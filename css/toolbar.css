@@ -1,0 +1,334 @@
+/* Toolbar — matches mateuszdabrowski.pl navbar style */
+
+.sf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--toolbar-height);
+  padding: 0 var(--spacing-lg);
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.sf-toolbar__left,
+.sf-toolbar__center,
+.sf-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.sf-toolbar__left,
+.sf-toolbar__right {
+  flex-shrink: 0;
+}
+.sf-toolbar__center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  justify-content: center;
+  pointer-events: auto;
+}
+/* Fallback when toolbar is too narrow (overlap detected via JS) */
+.sf-toolbar--compact .sf-toolbar__center {
+  position: static;
+  transform: none;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* Brand — logo mark + text */
+.sf-toolbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: var(--spacing-md);
+  white-space: nowrap;
+  color: var(--color-primary);
+  text-decoration: none;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.sf-toolbar__brand:hover {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* Ensure child elements don't swallow clicks in Safari */
+.sf-toolbar__brand > * {
+  pointer-events: none;
+}
+
+.sf-toolbar__brand-logo {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.sf-toolbar__brand-text {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.sf-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sf-toolbar__saved-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding: 0 var(--spacing-sm);
+}
+
+.sf-toolbar__separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+/* Navbar buttons — font-weight 500, 4px/12px padding (ifm style) */
+.sf-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-family);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+  min-width: 32px;
+  min-height: 32px;
+  line-height: 1;
+}
+
+.sf-toolbar__button:hover:not(:disabled) {
+  background: var(--toolbar-button-hover);
+  color: var(--text-primary);
+}
+
+.sf-toolbar__button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sf-toolbar__button--active {
+  background: var(--toolbar-button-active);
+  color: var(--color-primary);
+}
+
+/* Icon-only buttons (undo, redo, zoom, delete, align…) */
+.sf-toolbar__button--icon-only {
+  padding: 4px;
+  gap: 0;
+}
+
+/* Theme toggle — circular pill like mateuszdabrowski.pl */
+#btn-theme {
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+#btn-theme:hover:not(:disabled) {
+  background: var(--toolbar-button-hover);
+  color: var(--color-primary);
+}
+
+.sf-toolbar__icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+/* Larger icon for theme toggle */
+#btn-theme .sf-toolbar__icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Dropdown menus */
+.sf-toolbar__dropdown {
+  position: relative;
+}
+
+.sf-toolbar__chevron {
+  width: 8px;
+  height: 6px;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.sf-toolbar__menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 180px;
+  background: var(--toolbar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+  padding: 4px 0;
+}
+
+.sf-toolbar__dropdown.sf-toolbar__dropdown--open .sf-toolbar__menu {
+  display: block;
+}
+
+.sf-toolbar__menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sf-toolbar__menu-item:hover {
+  background: var(--toolbar-button-hover);
+  color: var(--text-primary);
+}
+
+.sf-toolbar__menu-item--icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sf-toolbar__menu-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.sf-toolbar__menu-item--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.sf-toolbar__menu-item--check input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+/* Theme toggle icon — moon/sun swap */
+#btn-theme .sf-toolbar__icon--theme {
+  fill: none;
+  width: 18px;
+  height: 18px;
+}
+
+[data-theme="dark"] .sf-icon-sun { display: none; }
+[data-theme="dark"] .sf-icon-moon { display: inline; }
+[data-theme="light"] .sf-icon-sun { display: inline; }
+[data-theme="light"] .sf-icon-moon { display: none; }
+
+.sf-toolbar__zoom-level {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 40px;
+  text-align: center;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 2px;
+}
+
+.sf-toolbar__saved-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Mobile toolbar ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sf-toolbar {
+    height: 44px;
+    padding: 0 var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  .sf-toolbar__brand-text {
+    display: none;
+  }
+
+  .sf-toolbar__brand {
+    margin-right: var(--spacing-xs);
+    gap: 4px;
+  }
+
+  .sf-toolbar__brand-logo {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Hide text labels on toolbar buttons — icons only */
+  .sf-toolbar__button span {
+    display: none;
+  }
+
+  .sf-toolbar__button {
+    padding: 4px 6px;
+    min-width: 28px;
+    min-height: 28px;
+    gap: 0;
+  }
+
+  .sf-toolbar__chevron {
+    display: none;
+  }
+
+  .sf-toolbar__separator {
+    height: 16px;
+    margin: 0 4px;
+  }
+
+  .sf-toolbar__saved-label {
+    display: none;
+  }
+
+  .sf-toolbar__center {
+    position: static !important;
+    transform: none !important;
+    flex: 0 0 auto;
+  }
+
+  .sf-toolbar__zoom-level {
+    min-width: 32px;
+    font-size: var(--font-size-xs);
+  }
+}

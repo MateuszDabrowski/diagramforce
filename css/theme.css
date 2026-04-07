@@ -1,0 +1,46 @@
+[data-theme="dark"] {
+  --color-primary: var(--brand-red);
+  --color-secondary: var(--brand-blue);
+
+  --bg-app: #212121;
+  --bg-surface: #18191A;
+  --bg-surface-raised: #242526;
+  --bg-canvas: #1A1A1A;
+
+  --text-primary: #F5F6F7;
+  --text-secondary: #B0B3B8;
+  --text-muted: #9CA3AF;
+  --text-inverse: #1C1E21;
+
+  --border-color: #3A3B3C;
+  --border-color-strong: #4E4F50;
+
+  --toolbar-bg: #242526;
+  --toolbar-border: #3A3B3C;
+  --toolbar-button-hover: rgba(255, 255, 255, 0.1);
+  --toolbar-button-active: rgba(218, 78, 85, 0.15);
+
+  --stencil-bg: #18191A;
+  --stencil-item-hover: rgba(255, 255, 255, 0.06);
+
+  --properties-bg: #18191A;
+
+  --canvas-grid-color: rgba(255, 255, 255, 0.06);
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 5px 40px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, 0.4), 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+
+  --node-bg: #242526;
+  --node-border: #3A3B3C;
+  --node-text: #F5F6F7;
+  --node-subtitle: rgba(255, 255, 255, 0.5);
+  --container-bg: rgba(255, 255, 255, 0.04);
+  --container-border: #3A3B3C;
+  --container-text: #F5F6F7;
+  --pool-header-bg: rgba(255, 255, 255, 0.08);
+  --port-color: var(--brand-red);
+  --selection-color: var(--brand-red);
+  --gantt-phase-fill: #8B8E94;
+  --gantt-task-uncompleted: #3A3B3C;
+}

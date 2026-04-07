@@ -1,0 +1,486 @@
+/* Modal overlay and dialog */
+
+.sf-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sf-modal--hidden {
+  display: none;
+}
+
+.sf-modal__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.sf-modal__dialog {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md, 10px);
+  box-shadow: var(--shadow-md);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sf-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sf-modal__title {
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sf-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm) 0;
+}
+
+.sf-modal__body::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sf-modal__body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.sf-modal__empty {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Legacy save-item aliases — now handled by .sf-modal__row */
+
+.sf-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.sf-modal__btn--primary {
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+.sf-modal__btn--primary:hover {
+  opacity: 0.88;
+}
+
+.sf-modal__btn--danger {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.sf-modal__btn--danger:hover {
+  color: #e53935;
+  border-color: #e53935;
+  background: rgba(229, 57, 53, 0.08);
+}
+
+/* ── About modal ───────────────────────────────────── */
+
+.sf-about {
+  width: 380px;
+  text-align: center;
+}
+
+.sf-about__body {
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md) !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.sf-about__logo img {
+  border-radius: 12px;
+}
+
+.sf-about__tagline {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sf-about__info {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.sf-about__info p {
+  margin: 0 0 var(--spacing-sm);
+}
+
+.sf-about__info p:last-child {
+  margin-bottom: 0;
+}
+
+.sf-about__info a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.sf-about__info a:hover {
+  text-decoration: underline;
+}
+
+.sf-about__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  width: 100%;
+  justify-content: center;
+}
+
+.sf-about__link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.sf-about__link:hover {
+  text-decoration: underline;
+}
+
+/* ── Shared modal rows (Save & Load) ──────────────── */
+
+.sf-save-modal__dialog {
+  width: 520px;
+}
+
+.sf-modal__row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--spacing-xs) var(--spacing-sm) !important;
+}
+
+.sf-modal__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.sf-modal__row:hover {
+  background: var(--stencil-item-hover);
+}
+
+.sf-modal__row--active {
+  background: var(--stencil-item-hover);
+}
+
+.sf-modal__row-check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.sf-modal__row-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.sf-modal__row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-modal__row-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-modal__row-meta {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sf-modal__row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.sf-modal__row-name:focus {
+  border-color: var(--color-primary);
+}
+
+.sf-modal__row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* Footer — shared between Save & Load */
+
+.sf-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.sf-modal__select-all {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sf-modal__select-all input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.sf-modal__action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Close tab confirmation modal ─────────────────── */
+
+.sf-close-confirm__btn {
+  padding: 6px 14px;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast);
+}
+
+.sf-close-confirm__btn:hover {
+  background: var(--stencil-item-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+}
+
+.sf-close-confirm__btn--save {
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+.sf-close-confirm__btn--save:hover {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+  color: #fff;
+}
+
+.sf-close-confirm__btn--discard {
+  border-color: #DA4E55;
+  color: #DA4E55;
+}
+
+.sf-close-confirm__btn--discard:hover {
+  background: #DA4E55;
+  border-color: #DA4E55;
+  color: #fff;
+}
+
+/* ── Share modal ─────────────────────────────────── */
+
+.sf-share-modal__url {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 10px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.sf-share-modal__url:focus,
+.sf-share-modal__url:focus-visible {
+  border-color: var(--brand-blue);
+  outline: none;
+}
+
+/* ── Field Editor Modal (Full Edit Mode) ─────────── */
+
+.sf-field-modal__dialog {
+  width: 720px;
+  max-width: calc(100vw - 32px);
+  max-height: 80vh;
+}
+
+.sf-field-modal__body {
+  padding: var(--spacing-sm) var(--spacing-md) !important;
+  overflow-y: auto;
+}
+
+.sf-field-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+}
+.sf-field-modal__close:hover {
+  background: var(--stencil-item-hover);
+  color: var(--text-primary);
+}
+
+.sf-field-modal__row {
+  display: grid;
+  grid-template-columns: 24px 32px 1fr 1fr 100px 52px 36px 36px 24px;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 32px;
+}
+
+.sf-field-modal__row--header {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+}
+
+.sf-field-modal__row--header span {
+  text-align: center;
+}
+.sf-field-modal__row--header .sf-field-modal__col--api,
+.sf-field-modal__row--header .sf-field-modal__col--label {
+  text-align: left;
+}
+
+.sf-field-modal__handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  user-select: none;
+}
+.sf-field-modal__handle:active {
+  cursor: grabbing;
+}
+
+.sf-field-modal__row--dragging {
+  opacity: 0.4;
+}
+.sf-field-modal__row--drop-above {
+  box-shadow: 0 -2px 0 0 var(--brand-amber, #F6B355);
+}
+.sf-field-modal__row--drop-below {
+  box-shadow: 0 2px 0 0 var(--brand-amber, #F6B355);
+}
+
+.sf-field-modal__row .sf-field-input {
+  height: 26px;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.sf-field-modal__row select.sf-field-input {
+  font-size: 11px;
+}
+
+.sf-field-modal__check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  justify-self: center;
+}
+
+.sf-field-modal__col--del {
+  justify-self: center;
+}
+
+.sf-field-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sf-field-modal__footer .sf-properties__btn--add-field {
+  margin-top: 0;
+  width: auto;
+  padding: 6px 14px;
+}

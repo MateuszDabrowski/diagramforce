@@ -1,0 +1,91 @@
+:root {
+  /* Brand colors — aligned with mateuszdabrowski.pl palette */
+  --brand-blue: #3578E5;
+  --brand-red: #DA4E55;
+  --brand-amber: #F6B355;
+
+  /* Semantic colors (overridden per theme) */
+  --color-primary: var(--brand-blue);
+  --color-secondary: var(--brand-red);
+  --color-accent: var(--brand-amber);
+
+  /* Surfaces */
+  --bg-app: #F5F6F7;
+  --bg-surface: #FFFFFF;
+  --bg-surface-raised: #FFFFFF;
+  --bg-canvas: #FAFAFA;
+
+  /* Text */
+  --text-primary: #1C1E21;
+  --text-secondary: #606770;
+  --text-muted: #65707B;
+  --text-inverse: #FFFFFF;
+
+  /* Borders */
+  --border-color: #DADDE1;
+  --border-color-strong: #BEC3C9;
+
+  /* Toolbar */
+  --toolbar-bg: #FFFFFF;
+  --toolbar-border: var(--border-color);
+  --toolbar-button-hover: rgba(0, 0, 0, 0.06);
+  --toolbar-button-active: rgba(53, 120, 229, 0.12);
+
+  /* Stencil */
+  --stencil-bg: var(--bg-surface);
+  --stencil-width: 280px;
+  --stencil-item-hover: rgba(0, 0, 0, 0.05);
+
+  /* Properties */
+  --properties-bg: var(--bg-surface);
+  --properties-width: 256px;
+
+  /* Canvas */
+  --canvas-grid-color: rgba(0, 0, 0, 0.08);
+
+  /* Sizing */
+  --toolbar-height: 60px;
+  --border-radius-sm: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+
+  /* Typography */
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --line-height: 1.65;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 5px 40px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, 0.2), 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+
+  /* Transitions — matching Docusaurus/Infima timing */
+  --transition-fast: 150ms ease;
+  --transition-normal: 400ms cubic-bezier(0.08, 0.52, 0.52, 1);
+
+  /* Node defaults (for diagram elements) */
+  --node-bg: #FFFFFF;
+  --node-border: #DADDE1;
+  --node-text: #1C1E21;
+  --node-subtitle: rgba(0, 0, 0, 0.45);
+  --node-radius: 8px;
+  --container-bg: #F5F6F7;
+  --container-border: #DADDE1;
+  --container-text: #1C1E21;
+  --port-color: var(--brand-blue);
+  --port-size: 10px;
+  --selection-color: var(--brand-blue);
+  --gantt-phase-fill: #2A2D32;
+  --gantt-task-uncompleted: #C9CDD3;
+}

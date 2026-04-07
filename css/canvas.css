@@ -1,0 +1,98 @@
+.sf-canvas {
+  position: relative;
+  background: var(--bg-canvas);
+  cursor: default;
+}
+
+/* JointJS paper SVG fills the container */
+.joint-paper {
+  background: transparent !important;
+}
+
+/* Hide ports by default, show on element hover or selection */
+.joint-port {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.joint-element:hover .joint-port,
+.joint-element.selected .joint-port {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Selection highlight — applied via JS classList.add('selected') */
+.joint-element.selected .body,
+.joint-element.selected rect.body {
+  stroke: var(--selection-color) !important;
+  stroke-width: 2 !important;
+}
+
+/* Also target the first rect child for shapes that don't use .body selector */
+.joint-element.selected > g > rect:first-child {
+  stroke: var(--selection-color) !important;
+  stroke-width: 2 !important;
+}
+
+/* Show and highlight available ports when dragging a link */
+.joint-port.available-magnet {
+  opacity: 1 !important;
+  pointer-events: all !important;
+}
+
+.joint-port.available-magnet circle {
+  fill: var(--brand-amber) !important;
+}
+
+/* Show all ports on available connection targets */
+.joint-paper .available-cell .joint-port {
+  opacity: 1 !important;
+  pointer-events: all !important;
+}
+
+/* Link styling */
+.joint-link .connection {
+  transition: stroke-width var(--transition-fast);
+}
+
+.joint-link:hover .connection {
+  stroke-width: 3px !important;
+}
+
+/* Link selection */
+.joint-link.selected .connection {
+  stroke: var(--selection-color) !important;
+}
+
+/* Rubber-band selection rectangle */
+.sf-selection-rect {
+  position: absolute;
+  border: 1.5px dashed var(--selection-color);
+  background: rgba(53, 120, 229, 0.08);
+  pointer-events: none;
+  z-index: 1000;
+  border-radius: 3px;
+}
+
+[data-theme="dark"] .sf-selection-rect {
+  background: rgba(218, 78, 85, 0.08);
+}
+
+/* Highlight available connection targets */
+.joint-paper .available-cell .body,
+.joint-paper .available-cell rect {
+  stroke: var(--brand-amber) !important;
+  stroke-width: 2px !important;
+}
+
+/* Blinking caret on canvas label */
+.sf-canvas-caret {
+  animation: sf-blink 1s step-end infinite;
+  pointer-events: none;
+}
+
+@keyframes sf-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

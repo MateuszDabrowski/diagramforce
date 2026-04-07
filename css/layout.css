@@ -1,0 +1,71 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  background: var(--bg-app);
+}
+
+.sf-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sf-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.sf-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+#paper {
+  width: 100%;
+  height: 100%;
+}
+
+/* WCAG 2.4.7 — Visible focus indicators for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Remove default outline when using mouse (focus without focus-visible) */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Mobile layout ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sf-main {
+    flex-direction: column;
+  }
+
+  .sf-canvas {
+    flex: 1;
+    min-height: 0;
+  }
+}

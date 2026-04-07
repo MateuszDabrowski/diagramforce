@@ -1,0 +1,936 @@
+/* Properties panel — left sidebar element inspector */
+
+.sf-properties {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--properties-width);
+  background: var(--properties-bg);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform var(--transition-normal);
+  z-index: 20;
+  box-shadow: var(--shadow-md);
+}
+
+.sf-properties--hidden {
+  transform: translateX(-100%);
+  box-shadow: none;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+
+.sf-properties__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: var(--spacing-xs);
+  min-height: 44px;
+}
+
+.sf-properties__title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sf-properties__type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-primary);
+  opacity: 0.8;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sf-properties__title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Scrollable body ───────────────────────────────────── */
+
+.sf-properties__body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sf-properties__body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sf-properties__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sf-properties__body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+/* ── Accordion sections ────────────────────────────────── */
+
+.sf-section {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sf-section:last-child {
+  border-bottom: none;
+}
+
+.sf-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.sf-section__header:hover {
+  color: var(--text-secondary);
+  background: var(--stencil-item-hover);
+}
+
+.sf-section__chevron {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.sf-section--collapsed .sf-section__chevron {
+  transform: rotate(-90deg);
+}
+
+.sf-section__body {
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.sf-section--collapsed .sf-section__body {
+  display: none;
+}
+
+/* ── Field: label stacked above control ────────────────── */
+
+.sf-prop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Inline pair: two fields side by side (Width / Height) */
+.sf-prop-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.sf-properties__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+/* ── Inputs ────────────────────────────────────────────── */
+
+.sf-properties__input {
+  width: 100%;
+  padding: 6px var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-sizing: border-box;
+}
+
+/* Larger spinners for number inputs */
+.sf-properties__input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.sf-properties__input[type="number"]::-webkit-inner-spin-button,
+.sf-properties__input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  opacity: 1;
+  height: 24px;
+  width: 16px;
+}
+
+.sf-properties__textarea {
+  resize: vertical;
+  min-height: 48px;
+  line-height: 1.5;
+}
+
+.sf-properties__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
+}
+
+[data-theme="dark"] .sf-properties__input:focus {
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+}
+
+.sf-properties__select {
+  width: 100%;
+  padding: 6px var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.sf-properties__select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
+}
+
+[data-theme="dark"] .sf-properties__select:focus {
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+}
+
+/* ── Color field ───────────────────────────────────────── */
+
+.sf-prop-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.sf-properties__color {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  padding: 2px;
+  background: none;
+  flex-shrink: 0;
+}
+
+.sf-properties__color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.sf-properties__color::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+/* Hex text fills remaining width */
+.sf-prop-color-row .sf-properties__input {
+  flex: 1;
+  min-width: 0;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: var(--font-size-xs);
+}
+
+/* ── Icon picker ───────────────────────────────────────── */
+
+.sf-prop-icon-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 4px var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  transition: border-color var(--transition-fast);
+}
+
+.sf-prop-icon-preview:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
+}
+
+[data-theme="dark"] .sf-prop-icon-preview:focus-within {
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+}
+
+.sf-prop-icon-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sf-prop-icon-swatch svg {
+  fill: var(--text-primary);
+}
+
+.sf-prop-icon-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  padding: 2px 0;
+  outline: none;
+}
+
+.sf-prop-icon-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.sf-prop-icon-clear {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sf-prop-icon-clear:hover {
+  background: rgba(218, 78, 85, 0.15);
+  color: #DA4E55;
+}
+
+.sf-prop-icon-none {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Action buttons ────────────────────────────────────── */
+
+.sf-properties__btn {
+  width: 100%;
+  padding: 7px var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sf-properties__btn:hover {
+  background: var(--stencil-item-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+}
+
+.sf-properties__btn--primary {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.sf-properties__btn--primary:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* ── Order section ─────────────────────────────────────────────── */
+
+.sf-prop-order-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+.sf-properties__btn--order {
+  font-size: 10px;
+  padding: 5px 6px;
+  gap: 4px;
+  color: var(--text-muted);
+  border-color: var(--border-color);
+  justify-content: center;
+  flex: 1;
+}
+
+.sf-properties__btn--order:hover {
+  color: var(--brand-blue);
+  border-color: var(--brand-blue);
+  background: transparent;
+}
+
+/* Auto-size button — sits inside the Size section body */
+.sf-properties__btn--auto-size {
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  padding: 6px var(--spacing-sm);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.sf-properties__btn--auto-size:hover {
+  color: var(--brand-blue);
+  border-color: var(--brand-blue);
+  background: transparent;
+}
+
+.sf-properties__btn--apply-size {
+  width: 100%;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  padding: 6px var(--spacing-sm);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.sf-properties__btn--apply-size:hover {
+  color: var(--brand-amber);
+  border-color: var(--brand-amber);
+}
+
+/* ── Footer action strips (Convert / Clone / Delete) ── */
+/* Shared strip layout — consistent vertical spacing */
+.sf-convert-strip,
+.sf-clone-strip,
+.sf-delete-strip {
+  padding: var(--spacing-xs) var(--spacing-md);
+}
+
+/* First strip gets extra top padding, last strip gets extra bottom padding */
+.sf-properties__footer > :first-child {
+  padding-top: var(--spacing-sm);
+}
+
+.sf-properties__footer > :last-child {
+  padding-bottom: var(--spacing-sm);
+}
+
+/* Shared base for all footer action buttons */
+.sf-properties__btn--convert,
+.sf-properties__btn--clone,
+.sf-properties__btn--delete {
+  font-size: var(--font-size-xs);
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Consistent icon size inside footer buttons */
+.sf-properties__btn--convert svg,
+.sf-properties__btn--clone svg,
+.sf-properties__btn--delete svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* Convert — orange accent (darker in light mode for WCAG contrast) */
+.sf-properties__btn--convert {
+  --_convert-color: #D4911F;
+  border-color: var(--_convert-color);
+  color: var(--_convert-color);
+}
+
+[data-theme="dark"] .sf-properties__btn--convert {
+  --_convert-color: var(--brand-amber);
+}
+
+.sf-properties__btn--convert:hover {
+  background: var(--_convert-color);
+  border-color: var(--_convert-color);
+  color: #fff;
+}
+
+/* Clone — blue accent (always blue, regardless of theme) */
+.sf-properties__btn--clone {
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+.sf-properties__btn--clone:hover {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+  color: #fff;
+}
+
+/* Delete — red danger */
+.sf-properties__btn--delete {
+  border-color: #DA4E55;
+  color: #DA4E55;
+}
+
+.sf-properties__btn--delete:hover {
+  background: #DA4E55;
+  border-color: #DA4E55;
+  color: #fff;
+}
+
+/* ── Footer (pinned to bottom — delete/convert buttons) ── */
+
+.sf-properties__footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.sf-properties__footer:empty {
+  display: none;
+}
+
+/* ── Data Object field editor ─────────────────────────────── */
+
+.sf-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sf-field-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr 20px;
+  gap: 3px;
+  align-items: center;
+}
+
+.sf-field-key {
+  width: 24px;
+  height: 22px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-surface-raised);
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
+}
+.sf-field-key--pk { color: #F6B355; border-color: #F6B355; }
+.sf-field-key--fk { color: #1D73C9; border-color: #1D73C9; }
+
+.sf-field-input {
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-surface-raised);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-family: system-ui, sans-serif;
+  min-width: 0;
+}
+.sf-field-input:focus {
+  outline: 1px solid var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.sf-field-input--type {
+  font-size: 9px;
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 2px;
+}
+
+.sf-field-input--length {
+  font-size: 9px;
+  text-align: center;
+  width: 100%;
+}
+
+.sf-field-delete {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sf-field-delete:hover {
+  background: rgba(218, 78, 85, 0.2);
+  color: #DA4E55;
+}
+
+.sf-properties__btn--add-field {
+  margin-top: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.sf-properties__btn--add-field:hover {
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+.sf-properties__btn--full-edit {
+  margin-top: 4px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--brand-amber, #F6B355);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--brand-amber, #F6B355);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.sf-properties__btn--full-edit:hover {
+  background: var(--brand-amber, #F6B355);
+  color: #fff;
+}
+
+/* Field editor header row */
+.sf-field-row--header {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+/* Show API Names toggle */
+.sf-field-api-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 4px;
+}
+
+.sf-field-api-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* ── Marker picker (Source/Target end) ────────────────── */
+
+.sf-marker-picker {
+  position: relative;
+}
+
+.sf-marker-picker__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sf-marker-picker__btn:hover {
+  border-color: var(--border-color-strong);
+}
+
+.sf-marker-picker__btn svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.sf-marker-picker__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  flex-direction: column;
+  background: var(--toolbar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 300;
+  padding: 3px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.sf-marker-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sf-marker-picker__item:hover {
+  background: var(--toolbar-button-hover);
+  color: var(--text-primary);
+}
+
+.sf-marker-picker__item--active {
+  color: var(--color-primary);
+}
+
+.sf-marker-picker__item svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.sf-marker-picker__item--active svg {
+  color: var(--color-primary);
+}
+
+/* ── Mobile properties — bottom sheet ──────────────────────────── */
+@media (max-width: 768px) {
+  .sf-properties {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 50vh;
+    max-height: 50vh;
+    border-right: none;
+    border-top: 1px solid var(--border-color);
+    transform: translateY(0);
+    z-index: 200;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+  }
+
+  .sf-properties--hidden {
+    transform: translateY(100%);
+    box-shadow: none;
+  }
+}
+
+/* Multi-select message */
+.sf-properties__multi-msg {
+  padding: var(--spacing-lg) var(--spacing-md);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height);
+  text-align: center;
+}
+
+/* Number input with suffix (e.g., "12 weeks") */
+.sf-prop-input-with-suffix {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.sf-prop-input-with-suffix .sf-properties__input {
+  flex: 1;
+  padding-right: 60px;
+}
+
+.sf-properties__input-suffix {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+/* ── Timeline task editor ───────────────────────────────── */
+
+.sf-timeline-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-timeline-task-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+.sf-timeline-task-row--task {
+  padding-left: 20px;
+}
+
+.sf-timeline-task-row--group {
+  font-weight: 600;
+}
+
+.sf-timeline-task-row--drag-over {
+  box-shadow: 0 -2px 0 0 var(--color-primary);
+}
+
+.sf-timeline-task-drag {
+  width: 14px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity var(--transition-fast);
+}
+
+.sf-timeline-task-row:hover .sf-timeline-task-drag {
+  opacity: 1;
+}
+
+.sf-timeline-task-drag:active {
+  cursor: grabbing;
+}
+
+.sf-timeline-task-drag svg {
+  width: 10px;
+  height: 14px;
+}
+
+.sf-timeline-task-color {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sf-timeline-task-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.sf-timeline-task-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sf-timeline-task-actions .sf-properties__btn {
+  flex: 1;
+}
+
+/* ── OrgPerson detail reorder rows ────────────────────── */
+
+.sf-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: var(--border-radius-sm);
+  transition: background 0.15s;
+}
+
+.sf-detail-row:hover {
+  background: var(--toolbar-button-hover);
+}
+
+.sf-detail-row--dragging {
+  opacity: 0.4;
+}
+
+.sf-detail-row--over {
+  border-top: 2px solid var(--color-primary);
+}
+
+.sf-detail-row__handle {
+  cursor: grab;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.sf-detail-row__handle:active {
+  cursor: grabbing;
+}
+
+.sf-detail-row .sf-properties__label {
+  margin-bottom: 0;
+  font-size: var(--font-size-xs);
+  flex-shrink: 0;
+}
+
+.sf-detail-row .sf-properties__input {
+  flex: 1;
+  min-width: 0;
+}
