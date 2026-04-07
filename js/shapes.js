@@ -1488,6 +1488,60 @@ export function register() {
     }
   );
 
+  // --- GanttMarker ---
+  // Upward-pointing triangle that marks the current point in time on a Gantt chart.
+  // Can be embedded in a GanttTimeline like a milestone.
+  joint.dia.Element.define(
+    'sf.GanttMarker',
+    {
+      size: { width: 20, height: 16 },
+      z: 2000,
+      pointDown: false,
+      attrs: {
+        body: {
+          refPoints: '0,1 0.5,0 1,1',
+          fill: '#DA4E55',
+          stroke: '#B03A40',
+          strokeWidth: 1.5,
+        },
+        label: {
+          x: 'calc(0.5 * w)',
+          y: 'calc(h + 4)',
+          textAnchor: 'middle',
+          textVerticalAnchor: 'top',
+          fontSize: 10,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-primary)',
+          text: 'Today',
+        },
+      },
+      ports: {
+        groups: {
+          left: {
+            position: { name: 'left' },
+            attrs: { circle: { r: 4, magnet: true, fill: '#DA4E55', stroke: '#FFFFFF', strokeWidth: 1.5 } },
+            markup: [{ tagName: 'circle', selector: 'circle' }],
+          },
+          right: {
+            position: { name: 'right' },
+            attrs: { circle: { r: 4, magnet: true, fill: '#DA4E55', stroke: '#FFFFFF', strokeWidth: 1.5 } },
+            markup: [{ tagName: 'circle', selector: 'circle' }],
+          },
+        },
+        items: [
+          { id: 'port-left', group: 'left' },
+          { id: 'port-right', group: 'right' },
+        ],
+      },
+    },
+    {
+      markup: [
+        { tagName: 'polygon', selector: 'body' },
+        { tagName: 'text', selector: 'label' },
+      ],
+    }
+  );
+
   // --- GanttTimeline ---
   // Auto-calculated week/month header. Renders a two-row header:
   // top row shows months, bottom row shows weeks (or vice versa).

@@ -121,7 +121,7 @@ function showNewDiagramModal() {
             <rect x="24" y="28" width="18" height="7" rx="2" fill="var(--color-primary)" opacity="0.4"/>
             <line x1="32" y1="13" x2="32" y2="17" stroke="var(--text-muted)" stroke-width="1"/>
             <line x1="42" y1="24" x2="42" y2="28" stroke="var(--text-muted)" stroke-width="1"/>
-            <polygon points="50,31.5 53,28 56,31.5" fill="var(--color-accent)"/>
+            <polygon points="30,35 33,28 36,35" fill="var(--color-accent)"/>
           </svg>
           <span class="sf-new-modal__card-title">Gantt Chart</span>
           <span class="sf-new-modal__card-desc">Plan project timelines, tasks, milestones, and dependencies.</span>

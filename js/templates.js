@@ -381,6 +381,7 @@ export const BPMN_CATEGORIES = [
 const ganttSVG = {
   task:      '<rect x="2" y="6" width="16" height="8" rx="2"/><rect x="2" y="6" width="10" height="8" rx="2" fill="currentColor" stroke="none" opacity="0.4"/>',
   milestone: '<polygon points="10,2 18,10 10,18 2,10" />',
+  marker:    '<polygon points="4,18 10,4 16,18" />',
   group:     '<rect x="1" y="7" width="18" height="4" fill="currentColor" stroke="none"/><path d="M1 7L1 11L4 7" fill="currentColor" stroke="none"/><path d="M19 7L19 11L16 7" fill="currentColor" stroke="none"/>',
   timeline:  '<rect x="1" y="3" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1"/><line x1="7" y1="3" x2="7" y2="9" stroke="currentColor" stroke-width="0.5"/><line x1="13" y1="3" x2="13" y2="9" stroke="currentColor" stroke-width="0.5"/><rect x="1" y="9" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1"/><line x1="4" y1="9" x2="4" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="7" y1="9" x2="7" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="10" y1="9" x2="10" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="13" y1="9" x2="13" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="16" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="0.3"/>',
 };
@@ -400,6 +401,7 @@ export const GANTT_CATEGORIES = [
       { type: 'sf.GanttTask',      label: 'Completed Task',  stencilSvg: ganttSVG.task,
         taskLabel: 'Completed Task', progress: 100, barColor: '#2A9D8F' },
       { type: 'sf.GanttMilestone', label: 'Milestone',       stencilSvg: ganttSVG.milestone },
+      { type: 'sf.GanttMarker',    label: 'Today Marker',    stencilSvg: ganttSVG.marker },
       { type: 'sf.GanttGroup',     label: 'Phase / Group',   stencilSvg: ganttSVG.group },
     ],
   },
@@ -1191,6 +1193,12 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
       return new joint.shapes.sf.GanttMilestone({
         position,
         attrs: { label: { text: label || 'Milestone' } },
+      });
+
+    case 'sf.GanttMarker':
+      return new joint.shapes.sf.GanttMarker({
+        position,
+        attrs: { label: { text: label || 'Today' } },
       });
 
     case 'sf.GanttGroup':

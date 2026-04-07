@@ -327,7 +327,7 @@ function tryEmbed(element) {
     } else if (parentType === 'sf.BpmnSubprocess') {
       valid = childType !== 'sf.BpmnPool' && childType !== 'sf.BpmnSubprocess';
     } else if (parentType === 'sf.GanttTimeline') {
-      valid = childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttGroup';
+      valid = childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
     }
     if (valid) {
       candidate.embed(element);

@@ -118,8 +118,28 @@ function addResizeHandles(view) {
           newY = origPos.y + (origSz.height - newH);
         }
 
+        // Constrain icon-mode nodes to square and update circle attrs
+        if (model.get('iconMode')) {
+          const s = Math.max(newW, newH);
+          const origS = Math.max(origSz.width, origSz.height);
+          newW = s; newH = s;
+          if (cx === 0) newX = origPos.x + (origS - s);
+          if (cy === 0) newY = origPos.y + (origS - s);
+        }
+
         model.position(newX, newY);
         model.resize(newW, newH);
+        if (model.get('iconMode')) {
+          const r = newW / 2;
+          model.attr('body/rx', r);
+          model.attr('body/ry', r);
+          const pad = Math.round(newW * 0.2);
+          const iconSz = newW - pad * 2;
+          model.attr('icon/x', pad);
+          model.attr('icon/y', pad);
+          model.attr('icon/width', iconSz);
+          model.attr('icon/height', iconSz);
+        }
         updateGuides(newX, newY, newW, newH);
 
         // Sync peers: same new size, adjust position by same delta relative to their anchor corner
@@ -127,6 +147,17 @@ function addResizeHandles(view) {
         const dh = newH - origSz.height;
         for (const p of peers) {
           p.model.resize(newW, newH);
+          if (p.model.get('iconMode')) {
+            const r = newW / 2;
+            p.model.attr('body/rx', r);
+            p.model.attr('body/ry', r);
+            const pad = Math.round(newW * 0.2);
+            const iconSz = newW - pad * 2;
+            p.model.attr('icon/x', pad);
+            p.model.attr('icon/y', pad);
+            p.model.attr('icon/width', iconSz);
+            p.model.attr('icon/height', iconSz);
+          }
           // Only shift position for corners that move the origin
           let px = p.origPos.x;
           let py = p.origPos.y;

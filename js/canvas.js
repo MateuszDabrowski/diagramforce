@@ -42,6 +42,7 @@ export const Z_BASE = {
   'sf.DataObject':     2000,
   'sf.GanttTask':      2000,
   'sf.GanttMilestone': 2000,
+  'sf.GanttMarker':    2000,
   'sf.GanttTimeline':  1000,
   'sf.GanttGroup':     1000,
   'sf.OrgPerson':      2000,
@@ -330,16 +331,22 @@ export function init() {
   // ── Z-tier enforcement on any z change ──────────────────────────────
   // JointJS calls element.toFront() during drag when embeddingMode is on
   // (inside prepareEmbedding), which pushes the element above all others.
-  // This listener snaps it back into the correct tier immediately.
+  // This listener restores the previous z so that dragging never reorders.
   graph.on('change:z', (cell) => {
     if (_isLoadingJSON) return;
     if (cell.isLink()) {
       const z = cell.get('z');
       if (z >= Z_LINK_BASE) return; // already in link tier
-      const maxLinkZ = graph.getLinks()
-        .filter(l => l !== cell)
-        .reduce((m, l) => Math.max(m, l.get('z') ?? Z_LINK_BASE), Z_LINK_BASE - 1);
-      cell.set('z', maxLinkZ + 1);
+      // Restore previous z if it was valid, otherwise assign top of link tier
+      const prevZ = cell.previous('z');
+      if (prevZ != null && prevZ >= Z_LINK_BASE) {
+        cell.set('z', prevZ);
+      } else {
+        const maxLinkZ = graph.getLinks()
+          .filter(l => l !== cell)
+          .reduce((m, l) => Math.max(m, l.get('z') ?? Z_LINK_BASE), Z_LINK_BASE - 1);
+        cell.set('z', maxLinkZ + 1);
+      }
       return;
     }
     if (!cell.isElement()) return;
@@ -347,7 +354,13 @@ export function init() {
     if (base === undefined) return;
     const z = cell.get('z');
     if (z >= base && z < base + Z_TIER_SPAN) return; // already in tier
-    // z escaped its tier — push to top of correct tier
+    // Restore previous z if it was within this tier (drag didn't intend reorder)
+    const prevZ = cell.previous('z');
+    if (prevZ != null && prevZ >= base && prevZ < base + Z_TIER_SPAN) {
+      cell.set('z', prevZ);
+      return;
+    }
+    // Otherwise push to top of correct tier (e.g. type conversion)
     const sameTier = graph.getElements().filter(
       el => el !== cell && el.get('z') >= base && el.get('z') < base + Z_TIER_SPAN
     );
@@ -376,6 +389,13 @@ export function init() {
         line: {
           stroke: '#888888',
           strokeWidth: 2,
+          sourceMarker: {
+            type: 'path',
+            d: 'M 0 0 L -12 0',
+            fill: 'none',
+            stroke: '#888888',
+            'stroke-width': 2,
+          },
           targetMarker: {
             type: 'path',
             d: 'M 0 -6 L -14 0 L 0 6 z',
@@ -417,8 +437,8 @@ export function init() {
       const candidates = graph.findModelsInArea(bbox).filter(
         (el) => el.id !== elementView.model.id
       );
-      // For milestones: if a GanttTask is found, replace it with its GanttTimeline ancestor
-      if (childType === 'sf.GanttMilestone') {
+      // For milestones/markers: if a GanttTask is found, replace it with its GanttTimeline ancestor
+      if (childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker') {
         const resolved = [];
         const seen = new Set();
         for (const el of candidates) {
@@ -466,7 +486,7 @@ export function init() {
       }
       // GanttTimeline accepts GanttTask, GanttMilestone, GanttGroup
       if (parentType === 'sf.GanttTimeline') {
-        return childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttGroup';
+        return childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
       }
       return false;
     },
@@ -770,6 +790,18 @@ export function setViewport({ zoom, translate } = {}) {
 // ── Migrate link labels to use canvas-bg rect + connector-colored text ──
 export function migrateLinks() {
   for (const link of graph.getLinks()) {
+    // Ensure links have a sourceMarker (older diagrams may lack one)
+    if (!link.attr('line/sourceMarker')) {
+      const stroke = link.attr('line/stroke') || '#888888';
+      link.attr('line/sourceMarker', {
+        type: 'path',
+        d: 'M 0 0 L -12 0',
+        fill: 'none',
+        stroke,
+        'stroke-width': 2,
+      });
+    }
+
     // Migrate old arrow markers to native JointJS convention
     for (const key of ['sourceMarker', 'targetMarker']) {
       const m = link.attr(`line/${key}`);

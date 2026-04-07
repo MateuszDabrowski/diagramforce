@@ -44,6 +44,7 @@ const TYPE_LABELS = {
   'sf.OrgPerson':      'Person',
   'sf.GanttTask':      'Task',
   'sf.GanttMilestone': 'Milestone',
+  'sf.GanttMarker':    'Today Marker',
   'sf.GanttTimeline':  'Timeline',
   'sf.GanttGroup':     'Group',
 };
@@ -74,6 +75,7 @@ const DEFAULT_SIZES = {
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },
   'sf.GanttMilestone': { width: 24,  height: 24 },
+  'sf.GanttMarker':    { width: 20,  height: 16 },
   'sf.GanttTimeline':  { width: 960, height: 48 },
   'sf.GanttGroup':     { width: 360, height: 24 },
   'sf.OrgPerson':      { width: 280, height: 90 },
@@ -160,6 +162,7 @@ function showProperties(cell) {
   else if (type === 'sf.DataObject') renderDataObjectProps(cell);
   else if (type === 'sf.GanttTask') renderGanttTaskProps(cell);
   else if (type === 'sf.GanttMilestone') renderGanttMilestoneProps(cell);
+  else if (type === 'sf.GanttMarker') renderGanttMarkerProps(cell);
   else if (type === 'sf.GanttTimeline') renderGanttTimelineProps(cell);
   else if (type === 'sf.GanttGroup') renderGanttGroupProps(cell);
   else if (type === 'sf.OrgPerson') renderOrgPersonProps(cell);
@@ -461,17 +464,39 @@ function renderSimpleNodeProps(cell) {
     cell.attr('subtitle/fill', v);
     recolorCellIcon(cell, v);
   });
-  addNumber(appearance, 'Corner radius', cell.attr('body/rx') ?? 8,
-    v => { cell.attr('body/rx', v); cell.attr('body/ry', v); });
+  if (!isIcon) {
+    addNumber(appearance, 'Corner radius', cell.attr('body/rx') ?? 8,
+      v => { cell.attr('body/rx', v); cell.attr('body/ry', v); });
+  }
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
-  addNumberPair(size,
-    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
-    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  if (isIcon) {
+    addNumber(size, 'Size', cell.size().width, v => {
+      cell.resize(v, v);
+      const r = v / 2;
+      cell.attr('body/rx', r);
+      cell.attr('body/ry', r);
+      const pad = Math.round(v * 0.2);
+      const iconSz = v - pad * 2;
+      cell.attr('icon/x', pad);
+      cell.attr('icon/y', pad);
+      cell.attr('icon/width', iconSz);
+      cell.attr('icon/height', iconSz);
+    });
+  } else {
+    addNumberPair(size,
+      'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+      'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  }
   addAutoSizeBtn(size, () => {
-    const def = DEFAULT_SIZES['sf.SimpleNode'];
-    cell.resize(def.width, def.height);
+    if (isIcon) {
+      cell.resize(64, 64);
+      cell.attr({ body: { rx: 32, ry: 32 }, icon: { x: 16, y: 16, width: 32, height: 32 } });
+    } else {
+      const def = DEFAULT_SIZES['sf.SimpleNode'];
+      cell.resize(def.width, def.height);
+    }
   });
   addApplySizeBtn(size, cell);
   addOrderButtons(size, cell, 'Node layer');
@@ -1416,6 +1441,65 @@ function renderGanttMilestoneProps(cell) {
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Size', cell.size().width, v => cell.resize(v, v));
+  addOrderButtons(size, cell, 'Node layer');
+
+  // Delete
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderGanttMarkerProps(cell) {
+  // Content
+  const content = section(bodyEl, 'Today Marker');
+  addText(content, 'Label', cell.attr('label/text'), v => {
+    cell.attr('label/text', v);
+    titleEl.textContent = v || 'Today';
+  });
+
+  // Direction toggle
+  const dirRow = document.createElement('div');
+  dirRow.className = 'sf-prop-pair';
+  const isDown = cell.get('pointDown') === true;
+
+  const upBtn = document.createElement('button');
+  upBtn.className = 'sf-properties__btn sf-properties__btn--order';
+  upBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="8,2 14,14 2,14"/></svg> Point Up`;
+  upBtn.style.opacity = isDown ? '0.5' : '1';
+  upBtn.addEventListener('click', () => {
+    cell.set('pointDown', false);
+    cell.attr('body/refPoints', '0,1 0.5,0 1,1');
+    cell.attr('label/y', 'calc(h + 4)');
+    cell.attr('label/textVerticalAnchor', 'top');
+    upBtn.style.opacity = '1';
+    downBtn.style.opacity = '0.5';
+  });
+
+  const downBtn = document.createElement('button');
+  downBtn.className = 'sf-properties__btn sf-properties__btn--order';
+  downBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="2,2 14,2 8,14"/></svg> Point Down`;
+  downBtn.style.opacity = isDown ? '1' : '0.5';
+  downBtn.addEventListener('click', () => {
+    cell.set('pointDown', true);
+    cell.attr('body/refPoints', '0,0 1,0 0.5,1');
+    cell.attr('label/y', -4);
+    cell.attr('label/textVerticalAnchor', 'bottom');
+    upBtn.style.opacity = '0.5';
+    downBtn.style.opacity = '1';
+  });
+
+  dirRow.appendChild(upBtn);
+  dirRow.appendChild(downBtn);
+  content.appendChild(dirRow);
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.attr('body/fill') || '#DA4E55', v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke') || '#B03A40', v => cell.attr('body/stroke', v));
+  addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumber(size, 'Size', cell.size().width, v => cell.resize(v, Math.round(v * 0.8)));
   addOrderButtons(size, cell, 'Node layer');
 
   // Delete
@@ -2396,6 +2480,7 @@ const TYPE_PLURALS = {
   'sf.OrgPerson':      'Persons',
   'sf.GanttTask':      'Tasks',
   'sf.GanttMilestone': 'Milestones',
+  'sf.GanttMarker':    'Markers',
   'sf.GanttTimeline':  'Timelines',
   'sf.GanttGroup':     'Groups',
 };
