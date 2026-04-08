@@ -154,7 +154,7 @@ function showVersionWarningModal(savedVersion, sourceName, diff) {
     const message = isMajor
       ? 'There were significant changes introduced since this diagram was saved. Your save probably won\'t load correctly.'
       : 'There have been some changes since this diagram was saved, but it should still work.';
-    const loadLabel = isMajor ? 'Load Anyway' : 'Continue';
+    const loadLabel = isMajor ? 'Try Anyway' : 'Continue';
 
     overlay.innerHTML = `
       <div class="sf-modal__overlay"></div>

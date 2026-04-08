@@ -483,6 +483,43 @@ function updateLastSavedLabel() {
   el.style.display = '';
 }
 
+/** Populate tabs array and load the active tab from parsed session data. */
+function doRestoreTabData(data) {
+  if (data.nextId) nextId = data.nextId;
+
+  if (data.tabs?.length > 0) {
+    for (const t of data.tabs) {
+      tabs.push({
+        id: t.id,
+        name: t.name || 'Draft',
+        diagramType: t.diagramType || 'architecture',
+        graphJSON: t.graphJSON || null,
+        viewport: t.viewport || null,
+        dirty: t.dirty || (!t.lastSavedAt && t.graphJSON?.cells?.length > 0) || false,
+        lastSavedAt: t.lastSavedAt || null,
+        lastSaveType: t.lastSaveType || null,
+      });
+    }
+    activeTabId = data.activeTabId || tabs[0].id;
+  } else {
+    const id = generateId();
+    tabs.push({ id, name: 'Draft', diagramType: 'architecture', graphJSON: null, viewport: null, dirty: false, lastSavedAt: null, lastSaveType: null });
+    activeTabId = id;
+  }
+
+  // Load the active tab's state
+  const active = tabs.find(t => t.id === activeTabId);
+  if (active?.graphJSON) {
+    canvasModule.setLoadingJSON(true);
+    try { graph.fromJSON(active.graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+    if (active.viewport) canvasModule.setViewport(active.viewport);
+  }
+  // Set stencil for active tab's diagram type
+  if (stencilModule?.setDiagramType) {
+    stencilModule.setDiagramType(active?.diagramType || 'architecture');
+  }
+}
+
 function restoreTabs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -494,50 +531,32 @@ function restoreTabs() {
 
     const data = JSON.parse(raw);
 
-    // Check stored version against current app version
-    const diff = classifyVersionDiff(data.appVersion || null);
+    // Check stored version against current app version.
+    // Sessions saved before versioning was introduced have no appVersion —
+    // treat them as 1.0.0 (the last version without this field).
+    const savedVersion = data.appVersion || '1.0.0';
+    const diff = classifyVersionDiff(savedVersion);
     if (diff === 'major') {
-      // Major version mismatch — session data is likely incompatible
-      localStorage.removeItem(STORAGE_KEY);
-      showSessionVersionWarning(data.appVersion || null, () => {
-        showNewDiagramModal();
+      // Major version mismatch — ask user whether to reset or try loading
+      showSessionVersionWarning(savedVersion, 'major').then(tryLoad => {
+        if (tryLoad) {
+          doRestoreTabData(data);
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+          showNewDiagramModal();
+        }
+        render();
+        updateLastSavedLabel();
       });
       return;
     }
-
-    if (data.nextId) nextId = data.nextId;
-
-    if (data.tabs?.length > 0) {
-      for (const t of data.tabs) {
-        tabs.push({
-          id: t.id,
-          name: t.name || 'Draft',
-          diagramType: t.diagramType || 'architecture',
-          graphJSON: t.graphJSON || null,
-          viewport: t.viewport || null,
-          dirty: t.dirty || (!t.lastSavedAt && t.graphJSON?.cells?.length > 0) || false,
-          lastSavedAt: t.lastSavedAt || null,
-          lastSaveType: t.lastSaveType || null,
-        });
-      }
-      activeTabId = data.activeTabId || tabs[0].id;
-    } else {
-      const id = generateId();
-      tabs.push({ id, name: 'Draft', diagramType: 'architecture', graphJSON: null, viewport: null, dirty: false, lastSavedAt: null, lastSaveType: null });
-      activeTabId = id;
+    if (diff === 'minor') {
+      // Minor version mismatch — show notice but restore normally
+      showSessionVersionWarning(savedVersion, 'minor');
     }
 
-    // Load the active tab's state
-    const active = tabs.find(t => t.id === activeTabId);
-    if (active?.graphJSON) {
-      canvasModule.setLoadingJSON(true);
-      try { graph.fromJSON(active.graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
-      if (active.viewport) canvasModule.setViewport(active.viewport);
-    }
-    // Set stencil for active tab's diagram type
-    if (stencilModule?.setDiagramType) {
-      stencilModule.setDiagramType(active?.diagramType || 'architecture');
-    }
+    doRestoreTabData(data);
+
   } catch (err) {
     console.warn('SF Diagrams: Tab restore failed:', err);
     if (tabs.length === 0) {
@@ -548,44 +567,82 @@ function restoreTabs() {
   }
 }
 
-/** Show a warning when the auto-saved session is from a different major version. */
-function showSessionVersionWarning(savedVersion, onDismiss) {
-  const overlay = document.createElement('div');
-  overlay.className = 'sf-modal';
-  overlay.style.zIndex = '10001';
+/**
+ * Show a warning when the auto-saved session version differs.
+ * For major: returns Promise<boolean> — true = try loading, false = reset.
+ * For minor: shows informational modal, returns Promise<void>.
+ */
+function showSessionVersionWarning(savedVersion, diff) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'sf-modal';
+    overlay.style.zIndex = '10001';
 
-  const savedLabel = savedVersion || 'unknown';
-  overlay.innerHTML = `
-    <div class="sf-modal__overlay"></div>
-    <div class="sf-modal__dialog" style="width:440px">
-      <div class="sf-modal__header">
-        <h2 class="sf-modal__title">Session Reset</h2>
-      </div>
-      <div class="sf-modal__body" style="padding:16px 20px">
-        <p style="margin:0 0 12px">
-          Diagramforce has been updated from <strong>v${escHtml(savedLabel)}</strong>
-          to <strong>v${escHtml(APP_VERSION)}</strong>.
-        </p>
-        <p style="margin:0 0 12px;color:var(--text-secondary)">
-          There were significant changes introduced and your previous session could not be restored.
-          Any unsaved work in open tabs has been cleared.
-        </p>
-        <p style="margin:0;color:var(--text-secondary)">
+    const isMajor = diff === 'major';
+    const title = isMajor ? 'Compatibility Warning' : 'Session Restored';
+    const message = isMajor
+      ? `There were significant changes introduced since your last session.
+         Your open tabs probably won't load correctly.`
+      : `There have been some changes since your last session, but it should still work.
+         If anything looks off, try re-adding the affected elements.`;
+    const footerNote = isMajor
+      ? `<p style="margin:0;color:var(--text-secondary)">
           Diagrams saved to Browser Storage or exported as JSON are not affected
           and can be loaded from the Load menu.
-        </p>
-      </div>
-      <div class="sf-modal__footer" style="justify-content:flex-end">
-        <button class="sf-modal__btn sf-modal__btn--primary" data-action="ok">OK</button>
-      </div>
-    </div>`;
+        </p>`
+      : '';
+    const buttons = isMajor
+      ? `<button class="sf-modal__btn" data-action="reset">Reset Session</button>
+         <button class="sf-modal__btn sf-modal__btn--primary" data-action="try">Try Anyway</button>`
+      : `<button class="sf-modal__btn sf-modal__btn--primary" data-action="ok">OK</button>`;
 
-  overlay.querySelector('[data-action="ok"]').addEventListener('click', () => {
-    overlay.remove();
-    onDismiss();
+    overlay.innerHTML = `
+      <div class="sf-modal__overlay"></div>
+      <div class="sf-modal__dialog" style="width:440px">
+        <div class="sf-modal__header">
+          <h2 class="sf-modal__title">${title}</h2>
+        </div>
+        <div class="sf-modal__body" style="padding:16px 20px">
+          <p style="margin:0 0 12px">
+            Diagramforce has been updated from <strong>v${escHtml(savedVersion)}</strong>
+            to <strong>v${escHtml(APP_VERSION)}</strong>.
+          </p>
+          <p style="margin:0${footerNote ? ' 0 12px' : ''};color:var(--text-secondary)">
+            ${message}
+          </p>
+          ${footerNote}
+        </div>
+        <div class="sf-modal__footer" style="justify-content:flex-end">
+          ${buttons}
+        </div>
+      </div>`;
+
+    if (isMajor) {
+      overlay.querySelector('[data-action="reset"]').addEventListener('click', () => {
+        overlay.remove();
+        resolve(false);
+      });
+      overlay.querySelector('[data-action="try"]').addEventListener('click', () => {
+        overlay.remove();
+        resolve(true);
+      });
+      overlay.querySelector('.sf-modal__overlay').addEventListener('click', () => {
+        overlay.remove();
+        resolve(false);
+      });
+    } else {
+      overlay.querySelector('[data-action="ok"]').addEventListener('click', () => {
+        overlay.remove();
+        resolve();
+      });
+      overlay.querySelector('.sf-modal__overlay').addEventListener('click', () => {
+        overlay.remove();
+        resolve();
+      });
+    }
+
+    document.body.appendChild(overlay);
   });
-
-  document.body.appendChild(overlay);
 }
 
 // Auto-save tabs whenever graph changes (debounced)
