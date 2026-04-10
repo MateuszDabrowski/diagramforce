@@ -70,6 +70,10 @@ assets/
   icons/            SLDS SVG sprite files
 ```
 
+## LLM Diagram Generation
+
+The [`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) file documents the complete JSON structure for all diagram types. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, process flow, etc. The output can be imported directly via File > Import JSON.
+
 ## Browser Support
 
 Tested in Chrome, Vivaldi, and Safari.
