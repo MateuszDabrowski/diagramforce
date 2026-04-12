@@ -596,8 +596,12 @@ function showSessionVersionWarning(savedVersion, diff) {
           and can be loaded from the Load menu.
         </p>`
       : '';
+    const backupBtn = isMajor
+      ? `<button class="sf-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>`
+      : '';
     const buttons = isMajor
-      ? `<button class="sf-modal__btn" data-action="reset">Reset Session</button>
+      ? `<button class="sf-modal__btn" data-action="reset">Don't load</button>
+         ${backupBtn}
          <button class="sf-modal__btn sf-modal__btn--primary" data-action="try">Try Anyway</button>`
       : `<button class="sf-modal__btn sf-modal__btn--primary" data-action="ok">OK</button>`;
 
@@ -610,7 +614,8 @@ function showSessionVersionWarning(savedVersion, diff) {
         <div class="sf-modal__body" style="padding:16px 20px">
           <p style="margin:0 0 12px">
             Diagramforce has been updated from <strong>v${escHtml(savedVersion)}</strong>
-            to <strong>v${escHtml(APP_VERSION)}</strong>.
+            to <strong>v${escHtml(APP_VERSION)}</strong>
+            (<a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener" style="color:var(--color-primary)">GitHub</a>).
           </p>
           <p style="margin:0${footerNote ? ' 0 12px' : ''};color:var(--text-secondary)">
             ${message}
@@ -626,6 +631,48 @@ function showSessionVersionWarning(savedVersion, diff) {
       overlay.querySelector('[data-action="reset"]').addEventListener('click', () => {
         overlay.remove();
         resolve(false);
+      });
+      overlay.querySelector('[data-action="backup"]')?.addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        if (btn.dataset.saved) return;
+        // Export each auto-saved tab as a separate backup JSON file
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const sessionData = JSON.parse(raw);
+            const sessionTabs = sessionData.tabs || [];
+            const d = new Date();
+            const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+            for (const tab of sessionTabs) {
+              if (!tab.graphJSON) continue;
+              const backupData = {
+                version: 1,
+                appVersion: sessionData.appVersion || savedVersion || 'unknown',
+                timestamp: Date.now(),
+                title: tab.name || 'Backup',
+                diagramType: tab.diagramType || 'architecture',
+                graph: tab.graphJSON,
+                viewport: tab.viewport || null,
+              };
+              const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+              const safeName = (tab.name || 'backup').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'backup';
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `${safeName}_backup_${stamp}.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+            }
+          }
+        } catch (err) {
+          console.warn('SF Diagrams: Session backup export failed:', err);
+        }
+        btn.textContent = 'Saved!';
+        btn.style.background = '#2e844a';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#2e844a';
+        btn.dataset.saved = '1';
       });
       overlay.querySelector('[data-action="try"]').addEventListener('click', () => {
         overlay.remove();

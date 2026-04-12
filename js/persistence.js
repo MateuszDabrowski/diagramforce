@@ -131,7 +131,7 @@ export function classifyVersionDiff(savedVersion) {
  * - Major differences: strong warning (probably won't work)
  * - No version info: treated as major
  */
-function checkVersionWarning(savedAppVersion, sourceName) {
+function checkVersionWarning(savedAppVersion, sourceName, rawData) {
   if (compareSemver(savedAppVersion, APP_VERSION) >= 0) {
     return Promise.resolve(true); // same or newer — load without warning
   }
@@ -139,10 +139,10 @@ function checkVersionWarning(savedAppVersion, sourceName) {
   if (diff === 'none' || diff === 'patch') {
     return Promise.resolve(true); // patch-only difference — no warning
   }
-  return showVersionWarningModal(savedAppVersion, sourceName, diff);
+  return showVersionWarningModal(savedAppVersion, sourceName, diff, rawData);
 }
 
-function showVersionWarningModal(savedVersion, sourceName, diff) {
+function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'sf-modal';
@@ -166,14 +166,16 @@ function showVersionWarningModal(savedVersion, sourceName, diff) {
           <p style="margin:0 0 12px">
             <strong>${escHtml(sourceName || 'This diagram')}</strong> was saved with
             <strong>v${escHtml(savedLabel)}</strong>, but the current app version is
-            <strong>v${escHtml(APP_VERSION)}</strong>.
+            <strong>v${escHtml(APP_VERSION)}</strong>
+            (<a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener" style="color:var(--color-primary)">GitHub</a>).
           </p>
           <p style="margin:0;color:var(--text-secondary)">
             ${message}
           </p>
         </div>
         <div class="sf-modal__footer" style="justify-content:flex-end">
-          <button class="sf-modal__btn" data-action="cancel">Cancel</button>
+          <button class="sf-modal__btn" data-action="cancel">Don't load</button>
+          <button class="sf-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>
           <button class="sf-modal__btn sf-modal__btn--primary" data-action="load">${loadLabel}</button>
         </div>
       </div>`;
@@ -181,6 +183,32 @@ function showVersionWarningModal(savedVersion, sourceName, diff) {
     overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => {
       overlay.remove();
       resolve(false);
+    });
+    overlay.querySelector('[data-action="backup"]').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      if (btn.dataset.saved) return;
+      // Export the incoming diagram data as-is (the old version) as a backup
+      const exportData = rawData ? JSON.parse(JSON.stringify(rawData)) : null;
+      if (exportData) {
+        // Normalise structure — share URLs use compact keys (v, av, name, type)
+        const backupData = {
+          version: exportData.version || exportData.v || 1,
+          appVersion: exportData.appVersion || exportData.av || savedVersion || 'unknown',
+          timestamp: exportData.timestamp || Date.now(),
+          title: exportData.title || exportData.name || sourceName || 'Backup',
+          diagramType: exportData.diagramType || exportData.type || 'architecture',
+          graph: exportData.graph,
+          viewport: exportData.viewport || null,
+        };
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const safeName = (backupData.title).replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'backup';
+        triggerDownload(URL.createObjectURL(blob), `${safeName}_backup_${dateSuffix()}.json`);
+      }
+      btn.textContent = 'Saved!';
+      btn.style.background = '#2e844a';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#2e844a';
+      btn.dataset.saved = '1';
     });
     overlay.querySelector('[data-action="load"]').addEventListener('click', () => {
       overlay.remove();
@@ -312,7 +340,7 @@ export async function loadNamedSave(key) {
     const data = JSON.parse(raw);
     const savedVer = data.appVersion || null;
     const name = data.name || key.replace(NAMED_SAVE_PREFIX, '');
-    const ok = await checkVersionWarning(savedVer, name);
+    const ok = await checkVersionWarning(savedVer, name, data);
     if (!ok) return false;
     if (data?.graph) sanitizeGraphJSON(data.graph);
     if (onImportCallback && data?.graph) {
@@ -369,7 +397,7 @@ export function importJSON() {
           const data = JSON.parse(e.target.result);
           const savedVer = data.appVersion || null;
           const name = data.title || file.name.replace(/\.json$/i, '') || 'Imported';
-          const ok = await checkVersionWarning(savedVer, name);
+          const ok = await checkVersionWarning(savedVer, name, data);
           if (!ok) return;
           if (data?.graph) sanitizeGraphJSON(data.graph);
           if (onImportCallback && data?.graph) {
@@ -668,7 +696,7 @@ export async function loadFromURL() {
     history.replaceState(null, '', window.location.pathname);
 
     const savedVer = data.av || null;
-    const ok = await checkVersionWarning(savedVer, data.name || 'Shared Diagram');
+    const ok = await checkVersionWarning(savedVer, data.name || 'Shared Diagram', data);
     if (!ok) return false;
 
     // Import the diagram using the existing import handler
