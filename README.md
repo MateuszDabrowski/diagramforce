@@ -16,6 +16,7 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Smart Node Layout** — Content auto-centers: text-only, icon+text, or description layout
 - **Resize Guides** — Tracking lines extend from resized edges for easy alignment
 - **Export** — Save to browser, export as JSON or PNG, share via copyable URL
+- **Mermaid Import (beta)** — Paste mermaid.js source (`graph` / `flowchart` / `stateDiagram` → Process, `erDiagram` → Data Model) and convert it into a native diagramforce diagram with auto-layout
 - **Fit to Content** — Automatically fits viewport when loading shared or saved diagrams
 - **No Backend** — Everything runs client-side; your diagrams never leave your browser
 

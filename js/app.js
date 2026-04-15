@@ -1,20 +1,21 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.2.0';
-import * as icons       from './icons.js?v=1.2.0';
-import { getAllStencilSvgs } from './templates.js?v=1.2.0';
-import * as shapes      from './shapes.js?v=1.2.0';
-import * as canvas      from './canvas.js?v=1.2.0';
-import * as stencil     from './stencil.js?v=1.2.0';
-import * as selection   from './selection.js?v=1.2.0';
-import * as history     from './history.js?v=1.2.0';
-import * as clipboard   from './clipboard.js?v=1.2.0';
-import * as keyboard    from './keyboard.js?v=1.2.0';
-import * as toolbar     from './toolbar.js?v=1.2.0';
-import * as properties  from './properties.js?v=1.2.0';
-import * as persistence from './persistence.js?v=1.2.0';
-import * as tabs        from './tabs.js?v=1.2.0';
+import * as theme       from './theme.js?v=1.3.1';
+import * as icons       from './icons.js?v=1.3.1';
+import { getAllStencilSvgs } from './templates.js?v=1.3.1';
+import * as shapes      from './shapes.js?v=1.3.1';
+import * as canvas      from './canvas.js?v=1.3.1';
+import * as stencil     from './stencil.js?v=1.3.1';
+import * as selection   from './selection.js?v=1.3.1';
+import * as history     from './history.js?v=1.3.1';
+import * as clipboard   from './clipboard.js?v=1.3.1';
+import * as keyboard    from './keyboard.js?v=1.3.1';
+import * as toolbar     from './toolbar.js?v=1.3.1';
+import * as properties  from './properties.js?v=1.3.1';
+import * as persistence from './persistence.js?v=1.3.1';
+import * as tabs        from './tabs.js?v=1.3.1';
+import * as mermaidImport from './mermaid-import.js?v=1.3.1';
 
 async function main() {
   // Set app version in About modal
@@ -58,6 +59,7 @@ async function main() {
     theme,
     stencil,
     tabs,
+    mermaidImport,
   };
 
   keyboard.init(moduleRefs);
@@ -72,6 +74,9 @@ async function main() {
   // --- Phase 7: Tabs (restores session, manages auto-save) ---
   tabs.init(graph, paper, canvas, selection, history, persistence, stencil);
   tabs.setupAutoSave();
+
+  // --- Phase 7b: Mermaid import (needs tabs + canvas + graph) ---
+  mermaidImport.init(moduleRefs);
 
   // --- Phase 8: Mobile interactions ---
   canvas.initMobileDragHandles();

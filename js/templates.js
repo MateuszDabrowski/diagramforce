@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.2.0';
+import { getIconDataUri } from './icons.js?v=1.3.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -55,9 +55,9 @@ export const SVG = {
   orgDepartment: '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><circle cx="7" cy="8" r="1.5" stroke-width="0.8"/><circle cx="13" cy="8" r="1.5" stroke-width="0.8"/><circle cx="10" cy="13" r="1.5" stroke-width="0.8"/>',
   orgTeam:       '<rect x="2" y="3" width="16" height="14" rx="2"/><rect x="2" y="5" width="2" height="10" rx="1" fill="currentColor" stroke="none" opacity="0.6"/><text x="7" y="8" font-size="4" font-weight="bold" fill="currentColor" stroke="none" opacity="0.5">Team</text><circle cx="8" cy="13" r="1.5" stroke-width="0.8"/><circle cx="13" cy="13" r="1.5" stroke-width="0.8"/>',
   // BPMN Events
-  eventStart:        '<circle cx="10" cy="10" r="7" stroke-width="2"/>',
-  eventEnd:          '<circle cx="10" cy="10" r="7" stroke-width="3"/>',
-  eventIntermediate: '<circle cx="10" cy="10" r="7" stroke-width="2"/><circle cx="10" cy="10" r="5" stroke-width="1"/>',
+  eventStart:        '<circle cx="10" cy="10" r="7" stroke-width="1.5"/>',
+  eventEnd:          '<circle cx="10" cy="10" r="7" stroke-width="4"/>',
+  eventIntermediate: '<circle cx="10" cy="10" r="7" stroke-width="1.5"/><circle cx="10" cy="10" r="4.5" stroke-width="1.5"/>',
   // BPMN Activities
   task:       '<rect x="2" y="4" width="16" height="12" rx="3"/>',
   subprocess: '<rect x="2" y="4" width="16" height="12" rx="3"/><rect x="7.5" y="12" width="5" height="3.5" rx="0.5" fill="none" stroke-width="0.8"/><line x1="10" y1="12.5" x2="10" y2="15" stroke-width="0.8"/><line x1="8.5" y1="13.75" x2="11.5" y2="13.75" stroke-width="0.8"/>',
@@ -998,12 +998,18 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
     case 'sf.BpmnEvent': {
       const eventType = template.eventType || 'start';
       const attrs = { label: { text: label || '' } };
-      // Style based on event type
+      // Style based on event type — distinct fill + border colors so each
+      // type is unambiguously recognizable in both light and dark themes.
       if (eventType === 'end') {
-        attrs.body = { strokeWidth: 3 };
+        attrs.body = { fill: '#F9E3E5', stroke: '#DA4E55', strokeWidth: 4 };
+        attrs.icon = { fill: '#DA4E55' };
       } else if (eventType === 'intermediate') {
-        attrs.body = { strokeWidth: 2 };
-        attrs.innerRing = { stroke: '#222222' };
+        attrs.body = { fill: '#FDF1DC', stroke: '#F6B355', strokeWidth: 1.5 };
+        attrs.innerRing = { stroke: '#F6B355', strokeWidth: 1.5 };
+        attrs.icon = { fill: '#F6B355' };
+      } else {
+        attrs.body = { fill: '#DCF1E2', stroke: '#4FAE7B', strokeWidth: 1.5 };
+        attrs.icon = { fill: '#4FAE7B' };
       }
       return new joint.shapes.sf.BpmnEvent({ position, attrs, eventType });
     }

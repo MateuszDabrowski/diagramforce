@@ -275,7 +275,7 @@ export function register() {
           r: 'calc(0.5 * w)',
           fill: '#FFFFFF',
           stroke: '#222222',
-          strokeWidth: 2,
+          strokeWidth: 1.5,
         },
         innerRing: {
           cx: 'calc(0.5 * w)',

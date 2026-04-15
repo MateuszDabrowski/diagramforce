@@ -7,7 +7,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.2.0",
+  "appVersion": "1.3.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -24,7 +24,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.2.0"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.3.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"data"`, `"organisation"`, `"gantt"` |
@@ -867,7 +867,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.2.0",
+  "appVersion": "1.3.1",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1023,7 +1023,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.2.0",
+  "appVersion": "1.3.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "data",

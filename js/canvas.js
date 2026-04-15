@@ -1274,7 +1274,11 @@ export function autoLayout(direction) {
     // If there's a cycle (no roots), fall back to the highest out-degree node
     if (roots.length === 0) roots.push(ids.reduce((best, id) => (adjOut.get(id) || new Set()).size > (adjOut.get(best) || new Set()).size ? id : best, ids[0]));
 
-    // BFS/topological longest-path assignment
+    // BFS/topological longest-path assignment.
+    // Cycle guard: a longest simple path in a graph with N nodes is at most N-1,
+    // so clamp level updates there — otherwise a back-edge (e.g. B→C→D→B) would
+    // re-push nodes indefinitely and hang the layout.
+    const maxLevel = ids.length - 1;
     const queue = [...roots];
     roots.forEach(r => level.set(r, 0));
     while (queue.length) {
@@ -1283,6 +1287,7 @@ export function autoLayout(direction) {
       for (const n of (adjOut.get(id) || [])) {
         if (!idSet.has(n)) continue;
         const newLevel = l + 1;
+        if (newLevel > maxLevel) continue;
         if (!level.has(n) || level.get(n) < newLevel) {
           level.set(n, newLevel);
           queue.push(n);
@@ -1411,22 +1416,64 @@ export function autoLayout(direction) {
         const nextPos = new Map();
         nextLayer.forEach((id, i) => nextPos.set(id, i));
 
-        const bary = new Map();
+        // Two-phase placement to avoid leaf siblings stealing the center
+        // slot from a branching node. Branching nodes are anchored at a
+        // position proportional to the center-of-mass of their children in
+        // the next layer; leaves are then slotted into remaining positions
+        // preserving their current relative order.
+        const branching = [];
+        const leaves = [];
         for (const id of layer) {
           const nbrs = neighborsInLayer(id, nextSet);
           if (nbrs.length > 0) {
-            bary.set(id, nbrs.reduce((s, n) => s + nextPos.get(n), 0) / nbrs.length);
+            const avgNext = nbrs.reduce((s, n) => s + nextPos.get(n), 0) / nbrs.length;
+            // Map [0, nextLayer.length-1] → [0, layer.length-1].
+            // When the next layer has a single node, every branching node has
+            // the same anchor (0); the collision loop below then shifts them
+            // into distinct slots preserving avgNext order.
+            const scale = nextLayer.length > 1 ? (layer.length - 1) / (nextLayer.length - 1) : 0;
+            const targetPos = Math.round(avgNext * scale);
+            branching.push({ id, targetPos, avgNext });
           } else {
-            bary.set(id, orderIndex.get(id) ?? 0);
+            leaves.push(id);
           }
         }
-        layer.sort((a, b) => bary.get(a) - bary.get(b));
+        // Assign branching nodes to their target slots (resolve collisions
+        // by shifting to the nearest free slot).
+        const slots = new Array(layer.length).fill(null);
+        branching.sort((a, b) => a.avgNext - b.avgNext);
+        for (const b of branching) {
+          let p = Math.max(0, Math.min(layer.length - 1, b.targetPos));
+          if (slots[p] !== null) {
+            // Find nearest free slot
+            let found = -1;
+            for (let d = 1; d < layer.length; d++) {
+              if (p - d >= 0 && slots[p - d] === null) { found = p - d; break; }
+              if (p + d < layer.length && slots[p + d] === null) { found = p + d; break; }
+            }
+            if (found >= 0) p = found;
+          }
+          slots[p] = b.id;
+        }
+        // Fill remaining slots with leaves in their current order
+        let lIdx = 0;
+        for (let i = 0; i < slots.length; i++) {
+          if (slots[i] === null) {
+            while (lIdx < leaves.length && leaves[lIdx] === undefined) lIdx++;
+            slots[i] = leaves[lIdx++];
+          }
+        }
+        layer.length = 0;
+        layer.push(...slots);
         layer.forEach((id, i) => orderIndex.set(id, i));
       }
 
-      // Track the best ordering seen so far
+      // Track the best ordering seen so far.
+      // Use `<=` so later (converged) orderings overwrite earlier ties —
+      // the initial order may already have zero layer-pair crossings but
+      // still produce physically crossed routes.
       const cur = totalCrossings();
-      if (cur < bestCrossings) {
+      if (cur <= bestCrossings) {
         bestCrossings = cur;
         for (const l of sortedLevels) {
           bestOrder.set(l, [...layers.get(l)]);

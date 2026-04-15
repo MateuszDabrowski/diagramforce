@@ -22,6 +22,7 @@ export function init(_modules) {
   setupDropdown('btn-load');
   btn('btn-load-browser').addEventListener('click', () => showLoadModal());
   btn('btn-load-json').addEventListener('click', () => modules.persistence.importJSON());
+  btn('btn-load-mermaid').addEventListener('click', () => showMermaidImportModal());
 
   // Display dropdown (hidden for Gantt, some options data-model only)
   setupDropdown('btn-display');
@@ -50,15 +51,29 @@ export function init(_modules) {
     updateGanttToggleLabels();
   });
 
-  // Auto Layout
-  btn('btn-auto-layout-h').addEventListener('click', () => {
-    modules.canvas.autoLayout('horizontal');
+  // Auto Layout — Process diagrams use the Mermaid-style hierarchical layout
+  // (DFS back-edge detection + longest-path layering + barycentric ordering),
+  // which handles cycles and branching far more cleanly than the generic
+  // force-directed layout. All other diagram types keep the original layout.
+  const runAutoLayout = (direction) => {
+    const type = modules.tabs.getActiveTabType?.();
+    if (type === 'process') {
+      try {
+        modules.mermaidImport.hierarchicalLayout(modules.graph, null, direction);
+        modules.mermaidImport.snapLinksToPorts(modules.graph, direction);
+        requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
+      } catch (err) {
+        console.warn('Process hierarchical layout failed, falling back:', err);
+        modules.canvas.autoLayout(direction);
+      }
+    } else {
+      modules.canvas.autoLayout(direction);
+      try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+    }
     document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
-  });
-  btn('btn-auto-layout-v').addEventListener('click', () => {
-    modules.canvas.autoLayout('vertical');
-    document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
-  });
+  };
+  btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
+  btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
 
   // Update Display menu when tab changes
   if (modules.tabs) {
@@ -357,6 +372,129 @@ function showSaveModal() {
 
     close();
   });
+}
+
+// --- Mermaid Import Modal ---
+
+function showMermaidImportModal() {
+  document.querySelector('.sf-mermaid-modal')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'sf-mermaid-modal sf-modal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="sf-modal__overlay"></div>
+    <div class="sf-modal__dialog" style="width:620px;max-width:92vw">
+      <div class="sf-modal__header">
+        <h2 class="sf-modal__title">
+          Import from Mermaid
+          <span class="sf-badge sf-badge--beta" style="margin-left:8px;padding:2px 6px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>
+        </h2>
+        <button class="sf-toolbar__button sf-mermaid-modal__close" aria-label="Close">
+          <svg class="sf-toolbar__icon"><use href="#close"></use></svg>
+        </button>
+      </div>
+      <div class="sf-modal__body" style="padding:var(--spacing-md) var(--spacing-lg)">
+        <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+          Paste mermaid.js code:
+        </p>
+        <textarea class="sf-mermaid-modal__input" spellcheck="false" rows="14"
+          placeholder="flowchart TD&#10;  A[Start] --&gt; B{Decision}&#10;  B --&gt;|Yes| C[Process]&#10;  B --&gt;|No| D[End]"
+          style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
+        <p class="sf-mermaid-modal__supported" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+          <span class="sf-mermaid-modal__supported-label">Supported:</span>
+          <span data-type="graph"><strong>graph</strong> → Process</span>,
+          <span data-type="flowchart"><strong>flowchart</strong> → Process</span>,
+          <span data-type="state"><strong>stateDiagram</strong> → Process</span>,
+          <span data-type="er"><strong>erDiagram</strong> → Data Model</span>.
+        </p>
+      </div>
+      <div class="sf-modal__footer" style="justify-content:flex-end;gap:8px">
+        <button class="sf-modal__btn sf-mermaid-modal__cancel">Cancel</button>
+        <button class="sf-modal__btn sf-modal__btn--primary sf-mermaid-modal__import" disabled>Import</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector('.sf-mermaid-modal__input');
+  const importBtn = overlay.querySelector('.sf-mermaid-modal__import');
+  const supportedP = overlay.querySelector('.sf-mermaid-modal__supported');
+  const supportedLabel = overlay.querySelector('.sf-mermaid-modal__supported-label');
+  const supportedSpans = overlay.querySelectorAll('.sf-mermaid-modal__supported [data-type]');
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+
+  overlay.querySelector('.sf-modal__overlay').addEventListener('click', close);
+  overlay.querySelector('.sf-mermaid-modal__close').addEventListener('click', close);
+  overlay.querySelector('.sf-mermaid-modal__cancel').addEventListener('click', close);
+
+  const resetSpans = () => {
+    supportedSpans.forEach(s => {
+      s.style.color = '';
+      s.style.fontWeight = '';
+      s.style.textDecoration = '';
+      s.style.opacity = '';
+    });
+  };
+  const setIdle = () => {
+    supportedP.style.color = 'var(--text-secondary)';
+    supportedLabel.textContent = 'Supported:';
+    resetSpans();
+  };
+  const setDetected = (type) => {
+    supportedP.style.color = 'var(--text-secondary)';
+    supportedLabel.textContent = 'Detected:';
+    resetSpans();
+    supportedSpans.forEach(s => {
+      if (s.dataset.type === type) {
+        s.style.color = 'var(--color-primary)';
+        s.style.fontWeight = '600';
+      } else {
+        s.style.textDecoration = 'line-through';
+        s.style.opacity = '0.55';
+      }
+    });
+  };
+  const setUnsupported = () => {
+    supportedP.style.color = 'var(--color-error, #ba0517)';
+    supportedLabel.textContent = 'Could not detect a supported diagram type.';
+    resetSpans();
+    supportedSpans.forEach(s => {
+      s.style.textDecoration = 'line-through';
+      s.style.opacity = '0.55';
+    });
+  };
+  const validate = () => {
+    const text = input.value;
+    if (!text.trim()) {
+      importBtn.disabled = true;
+      setIdle();
+      return;
+    }
+    const v = modules.mermaidImport.validateMermaid(text);
+    if (v.ok) {
+      importBtn.disabled = false;
+      setDetected(v.type);
+    } else {
+      importBtn.disabled = true;
+      setUnsupported();
+    }
+  };
+  input.addEventListener('input', validate);
+
+  importBtn.addEventListener('click', () => {
+    const ok = modules.mermaidImport.importMermaidText(input.value);
+    if (ok) close();
+  });
+
+  setTimeout(() => input.focus(), 50);
 }
 
 // --- Shared modal helpers ---
