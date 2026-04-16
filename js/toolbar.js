@@ -10,8 +10,20 @@ export function init(_modules) {
   setupDropdown('btn-save');
   btn('btn-save-browser').addEventListener('click', () => showSaveModal());
   btn('btn-save-json').addEventListener('click', () => modules.persistence.exportJSON());
-  btn('btn-save-png').addEventListener('click', () => modules.persistence.exportPNG(false));
-  btn('btn-save-png-t').addEventListener('click', () => modules.persistence.exportPNG(true));
+  btn('btn-save-png').addEventListener('click', () => {
+    if (document.getElementById('paper')?.classList.contains('sf-animate-flow')) {
+      modules.persistence.exportGIF(false);
+    } else {
+      modules.persistence.exportPNG(false);
+    }
+  });
+  btn('btn-save-png-t').addEventListener('click', () => {
+    if (document.getElementById('paper')?.classList.contains('sf-animate-flow')) {
+      modules.persistence.exportGIF(true);
+    } else {
+      modules.persistence.exportPNG(true);
+    }
+  });
   btn('btn-save-share').addEventListener('click', () => modules.persistence.shareAsURL());
   document.getElementById('btn-share-url').addEventListener('click', () => modules.persistence.shareAsURL());
 
@@ -74,6 +86,15 @@ export function init(_modules) {
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
   btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
+
+  // Animate Connectors toggle
+  btn('btn-animate-flow').addEventListener('click', () => {
+    const paperEl = document.getElementById('paper');
+    const isOn = paperEl.classList.toggle('sf-animate-flow');
+    const animBtn = document.getElementById('btn-animate-flow');
+    if (animBtn) animBtn.textContent = isOn ? 'Stop Animation' : 'Animate Connectors';
+    updateExportButtons(isOn);
+  });
 
   // Update Display menu when tab changes
   if (modules.tabs) {
@@ -666,6 +687,23 @@ function updateDisplayMenuVisibility() {
   if (lenBtn) lenBtn.style.display = isDataModel ? '' : 'none';
   if (dmSep) dmSep.style.display = isDataModel ? '' : 'none';
 
+  // Show animate connectors for architecture, process, datamodel
+  const showFlow = type === 'architecture' || type === 'process' || type === 'datamodel';
+  const flowSep = document.getElementById('display-flow-separator');
+  const flowBtn = document.getElementById('btn-animate-flow');
+  if (flowSep) flowSep.style.display = showFlow ? '' : 'none';
+  if (flowBtn) flowBtn.style.display = showFlow ? '' : 'none';
+
+  // Stop animation and reset export buttons when switching away from supported types
+  if (!showFlow) {
+    const paperEl = document.getElementById('paper');
+    if (paperEl?.classList.contains('sf-animate-flow')) {
+      paperEl.classList.remove('sf-animate-flow');
+      if (flowBtn) flowBtn.textContent = 'Animate Connectors';
+      updateExportButtons(false);
+    }
+  }
+
   if (isGantt) {
     dd.style.display = '';
     updateGanttToggleLabels();
@@ -837,6 +875,13 @@ function setupToolbarCentering() {
   const ro = new ResizeObserver(checkOverlap);
   ro.observe(toolbar);
   checkOverlap();
+}
+
+function updateExportButtons(animating) {
+  const pngBtn = document.getElementById('btn-save-png');
+  const pngTBtn = document.getElementById('btn-save-png-t');
+  if (pngBtn) pngBtn.textContent = animating ? 'Save to GIF' : 'Save to PNG';
+  if (pngTBtn) pngTBtn.textContent = animating ? 'Save to transparent GIF' : 'Save to transparent PNG';
 }
 
 function btn(id) {

@@ -34,6 +34,15 @@
   stroke-width: 2 !important;
 }
 
+/* Line shape selection — highlight the line, not the hit area */
+.joint-element.selected line[joint-selector="line"] {
+  stroke: var(--selection-color) !important;
+}
+
+.joint-element.selected rect[joint-selector="hitArea"] {
+  stroke: none !important;
+}
+
 /* Show and highlight available ports when dragging a link */
 .joint-port.available-magnet {
   opacity: 1 !important;
@@ -119,4 +128,32 @@
   .joint-link .connection-wrap {
     stroke-width: 24px;
   }
+}
+
+/* ── Inline text editing overlay ──────────────────────────────── */
+.sf-inline-edit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.sf-inline-edit__input {
+  pointer-events: all;
+  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.2);
+}
+
+[data-theme="dark"] .sf-inline-edit__input {
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.2);
+}
+
+/* ── Animated connector flow ─────────────────────────────────── */
+.sf-animate-flow .joint-link [joint-selector="line"] {
+  stroke-dasharray: 8 4;
+  animation: sf-flow 0.6s linear infinite;
+}
+
+@keyframes sf-flow {
+  from { stroke-dashoffset: 12; }
+  to   { stroke-dashoffset: 0; }
 }

@@ -1,21 +1,21 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.3.2';
-import * as icons       from './icons.js?v=1.3.2';
-import { getAllStencilSvgs } from './templates.js?v=1.3.2';
-import * as shapes      from './shapes.js?v=1.3.2';
-import * as canvas      from './canvas.js?v=1.3.2';
-import * as stencil     from './stencil.js?v=1.3.2';
-import * as selection   from './selection.js?v=1.3.2';
-import * as history     from './history.js?v=1.3.2';
-import * as clipboard   from './clipboard.js?v=1.3.2';
-import * as keyboard    from './keyboard.js?v=1.3.2';
-import * as toolbar     from './toolbar.js?v=1.3.2';
-import * as properties  from './properties.js?v=1.3.2';
-import * as persistence from './persistence.js?v=1.3.2';
-import * as tabs        from './tabs.js?v=1.3.2';
-import * as mermaidImport from './mermaid-import.js?v=1.3.2';
+import * as theme       from './theme.js?v=1.4.1';
+import * as icons       from './icons.js?v=1.4.1';
+import { getAllStencilSvgs } from './templates.js?v=1.4.1';
+import * as shapes      from './shapes.js?v=1.4.1';
+import * as canvas      from './canvas.js?v=1.4.1';
+import * as stencil     from './stencil.js?v=1.4.1';
+import * as selection   from './selection.js?v=1.4.1';
+import * as history     from './history.js?v=1.4.1';
+import * as clipboard   from './clipboard.js?v=1.4.1';
+import * as keyboard    from './keyboard.js?v=1.4.1';
+import * as toolbar     from './toolbar.js?v=1.4.1';
+import * as properties  from './properties.js?v=1.4.1';
+import * as persistence from './persistence.js?v=1.4.1';
+import * as tabs        from './tabs.js?v=1.4.1';
+import * as mermaidImport from './mermaid-import.js?v=1.4.1';
 
 async function main() {
   // Set app version in About modal

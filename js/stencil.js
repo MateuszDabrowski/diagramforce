@@ -1,9 +1,9 @@
 // Stencil panel — draggable component library
 // Organizes templates by category, supports search, handles drag-to-canvas
 
-import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.3.2';
-import { getAllIcons, getCategories } from './icons.js?v=1.3.2';
-import { updateSimpleNodeLayout } from './canvas.js?v=1.3.2';
+import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.4.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.4.1';
+import { updateSimpleNodeLayout } from './canvas.js?v=1.4.1';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -282,6 +282,7 @@ function setDragPreview(evt, template) {
   else if (type === 'sf.DataObject') { w = 180; h = 72; }
   else if (type === 'sf.Note') { w = 120; h = 64; }
   else if (type === 'sf.TextLabel') { w = 100; h = 24; }
+  else if (type === 'sf.Line') { w = 120; h = 8; }
   else if (type.startsWith('sf.Bpmn') || type.startsWith('sf.Flow')) { w = 100; h = 48; }
   else if (type.startsWith('sf.Gantt')) { w = 160; h = 28; }
   else if (type === 'sf.OrgPerson') { w = 180; h = 72; }

@@ -25,6 +25,7 @@ export const Z_BASE = {
   'sf.BpmnLoop':       500,
   'sf.SimpleNode':     2000,
   'sf.TextLabel':      2000,
+  'sf.Line':           2000,
   'sf.Note':           2000,
   'sf.BpmnEvent':      2000,
   'sf.BpmnTask':       2000,
@@ -1013,7 +1014,7 @@ export function updateSimpleNodeLayout(cell) {
       label: {
         x: 'calc(0.5*w + 20)', y: 'calc(0.5*h)',
         textAnchor: 'middle', textVerticalAnchor: 'middle',
-        textWrap: { width: 'calc(w - 64)', maxLineCount: 2, ellipsis: true },
+        textWrap: { width: 'calc(w - 64)', maxLineCount: 4, ellipsis: true },
       },
       subtitle: { visibility: 'hidden' },
     });
@@ -1024,7 +1025,7 @@ export function updateSimpleNodeLayout(cell) {
       label: {
         x: 'calc(0.5*w)', y: 'calc(0.5*h)',
         textAnchor: 'middle', textVerticalAnchor: 'middle',
-        textWrap: { width: 'calc(w - 24)', maxLineCount: 2, ellipsis: true },
+        textWrap: { width: 'calc(w - 24)', maxLineCount: 4, ellipsis: true },
       },
       subtitle: { visibility: 'hidden' },
     });

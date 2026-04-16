@@ -7,7 +7,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.3.2",
+  "appVersion": "1.4.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -24,7 +24,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.3.2"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.4.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"data"`, `"organisation"`, `"gantt"` |
@@ -101,7 +101,7 @@ Most shapes need ports for connecting links. Include this `ports` block for any 
 }
 ```
 
-Shapes that do NOT have ports: `sf.TextLabel`, `sf.Note`, `sf.Zone`, `sf.BpmnPool`.
+Shapes that do NOT have ports: `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Zone`, `sf.BpmnPool`.
 
 ## Link Structure
 
@@ -406,6 +406,41 @@ Post-it style sticky note.
   }
 }
 ```
+
+No ports.
+
+### sf.Line
+
+Decorative horizontal line separator. Available in all diagram types.
+
+**Default size:** `200 x 8`
+
+```json
+{
+  "id": "line-1",
+  "type": "sf.Line",
+  "position": { "x": 100, "y": 300 },
+  "size": { "width": 200, "height": 8 },
+  "z": 2000,
+  "lineStyle": "solid",
+  "attrs": {
+    "hitArea": {
+      "width": "calc(w)", "height": "calc(h)",
+      "fill": "transparent", "stroke": "none"
+    },
+    "line": {
+      "x1": 0, "y1": "calc(0.5 * h)", "x2": "calc(w)", "y2": "calc(0.5 * h)",
+      "stroke": "var(--text-muted)", "strokeWidth": 2, "strokeLinecap": "round"
+    }
+  }
+}
+```
+
+**`lineStyle`** — `"solid"` (default), `"dashed"`, `"dotted"`, or `"breaks"`. Controls `strokeDasharray`:
+- `solid` → `none`
+- `dashed` → `12 6`
+- `dotted` → `3 4`
+- `breaks` → `16 8 2 8`
 
 No ports.
 
@@ -867,7 +902,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.3.2",
+  "appVersion": "1.4.1",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1023,7 +1058,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.3.2",
+  "appVersion": "1.4.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "data",

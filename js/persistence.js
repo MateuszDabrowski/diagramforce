@@ -1,10 +1,12 @@
-// Persistence — named saves, JSON import/export, PNG export
+// Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
+
+import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.4.1';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -506,6 +508,140 @@ export function exportPNG(transparent = false) {
   } catch (err) {
     alert('PNG export failed: ' + err.message);
     console.error('SF Diagrams: PNG export failed:', err);
+  }
+}
+
+/**
+ * Export an animated GIF of the diagram with flowing connector dashes.
+ * Renders multiple frames with varying stroke-dashoffset on link lines,
+ * then encodes them as an animated GIF using gifenc.
+ */
+export async function exportGIF(transparent = false) {
+  try {
+    const contentBBox = paper.getContentBBox();
+    if (!contentBBox || contentBBox.width === 0) {
+      alert('The diagram is empty — nothing to export.');
+      return;
+    }
+
+    const padding = 32;
+    const exportW = contentBBox.width + padding * 2;
+    const exportH = contentBBox.height + padding * 2;
+    const scale = 2; // 2× for retina sharpness
+    const canvasW = Math.round(exportW * scale);
+    const canvasH = Math.round(exportH * scale);
+
+    // Animation parameters — must match css/canvas.css .sf-animate-flow
+    const TOTAL_FRAMES = 12;
+    const DASH_TOTAL = 12; // stroke-dasharray: 8 4 → total repeat = 12
+    const FRAME_DELAY = 50; // ms per frame (12 frames × 50ms = 600ms = one cycle)
+
+    // Prepare a base SVG clone (same pipeline as exportPNG)
+    function prepareBaseSvg() {
+      const svgEl = paper.svg;
+      const svgClone = svgEl.cloneNode(true);
+      svgClone.setAttribute('width', exportW);
+      svgClone.setAttribute('height', exportH);
+      svgClone.setAttribute('viewBox',
+        `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`
+      );
+      const viewport = svgClone.querySelector('.joint-viewport');
+      if (viewport) viewport.removeAttribute('transform');
+      svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
+      const spritesContainer = document.getElementById('slds-icons');
+      if (spritesContainer) {
+        const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defsEl.innerHTML = spritesContainer.innerHTML;
+        svgClone.insertBefore(defsEl, svgClone.firstChild);
+      }
+      replaceForeignObjects(svgClone);
+      resolveCssVars(svgClone);
+      return svgClone;
+    }
+
+    // Determine background color
+    const theme = document.documentElement.getAttribute('data-theme');
+    const bgColor = transparent ? null : (theme === 'dark' ? '#1A1A1A' : '#FAFAFA');
+
+    // Render a single frame: clone SVG, set dash offset, rasterise to canvas
+    function renderFrame(frameIndex) {
+      return new Promise((resolve, reject) => {
+        const svgClone = prepareBaseSvg();
+
+        // Apply animated dash to all link lines
+        const offset = DASH_TOTAL - (frameIndex * (DASH_TOTAL / TOTAL_FRAMES));
+        svgClone.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
+          line.setAttribute('stroke-dasharray', '8 4');
+          line.setAttribute('stroke-dashoffset', String(offset));
+        });
+
+        const svgStr = new XMLSerializer().serializeToString(svgClone);
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvasW;
+          canvas.height = canvasH;
+          const ctx = canvas.getContext('2d');
+
+          if (bgColor) {
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvasW, canvasH);
+          }
+
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, exportW, exportH);
+
+          const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
+          URL.revokeObjectURL(svgUrl);
+          resolve(imageData.data);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(svgUrl);
+          reject(new Error('Frame rendering failed'));
+        };
+        img.src = svgUrl;
+      });
+    }
+
+    // Render all frames and encode GIF
+    const gif = GIFEncoder();
+
+    for (let i = 0; i < TOTAL_FRAMES; i++) {
+      const rgba = await renderFrame(i);
+      const palette = quantize(rgba, 256, { format: 'rgba4444' });
+      const index = applyPalette(rgba, palette, 'rgba4444');
+
+      const writeOpts = { palette, delay: FRAME_DELAY };
+      if (transparent) {
+        // Find the transparent entry in palette (closest to [0,0,0,0])
+        let tIdx = 0;
+        let minDist = Infinity;
+        for (let p = 0; p < palette.length; p++) {
+          const r = palette[p][0], g = palette[p][1], b = palette[p][2], a = palette[p][3];
+          // Prefer fully transparent pixels
+          if (a === 0) { tIdx = p; minDist = 0; break; }
+          const dist = a; // lower alpha = more transparent
+          if (dist < minDist) { minDist = dist; tIdx = p; }
+        }
+        writeOpts.transparent = true;
+        writeOpts.transparentIndex = tIdx;
+      }
+
+      gif.writeFrame(index, canvasW, canvasH, writeOpts);
+    }
+
+    gif.finish();
+    const bytes = gif.bytes();
+    const blob = new Blob([bytes], { type: 'image/gif' });
+    const gifName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
+    triggerDownload(URL.createObjectURL(blob), `${gifName}_${dateSuffix()}.gif`);
+
+  } catch (err) {
+    alert('GIF export failed: ' + err.message);
+    console.error('SF Diagrams: GIF export failed:', err);
   }
 }
 

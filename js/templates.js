@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.3.2';
+import { getIconDataUri } from './icons.js?v=1.4.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -42,6 +42,7 @@ export const SVG = {
   text:       '<line x1="5" y1="4" x2="15" y2="4"/><line x1="10" y1="4" x2="10" y2="16"/><line x1="7" y1="16" x2="13" y2="16"/>',
   note:       '<path d="M4 3h9l3 3v11H4z"/><path d="M13 3v3h3"/>',
   zone:       '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><line x1="4" y1="6" x2="10" y2="6" stroke-width="1" opacity="0.5"/>',
+  line:       '<line x1="2" y1="10" x2="18" y2="10" stroke-width="2" stroke-linecap="round"/>',
   // Flowchart
   flowProcess:    '<rect x="2" y="4" width="16" height="12" rx="2"/>',
   flowDecision:   '<path d="M10 3L18 10L10 17L2 10Z"/>',
@@ -89,6 +90,7 @@ export const TEMPLATE_CATEGORIES = [
       { type: 'sf.Note',        label: 'Note',       stencilSvg: SVG.note  },
       { type: 'sf.TextLabel',   label: 'Text',       stencilSvg: SVG.text  },
       { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
     ],
   },
   // ── Salesforce Products ────────────────────────────────────────────
@@ -372,6 +374,7 @@ export const BPMN_CATEGORIES = [
       { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
     ],
   },
 ];
@@ -445,6 +448,7 @@ export const GANTT_CATEGORIES = [
       { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
     ],
   },
 ];
@@ -469,6 +473,7 @@ export const ORG_CATEGORIES = [
       { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
     ],
   },
 ];
@@ -491,6 +496,7 @@ export const DATAMODEL_CATEGORIES = [
       { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
     ],
   },
   {
@@ -973,6 +979,9 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
         position,
         attrs: { label: { text: label || 'Label' } },
       });
+
+    case 'sf.Line':
+      return new joint.shapes.sf.Line({ position });
 
     case 'sf.Note': {
       const noteIconId = iconName || 'light_bulb';

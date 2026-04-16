@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.3.2';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.3.2';
-import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.3.2';
-import { duplicate as clipboardDuplicate } from './clipboard.js?v=1.3.2';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.4.1';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.4.1';
+import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.4.1';
+import { duplicate as clipboardDuplicate } from './clipboard.js?v=1.4.1';
 
 /** Resolve a color value — if it's a CSS var(), compute the actual color; otherwise return as-is. */
 function resolveColor(color) {
@@ -40,6 +40,7 @@ const TYPE_LABELS = {
   'sf.FlowPredefined': 'Predefined Process',
   'sf.FlowOffPage':    'Off-Page Link',
   'sf.Annotation':     'Annotation',
+  'sf.Line':           'Line',
   'sf.DataObject':     'Object',
   'sf.OrgPerson':      'Person',
   'sf.GanttTask':      'Task',
@@ -72,6 +73,7 @@ const DEFAULT_SIZES = {
   'sf.FlowPredefined': { width: 120, height: 60 },
   'sf.FlowOffPage':    { width: 60,  height: 60 },
   'sf.Annotation':     { width: 100, height: 120 },
+  'sf.Line':           { width: 200, height: 8 },
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },
   'sf.GanttMilestone': { width: 24,  height: 24 },
@@ -102,6 +104,9 @@ export function init(_graph, _paper, _selection) {
 
   selection.onChange((ids) => {
     cleanupCanvasHighlights();
+    // Dismiss any inline text editor (trigger blur to save and clean up)
+    const activeEditor = document.querySelector('.sf-inline-edit__input');
+    if (activeEditor) activeEditor.blur();
     if (ids.length === 1) {
       const cell = graph.getCell(ids[0]);
       if (cell) showProperties(cell);
@@ -113,19 +118,149 @@ export function init(_graph, _paper, _selection) {
     }
   });
 
-  // Double-click on element enters edit mode (focuses first input for label editing)
-  paper.on('cell:pointerdblclick', (cellView) => {
+  // Double-click on element opens inline text editor on canvas
+  paper.on('cell:pointerdblclick', (cellView, evt) => {
     if (!cellView.model.isElement()) return;
-    setTimeout(() => {
-      const firstInput = bodyEl.querySelector('.sf-properties__input');
-      if (firstInput) firstInput.focus();
-    }, 50);
+    startInlineEdit(cellView, evt);
+  });
+
+  // Dismiss inline editor on blank area click
+  paper.on('blank:pointerdown', () => {
+    const editor = document.querySelector('.sf-inline-edit__input');
+    if (editor) editor.blur();
   });
 }
 
 /** Remove any lingering caret highlights from the canvas */
 function cleanupCanvasHighlights() {
   document.querySelectorAll('.sf-canvas-caret').forEach(el => el.remove());
+}
+
+// ── Inline canvas text editing ──────────────────────────────────────
+
+/** Determine the primary label attr path for a given element type */
+function getLabelAttrPath(cell) {
+  const type = cell.get('type') || '';
+  if (type === 'sf.Container' || type === 'sf.DataObject') return 'headerLabel/text';
+  if (type === 'sf.OrgPerson') return null; // complex custom view — use properties panel
+  if (type === 'sf.Line') return null;     // no label — use properties panel
+  return 'label/text';
+}
+
+/** Start inline text editing on the canvas overlay */
+function startInlineEdit(cellView, evt) {
+  // Remove any existing inline editor
+  document.querySelector('.sf-inline-edit')?.remove();
+
+  const cell = cellView.model;
+  const type = cell.get('type') || '';
+
+  // Skip types that don't have simple editable labels
+  const attrPath = getLabelAttrPath(cell);
+  if (!attrPath) {
+    // Fall back to focusing the properties panel
+    setTimeout(() => {
+      const firstInput = bodyEl.querySelector('.sf-properties__input');
+      if (firstInput) firstInput.focus();
+    }, 50);
+    return;
+  }
+
+  const currentText = cell.attr(attrPath) || '';
+
+  // Find the SVG text element for positioning
+  const selector = attrPath.split('/')[0]; // 'label' or 'headerLabel'
+  const textEl = cellView.el.querySelector(`text[joint-selector="${selector}"]`);
+  if (!textEl) return;
+
+  const canvasContainer = document.getElementById('canvas-container');
+  const containerRect = canvasContainer.getBoundingClientRect();
+
+  // Use the element's actual screen bounding rect for reliable positioning
+  const elRect = cellView.el.getBoundingClientRect();
+  const scale = paper.scale().sx;
+
+  // Create overlay textarea
+  const overlay = document.createElement('div');
+  overlay.className = 'sf-inline-edit';
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'sf-inline-edit__input';
+  textarea.value = currentText;
+
+  // Match font styling from the SVG text
+  const computed = window.getComputedStyle(textEl);
+  const fontSize = parseFloat(textEl.getAttribute('font-size') || computed.fontSize || 13) * scale;
+  const fontWeight = textEl.getAttribute('font-weight') || computed.fontWeight || 'normal';
+  const fontFamily = textEl.getAttribute('font-family') || computed.fontFamily || 'system-ui, -apple-system, sans-serif';
+  const textAnchor = textEl.getAttribute('text-anchor') || 'middle';
+
+  // Position the textarea over the element
+  const pad = 2;
+  textarea.style.cssText = `
+    position: absolute;
+    left: ${elRect.left - containerRect.left - pad}px;
+    top: ${elRect.top - containerRect.top - pad}px;
+    width: ${elRect.width + pad * 2}px;
+    height: ${elRect.height + pad * 2}px;
+    font-size: ${fontSize}px;
+    font-weight: ${fontWeight};
+    font-family: ${fontFamily};
+    text-align: ${textAnchor === 'middle' ? 'center' : 'left'};
+    line-height: 1.3;
+    color: var(--text-primary);
+    background: var(--bg-canvas);
+    border: 2px solid var(--selection-color);
+    border-radius: 4px;
+    padding: ${4 * scale}px ${6 * scale}px;
+    outline: none;
+    resize: none;
+    overflow: hidden;
+    z-index: 100;
+    box-sizing: border-box;
+  `;
+
+  overlay.appendChild(textarea);
+  canvasContainer.appendChild(overlay);
+
+  // Hide the original text while editing
+  textEl.style.opacity = '0';
+  // Also hide subtitle if editing the main label
+  const subtitleEl = cellView.el.querySelector('text[joint-selector="subtitle"]');
+  if (subtitleEl && selector === 'label') subtitleEl.style.opacity = '0';
+
+  textarea.focus();
+  textarea.select();
+
+  const finish = () => {
+    if (overlay._finished) return;
+    overlay._finished = true;
+
+    const newText = textarea.value;
+    if (newText !== currentText) {
+      cell.attr(attrPath, newText);
+      // Trigger layout updates for SimpleNode
+      if (type === 'sf.SimpleNode') updateSimpleNodeLayout(cell);
+      // Refresh properties panel if visible
+      const ids = selection.getSelectedIds();
+      if (ids.length === 1 && ids[0] === cell.id) showProperties(cell);
+    }
+
+    // Restore text visibility
+    textEl.style.opacity = '';
+    if (subtitleEl && selector === 'label') subtitleEl.style.opacity = '';
+    overlay.remove();
+  };
+
+  textarea.addEventListener('blur', finish);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      textarea.value = currentText; // revert
+      textarea.blur();
+    }
+    // Allow Enter for multiline; Shift is not needed
+    e.stopPropagation(); // prevent keyboard shortcuts
+  });
 }
 
 function showProperties(cell) {
@@ -167,6 +302,7 @@ function showProperties(cell) {
   else if (type === 'sf.GanttTimeline') renderGanttTimelineProps(cell);
   else if (type === 'sf.GanttGroup') renderGanttGroupProps(cell);
   else if (type === 'sf.OrgPerson') renderOrgPersonProps(cell);
+  else if (type === 'sf.Line')     renderLineProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
 
   // Don't auto-focus inputs on single click — single click selects, double click edits.
@@ -574,6 +710,42 @@ function renderTextLabelProps(cell) {
   addOrderButtons(text, cell, 'Node layer');
 
   // Delete (in footer)
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderLineProps(cell) {
+  const LINE_STYLES = [
+    { value: 'solid',  label: 'Solid' },
+    { value: 'dashed', label: 'Dashed' },
+    { value: 'dotted', label: 'Dotted' },
+    { value: 'breaks', label: 'Breaks' },
+  ];
+
+  function applyLineStyle(style) {
+    cell.set('lineStyle', style);
+    const dashMap = { solid: 'none', dashed: '12 6', dotted: '3 4', breaks: '16 8 2 8' };
+    cell.attr('line/strokeDasharray', dashMap[style] || 'none');
+  }
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addSelect(appearance, 'Style', cell.get('lineStyle') || 'solid', LINE_STYLES, v => applyLineStyle(v));
+  addColor(appearance, 'Color', cell.attr('line/stroke'), v => cell.attr('line/stroke', v));
+  addNumber(appearance, 'Thickness', cell.attr('line/strokeWidth') ?? 2, v => cell.attr('line/strokeWidth', v));
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.Line'];
+    cell.resize(def.width, def.height);
+  });
+  addOrderButtons(size, cell, 'Node layer');
+
+  // Footer
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
 }
@@ -2207,11 +2379,17 @@ function field(parent, label) {
 
 function addText(parent, label, value, onChange, cell) {
   const f = field(parent, label);
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'sf-properties__input';
+  const input = document.createElement('textarea');
+  input.className = 'sf-properties__input sf-properties__text-input';
   input.value = value ?? '';
-  input.addEventListener('input', () => onChange(input.value));
+  input.rows = 1;
+  // Auto-size: grow to fit content, minimum 1 row
+  const autoSize = () => {
+    const lines = (input.value.match(/\n/g) || []).length + 1;
+    input.rows = Math.max(1, lines);
+  };
+  autoSize();
+  input.addEventListener('input', () => { onChange(input.value); autoSize(); });
   // Highlight label on canvas when editing (auto-detect cell from selection if not passed)
   const targetCell = cell || getActiveCell();
   if (targetCell) wireCanvasLabelHighlight(input, targetCell);

@@ -192,6 +192,13 @@
   line-height: 1.5;
 }
 
+.sf-properties__text-input {
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
+  field-sizing: content;
+}
+
 .sf-properties__input:focus {
   outline: none;
   border-color: var(--color-primary);

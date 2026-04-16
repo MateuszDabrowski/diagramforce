@@ -57,7 +57,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: 'var(--node-text)',
           text: 'Node',
-          textWrap: { width: 'calc(w - 64)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 64)', maxLineCount: 4, ellipsis: true },
         },
         subtitle: {
           x: 12,
@@ -148,7 +148,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: 'var(--node-subtitle)',
           text: '',
-          textWrap: { width: 'calc(w - 28)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 28)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: {
@@ -192,6 +192,37 @@ export function register() {
     {
       markup: [
         { tagName: 'text', selector: 'label' },
+      ],
+    }
+  );
+
+  // --- Line ---
+  // A decorative line element — horizontal by default, resizable.
+  // Supports solid, dotted, dashed, and break styles via lineStyle property.
+  // No ports — purely decorative.
+  joint.dia.Element.define(
+    'sf.Line',
+    {
+      size: { width: 200, height: 8 },
+      z: 2000,
+      lineStyle: 'solid',          // 'solid' | 'dotted' | 'dashed' | 'breaks'
+      attrs: {
+        hitArea: {
+          width: 'calc(w)', height: 'calc(h)',
+          fill: 'transparent', stroke: 'none',
+        },
+        line: {
+          x1: 0, y1: 'calc(0.5 * h)', x2: 'calc(w)', y2: 'calc(0.5 * h)',
+          stroke: 'var(--text-muted)',
+          strokeWidth: 2,
+          strokeLinecap: 'round',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'hitArea' },
+        { tagName: 'line', selector: 'line' },
       ],
     }
   );
@@ -351,7 +382,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Task',
-          textWrap: { width: 'calc(w - 16)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 16)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: {
@@ -656,7 +687,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Process',
-          textWrap: { width: 'calc(w - 16)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 16)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: { groups: portGroups, items: portItems },
@@ -773,7 +804,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Database',
-          textWrap: { width: 'calc(w - 16)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 16)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: { groups: portGroups, items: portItems },
@@ -810,7 +841,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Document',
-          textWrap: { width: 'calc(w - 16)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 16)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: { groups: portGroups, items: portItems },
@@ -846,7 +877,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Input / Output',
-          textWrap: { width: 'calc(w - 48)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 48)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: { groups: portGroups, items: portItems },
@@ -895,7 +926,7 @@ export function register() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#222222',
           text: 'Predefined',
-          textWrap: { width: 'calc(w - 36)', maxLineCount: 2, ellipsis: true },
+          textWrap: { width: 'calc(w - 36)', maxLineCount: 4, ellipsis: true },
         },
       },
       ports: { groups: portGroups, items: portItems },
