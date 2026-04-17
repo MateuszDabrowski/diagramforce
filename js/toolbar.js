@@ -94,6 +94,7 @@ export function init(_modules) {
     const animBtn = document.getElementById('btn-animate-flow');
     if (animBtn) animBtn.textContent = isOn ? 'Stop Animation' : 'Animate Connectors';
     updateExportButtons(isOn);
+    if (isOn) startFlowAnimation(); else stopFlowAnimation();
   });
 
   // Update Display menu when tab changes
@@ -701,6 +702,7 @@ function updateDisplayMenuVisibility() {
       paperEl.classList.remove('sf-animate-flow');
       if (flowBtn) flowBtn.textContent = 'Animate Connectors';
       updateExportButtons(false);
+      stopFlowAnimation();
     }
   }
 
@@ -875,6 +877,73 @@ function setupToolbarCentering() {
   const ro = new ResizeObserver(checkOverlap);
   ro.observe(toolbar);
   checkOverlap();
+}
+
+// ── Flow animation overlays ──────────────────────────────────────
+// Safari propagates stroke-dasharray into SVG <marker> content at
+// the rendering level — CSS cannot override it.  We work around this
+// by cloning each link's line path WITHOUT markers, then animating
+// the clone.  The original path keeps its markers un-dashed.
+
+let _flowObserver = null;
+let _flowActive = false;
+
+function startFlowAnimation() {
+  _flowActive = true;
+  syncFlowOverlays();
+
+  const target = document.querySelector('#paper svg .joint-viewport')
+              || document.querySelector('#paper svg');
+  if (target) {
+    _flowObserver = new MutationObserver(() => {
+      if (!_flowActive) return;
+      scheduleFlowSync();
+    });
+    _flowObserver.observe(target, { childList: true, subtree: true });
+  }
+}
+
+function stopFlowAnimation() {
+  _flowActive = false;
+  if (_flowObserver) { _flowObserver.disconnect(); _flowObserver = null; }
+  document.querySelectorAll('.sf-flow-overlay').forEach(el => el.remove());
+}
+
+let _flowSyncId = 0;
+function scheduleFlowSync() {
+  if (_flowSyncId) return;
+  _flowSyncId = requestAnimationFrame(() => {
+    _flowSyncId = 0;
+    if (_flowActive) syncFlowOverlays();
+  });
+}
+
+function syncFlowOverlays() {
+  // Disconnect observer while we mutate the DOM to avoid feedback loops
+  if (_flowObserver) _flowObserver.disconnect();
+
+  // Remove stale overlays
+  document.querySelectorAll('.sf-flow-overlay').forEach(el => el.remove());
+
+  // Clone each link line — strip markers, add animation class
+  document.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
+    const clone = line.cloneNode(false);
+    clone.removeAttribute('marker-start');
+    clone.removeAttribute('marker-end');
+    clone.removeAttribute('marker-mid');
+    clone.removeAttribute('joint-selector');
+    clone.setAttribute('class', 'sf-flow-overlay');
+    line.parentNode.insertBefore(clone, line.nextSibling);
+  });
+
+  // Reconnect observer
+  if (_flowActive && _flowObserver) {
+    const target = document.querySelector('#paper svg .joint-viewport')
+                || document.querySelector('#paper svg');
+    if (target) {
+      _flowObserver.observe(target, { childList: true, subtree: true });
+    }
+  }
 }
 
 function updateExportButtons(animating) {

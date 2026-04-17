@@ -6,7 +6,7 @@ import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -568,11 +568,21 @@ export async function exportGIF(transparent = false) {
       return new Promise((resolve, reject) => {
         const svgClone = prepareBaseSvg();
 
-        // Apply animated dash to all link lines
+        // Inverse-masking approach: clone each link line ON TOP without markers,
+        // paint background-coloured dashes that "erase" sections of the solid
+        // original line underneath.  This avoids Safari's marker inheritance bug.
         const offset = DASH_TOTAL - (frameIndex * (DASH_TOTAL / TOTAL_FRAMES));
+        const eraseFill = bgColor || '#FFFFFF';
         svgClone.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
-          line.setAttribute('stroke-dasharray', '8 4');
-          line.setAttribute('stroke-dashoffset', String(offset));
+          const overlay = line.cloneNode(false);
+          overlay.removeAttribute('marker-start');
+          overlay.removeAttribute('marker-end');
+          overlay.removeAttribute('marker-mid');
+          overlay.removeAttribute('joint-selector');
+          overlay.setAttribute('stroke', eraseFill);
+          overlay.setAttribute('stroke-dasharray', '4 8');
+          overlay.setAttribute('stroke-dashoffset', String(offset));
+          line.parentNode.insertBefore(overlay, line.nextSibling);
         });
 
         const svgStr = new XMLSerializer().serializeToString(svgClone);

@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.4.1';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.4.1';
-import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.4.1';
-import { duplicate as clipboardDuplicate } from './clipboard.js?v=1.4.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.4.2';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.4.2';
+import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.4.2';
+import { duplicate as clipboardDuplicate } from './clipboard.js?v=1.4.2';
 
 /** Resolve a color value — if it's a CSS var(), compute the actual color; otherwise return as-is. */
 function resolveColor(color) {

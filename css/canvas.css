@@ -148,9 +148,16 @@
 }
 
 /* ── Animated connector flow ─────────────────────────────────── */
-.sf-animate-flow .joint-link [joint-selector="line"] {
-  stroke-dasharray: 8 4;
+/* Safari propagates stroke-dasharray into SVG <marker> content at the
+   rendering level — CSS cannot override it.  We work around this by
+   placing a clone ON TOP of the original line that paints background-
+   coloured dashes, effectively "erasing" sections and revealing flowing
+   gaps.  The original solid line + markers underneath stays untouched. */
+.sf-flow-overlay {
+  stroke: var(--bg-canvas) !important;
+  stroke-dasharray: 4 8;
   animation: sf-flow 0.6s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes sf-flow {
