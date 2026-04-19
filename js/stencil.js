@@ -1,9 +1,9 @@
 // Stencil panel — draggable component library
 // Organizes templates by category, supports search, handles drag-to-canvas
 
-import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.5.2';
-import { getAllIcons, getCategories } from './icons.js?v=1.5.2';
-import { updateSimpleNodeLayout } from './canvas.js?v=1.5.2';
+import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.6.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.6.1';
+import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.6.1';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -39,6 +39,7 @@ function renderCategories() {
                    : currentDiagramType === 'datamodel' ? DATAMODEL_CATEGORIES
                    : currentDiagramType === 'gantt' ? GANTT_CATEGORIES
                    : currentDiagramType === 'org' ? ORG_CATEGORIES
+                   : currentDiagramType === 'sequence' ? SEQUENCE_CATEGORIES
                    : TEMPLATE_CATEGORIES;
 
   for (const category of categories) {
@@ -208,6 +209,10 @@ function setupDropZone() {
         graph.addCell(element);
         updateSimpleNodeLayout(element);
         tryEmbed(element);
+        // Capture: drop-on-lifeline snaps activation's X to the lifeline centre.
+        if (element.get('type') === 'sf.SequenceActivation') {
+          snapActivationToLifeline(element);
+        }
       }
     } catch (err) {
       console.warn('SF Diagrams: Drop failed:', err);
@@ -348,6 +353,8 @@ function tryEmbed(element) {
       valid = childType !== 'sf.BpmnPool' && childType !== 'sf.BpmnSubprocess';
     } else if (parentType === 'sf.GanttTimeline') {
       valid = childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
+    } else if (parentType === 'sf.SequenceParticipant' || parentType === 'sf.SequenceActor') {
+      valid = childType === 'sf.SequenceActivation';
     }
     if (valid) {
       candidate.embed(element);

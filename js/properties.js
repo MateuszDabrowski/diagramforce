@@ -1,9 +1,9 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.5.2';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.5.2';
-import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.5.2';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.6.1';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.6.1';
+import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.6.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -12,8 +12,8 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.5.2';
-import * as history from './history.js?v=1.5.2';
+} from './clipboard.js?v=1.6.1';
+import * as history from './history.js?v=1.6.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -72,6 +72,10 @@ const TYPE_LABELS = {
   'sf.GanttMarker':    'Today Marker',
   'sf.GanttTimeline':  'Timeline',
   'sf.GanttGroup':     'Group',
+  'sf.SequenceParticipant': 'Participant',
+  'sf.SequenceActor':       'Actor',
+  'sf.SequenceActivation':  'Activation',
+  'sf.SequenceFragment':    'Fragment',
 };
 
 // Default sizes used by "Auto Size"
@@ -105,6 +109,10 @@ const DEFAULT_SIZES = {
   'sf.GanttTimeline':  { width: 960, height: 48 },
   'sf.GanttGroup':     { width: 360, height: 24 },
   'sf.OrgPerson':      { width: 280, height: 90 },
+  'sf.SequenceParticipant': { width: 140, height: 360 },
+  'sf.SequenceActor':       { width: 100, height: 340 },
+  'sf.SequenceActivation':  { width: 12,  height: 80 },
+  'sf.SequenceFragment':    { width: 400, height: 200 },
 };
 
 // Per-type color field schema used by the multi-select Colors section.
@@ -249,6 +257,62 @@ const COLOR_SCHEMA = {
     { label: 'Label color',
       get: c => c.attr('label/fill'),
       set: (c, v) => c.attr('label/fill', v) },
+  ],
+  'sf.SequenceParticipant': [
+    { label: 'Accent',
+      get: c => c.attr('headerAccent/fill'),
+      set: (c, v) => {
+        c.attr('headerAccent/fill', v);
+        c.attr('header/stroke', v);
+        c.attr('lifeline/stroke', v);
+        c.attr('underline/stroke', v);
+      } },
+    { label: 'Fill',
+      get: c => c.attr('header/fill'),
+      set: (c, v) => c.attr('header/fill', v) },
+    { label: 'Label color',
+      get: c => c.attr('label/fill'),
+      set: (c, v) => c.attr('label/fill', v) },
+  ],
+  'sf.SequenceActor': [
+    { label: 'Accent',
+      get: c => c.attr('actorHead/stroke'),
+      set: (c, v) => {
+        c.attr('actorHead/stroke', v);
+        c.attr('actorBody/stroke', v);
+        c.attr('actorArms/stroke', v);
+        c.attr('actorLegLeft/stroke', v);
+        c.attr('actorLegRight/stroke', v);
+        c.attr('lifeline/stroke', v);
+      } },
+    { label: 'Label color',
+      get: c => c.attr('label/fill'),
+      set: (c, v) => c.attr('label/fill', v) },
+  ],
+  'sf.SequenceActivation': [
+    { label: 'Fill',
+      get: c => c.attr('body/fill'),
+      set: (c, v) => c.attr('body/fill', v) },
+    { label: 'Border',
+      get: c => c.attr('body/stroke'),
+      set: (c, v) => c.attr('body/stroke', v) },
+  ],
+  'sf.SequenceFragment': [
+    { label: 'Border',
+      get: c => c.attr('body/stroke'),
+      set: (c, v) => {
+        c.attr('body/stroke', v);
+        c.attr('titleTab/stroke', v);
+      } },
+    { label: 'Fill',
+      get: c => c.attr('body/fill'),
+      set: (c, v) => c.attr('body/fill', v) },
+    { label: 'Label color',
+      get: c => c.attr('titleText/fill'),
+      set: (c, v) => {
+        c.attr('titleText/fill', v);
+        c.attr('conditionText/fill', v);
+      } },
   ],
 };
 
@@ -500,6 +564,10 @@ function showProperties(cell) {
   else if (type === 'sf.GanttTimeline') renderGanttTimelineProps(cell);
   else if (type === 'sf.GanttGroup') renderGanttGroupProps(cell);
   else if (type === 'sf.OrgPerson') renderOrgPersonProps(cell);
+  else if (type === 'sf.SequenceParticipant') renderSequenceParticipantProps(cell);
+  else if (type === 'sf.SequenceActor')       renderSequenceActorProps(cell);
+  else if (type === 'sf.SequenceActivation')  renderSequenceActivationProps(cell);
+  else if (type === 'sf.SequenceFragment')    renderSequenceFragmentProps(cell);
   else if (type === 'sf.Line')     renderLineProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
 
@@ -574,6 +642,36 @@ function showMultiProperties(count) {
     const allSameR = radii.every(r => r === radii[0]);
     addNumber(appearanceSec, 'Corner radius', allSameR ? radii[0] : 8, v => {
       elements.forEach(c => { c.attr('body/rx', v); c.attr('body/ry', v); });
+    });
+  }
+
+  // ── Sequence lifeline — port count — only when every selected element is
+  // a sequence shape with a configurable lifeline. For actors, the port
+  // count only takes effect when their lifeline is currently shown (the
+  // rebuilder still stores the count so it applies on next Show).
+  const SEQ_WITH_PORTS = new Set([
+    'sf.SequenceParticipant',
+    'sf.SequenceActor',
+    'sf.SequenceActivation',
+  ]);
+  if (elements.length > 1 && elements.every(c => SEQ_WITH_PORTS.has(c.get('type')))) {
+    const seqSec = section(bodyEl, 'Lifeline');
+    const counts = elements.map(c => c.get('lifelinePortCount') ?? (c.get('type') === 'sf.SequenceActivation' ? 2 : 5));
+    const allSameCount = counts.every(n => n === counts[0]);
+    addNumber(seqSec, 'Ports', allSameCount ? counts[0] : '', v => {
+      const n = Math.max(1, v | 0);
+      elements.forEach(c => {
+        const t = c.get('type');
+        if (t === 'sf.SequenceParticipant') joint.shapes.sf.rebuildSeqParticipantPorts(c, n);
+        else if (t === 'sf.SequenceActor') {
+          // Only rebuild ports when the actor's lifeline is actually visible;
+          // otherwise just store the count so re-showing the lifeline picks
+          // it up (rebuildSeqActorPorts sets lifelinePortCount either way).
+          if (c.get('showLifeline')) joint.shapes.sf.rebuildSeqActorPorts(c, n);
+          else c.set('lifelinePortCount', n);
+        }
+        else if (t === 'sf.SequenceActivation') joint.shapes.sf.rebuildSeqActivationPorts(c, n);
+      });
     });
   }
 
@@ -2227,6 +2325,201 @@ function renderOrgPersonProps(cell) {
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
 }
 
+// ── Sequence Diagram renderers ────────────────────────────────────
+
+function renderSequenceParticipantProps(cell) {
+  // Content
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.attr('label/text'), v => {
+    cell.attr('label/text', v);
+    titleEl.textContent = v || 'Participant';
+  }, cell);
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Accent',     cell.attr('headerAccent/fill'), v => {
+    cell.attr('headerAccent/fill', v);
+  });
+  addColor(appearance, 'Fill',        cell.attr('header/fill'),       v => cell.attr('header/fill', v));
+  addColor(appearance, 'Label color', cell.attr('label/fill'),        v => cell.attr('label/fill', v));
+
+  // Lifeline — port count (ports auto-distribute evenly along the lifeline)
+  const lifeline = section(bodyEl, 'Lifeline');
+  addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 5, v => {
+    joint.shapes.sf.rebuildSeqParticipantPorts(cell, v);
+  });
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.SequenceParticipant'];
+    cell.resize(def.width, def.height);
+  });
+  addApplySizeBtn(size, cell);
+  addOrderButtons(size, cell, 'Node layer');
+
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderSequenceActorProps(cell) {
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.attr('label/text'), v => {
+    cell.attr('label/text', v);
+    titleEl.textContent = v || 'Actor';
+  }, cell);
+
+  const appearance = section(bodyEl, 'Appearance');
+  // Stick figure stroke (optional tint) — lifeline keeps its own theme-aware
+  // default so hiding the figure tint doesn't also wipe the lifeline colour.
+  addColor(appearance, 'Stroke', cell.attr('actorHead/stroke'), v => {
+    cell.attr('actorHead/stroke', v);
+    cell.attr('actorBody/stroke', v);
+    cell.attr('actorArms/stroke', v);
+    cell.attr('actorLegLeft/stroke', v);
+    cell.attr('actorLegRight/stroke', v);
+  });
+  addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
+
+  // Lifeline — show/hide slider + port count (when shown)
+  const showLifeline = cell.get('showLifeline') !== false;
+  const lifeline = section(bodyEl, 'Lifeline');
+  addSegmented(lifeline, 'Visibility', showLifeline, [
+    { value: true,  label: 'Show' },
+    { value: false, label: 'Hide' },
+  ], v => {
+    joint.shapes.sf.setActorLifelineVisible(cell, v);
+    // Re-render the panel so the Ports field appears/disappears
+    showProperties(cell);
+  });
+  if (showLifeline) {
+    addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 5, v => {
+      joint.shapes.sf.rebuildSeqActorPorts(cell, v);
+    });
+  }
+
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.SequenceActor'];
+    // When lifeline hidden, auto-size to just the figure+label block
+    const h = showLifeline ? def.height : 92;
+    cell.resize(def.width, h);
+  });
+  addApplySizeBtn(size, cell);
+  addOrderButtons(size, cell, 'Node layer');
+
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderSequenceActivationProps(cell) {
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
+
+  // Lifeline — port count (auto-distributed evenly)
+  const lifeline = section(bodyEl, 'Lifeline');
+  addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 2, v => {
+    joint.shapes.sf.rebuildSeqActivationPorts(cell, v);
+  });
+
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.SequenceActivation'];
+    cell.resize(def.width, def.height);
+  });
+  addApplySizeBtn(size, cell);
+  addOrderButtons(size, cell, 'Node layer');
+
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderSequenceFragmentProps(cell) {
+  const FRAGMENT_TYPES = [
+    { value: 'standard',    label: 'Standard' },
+    { value: 'alternative', label: 'Alternative' },
+  ];
+
+  const setAlternativeVisibility = (isAlt) => {
+    cell.attr('dividerLine/visibility', isAlt ? 'visible' : 'hidden');
+    cell.attr('elseText/visibility', isAlt ? 'visible' : 'hidden');
+    const elseCond = cell.get('elseCondition') || '';
+    cell.attr('elseText/text', isAlt ? (elseCond ? `[${elseCond}]` : '[else]') : '');
+  };
+
+  // Content
+  const content = section(bodyEl, 'Content');
+  addSelect(content, 'Type', cell.get('fragmentType') || 'standard', FRAGMENT_TYPES, v => {
+    cell.set('fragmentType', v);
+    const isAlt = v === 'alternative';
+    setAlternativeVisibility(isAlt);
+    // Auto-adjust the label only when it still matches the default for the
+    // previous type — preserves any custom text the user typed.
+    const curLabel = cell.get('fragmentLabel') || cell.attr('titleText/text') || '';
+    if (curLabel === 'loop' || curLabel === 'alt' || curLabel === '') {
+      const newLabel = isAlt ? 'alt' : 'loop';
+      cell.set('fragmentLabel', newLabel);
+      cell.attr('titleText/text', newLabel);
+      labelInput.value = newLabel;
+      joint.shapes.sf.updateFragmentTitleTab?.(cell);
+    }
+  });
+  const labelInput = addText(content, 'Label', cell.get('fragmentLabel') || cell.attr('titleText/text') || '', v => {
+    cell.set('fragmentLabel', v);
+    cell.attr('titleText/text', v);
+    // Resize the trapezoidal tab to fit the new label.
+    joint.shapes.sf.updateFragmentTitleTab?.(cell);
+  });
+  addText(content, 'Condition', cell.get('condition') ?? 'if', v => {
+    cell.set('condition', v);
+    cell.attr('conditionText/text', v ? `[${v}]` : '');
+  });
+  addText(content, 'Else condition', cell.get('elseCondition') ?? 'else', v => {
+    cell.set('elseCondition', v);
+    const isAlt = (cell.get('fragmentType') || 'standard') === 'alternative';
+    cell.attr('elseText/text', isAlt ? (v ? `[${v}]` : '[else]') : '');
+  });
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Border', cell.attr('body/stroke'), v => {
+    cell.attr('body/stroke', v);
+    cell.attr('titleTab/stroke', v);
+    cell.attr('dividerLine/stroke', v);
+  });
+  addColor(appearance, 'Fill', cell.attr('body/fill') || 'transparent', v => cell.attr('body/fill', v));
+  addColor(appearance, 'Label color', cell.attr('titleText/fill'), v => {
+    cell.attr('titleText/fill', v);
+    cell.attr('conditionText/fill', v);
+    cell.attr('elseText/fill', v);
+  });
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.SequenceFragment'];
+    cell.resize(def.width, def.height);
+  });
+  addApplySizeBtn(size, cell);
+  addOrderButtons(size, cell, 'Container layer');
+
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
 function renderLinkProps(cell) {
   // Label
   const labelSec = section(bodyEl, 'Label');
@@ -2303,6 +2596,11 @@ function renderLinkProps(cell) {
     // and auto-trims the line at the marker boundary. Using JointJS native
     // coordinate convention: tip at negative-x, base at x=0.
     arrow:       { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' },
+    // Line arrow (open V): two-stroke open arrowhead, no fill. Used for
+    // async/open messages on sequence diagrams; also useful as a lighter
+    // alternative to the filled arrow on any diagram type. Explicit fill/
+    // stroke because this is an open path (won't auto-inherit like `arrow`).
+    lineArrow:   { type: 'path', d: 'M 0 -6 L -14 0 L 0 6', fill: 'none', stroke: stroke, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' },
     // ── ER notation (negative-x = toward element, positive-x = toward link) ──
     // One: bar at entity end (x=-12) + stem back to line (x=0)
     one:         { type: 'path', d: 'M -12 -8 L -12 8 M -12 0 L 0 0', fill: 'none', stroke: stroke, 'stroke-width': 2 },
@@ -2318,6 +2616,7 @@ function renderLinkProps(cell) {
   const markerOpts = [
     { value: 'none',      label: 'None' },
     { value: 'arrow',     label: 'Arrow' },
+    { value: 'lineArrow', label: 'Line Arrow' },
     { value: 'one',       label: 'One (1)' },
     { value: 'zeroOne',   label: 'Zero or One (0..1)' },
     { value: 'many',      label: 'Many (N)' },
@@ -2330,6 +2629,11 @@ function renderLinkProps(cell) {
     if (!d) return 'none';
     // Arrow: closed path with 'z'
     if (d.includes('z')) return 'arrow';
+    // Line Arrow: two strokes meeting at the tip `M 0 -6 L -14 0 L 0 6` — no
+    // `z`, open V. Also accept the reversed-tip form that shipped in an earlier
+    // 1.6.0 build so existing diagrams keep showing the picker as "Line Arrow".
+    if (/M\s*0\s+-6\s+L\s*-14\s+0\s+L\s*0\s+6/.test(d)) return 'lineArrow';
+    if (/M\s*-14\s+-6\s+L\s*0\s+0\s+L\s*-14\s+6/.test(d)) return 'lineArrow';
     // Crow's foot detection: has "L 0 0" vertex AND prong "L -12 8", or old format "L 12 0"
     const isCrowFoot = (d.includes('L 0 0') && /L\s*-12\s+8/.test(d)) || d.includes('L 12 0');
     const hasCircle = /a [345] [345]/.test(d);
@@ -2371,6 +2675,7 @@ function renderLinkProps(cell) {
   const markerSvgs = {
     none:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/>',
     arrow:     '<line x1="2" y1="9" x2="20" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 4 L 31 9 L 20 14 Z" fill="currentColor"/>',
+    lineArrow: '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 3 L 30 9 L 20 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>',
     one:       '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
     zeroOne:   '<line x1="2" y1="9" x2="18" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="22" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="26" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
     many:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -2620,6 +2925,8 @@ function addText(parent, label, value, onChange, cell) {
   input.className = 'sf-properties__input sf-properties__text-input';
   input.value = value ?? '';
   input.rows = 1;
+  // Return the input so callers can imperatively sync its value (e.g. when
+  // another control changes the underlying model and the field must reflect it).
   // Auto-size: grow to fit content, minimum 1 row
   const autoSize = () => {
     const lines = (input.value.match(/\n/g) || []).length + 1;
@@ -2631,6 +2938,7 @@ function addText(parent, label, value, onChange, cell) {
   const targetCell = cell || getActiveCell();
   if (targetCell) wireCanvasLabelHighlight(input, targetCell);
   f.appendChild(input);
+  return input;
 }
 
 /** Get the currently selected single cell */
@@ -3172,6 +3480,63 @@ function renderTimelineTaskEditor(parent, cell) {
 
   rebuild();
   parent.appendChild(listEl);
+}
+
+// Slide/switch toggle for boolean properties. `value` is a boolean; onChange
+// fires with the new boolean. Styled via `.sf-properties__toggle*` CSS.
+function addToggle(parent, label, value, onChange) {
+  const f = field(parent, label);
+  const wrap = document.createElement('label');
+  wrap.className = 'sf-properties__toggle';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.className = 'sf-properties__toggle-input';
+  input.checked = !!value;
+  const track = document.createElement('span');
+  track.className = 'sf-properties__toggle-track';
+  const thumb = document.createElement('span');
+  thumb.className = 'sf-properties__toggle-thumb';
+  track.appendChild(thumb);
+  wrap.appendChild(input);
+  wrap.appendChild(track);
+  input.addEventListener('change', () => onChange(input.checked));
+  f.appendChild(wrap);
+}
+
+// Two-position segmented slider. Unlike addToggle (a plain on/off switch),
+// this renders both options as labelled pill buttons inside a shared track,
+// so each state has an explicit name (e.g. "Show" / "Hide"). `options` is
+// `[{ value, label }, ...]`; `onChange` fires with the selected value when
+// the user picks a different one.
+function addSegmented(parent, label, value, options, onChange) {
+  const f = field(parent, label);
+  const wrap = document.createElement('div');
+  wrap.className = 'sf-properties__segmented';
+  wrap.setAttribute('role', 'radiogroup');
+  const buttons = [];
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sf-properties__segmented-option';
+    btn.textContent = opt.label;
+    btn.setAttribute('role', 'radio');
+    const isActive = opt.value === value;
+    btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    if (isActive) btn.classList.add('sf-properties__segmented-option--active');
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('sf-properties__segmented-option--active')) return;
+      buttons.forEach(b => {
+        b.classList.remove('sf-properties__segmented-option--active');
+        b.setAttribute('aria-checked', 'false');
+      });
+      btn.classList.add('sf-properties__segmented-option--active');
+      btn.setAttribute('aria-checked', 'true');
+      onChange(opt.value);
+    });
+    buttons.push(btn);
+    wrap.appendChild(btn);
+  });
+  f.appendChild(wrap);
 }
 
 function addSelect(parent, label, value, options, onChange) {

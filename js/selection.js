@@ -21,7 +21,9 @@ function addResizeHandles(view) {
   const grid = paper.options.gridSize || 16;
   const snapDelta = v => Math.round(v / grid) * grid;
   const type = model.get('type');
-  const minW = 80;
+  // Activations are narrow strips sitting on top of participant lifelines —
+  // their starting width is 12, so the minimum should be the same (not 80).
+  const minW = (type === 'sf.SequenceActivation') ? 12 : 80;
   const minH = (type === 'sf.GanttTask' || type === 'sf.GanttMilestone') ? 24 : (type === 'sf.GanttGroup') ? 16 : 40;
 
   RESIZE_CORNERS.forEach(({ cx, cy, cursor }) => {

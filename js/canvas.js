@@ -47,6 +47,10 @@ export const Z_BASE = {
   'sf.GanttTimeline':  1000,
   'sf.GanttGroup':     1000,
   'sf.OrgPerson':      2000,
+  'sf.SequenceFragment':    500,   // subprocess tier — groups messages
+  'sf.SequenceParticipant': 2000,  // node tier — participants + lifelines
+  'sf.SequenceActor':       2000,
+  'sf.SequenceActivation':  2200,  // above participant lifeline, below links
 };
 export const Z_TIER_SPAN = 499;   // 500 slots per tier (0–499 relative to base)
 export const Z_LINK_BASE  = 3000;
@@ -76,8 +80,31 @@ function getGridColor() {
 // Guarantees a 32px stub out from each port before routing, and never crosses
 // non-endpoint elements. Falls back to JointJS manhattan when port info is unavailable.
 function registerSfRouter() {
-  const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (12px) + arrow length (10px)
+  const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
   const PAD = 16;   // clearance around obstacles (must be < STUB so stubs are outside padded zones)
+
+  // Best-effort calc() evaluator covering the handful of forms used by our
+  // shape definitions: calc(w), calc(h), calc(<r> * w [+ <o>]), calc(<r> * h
+  // [+ <o>]). Falls back to a plain number if no match.
+  function resolveCalc(expr, w, h) {
+    if (typeof expr === 'number') return expr;
+    if (typeof expr !== 'string') return 0;
+    // Matches `calc(ratio * dim)` or `calc(ratio * dim ± offset)`. The offset
+    // group captures either a `+`-prefixed (possibly negative) number or a
+    // `-`-prefixed positive number so both `+ -8` and `- 8` resolve correctly.
+    const mul = expr.match(/calc\s*\(\s*([\d.]+)\s*\*\s*([whWH])\s*(?:([+-])\s*(-?[\d.]+))?\s*\)/);
+    if (mul) {
+      const ratio = parseFloat(mul[1]);
+      const dim = mul[2].toLowerCase() === 'w' ? w : h;
+      const sign = mul[3] === '-' ? -1 : 1;
+      const offset = mul[4] ? sign * parseFloat(mul[4]) : 0;
+      return ratio * dim + offset;
+    }
+    const plain = expr.match(/calc\s*\(\s*([whWH])\s*\)/);
+    if (plain) return plain[1].toLowerCase() === 'w' ? w : h;
+    const n = parseFloat(expr);
+    return isNaN(n) ? 0 : n;
+  }
 
   // Return {dir, stub} for a given cell+port, or null.
   function getPortInfo(cell, portId, bbox) {
@@ -93,6 +120,21 @@ function registerSfRouter() {
       case 'top':        return { dir: 'top',    stub: { x: cx, y: bbox.y - STUB } };
       case 'fieldRight': return { dir: 'right',  stub: { x: bbox.x + bbox.width + STUB, y: bbox.y + (port.args?.y || cy) } };
       case 'fieldLeft':  return { dir: 'left',   stub: { x: bbox.x - STUB, y: bbox.y + (port.args?.y || cy) } };
+      case 'seq-left': {
+        // Anchor the stub to the port's actual x (not the cell edge) so
+        // participant/actor lifeline ports (which sit at 0.5*w - offset, not
+        // at the cell edge) stub out from the LIFELINE, not from the wide
+        // header. Activations have port x = 0, which equals their left edge
+        // — same result as before.
+        const px = bbox.x + resolveCalc(port.args?.x, bbox.width, bbox.height);
+        const py = bbox.y + resolveCalc(port.args?.y, bbox.width, bbox.height);
+        return { dir: 'left',  stub: { x: px - STUB, y: py } };
+      }
+      case 'seq-right': {
+        const px = bbox.x + resolveCalc(port.args?.x, bbox.width, bbox.height);
+        const py = bbox.y + resolveCalc(port.args?.y, bbox.width, bbox.height);
+        return { dir: 'right', stub: { x: px + STUB, y: py } };
+      }
       default: return null;
     }
   }
@@ -233,13 +275,47 @@ function registerSfRouter() {
 
     const srcParent = getParent(srcCell);
     const tgtParent = getParent(tgtCell);
-    const srcEmbedded = srcParent?.get('type') === 'sf.Container';
-    const tgtEmbedded = tgtParent?.get('type') === 'sf.Container';
+    const EMBED_PARENT_TYPES = new Set(['sf.Container', 'sf.SequenceParticipant', 'sf.SequenceActor']);
+    const srcEmbedded = EMBED_PARENT_TYPES.has(srcParent?.get('type'));
+    const tgtEmbedded = EMBED_PARENT_TYPES.has(tgtParent?.get('type'));
 
     const srcBBox = srcCell.getBBox();
     const tgtBBox = tgtCell.getBBox();
-    const srcInfo = getPortInfo(srcCell, srcDef.port, srcBBox);
-    const tgtInfo = getPortInfo(tgtCell, tgtDef.port, tgtBBox);
+    let srcInfo = getPortInfo(srcCell, srcDef.port, srcBBox);
+    let tgtInfo = getPortInfo(tgtCell, tgtDef.port, tgtBBox);
+
+    // Self-loop on a sequence lifeline/activation: UML convention is to draw
+    // self-messages on ONE side of the lifeline (exit right, loop down, re-
+    // enter right). Without this override, a right-to-left self-loop would
+    // either cross the lifeline visual or detour all the way above the
+    // participant header. Force both stubs onto the source's exit side so the
+    // link always stays on the same side of the lifeline.
+    //
+    // All three sequence shapes are lifeline-centred, so we compute the
+    // anchor X from the cell's horizontal centre and stub out by the regular
+    // STUB (32 px) measured from the port — matching inter-participant links
+    // and guaranteeing a visible horizontal exit segment after the 16 px
+    // defaultConnectionPoint offset is subtracted.
+    if (srcCell === tgtCell && srcInfo && tgtInfo) {
+      const type = srcCell.get('type');
+      if (type === 'sf.SequenceParticipant' || type === 'sf.SequenceActor' || type === 'sf.SequenceActivation') {
+        const side = srcInfo.dir === 'left' ? 'left' : 'right';
+        const isNarrow = type === 'sf.SequenceActivation';
+        // Port anchor X on the chosen side:
+        //   Participants/Actors — port sits LIFELINE_PORT_OFFSET (8) off the
+        //   cell's horizontal centre (which is the lifeline axis).
+        //   Activations — ports sit on the cell edges (the narrow bar
+        //   straddles the lifeline, so its edges ARE offset from the axis).
+        const LIFELINE_PORT_OFFSET = 8;
+        const anchorX = isNarrow
+          ? (side === 'right' ? srcBBox.x + srcBBox.width : srcBBox.x)
+          : (srcBBox.x + srcBBox.width / 2
+              + (side === 'right' ? LIFELINE_PORT_OFFSET : -LIFELINE_PORT_OFFSET));
+        const stubX = side === 'right' ? anchorX + STUB : anchorX - STUB;
+        srcInfo = { dir: side, stub: { x: stubX, y: srcInfo.stub.y } };
+        tgtInfo = { dir: side, stub: { x: stubX, y: tgtInfo.stub.y } };
+      }
+    }
 
     if (!srcInfo || !tgtInfo) {
       return joint.routers.normal(vertices, args, linkView);
@@ -247,16 +323,38 @@ function registerSfRouter() {
 
     // Build obstacle list — includes source and target so routes go AROUND them
     // (stubs are already outside the padded zones since STUB > PAD).
-    // Exclude only: zones, text labels, and parent containers of embedded nodes.
+    // Exclude only: zones, text labels, parent containers of embedded nodes,
+    // AND the source/target cell itself for SEQUENCE self-loops — the stub
+    // override above places sequence self-loop stubs at lifeline±32 px (INSIDE
+    // the cell's padded bbox for wide participants) so the cell must be pass-
+    // through for its own loop to route. For every other self-loop the stubs
+    // are outside the bbox, so keeping the cell as an obstacle forces the
+    // route to go AROUND the node instead of cutting through it.
     const obstacles = [];
     const excludeIds = new Set();
     if (srcEmbedded) excludeIds.add(srcParent.id);
     if (tgtEmbedded) excludeIds.add(tgtParent.id);
+    if (srcCell === tgtCell) {
+      const t = srcCell.get('type');
+      if (t === 'sf.SequenceParticipant' || t === 'sf.SequenceActor' || t === 'sf.SequenceActivation') {
+        excludeIds.add(srcCell.id);
+      }
+    }
 
     for (const el of gr.getElements()) {
       const type = el.get('type');
       if (type === 'sf.Zone' || type === 'sf.TextLabel' || type === 'sf.Note' || type === 'sf.BpmnPool' || type === 'sf.BpmnDataObject'
         || type === 'sf.GanttTimeline' || type === 'sf.GanttGroup') continue;
+      // Sequence shapes are semantically pass-through — in UML a message line
+      // may cross any lifeline between source and target. Treating them as
+      // obstacles forces inter-participant connectors to detour around full-
+      // height columns, which looks broken. Activations are excluded too so
+      // messages can cross activation bars on intervening lifelines, and
+      // Fragments (loop/alt/opt frames) are excluded because messages are
+      // typically drawn THROUGH them. Self-loops still get the same-side
+      // override above, which is independent of the obstacle set.
+      if (type === 'sf.SequenceParticipant' || type === 'sf.SequenceActor'
+        || type === 'sf.SequenceActivation' || type === 'sf.SequenceFragment') continue;
       if (excludeIds.has(el.id)) continue;
       const bb = el.getBBox();
       if (bb) obstacles.push({ x: bb.x, y: bb.y, width: bb.width, height: bb.height });
@@ -371,6 +469,17 @@ export function init() {
     cell.set('z', nextZ);
   });
 
+  // ── Sequence Participant: keep bottom mirror in sync with top header ──
+  // Whenever the top label text, header fill or accent changes, mirror the
+  // update onto the bottom header so the two stay consistent. Skipped during
+  // diagram load — migrateNodes handles that case in one pass.
+  graph.on('change:attrs', (cell) => {
+    if (_isLoadingJSON) return;
+    if (!cell.isElement()) return;
+    if (cell.get('type') !== 'sf.SequenceParticipant') return;
+    joint.shapes.sf.syncParticipantBottomLabel?.(cell);
+  });
+
   paper = new joint.dia.Paper({
     el: document.getElementById('paper'),
     model: graph,
@@ -410,8 +519,10 @@ export function init() {
     defaultConnectionPoint: { name: 'anchor', args: { offset: 16 } },
 
     validateConnection: (cellViewS, magnetS, cellViewT, magnetT, end) => {
-      // Prevent self-loops
-      if (cellViewS === cellViewT) return false;
+      // Allow self-connection when the two magnets (ports) are different —
+      // useful for sequence diagram self-calls and data-model self-joins.
+      // Block only when the user tries to connect the exact same port.
+      if (cellViewS === cellViewT && magnetS && magnetT && magnetS === magnetT) return false;
       // When dragging source arrowhead, validate the source magnet
       if (end === 'source') {
         if (!magnetS) return false;
@@ -489,6 +600,11 @@ export function init() {
       if (parentType === 'sf.GanttTimeline') {
         return childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
       }
+      // Sequence: Participant and Actor lifelines capture Activations (like a
+      // Zone captures Nodes) so moving the lifeline carries the activation.
+      if (parentType === 'sf.SequenceParticipant' || parentType === 'sf.SequenceActor') {
+        return childType === 'sf.SequenceActivation';
+      }
       return false;
     },
 
@@ -500,6 +616,34 @@ export function init() {
       vertexRemove: true,
       arrowheadMove: true,
     },
+  });
+
+  // --- UML sequence default: reply-style links get dashed stroke ------
+  // Fires when the user releases an arrowhead onto a valid port. In UML a
+  // message drawn from the source's LEFT-side port into the target's RIGHT-
+  // side port represents a reply / return (visually: right-to-left), which
+  // convention renders as a dashed line. We apply dashed only on the very
+  // first successful connection of a fresh link, and only if the user has
+  // not already set an explicit dash pattern — so editing an existing link
+  // never silently overrides their choice.
+  paper.on('link:connect', (linkView) => {
+    const link = linkView.model;
+    const src = link.get('source');
+    const tgt = link.get('target');
+    if (!src?.id || !tgt?.id || !src.port || !tgt.port) return;
+    const srcCell = graph.getCell(src.id);
+    const tgtCell = graph.getCell(tgt.id);
+    if (!srcCell || !tgtCell) return;
+    const SEQ_TYPES = new Set([
+      'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation',
+    ]);
+    if (!SEQ_TYPES.has(srcCell.get('type')) || !SEQ_TYPES.has(tgtCell.get('type'))) return;
+    const srcPort = srcCell.getPort(src.port);
+    const tgtPort = tgtCell.getPort(tgt.port);
+    if (srcPort?.group !== 'seq-left' || tgtPort?.group !== 'seq-right') return;
+    const currentDash = link.attr('line/strokeDasharray');
+    if (currentDash && currentDash !== 'none') return;
+    link.attr('line/strokeDasharray', '6 4');
   });
 
   // --- Pan (drag on blank canvas area) ---
@@ -746,7 +890,12 @@ export function init() {
     }
   });
 
-  paper.on('element:pointerup', () => clearGuides());
+  paper.on('element:pointerup', (cellView) => {
+    clearGuides();
+    if (cellView?.model?.get('type') === 'sf.SequenceActivation') {
+      snapActivationToLifeline(cellView.model);
+    }
+  });
 
   return { graph, paper };
 }
@@ -759,6 +908,33 @@ function updateZoomDisplay() {
 export function getGraph() { return graph; }
 export function getPaper() { return paper; }
 export function getZoom() { return currentZoom; }
+
+// Snap a SequenceActivation's horizontal centre to the nearest participant or
+// actor lifeline when within a threshold, provided the activation overlaps the
+// lifeline vertically. Used both by `element:pointerup` (drag within canvas)
+// and by the stencil drop handler.
+export function snapActivationToLifeline(cell, threshold = 30) {
+  if (!cell || cell.get('type') !== 'sf.SequenceActivation') return;
+  const actBBox = cell.getBBox();
+  const actCx = actBBox.x + actBBox.width / 2;
+  let bestDx = Infinity;
+  let bestCx = null;
+  for (const el of graph.getElements()) {
+    const t = el.get('type');
+    if (t !== 'sf.SequenceParticipant' && t !== 'sf.SequenceActor') continue;
+    const bb = el.getBBox();
+    const lifeTop = bb.y + (t === 'sf.SequenceActor' ? 92 : 48);
+    const lifeBot = bb.y + bb.height;
+    const overlapY = Math.min(actBBox.y + actBBox.height, lifeBot) - Math.max(actBBox.y, lifeTop);
+    if (overlapY <= 0) continue;
+    const cx = bb.x + bb.width / 2;
+    const dx = Math.abs(cx - actCx);
+    if (dx < bestDx) { bestDx = dx; bestCx = cx; }
+  }
+  if (bestCx != null && bestDx <= threshold) {
+    cell.position(bestCx - actBBox.width / 2, actBBox.y);
+  }
+}
 
 export function setZoom(zoom) {
   currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom));
@@ -912,6 +1088,8 @@ export function migrateLinks() {
     const CANONICAL_MARKER_PATHS = new Set([
       'M 0 0 L -12 0',
       'M 0 -6 L -14 0 L 0 6 z',
+      'M 0 -6 L -14 0 L 0 6',
+      'M -14 -6 L 0 0 L -14 6', // legacy reversed form shipped in an earlier 1.6.0 build
       'M -12 -8 L -12 8 M -12 0 L 0 0',
       'M 2 0 a 5 5 0 1 1 -10 0 a 5 5 0 1 1 10 0 Z M -8 0 L -12 0 M -12 -8 L -12 8',
       'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0',
@@ -1057,6 +1235,47 @@ export function migrateNodes() {
     // Migrate Container from old left-accent to new top-bar accent
     if (el.get('type') === 'sf.Container') {
       migrateContainer(el);
+    }
+    // Migrate SequenceFragment: condition used to sit beside the title tab at
+    // (x=72, y=14); it now sits below the tab at (x=8, y=34) on its own line.
+    // Also recompute the trapezoid path so it adapts to the current label.
+    if (el.get('type') === 'sf.SequenceFragment') {
+      const cx = el.attr('conditionText/x');
+      const cy = el.attr('conditionText/y');
+      if (cx === 72 || cy === 14 || cx == null || cy == null) {
+        el.attr('conditionText/x', 8);
+        el.attr('conditionText/y', 34);
+        el.attr('conditionText/textAnchor', 'start');
+        el.attr('conditionText/textVerticalAnchor', 'middle');
+      }
+      joint.shapes.sf.updateFragmentTitleTab?.(el);
+    }
+    // Migrate SequenceParticipant: older saves have no bottom header/label
+    // attrs and no showBottomLabel property. New diagrams default showBottom
+    // to true; existing diagrams inherit true as well so the label mirror
+    // appears on load — users can hide via the properties panel.
+    if (el.get('type') === 'sf.SequenceParticipant') {
+      const hasBottomAttrs = el.attr('labelBottom/text') !== undefined;
+      // Always sync label text and accent/fill in case the top changed while
+      // this diagram was open without syncing.
+      joint.shapes.sf.syncParticipantBottomLabel?.(el);
+      if (!hasBottomAttrs && el.get('showBottomLabel') === undefined) {
+        el.set('showBottomLabel', true);
+      }
+      const show = el.get('showBottomLabel') !== false;
+      const v = show ? 'visible' : 'hidden';
+      el.attr('headerBottom/visibility', v);
+      el.attr('headerBottomAccent/visibility', v);
+      el.attr('labelBottom/visibility', v);
+      el.attr('underlineBottom/visibility', v);
+      // Rebuild ports so the symmetric [headerOffset, h - bottomOffset] port
+      // distribution (added alongside the bottom-label feature) applies to
+      // older participants that were saved with the old top-only spacing.
+      // Skip when the user customised port ratios so we don't trample edits.
+      if (!el.get('lifelinePortRatios')) {
+        const n = el.get('lifelinePortCount') || 5;
+        joint.shapes.sf.rebuildSeqParticipantPorts?.(el, n);
+      }
     }
   }
   // Regenerate icon data URIs so all icons use current normalized viewBoxes

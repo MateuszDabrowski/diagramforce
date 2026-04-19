@@ -15,13 +15,24 @@ export function init(_graph) {
 
   graph.on('add', (cell) => {
     if (isUndoRedoing) return;
-    const json = cell.toJSON();
+    const id = cell.id;
+    // Capture the initial JSON as a fallback. For links created via port-drag,
+    // the `add` event fires BEFORE the arrowhead is dropped on a target port,
+    // so this snapshot has target set to a point, not to `{ id, port }`.
+    // The undo handler re-captures the live JSON just before removing the
+    // cell — that captures the fully-connected link state (as well as any
+    // attribute edits made after creation), so redo restores the cell in its
+    // final form rather than its moment-of-creation form.
+    let capturedJson = cell.toJSON();
     pushCommand({
       undo: () => {
-        const c = graph.getCell(json.id);
-        if (c) c.remove();
+        const c = graph.getCell(id);
+        if (c) {
+          capturedJson = c.toJSON();
+          c.remove();
+        }
       },
-      redo: () => graph.addCell(json),
+      redo: () => graph.addCell(capturedJson),
     });
   });
 

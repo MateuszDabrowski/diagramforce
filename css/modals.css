@@ -547,11 +547,11 @@
     gap: 12px;
   }
 
-  .sf-new-modal__card:nth-child(1) { grid-column: auto; }
-  .sf-new-modal__card:nth-child(2) { grid-column: auto; }
-  .sf-new-modal__card:nth-child(3) { grid-column: auto; }
-  .sf-new-modal__card:nth-child(4) { grid-column: auto; max-width: none; justify-self: auto; }
-  .sf-new-modal__card:nth-child(5) { grid-column: auto; max-width: none; justify-self: auto; }
+  .sf-new-modal__card {
+    grid-column: auto;
+    max-width: none;
+    justify-self: auto;
+  }
 
   /* Display menu items when opened from hamburger */
   .sf-toolbar__menu-item {

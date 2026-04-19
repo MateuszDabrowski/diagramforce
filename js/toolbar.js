@@ -69,24 +69,40 @@ export function init(_modules) {
     updateGanttToggleLabels();
   });
 
+  // Sequence display toggles — diagram-wide (applies to every Participant)
+  btn('btn-sequence-bottom-labels').addEventListener('click', () => {
+    const current = isDisplayFlagOn('showBottomLabel');
+    applyDisplayFlagToAll('showBottomLabel', !current);
+    updateSequenceToggleLabels();
+  });
+
   // Auto Layout — Process diagrams use the Mermaid-style hierarchical layout
   // (DFS back-edge detection + longest-path layering + barycentric ordering),
   // which handles cycles and branching far more cleanly than the generic
   // force-directed layout. All other diagram types keep the original layout.
+  //
+  // The whole layout pass (position moves + port snapping) is wrapped in a
+  // single history batch so Undo restores the pre-layout state in one click
+  // and Redo re-applies it in one click.
   const runAutoLayout = (direction) => {
     const type = modules.tabs.getActiveTabType?.();
-    if (type === 'process') {
-      try {
-        modules.mermaidImport.hierarchicalLayout(modules.graph, null, direction);
-        modules.mermaidImport.snapLinksToPorts(modules.graph, direction);
-        requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
-      } catch (err) {
-        console.warn('Process hierarchical layout failed, falling back:', err);
+    modules.history.startBatch();
+    try {
+      if (type === 'process') {
+        try {
+          modules.mermaidImport.hierarchicalLayout(modules.graph, null, direction);
+          modules.mermaidImport.snapLinksToPorts(modules.graph, direction);
+          requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
+        } catch (err) {
+          console.warn('Process hierarchical layout failed, falling back:', err);
+          modules.canvas.autoLayout(direction);
+        }
+      } else {
         modules.canvas.autoLayout(direction);
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
       }
-    } else {
-      modules.canvas.autoLayout(direction);
-      try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+    } finally {
+      modules.history.endBatch();
     }
     document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
   };
@@ -670,6 +686,7 @@ function updateDisplayMenuVisibility() {
 
   const isGantt = type === 'gantt';
   const isDataModel = type === 'datamodel';
+  const isSequence = type === 'sequence';
 
   // Show/hide Gantt-specific options
   const ganttSep = document.getElementById('display-gantt-separator');
@@ -680,11 +697,13 @@ function updateDisplayMenuVisibility() {
   if (ganttAssignee) ganttAssignee.style.display = isGantt ? '' : 'none';
   if (ganttProgress) ganttProgress.style.display = isGantt ? '' : 'none';
 
-  // Hide auto-layout buttons for Gantt (layout is timeline-driven)
+  // Hide auto-layout buttons for Gantt (timeline-driven) and Sequence
+  // (positions are meaningful along the lifeline axes).
+  const hideAutoLayout = isGantt || isSequence;
   const autoH = document.getElementById('btn-auto-layout-h');
   const autoV = document.getElementById('btn-auto-layout-v');
-  if (autoH) autoH.style.display = isGantt ? 'none' : '';
-  if (autoV) autoV.style.display = isGantt ? 'none' : '';
+  if (autoH) autoH.style.display = hideAutoLayout ? 'none' : '';
+  if (autoV) autoV.style.display = hideAutoLayout ? 'none' : '';
 
   // Show data-model-specific options only for datamodel tabs
   const apiBtn = document.getElementById('btn-display-api');
@@ -696,10 +715,20 @@ function updateDisplayMenuVisibility() {
   if (keysBtn) keysBtn.style.display = isDataModel ? '' : 'none';
   if (dmSep) dmSep.style.display = isDataModel ? '' : 'none';
 
-  // Show animate connectors for architecture, process, datamodel
-  const showFlow = type === 'architecture' || type === 'process' || type === 'datamodel';
+  // Sequence-specific toggles — diagram-wide bottom participant label toggle.
+  // Sits ABOVE Animate Connectors; the flow separator below doubles as the
+  // divider between them. Auto-layout is hidden for Sequence, so no extra
+  // separator is needed above this button.
+  const seqBottomBtn = document.getElementById('btn-sequence-bottom-labels');
+  if (seqBottomBtn) seqBottomBtn.style.display = isSequence ? '' : 'none';
+
+  // Show animate connectors for architecture, process, datamodel, sequence
+  const showFlow = type === 'architecture' || type === 'process' || type === 'datamodel' || type === 'sequence';
   const flowSep = document.getElementById('display-flow-separator');
   const flowBtn = document.getElementById('btn-animate-flow');
+  // The flow separator needs to appear whenever there's any visible item
+  // above Animate Connectors — that's auto-layout (arch/process/datamodel)
+  // OR the sequence bottom-labels toggle (sequence).
   if (flowSep) flowSep.style.display = showFlow ? '' : 'none';
   if (flowBtn) flowBtn.style.display = showFlow ? '' : 'none';
 
@@ -721,6 +750,7 @@ function updateDisplayMenuVisibility() {
   }
   dd.style.display = '';
   if (isDataModel) updateDisplayToggleLabels();
+  if (isSequence) updateSequenceToggleLabels();
 }
 
 function updateDisplayToggleLabels() {
@@ -744,18 +774,30 @@ function updateGanttToggleLabels() {
   if (progressBtn) progressBtn.textContent = progressOn ? 'Hide Completion %' : 'Show Completion %';
 }
 
+function updateSequenceToggleLabels() {
+  const bottomOn = isDisplayFlagOn('showBottomLabel');
+  const bottomBtn = document.getElementById('btn-sequence-bottom-labels');
+  if (bottomBtn) bottomBtn.textContent = bottomOn ? 'Hide Bottom Participant Labels' : 'Show Bottom Participant Labels';
+}
+
 function isDisplayFlagOn(flag) {
   const graph = modules.graph;
   if (!graph) return false;
   const ganttFlags = ['showAssignee', 'showProgress'];
+  const sequenceFlags = ['showBottomLabel'];
   const isGanttFlag = ganttFlags.includes(flag);
+  const isSequenceFlag = sequenceFlags.includes(flag);
   const objs = graph.getElements().filter(el => {
     const t = el.get('type');
-    return isGanttFlag ? t.startsWith('sf.Gantt') : t === 'sf.DataObject';
+    if (isGanttFlag) return t.startsWith('sf.Gantt');
+    if (isSequenceFlag) return t === 'sf.SequenceParticipant';
+    return t === 'sf.DataObject';
   });
   if (objs.length === 0) return false;
-  // For Gantt flags, undefined means "shown" (matches renderGanttTaskProps logic)
-  if (isGanttFlag) return objs.some(el => el.get(flag) !== false);
+  // Default-on flags treat `undefined` as "shown" so a fresh diagram reads
+  // correctly (showBottomLabel defaults to true in the shape definition;
+  // Gantt flags default to true in renderGanttTaskProps).
+  if (isGanttFlag || isSequenceFlag) return objs.some(el => el.get(flag) !== false);
   return objs.some(el => el.get(flag));
 }
 
@@ -763,10 +805,20 @@ function applyDisplayFlagToAll(flag, value) {
   const graph = modules.graph;
   if (!graph) return;
   const ganttFlags = ['showAssignee', 'showProgress'];
+  const sequenceFlags = ['showBottomLabel'];
   const isGanttFlag = ganttFlags.includes(flag);
+  const isSequenceFlag = sequenceFlags.includes(flag);
   graph.getElements().forEach(el => {
     const t = el.get('type');
-    if (isGanttFlag ? t.startsWith('sf.Gantt') : t === 'sf.DataObject') {
+    const matches = isGanttFlag ? t.startsWith('sf.Gantt')
+      : isSequenceFlag ? t === 'sf.SequenceParticipant'
+      : t === 'sf.DataObject';
+    if (!matches) return;
+    if (flag === 'showBottomLabel' && joint.shapes.sf.setParticipantBottomLabelVisible) {
+      // Route through the helper so the header markup + port layout stay in
+      // sync (mirrored header/accent/underline visibility, correct ports).
+      joint.shapes.sf.setParticipantBottomLabelVisible(el, value);
+    } else {
       el.set(flag, value);
     }
   });

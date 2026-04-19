@@ -1,7 +1,7 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { escHtml, APP_VERSION, classifyVersionDiff } from './persistence.js?v=1.5.2';
+import { escHtml, APP_VERSION, classifyVersionDiff } from './persistence.js?v=1.6.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -15,6 +15,7 @@ const onChangeCallbacks = [];
 export const DIAGRAM_TYPES = {
   architecture: { label: 'Architecture Diagram', short: 'Architecture' },
   process:      { label: 'Process Diagram',      short: 'Process' },
+  sequence:     { label: 'Sequence Diagram',      short: 'Sequence' },
   datamodel:    { label: 'Data Model Diagram',   short: 'Data Model' },
   gantt:        { label: 'Gantt Chart',           short: 'Gantt' },
   org:          { label: 'Organisation Diagram',  short: 'Organisation' },
@@ -103,6 +104,24 @@ function showNewDiagramModal() {
           </svg>
           <span class="sf-new-modal__card-title">Process</span>
           <span class="sf-new-modal__card-desc">Design business processes, flows, and BPMN workflows.</span>
+        </button>
+        <button class="sf-new-modal__card" data-type="sequence">
+          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+            <rect x="4" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.85"/>
+            <rect x="25" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.65"/>
+            <rect x="46" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.5"/>
+            <line x1="11" y1="11" x2="11" y2="44" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 2"/>
+            <line x1="32" y1="11" x2="32" y2="44" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 2"/>
+            <line x1="53" y1="11" x2="53" y2="44" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 2"/>
+            <line x1="11" y1="20" x2="32" y2="20" stroke="var(--color-primary)" stroke-width="1.5"/>
+            <polygon points="32,20 28,18 28,22" fill="var(--color-primary)"/>
+            <line x1="32" y1="30" x2="53" y2="30" stroke="var(--color-primary)" stroke-width="1.5"/>
+            <polygon points="53,30 49,28 49,32" fill="var(--color-primary)"/>
+            <line x1="32" y1="38" x2="11" y2="38" stroke="var(--color-accent)" stroke-width="1" stroke-dasharray="3 2"/>
+            <polygon points="11,38 15,36 15,40" fill="var(--color-accent)"/>
+          </svg>
+          <span class="sf-new-modal__card-title">Sequence</span>
+          <span class="sf-new-modal__card-desc">Document request / response interactions between systems.</span>
         </button>
         <button class="sf-new-modal__card" data-type="datamodel">
           <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
@@ -730,6 +749,8 @@ function render() {
     typeIcon.setAttribute('fill', 'currentColor');
     if (tab.diagramType === 'process') {
       typeIcon.innerHTML = '<circle cx="3" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="5.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="5.5" y1="8" x2="7" y2="8" stroke="currentColor" stroke-width="1.5"/>';
+    } else if (tab.diagramType === 'sequence') {
+      typeIcon.innerHTML = '<rect x="1" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><rect x="10" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><line x1="3.5" y1="4" x2="3.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="12.5" y1="4" x2="12.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="3.5" y1="8" x2="12.5" y2="8" stroke="currentColor" stroke-width="1"/><polygon points="12.5,8 10.5,7 10.5,9" fill="currentColor"/><line x1="12.5" y1="12" x2="3.5" y2="12" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><polygon points="3.5,12 5.5,11 5.5,13" fill="currentColor"/>';
     } else if (tab.diagramType === 'datamodel') {
       typeIcon.innerHTML = '<rect x="1" y="1" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="1" width="6" height="3" rx="1" fill="currentColor"/><rect x="9" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="7" width="6" height="3" rx="1" fill="currentColor"/><path d="M7 5L9 11" stroke="currentColor" stroke-width="1.2" fill="none"/>';
     } else if (tab.diagramType === 'gantt') {

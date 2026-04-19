@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.5.2';
+import { getIconDataUri } from './icons.js?v=1.6.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -77,6 +77,11 @@ export const SVG = {
   annotation: '<line x1="2" y1="8" x2="10" y2="8" stroke-width="1" opacity="0.5"/><line x1="2" y1="11" x2="8" y2="11" stroke-width="1" opacity="0.5"/><path d="M18 3 Q14 3 14 6 L14 8.5 Q14 10 12 10 Q14 10 14 11.5 L14 14 Q14 17 18 17" fill="none"/>',
   // Data Model
   dataTable:  '<rect x="2" y="3" width="16" height="14" rx="2"/><rect x="2" y="3" width="16" height="5" rx="2" fill="currentColor" stroke="none" opacity="0.4"/><line x1="5" y1="11" x2="15" y2="11" stroke-width="1" opacity="0.4"/><line x1="5" y1="14" x2="12" y2="14" stroke-width="1" opacity="0.4"/>',
+  // Sequence Diagram
+  seqParticipant: '<rect x="3" y="2" width="14" height="5" rx="1"/><line x1="10" y1="7" x2="10" y2="18" stroke-dasharray="2 2"/>',
+  seqActor:       '<circle cx="10" cy="4" r="2" stroke-width="1.2"/><line x1="10" y1="6" x2="10" y2="11" stroke-width="1.2"/><line x1="7" y1="8" x2="13" y2="8" stroke-width="1.2"/><line x1="10" y1="11" x2="8" y2="13" stroke-width="1.2"/><line x1="10" y1="11" x2="12" y2="13" stroke-width="1.2"/><line x1="10" y1="14" x2="10" y2="18" stroke-dasharray="2 2"/>',
+  seqActivation:  '<rect x="8" y="3" width="4" height="14" fill="currentColor" stroke="none" opacity="0.4"/><rect x="8" y="3" width="4" height="14" stroke-width="1"/>',
+  seqFragment:    '<rect x="2" y="3" width="16" height="14" rx="1"/><path d="M2 3 L8 3 L9 5 L9 7 L2 7 Z" fill="currentColor" stroke="none" opacity="0.2"/><text x="3" y="6" font-size="3" font-weight="bold" fill="currentColor" stroke="none">loop</text>',
 };
 
 export const TEMPLATE_CATEGORIES = [
@@ -478,6 +483,44 @@ export const ORG_CATEGORIES = [
   },
 ];
 
+// ── Sequence Diagram templates ────────────────────────────────────
+
+// Role-based accent colors (match Mulesoft-style sequence diagrams).
+// Actor uses the same neutral grey as Participant/generic by default — users
+// change it explicitly via the property panel if they want role-styled shapes.
+const SEQ_ACCENT = {
+  generic:     '#8A9099', // neutral grey
+  salesforce:  '#2E844A', // Salesforce green
+  api:         '#1D73C9', // API / system blue
+  external:    '#F6B355', // external / partner amber
+  actor:       '#8A9099', // neutral grey — matches participant default
+};
+
+export const SEQUENCE_CATEGORIES = [
+  {
+    id: 'seq-components',
+    label: 'Sequence',
+    templates: [
+      { type: 'sf.SequenceParticipant', label: 'Participant', role: 'generic', accentColor: SEQ_ACCENT.generic, stencilSvg: SVG.seqParticipant },
+      { type: 'sf.SequenceActor',       label: 'Actor',       role: 'actor',   accentColor: SEQ_ACCENT.actor,   stencilSvg: SVG.seqActor },
+      { type: 'sf.SequenceActivation',  label: 'Activation',                                                    stencilSvg: SVG.seqActivation },
+      { type: 'sf.SequenceFragment',    label: 'Fragment',    fragmentType: 'standard',    fragmentLabel: 'loop', stencilSvg: SVG.seqFragment },
+      { type: 'sf.SequenceFragment',    label: 'Alternative', fragmentType: 'alternative', fragmentLabel: 'alt',  stencilSvg: SVG.seqFragment },
+    ],
+  },
+  {
+    id: 'seq-generic',
+    label: 'Generic Shapes',
+    templates: [
+      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
+      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
+      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
+      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
+      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+    ],
+  },
+];
+
 // ── Data Model templates ───────────────────────────────────────────
 
 export const DATAMODEL_CATEGORIES = [
@@ -548,8 +591,8 @@ export const DATAMODEL_CATEGORIES = [
           { label: 'Created Date', apiName: 'CreatedDate', type: 'DateTime', keyType: null },
           { label: 'Character Set', apiName: 'CharacterSet', type: 'Varchar(30)', keyType: null },
           { label: 'IP Address', apiName: 'IPAddress', type: 'Varchar(50)', keyType: null },
-          { label: 'SF Total Sub Count', apiName: 'SalesForceTotalSubscriberCount', type: 'Integer', keyType: null },
-          { label: 'SF Error Sub Count', apiName: 'SalesForceErrorSubscriberCount', type: 'Integer', keyType: null },
+          { label: 'SF Total Sub Count', apiName: 'SalesforceTotalSubscriberCount', type: 'Integer', keyType: null },
+          { label: 'SF Error Sub Count', apiName: 'SalesforceErrorSubscriberCount', type: 'Integer', keyType: null },
           { label: 'Send Type', apiName: 'SendType', type: 'Varchar(128)', keyType: null },
           { label: 'Dynamic Email Subject', apiName: 'DynamicEmailSubject', type: 'Varchar(max)', keyType: null },
           { label: 'Suppress Tracking', apiName: 'SuppressTracking', type: 'Boolean', keyType: null },
@@ -1249,6 +1292,77 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
           { id: 't1', type: 'task', label: 'Task 1', groupId: 'g1', color: '#1D73C9' },
         ],
       });
+    }
+
+    // ── Sequence Diagram shapes ──────────────────────────────
+
+    case 'sf.SequenceParticipant': {
+      const role = template.role || 'generic';
+      const accent = template.accentColor || '#8A9099';
+      const labelText = label || 'Participant';
+      // Only the accent bar on top of the header is tinted by the role colour;
+      // the header border/lifeline/underline keep the default theme colour so
+      // participants look consistent across roles (no coloured borders).
+      // labelBottom is initialised in parallel so the bottom-label mirror
+      // matches from the moment the participant is dropped.
+      return new joint.shapes.sf.SequenceParticipant({
+        position,
+        participantRole: role,
+        attrs: {
+          label: { text: labelText },
+          labelBottom: { text: labelText },
+          headerAccent: { fill: accent },
+          headerBottomAccent: { fill: accent },
+        },
+      });
+    }
+
+    case 'sf.SequenceActor': {
+      // Actor ignores role accent entirely — the stick figure + label use the
+      // default theme-aware stroke from the shape definition, matching the
+      // neutral look of Participant so Actor doesn't stand out with a tint.
+      return new joint.shapes.sf.SequenceActor({
+        position,
+        participantRole: 'actor',
+        attrs: {
+          label: { text: label || 'Actor' },
+        },
+      });
+    }
+
+    case 'sf.SequenceActivation':
+      return new joint.shapes.sf.SequenceActivation({ position });
+
+    case 'sf.SequenceFragment': {
+      const fragmentType = template.fragmentType || 'standard';
+      const fragmentLabel = template.fragmentLabel || (fragmentType === 'alternative' ? 'alt' : 'loop');
+      const isAlt = fragmentType === 'alternative';
+      const condition = template.condition ?? 'if';
+      const elseCondition = template.elseCondition ?? 'else';
+      const cell = new joint.shapes.sf.SequenceFragment({
+        position,
+        fragmentType,
+        fragmentLabel,
+        condition,
+        elseCondition,
+        attrs: {
+          titleText: { text: fragmentLabel },
+          conditionText: { text: condition ? `[${condition}]` : '' },
+          dividerLine: { visibility: isAlt ? 'visible' : 'hidden' },
+          elseText: {
+            text: isAlt ? `[${elseCondition}]` : '',
+            visibility: isAlt ? 'visible' : 'hidden',
+          },
+        },
+      });
+      // Auto-size the title tab to the label (delayed so the cell is in DOM
+      // terms already visible to the SVG measurement sandbox).
+      requestAnimationFrame(() => {
+        if (joint.shapes.sf.updateFragmentTitleTab) {
+          joint.shapes.sf.updateFragmentTitleTab(cell);
+        }
+      });
+      return cell;
     }
 
     // ── Organisation shapes ──────────────────────────────────

@@ -5,12 +5,13 @@
 //   flowchart / flowchart-elk   → Process  (BPMN shapes)
 //   stateDiagram / stateDiagram-v2 → Process (BPMN shapes)
 //   erDiagram                    → Data Model (DataObject)
+//   sequenceDiagram              → Sequence (participants, lifelines, messages)
 //
 // The parser is a hand-written, line-oriented, best-effort tokenizer — it
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromTemplate } from './templates.js?v=1.5.2';
+import { createElementFromTemplate } from './templates.js?v=1.6.1';
 
 let modules = {};
 
@@ -29,7 +30,7 @@ export function validateMermaid(text) {
   const { body } = parseFrontmatter(text);
   const type = detectDiagramType(body);
   if (!type) {
-    return { ok: false, error: 'Could not detect a supported diagram type. Expected one of: graph, flowchart, stateDiagram, erDiagram.' };
+    return { ok: false, error: 'Could not detect a supported diagram type. Expected one of: graph, flowchart, stateDiagram, erDiagram, sequenceDiagram.' };
   }
   return { ok: true, type };
 }
@@ -77,6 +78,8 @@ export function importMermaidText(text) {
   const tabName = dedupeTabName(baseName);
   modules.tabs.newTab(tabName, parsed.diagramType);
 
+  const isSequence = !!parsed.isSequence;
+
   // Build elements into the live graph of the freshly activated tab.
   modules.canvas.setLoadingJSON(true);
   try {
@@ -87,13 +90,26 @@ export function importMermaidText(text) {
     const byId = new Map();
     let x = 0, y = 0;
     for (const el of parsed.elements) {
-      const cell = createElementFromTemplate(el.template, { x, y });
+      // Sequence-parsed elements already carry absolute positions — honour them.
+      const pos = el.position ? { x: el.position.x, y: el.position.y } : { x, y };
+      const cell = createElementFromTemplate(el.template, pos);
       if (!cell) continue;
       if (el.size) cell.resize(el.size.width, el.size.height);
+      // Sequence actors default to showLifeline=false (standalone UML actor).
+      // In an imported sequence diagram the actor is an active participant in
+      // the message flow — force its lifeline on so the dashed line is
+      // visible down the full imported height.
+      if (cell.get('type') === 'sf.SequenceActor' && !cell.get('showLifeline')) {
+        joint.shapes.sf.setActorLifelineVisible?.(cell, true);
+        // setActor… resets size to DEFAULT; restore the imported height.
+        if (el.size) cell.resize(el.size.width, el.size.height);
+      }
       graph.addCell(cell);
       byId.set(el.id, cell);
-      x += 220; // arbitrary stagger — autoLayout will fix
-      if (x > 1200) { x = 0; y += 160; }
+      if (!el.position) {
+        x += 220; // arbitrary stagger — autoLayout will fix
+        if (x > 1200) { x = 0; y += 160; }
+      }
     }
 
     // Links
@@ -101,7 +117,9 @@ export function importMermaidText(text) {
       const src = byId.get(lk.source);
       const tgt = byId.get(lk.target);
       if (!src || !tgt) continue;
-      const link = buildLink(lk, src, tgt);
+      const link = isSequence
+        ? buildSequenceLink(lk, src, tgt)
+        : buildLink(lk, src, tgt);
       if (link) graph.addCell(link);
     }
 
@@ -110,6 +128,16 @@ export function importMermaidText(text) {
     if (modules.canvas.migrateNodes) modules.canvas.migrateNodes();
   } finally {
     modules.canvas.setLoadingJSON(false);
+  }
+
+  // Sequence diagrams are positioned precisely during parsing, so skip the
+  // hierarchical layout + port-snapping that would otherwise disturb the
+  // carefully-aligned lifelines / messages.
+  if (isSequence) {
+    requestAnimationFrame(() => {
+      try { modules.canvas.fitContent(); } catch {}
+    });
+    return true;
   }
 
   // Auto-layout
@@ -148,8 +176,19 @@ export function snapLinksToPorts(graph, direction) {
     const dy = (tb.y + tb.height / 2) - (sb.y + sb.height / 2);
     const srcIsDO = src.get('type') === 'sf.DataObject';
     const tgtIsDO = tgt.get('type') === 'sf.DataObject';
+    // DataObjects carry explicit field-level ports (`field-left-*` /
+    // `field-right-*`) attached to PK/FK rows. Those connections are
+    // semantically meaningful — losing them would collapse an ER diagram
+    // back to object-level arrows. Preserve any field port the user has
+    // already wired up; only snap ends that are still at the generic
+    // object-level ports (or have no port at all).
+    const srcPortId = link.get('source')?.port || '';
+    const tgtPortId = link.get('target')?.port || '';
+    const srcIsFieldPort = typeof srcPortId === 'string' && srcPortId.startsWith('field-');
+    const tgtIsFieldPort = typeof tgtPortId === 'string' && tgtPortId.startsWith('field-');
     let srcPort, tgtPort;
-    // DataObject only has top/bottom static ports — never pick left/right.
+    // DataObject only has top/bottom static ports at the object level —
+    // never pick left/right.
     if (srcIsDO || tgtIsDO) {
       if (dy >= 0) { srcPort = 'port-bottom'; tgtPort = 'port-top'; }
       else         { srcPort = 'port-top';    tgtPort = 'port-bottom'; }
@@ -169,8 +208,8 @@ export function snapLinksToPorts(graph, direction) {
         else         { srcPort = 'port-left';  tgtPort = 'port-right'; }
       }
     }
-    if (src.getPort?.(srcPort)) link.source({ id: src.id, port: srcPort });
-    if (tgt.getPort?.(tgtPort)) link.target({ id: tgt.id, port: tgtPort });
+    if (!srcIsFieldPort && src.getPort?.(srcPort)) link.source({ id: src.id, port: srcPort });
+    if (!tgtIsFieldPort && tgt.getPort?.(tgtPort)) link.target({ id: tgt.id, port: tgtPort });
   }
 }
 
@@ -332,6 +371,7 @@ function defaultTabName(type) {
     process: 'Imported Process',
     architecture: 'Imported Architecture',
     datamodel: 'Imported Data Model',
+    sequence: 'Imported Sequence',
   };
   return names[type] || 'Imported Diagram';
 }
@@ -348,6 +388,7 @@ function detectDiagramType(text) {
     if (/^graph\b/i.test(line))            return 'graph';
     if (/^stateDiagram(-v2)?\b/i.test(line)) return 'state';
     if (/^erDiagram\b/i.test(line))        return 'er';
+    if (/^sequenceDiagram\b/i.test(line))  return 'sequence';
     // gantt intentionally unsupported (removed in beta)
     // First non-empty line with none of the above → unsupported
     return null;
@@ -365,6 +406,7 @@ function parseMermaid(text, kind) {
     case 'graph':     return parseFlowchart(cleaned, 'process');
     case 'state':     return parseStateDiagram(cleaned);
     case 'er':        return parseErDiagram(cleaned);
+    case 'sequence':  return parseSequenceDiagram(cleaned);
   }
   return null;
 }
@@ -818,6 +860,472 @@ function buildLink(lk, src, tgt) {
   if (lk.label) {
     link.labels([{
       position: 0.5,
+      attrs: {
+        text: { text: lk.label, fontSize: 11, fill: 'var(--text-primary)' },
+      },
+    }]);
+  }
+  return link;
+}
+
+// ─── Sequence diagram parser ───────────────────────────────────────────────
+//
+// Mermaid sequenceDiagram syntax — covers the common subset:
+//
+//   sequenceDiagram
+//       title My Flow
+//       autonumber
+//       participant Alice as Alice Smith
+//       actor User
+//       Alice->>Bob: Hello
+//       Bob-->>Alice: Hi back
+//       Alice->>+Bob: Activate
+//       Bob-->>-Alice: Deactivate
+//       Alice-)Bob: Async
+//       Bob--)Alice: Async reply
+//       Note left of Alice: note
+//       Note right of Bob: note
+//       Note over Alice,Bob: spans both
+//       activate Bob
+//       deactivate Bob
+//       loop Every minute
+//         Alice->>Bob: check
+//       end
+//       alt success
+//         Alice->>Bob: ok
+//       else failure
+//         Alice->>Bob: fail
+//       end
+//
+// Message operators (Mermaid → our arrow style):
+//   ->>    solid line, solid arrow        (synchronous request)
+//   -->>   dashed line, solid arrow       (synchronous response)
+//   ->     solid line, open arrow         (legacy sync)
+//   -->    dashed line, open arrow        (legacy response)
+//   -)     solid line, open arrow, async  (fire-and-forget)
+//   --)    dashed line, open arrow, async (async response)
+//   -x / --x  solid/dashed, lost message (rendered as solid arrow for now)
+//
+// Layout constants are tuned to match the manually-drawn participants:
+//   LIFELINE_X_START   left margin of the leftmost participant
+//   LIFELINE_X_GAP     horizontal gap between participant centers
+//   MESSAGE_Y_START    Y of the first message (below the header)
+//   MESSAGE_Y_GAP      vertical gap between successive messages
+//   FRAGMENT_PADDING   top/bottom padding inside a fragment box
+//
+const SEQ_CONST = {
+  LIFELINE_X_START: 60,
+  LIFELINE_X_GAP: 220,
+  MESSAGE_Y_START: 120,
+  MESSAGE_Y_GAP: 48,
+  FRAGMENT_PAD_TOP: 28,
+  FRAGMENT_PAD_BOTTOM: 18,
+  FRAGMENT_PAD_X: 28,
+  PARTICIPANT_W: 140,
+  ACTOR_W: 100,
+  PARTICIPANT_HEADER_Y: 40,
+  ACTIVATION_W: 12,
+  NOTE_W: 160,
+  NOTE_H: 56,
+  NOTE_GAP: 12,
+};
+
+// Role-colour map mirrors SEQ_ACCENT in templates.js. Actor is kept neutral
+// grey to match the generic participant default — sequence diagrams read
+// cleaner when only roles with a semantic colour (Salesforce green, API blue,
+// External amber) stand out visually.
+const SEQ_ROLE_COLORS = {
+  generic:    '#8A9099',
+  salesforce: '#2E844A',
+  api:        '#1D73C9',
+  external:   '#F6B355',
+  actor:      '#8A9099',
+};
+
+/** Guess a participant role from its id / displayed label. */
+function inferSequenceRole(id, label) {
+  const hay = `${id || ''} ${label || ''}`.toLowerCase();
+  if (/\b(salesforce|sfdc|crm|sales cloud|service cloud|marketing cloud|mulesoft)\b/.test(hay)) return 'salesforce';
+  if (/\b(api|system|service|microservice|integration|endpoint|server|gateway|broker|queue|bus)\b/.test(hay)) return 'api';
+  if (/\b(external|partner|third[- ]?party|vendor|sap|ofbiz|ecommerce|ftp|legacy)\b/.test(hay)) return 'external';
+  return 'generic';
+}
+
+/**
+ * Parse a mermaid `sequenceDiagram` block into an internal representation
+ * with absolute positions pre-computed for every element.
+ *
+ * Returns the standard parser payload plus `isSequence: true` so that the
+ * importer can skip auto-layout / port-snapping.
+ */
+function parseSequenceDiagram(text) {
+  const lines = text.split('\n');
+
+  // ── Pass 1: tokenise into a flat event stream ───────────────────────────
+  const participants = new Map(); // id → { id, label, role, isActor, order }
+  const events = []; // { kind: 'msg'|'note'|'activate'|'deactivate'|'fragStart'|'fragElse'|'fragEnd', ... }
+  let title = null;
+  let autonumber = false;
+  let autoNum = 0;
+  let order = 0;
+
+  const ensureParticipant = (id, opts = {}) => {
+    if (!id) return null;
+    if (participants.has(id)) {
+      const p = participants.get(id);
+      if (opts.label) p.label = opts.label;
+      if (opts.isActor) p.isActor = true;
+      return p;
+    }
+    const label = opts.label || id;
+    const isActor = !!opts.isActor;
+    const role = isActor ? 'actor' : inferSequenceRole(id, label);
+    const p = { id, label, role, isActor, order: order++ };
+    participants.set(id, p);
+    return p;
+  };
+
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('%%')) continue;
+    if (/^sequenceDiagram\b/i.test(line)) continue;
+
+    // title MyTitle
+    let m = /^title\s+(.*)$/i.exec(line);
+    if (m) { title = m[1].trim(); continue; }
+
+    // autonumber
+    if (/^autonumber\b/i.test(line)) { autonumber = true; continue; }
+
+    // participant Foo as Foo Bar   |  participant Foo
+    m = /^participant\s+(\S+)(?:\s+as\s+(.+))?$/i.exec(line);
+    if (m) { ensureParticipant(m[1], { label: unquoteLabel((m[2] || m[1]).trim()) }); continue; }
+
+    // actor Foo as Foo Bar | actor Foo
+    m = /^actor\s+(\S+)(?:\s+as\s+(.+))?$/i.exec(line);
+    if (m) { ensureParticipant(m[1], { label: unquoteLabel((m[2] || m[1]).trim()), isActor: true }); continue; }
+
+    // activate Foo   |   deactivate Foo
+    m = /^activate\s+(\S+)$/i.exec(line);
+    if (m) { ensureParticipant(m[1]); events.push({ kind: 'activate', id: m[1] }); continue; }
+    m = /^deactivate\s+(\S+)$/i.exec(line);
+    if (m) { ensureParticipant(m[1]); events.push({ kind: 'deactivate', id: m[1] }); continue; }
+
+    // Note left of X: text   |  Note right of X: text  |  Note over X,Y: text
+    m = /^note\s+(left of|right of|over)\s+([^:]+):\s*(.*)$/i.exec(line);
+    if (m) {
+      const side = m[1].toLowerCase();
+      const targets = m[2].split(',').map(s => s.trim()).filter(Boolean);
+      targets.forEach(t => ensureParticipant(t));
+      events.push({ kind: 'note', side, targets, text: unquoteLabel(m[3].trim()) });
+      continue;
+    }
+
+    // Fragment openers: loop / alt / opt / par / critical / break  <condition>
+    m = /^(loop|alt|opt|par|critical|break)\b\s*(.*)$/i.exec(line);
+    if (m) {
+      events.push({ kind: 'fragStart', type: m[1].toLowerCase(), condition: (m[2] || '').trim() });
+      continue;
+    }
+    // else / and / option  <condition>  — alternative branch inside a fragment
+    m = /^(else|and|option)\b\s*(.*)$/i.exec(line);
+    if (m) {
+      events.push({ kind: 'fragElse', branch: m[1].toLowerCase(), condition: (m[2] || '').trim() });
+      continue;
+    }
+    // end — closes the most recent fragment
+    if (/^end\b/i.test(line)) { events.push({ kind: 'fragEnd' }); continue; }
+
+    // Message: `Src OP [+|-]Tgt : label`
+    // OP ∈ {->>, -->>, ->, -->, -), --), -x, --x}
+    const msgRe = /^(\S+?)\s*(->>|-->>|->|-->|-\)|--\)|-x|--x)\s*([+-]?)(\S+?)\s*:\s*(.*)$/;
+    m = msgRe.exec(line);
+    if (m) {
+      const [, srcId, op, actFlag, tgtId, label] = m;
+      ensureParticipant(srcId);
+      ensureParticipant(tgtId);
+      if (actFlag === '+') events.push({ kind: 'activate', id: tgtId });
+      let text = unquoteLabel(label.trim());
+      if (autonumber) { autoNum += 1; text = `${autoNum}. ${text}`; }
+      const style = (op === '-->>' || op === '-->' || op === '--)' || op === '--x') ? 'dashed' : 'solid';
+      const arrow = (op === '->>' || op === '-->>') ? 'solid'
+                   : (op === '-)' || op === '--)') ? 'openAsync'
+                   : (op === '-x' || op === '--x') ? 'lost'
+                   : 'open';
+      events.push({ kind: 'msg', src: srcId, tgt: tgtId, style, arrow, label: text });
+      if (actFlag === '-') events.push({ kind: 'deactivate', id: tgtId });
+      continue;
+    }
+
+    // Unknown line — silently skip (helps survive odd mermaid extensions)
+  }
+
+  // ── Pass 2: assign participant X positions and determine message Ys ─────
+  const partList = [...participants.values()].sort((a, b) => a.order - b.order);
+  const partX = new Map();
+  partList.forEach((p, i) => {
+    const centerX = SEQ_CONST.LIFELINE_X_START + (SEQ_CONST.PARTICIPANT_W / 2) + i * SEQ_CONST.LIFELINE_X_GAP;
+    partX.set(p.id, centerX);
+  });
+
+  // Walk the event stream computing Y per message and tracking activation stacks.
+  // Message Y starts just below the header band.
+  let curY = SEQ_CONST.MESSAGE_Y_START;
+  const messages = []; // { src, tgt, y, style, arrow, label }
+  const notes = [];    // { x, y, w, h, text }
+  const activations = []; // { partId, startY, endY }
+  const fragments = []; // { type, condition, topY, bottomY, minId, maxId, branches: [{ y, label }] }
+  const fragmentStack = [];
+  const activeStack = new Map(); // partId → array of { startY }
+
+  const partIdsInvolved = (evtIds) => {
+    const xs = evtIds.map(id => partX.get(id)).filter(x => x != null);
+    if (!xs.length) return null;
+    return { min: Math.min(...xs), max: Math.max(...xs) };
+  };
+  const touchFragments = (evtIds) => {
+    if (!fragmentStack.length) return;
+    for (const f of fragmentStack) {
+      for (const id of evtIds) {
+        if (partX.has(id)) {
+          if (f.minId == null || partX.get(id) < partX.get(f.minId)) f.minId = id;
+          if (f.maxId == null || partX.get(id) > partX.get(f.maxId)) f.maxId = id;
+        }
+      }
+    }
+  };
+
+  for (const evt of events) {
+    if (evt.kind === 'msg') {
+      const y = curY;
+      messages.push({ ...evt, y });
+      touchFragments([evt.src, evt.tgt]);
+      curY += SEQ_CONST.MESSAGE_Y_GAP;
+    } else if (evt.kind === 'note') {
+      const y = curY;
+      const span = partIdsInvolved(evt.targets);
+      let nx, nw;
+      if (evt.side === 'over') {
+        if (evt.targets.length === 1 && span) {
+          nx = span.min - SEQ_CONST.NOTE_W / 2;
+          nw = SEQ_CONST.NOTE_W;
+        } else if (span) {
+          nx = span.min - SEQ_CONST.PARTICIPANT_W / 2 - 10;
+          nw = (span.max - span.min) + SEQ_CONST.PARTICIPANT_W + 20;
+        } else continue;
+      } else if (evt.side === 'left of' && span) {
+        nx = span.min - SEQ_CONST.PARTICIPANT_W / 2 - SEQ_CONST.NOTE_W - SEQ_CONST.NOTE_GAP;
+        nw = SEQ_CONST.NOTE_W;
+      } else if (evt.side === 'right of' && span) {
+        nx = span.max + SEQ_CONST.PARTICIPANT_W / 2 + SEQ_CONST.NOTE_GAP;
+        nw = SEQ_CONST.NOTE_W;
+      } else continue;
+      notes.push({ x: nx, y: y - SEQ_CONST.NOTE_H / 2 + SEQ_CONST.MESSAGE_Y_GAP / 2, w: nw, h: SEQ_CONST.NOTE_H, text: evt.text });
+      touchFragments(evt.targets);
+      curY += SEQ_CONST.MESSAGE_Y_GAP;
+    } else if (evt.kind === 'activate') {
+      if (!activeStack.has(evt.id)) activeStack.set(evt.id, []);
+      activeStack.get(evt.id).push({ startY: curY - 6 });
+    } else if (evt.kind === 'deactivate') {
+      const stack = activeStack.get(evt.id);
+      if (stack && stack.length) {
+        const a = stack.pop();
+        activations.push({ partId: evt.id, startY: a.startY, endY: curY - SEQ_CONST.MESSAGE_Y_GAP + 10 });
+      }
+    } else if (evt.kind === 'fragStart') {
+      fragmentStack.push({
+        type: evt.type,
+        condition: evt.condition,
+        topY: curY - 18,
+        branches: [],
+        minId: null,
+        maxId: null,
+      });
+    } else if (evt.kind === 'fragElse') {
+      const f = fragmentStack[fragmentStack.length - 1];
+      if (f) f.branches.push({ y: curY - 10, label: evt.condition || evt.branch });
+    } else if (evt.kind === 'fragEnd') {
+      const f = fragmentStack.pop();
+      if (f) {
+        f.bottomY = curY + SEQ_CONST.FRAGMENT_PAD_BOTTOM;
+        fragments.push(f);
+        curY += 10; // small gap after fragment closes
+      }
+    }
+  }
+  // Flush any leftover open activations so they render even if mermaid omitted `deactivate`
+  for (const [id, stack] of activeStack) {
+    while (stack.length) {
+      const a = stack.pop();
+      activations.push({ partId: id, startY: a.startY, endY: curY - 6 });
+    }
+  }
+
+  // Total vertical extent: tallest participant needs to cover every event plus
+  // the 48px bottom-header mirror that sits below the lifeline (new default —
+  // mirrors the top header at the foot for long interactions).
+  const totalHeight = Math.max(curY + 40, SEQ_CONST.MESSAGE_Y_START + 80) + 48;
+
+  // ── Pass 3: materialise elements + links ────────────────────────────────
+  const elements = [];
+  const links = [];
+
+  // Participants / actors
+  for (const p of partList) {
+    const centerX = partX.get(p.id);
+    const accent = SEQ_ROLE_COLORS[p.role] || SEQ_ROLE_COLORS.generic;
+    if (p.isActor) {
+      const w = SEQ_CONST.ACTOR_W;
+      const x = centerX - w / 2;
+      elements.push({
+        id: p.id,
+        position: { x, y: SEQ_CONST.PARTICIPANT_HEADER_Y },
+        size: { width: w, height: totalHeight },
+        template: {
+          type: 'sf.SequenceActor',
+          label: p.label,
+          role: 'actor',
+          accentColor: accent,
+        },
+      });
+    } else {
+      const w = SEQ_CONST.PARTICIPANT_W;
+      const x = centerX - w / 2;
+      elements.push({
+        id: p.id,
+        position: { x, y: SEQ_CONST.PARTICIPANT_HEADER_Y },
+        size: { width: w, height: totalHeight },
+        template: {
+          type: 'sf.SequenceParticipant',
+          label: p.label,
+          role: p.role,
+          accentColor: accent,
+        },
+      });
+    }
+  }
+
+  // Fragments — rendered first (behind messages) via z-order assignment in the shape
+  fragments.forEach((f, idx) => {
+    const minX = f.minId != null ? partX.get(f.minId) : SEQ_CONST.LIFELINE_X_START + SEQ_CONST.PARTICIPANT_W / 2;
+    const maxX = f.maxId != null ? partX.get(f.maxId) : minX + SEQ_CONST.LIFELINE_X_GAP;
+    const x = minX - SEQ_CONST.FRAGMENT_PAD_X;
+    const y = f.topY;
+    const w = (maxX - minX) + SEQ_CONST.FRAGMENT_PAD_X * 2;
+    const h = f.bottomY - f.topY;
+    elements.push({
+      id: `__frag_${idx}`,
+      position: { x, y },
+      size: { width: w, height: h },
+      template: {
+        type: 'sf.SequenceFragment',
+        label: f.type,
+        fragmentType: f.type,
+        condition: f.condition,
+      },
+    });
+  });
+
+  // Activation boxes
+  activations.forEach((a, idx) => {
+    const centerX = partX.get(a.partId);
+    if (centerX == null) return;
+    const x = centerX - SEQ_CONST.ACTIVATION_W / 2;
+    const y = a.startY;
+    const h = Math.max(a.endY - a.startY, 20);
+    elements.push({
+      id: `__act_${idx}`,
+      position: { x, y },
+      size: { width: SEQ_CONST.ACTIVATION_W, height: h },
+      template: { type: 'sf.SequenceActivation', label: '' },
+    });
+  });
+
+  // Notes — reuse sf.Note for simple inline notes
+  notes.forEach((n, idx) => {
+    elements.push({
+      id: `__note_${idx}`,
+      position: { x: n.x, y: n.y },
+      size: { width: n.w, height: n.h },
+      template: { type: 'sf.Note', label: n.text },
+    });
+  });
+
+  // Messages → links (positions encoded so buildSequenceLink can anchor on Y)
+  for (const m of messages) {
+    links.push({
+      source: m.src,
+      target: m.tgt,
+      label: m.label,
+      y: m.y,
+      style: m.style,    // 'solid' | 'dashed'
+      arrow: m.arrow,    // 'solid' | 'open' | 'openAsync' | 'lost'
+    });
+  }
+
+  return {
+    diagramType: 'sequence',
+    isSequence: true,
+    title,
+    elements,
+    links,
+  };
+}
+
+/**
+ * Build a JointJS link for a sequence message. Uses `topLeft` anchors with
+ * an explicit `dy` so the arrow attaches at the correct Y on both lifelines,
+ * regardless of their dynamic heights.
+ */
+function buildSequenceLink(lk, src, tgt) {
+  const strokeColor = '#5E6B7A';
+  const strokeWidth = 2;
+  const dashed = lk.style === 'dashed';
+
+  // Source marker: never a marker tail — just trim the line.
+  const sourceMarker = { type: 'path', d: 'M 0 0 L -6 0', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
+
+  // Target marker — open V-head for async / open, filled triangle for sync.
+  let targetMarker;
+  if (lk.arrow === 'openAsync' || lk.arrow === 'open') {
+    targetMarker = { type: 'path', d: 'M 0 -6 L -14 0 L 0 6', fill: 'none', stroke: strokeColor, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+  } else if (lk.arrow === 'lost') {
+    // Simple X at the tip to indicate lost message
+    targetMarker = { type: 'path', d: 'M -10 -6 L 0 6 M -10 6 L 0 -6', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
+  } else {
+    targetMarker = { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' };
+  }
+
+  const srcW = (src.get('size') || {}).width || 140;
+  const tgtW = (tgt.get('size') || {}).width || 140;
+
+  const lineAttrs = {
+    stroke: strokeColor,
+    strokeWidth,
+    sourceMarker,
+    targetMarker,
+  };
+  if (dashed) lineAttrs.strokeDasharray = '6 4';
+
+  const link = new joint.shapes.standard.Link({
+    source: {
+      id: src.id,
+      anchor: { name: 'topLeft', args: { dx: srcW / 2, dy: lk.y } },
+    },
+    target: {
+      id: tgt.id,
+      anchor: { name: 'topLeft', args: { dx: tgtW / 2, dy: lk.y } },
+    },
+    connectionPoint: { name: 'anchor' },
+    router: { name: 'normal' },
+    connector: { name: 'normal' },
+    attrs: { line: lineAttrs },
+    z: 3000,
+  });
+
+  if (lk.label) {
+    link.labels([{
+      position: { distance: 0.5, offset: -10 },
       attrs: {
         text: { text: lk.label, fontSize: 11, fill: 'var(--text-primary)' },
       },

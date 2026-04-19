@@ -233,6 +233,113 @@
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
 }
 
+/* ── Slide toggle (on/off switch) ─────────────────────── */
+
+.sf-properties__toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sf-properties__toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.sf-properties__toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border-color);
+  border-radius: 999px;
+  transition: background var(--transition-fast);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.sf-properties__toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: left var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.sf-properties__toggle-input:checked + .sf-properties__toggle-track {
+  background: var(--color-primary);
+}
+
+.sf-properties__toggle-input:checked + .sf-properties__toggle-track .sf-properties__toggle-thumb {
+  left: 18px;
+}
+
+.sf-properties__toggle-input:focus-visible + .sf-properties__toggle-track {
+  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.25);
+}
+
+[data-theme="dark"] .sf-properties__toggle-input:focus-visible + .sf-properties__toggle-track {
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.25);
+}
+
+/* ── Segmented slider (two-position choice) ───────────── */
+/* Used in place of a boolean toggle when both states deserve an explicit
+   label (e.g. "Show" / "Hide"). Renders as a pill-shaped track with two
+   buttons; the active button is filled with the primary colour. */
+
+.sf-properties__segmented {
+  display: flex;
+  width: 100%;
+  background: var(--border-color);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 0;
+  user-select: none;
+}
+
+.sf-properties__segmented-option {
+  flex: 1;
+  text-align: center;
+  background: transparent;
+  border: none;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.sf-properties__segmented-option:hover:not(.sf-properties__segmented-option--active) {
+  color: var(--text-primary);
+}
+
+.sf-properties__segmented-option--active {
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.sf-properties__segmented-option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(53, 120, 229, 0.35);
+}
+
+[data-theme="dark"] .sf-properties__segmented-option:focus-visible {
+  box-shadow: 0 0 0 2px rgba(218, 78, 85, 0.35);
+}
+
 /* ── Color field ───────────────────────────────────────── */
 
 .sf-prop-color-row {

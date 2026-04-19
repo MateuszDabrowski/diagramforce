@@ -1,6 +1,6 @@
 # Diagramforce
 
-Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, process flows, org charts, and Gantt charts - all in your browser with no account, no backend, and no data leaving your machine.
+Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams - all in your browser with no account, no backend, and no data leaving your machine.
 
 **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl)**
 
@@ -11,12 +11,13 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Process Diagrams** — Design business processes with BPMN and flowchart shapes
 - **Organisation Charts** — Document team hierarchy with person cards, departments, and teams
 - **Gantt Charts** — Plan project timelines with tasks, milestones, phases, and dependencies
+- **Sequence Diagrams** — UML sequence diagrams with participants, actors, activation boxes, and alt/loop fragments; reply-style messages default to dashed
 - **Dark / Light Theme** — Full theme support with Salesforce-aligned brand colours
 - **Multi-tab** — Work on multiple diagrams simultaneously with independent undo/redo per tab
 - **Smart Node Layout** — Content auto-centers: text-only, icon+text, or description layout
 - **Resize Guides** — Tracking lines extend from resized edges for easy alignment
 - **Export** — Save to browser, export as JSON or PNG, share via copyable URL
-- **Mermaid Import (beta)** — Paste mermaid.js source (`graph` / `flowchart` / `stateDiagram` → Process, `erDiagram` → Data Model) and convert it into a native diagramforce diagram with auto-layout
+- **Mermaid Import (beta)** — Paste mermaid.js source (`graph` / `flowchart` / `stateDiagram` → Process, `erDiagram` → Data Model, `sequenceDiagram` → Sequence) and convert it into a native diagramforce diagram with auto-layout
 - **Fit to Content** — Automatically fits viewport when loading shared or saved diagrams
 - **No Backend** — Everything runs client-side; your diagrams never leave your browser
 
