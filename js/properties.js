@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.6.3';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.6.3';
-import * as stencilModule from './stencil.js?v=1.6.3';
-import { resizeDataObjectToFit, contrastTextColor } from './templates.js?v=1.6.3';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.7.1';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.7.1';
+import * as stencilModule from './stencil.js?v=1.7.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.7.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,8 +13,8 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.6.3';
-import * as history from './history.js?v=1.6.3';
+} from './clipboard.js?v=1.7.1';
+import * as history from './history.js?v=1.7.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -66,6 +66,7 @@ const TYPE_LABELS = {
   'sf.FlowOffPage':    'Off-Page Link',
   'sf.Annotation':     'Annotation',
   'sf.Line':           'Line',
+  'sf.Link':           'Link',
   'sf.DataObject':     'Object',
   'sf.OrgPerson':      'Person',
   'sf.GanttTask':      'Task',
@@ -103,6 +104,7 @@ const DEFAULT_SIZES = {
   'sf.FlowOffPage':    { width: 60,  height: 60 },
   'sf.Annotation':     { width: 100, height: 120 },
   'sf.Line':           { width: 200, height: 8 },
+  'sf.Link':           { width: 220, height: 44 },
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },
   'sf.GanttMilestone': { width: 24,  height: 24 },
@@ -383,11 +385,44 @@ export function init(_graph, _paper, _selection) {
     }
   });
 
-  // Double-click on element opens inline text editor on canvas
+  // Double-click on element opens inline text editor on canvas.
+  // Links are handled separately (below) so that dblclick on empty link
+  // segments keeps JointJS's vertex-add behaviour.
   paper.on('cell:pointerdblclick', (cellView, evt) => {
-    if (!cellView.model.isElement()) return;
+    if (cellView.model.isLink()) return;
     startInlineEdit(cellView, evt);
   });
+
+  // For links: only dblclick on the existing label enters inline edit.
+  // When a link is selected, JointJS overlays a vertex tool on top of the link
+  // and intercepts pointer events — so we hit-test click coords against every
+  // rendered label's bounding box instead of trusting evt.target.
+  paper.el.addEventListener('dblclick', (evt) => {
+    const x = evt.clientX, y = evt.clientY;
+    const links = paper.el.querySelectorAll('.joint-link');
+    for (const linkEl of links) {
+      const labelNodes = linkEl.querySelectorAll('.labels .label, g[joint-selector="labels"] > g');
+      if (!labelNodes.length) continue;
+      for (const labelNode of labelNodes) {
+        const r = labelNode.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        // Small hit-padding so clicking right at the edge still counts
+        const pad = 2;
+        if (x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad) {
+          const modelId = linkEl.getAttribute('model-id');
+          const cell = graph.getCell(modelId);
+          if (!cell || !cell.isLink()) return;
+          const cellView = paper.findViewByModel(cell);
+          if (!cellView) return;
+          evt.stopPropagation();
+          evt.stopImmediatePropagation();
+          evt.preventDefault();
+          startInlineEdit(cellView, evt);
+          return;
+        }
+      }
+    }
+  }, true);
 
   // Dismiss inline editor on blank area click
   paper.on('blank:pointerdown', () => {
@@ -403,27 +438,27 @@ function cleanupCanvasHighlights() {
 
 // ── Inline canvas text editing ──────────────────────────────────────
 
-/** Determine the primary label attr path for a given element type */
-function getLabelAttrPath(cell) {
+/**
+ * Resolve the inline-edit target for a given cell.
+ * Returns { kind, ... } where kind is 'attr' | 'model' | 'link', or null to skip.
+ */
+function getInlineEditTarget(cell) {
+  if (cell.isLink()) return { kind: 'link' };
   const type = cell.get('type') || '';
-  if (type === 'sf.Container' || type === 'sf.DataObject') return 'headerLabel/text';
-  if (type === 'sf.OrgPerson') return null; // complex custom view — use properties panel
-  if (type === 'sf.Line') return null;     // no label — use properties panel
-  return 'label/text';
+  if (type === 'sf.Line') return null; // no label
+  if (type === 'sf.OrgPerson') return { kind: 'model', prop: 'personName', selector: 'nameLabel' };
+  if (type === 'sf.Container' || type === 'sf.DataObject') return { kind: 'attr', path: 'headerLabel/text', selector: 'headerLabel' };
+  return { kind: 'attr', path: 'label/text', selector: 'label' };
 }
 
 /** Start inline text editing on the canvas overlay */
 function startInlineEdit(cellView, evt) {
-  // Remove any existing inline editor
   document.querySelector('.sf-inline-edit')?.remove();
 
   const cell = cellView.model;
   const type = cell.get('type') || '';
-
-  // Skip types that don't have simple editable labels
-  const attrPath = getLabelAttrPath(cell);
-  if (!attrPath) {
-    // Fall back to focusing the properties panel
+  const target = getInlineEditTarget(cell);
+  if (!target) {
     setTimeout(() => {
       const firstInput = bodyEl.querySelector('.sf-properties__input');
       if (firstInput) firstInput.focus();
@@ -431,21 +466,114 @@ function startInlineEdit(cellView, evt) {
     return;
   }
 
-  const currentText = cell.attr(attrPath) || '';
+  // Resolve current text, commit function, and source text element for positioning
+  let currentText = '';
+  let textEl = null;
+  let commit = () => {};
 
-  // Find the SVG text element for positioning
-  const selector = attrPath.split('/')[0]; // 'label' or 'headerLabel'
-  const textEl = cellView.el.querySelector(`text[joint-selector="${selector}"]`);
-  if (!textEl) return;
+  if (target.kind === 'link') {
+    currentText = cell.labels()?.[0]?.attrs?.text?.text ?? '';
+    textEl = cellView.el.querySelector('.labels text[joint-selector="text"]')
+          || cellView.el.querySelector('text[joint-selector="text"]');
+    commit = (newText) => {
+      const labels = cell.labels();
+      const fontSize = labels?.[0]?.attrs?.text?.fontSize ?? 13;
+      const lineColor = cell.attr('line/stroke') || '#888888';
+      cell.labels([]);
+      if (newText) {
+        cell.appendLabel({
+          markup: [
+            { tagName: 'rect', selector: 'body' },
+            { tagName: 'text', selector: 'text' },
+          ],
+          attrs: {
+            text: { text: newText, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+            body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
+          },
+          position: { distance: 0.5, offset: 0 },
+        });
+      }
+      titleEl.textContent = newText || 'Unnamed';
+    };
+  } else if (target.kind === 'model') {
+    currentText = cell.get(target.prop) || '';
+    textEl = cellView.el.querySelector(`text[joint-selector="${target.selector}"]`);
+    if (!textEl) return;
+    commit = (newText) => cell.set(target.prop, newText);
+  } else {
+    currentText = cell.attr(target.path) || '';
+    textEl = cellView.el.querySelector(`text[joint-selector="${target.selector}"]`);
+    if (!textEl) return;
+    commit = (newText) => cell.attr(target.path, newText);
+  }
 
   const canvasContainer = document.getElementById('canvas-container');
   const containerRect = canvasContainer.getBoundingClientRect();
-
-  // Use the element's actual screen bounding rect for reliable positioning
-  const elRect = cellView.el.getBoundingClientRect();
   const scale = paper.scale().sx;
 
-  // Create overlay textarea
+  // Determine textarea geometry and font styling
+  let left, top, width, height;
+  let fontSize = 13 * scale;
+  let fontWeight = 600;
+  let fontFamily = 'system-ui, -apple-system, sans-serif';
+  let textAnchor = 'middle';
+
+  if (target.kind === 'link') {
+    // Fit around label if present; otherwise anchor on the double-click point
+    if (textEl) {
+      const r = textEl.getBoundingClientRect();
+      width = Math.max(r.width + 40, 100);
+      height = Math.max(r.height + 10, 24);
+      left = r.left + r.width / 2 - width / 2 - containerRect.left;
+      top = r.top + r.height / 2 - height / 2 - containerRect.top;
+      const computed = window.getComputedStyle(textEl);
+      fontSize = parseFloat(textEl.getAttribute('font-size') || computed.fontSize || 13) * scale;
+    } else {
+      width = 120;
+      height = 24 * scale;
+      left = (evt?.clientX ?? containerRect.left + containerRect.width / 2) - width / 2 - containerRect.left;
+      top = (evt?.clientY ?? containerRect.top + containerRect.height / 2) - height / 2 - containerRect.top;
+    }
+  } else if (target.kind === 'model' && target.prop === 'personName') {
+    // Only cover the name-label area for OrgPerson
+    const r = textEl.getBoundingClientRect();
+    const pad = 2;
+    left = r.left - containerRect.left - pad;
+    top = r.top - containerRect.top - pad;
+    width = Math.max(r.width + pad * 2, 160 * scale);
+    height = Math.max(r.height + pad * 2, 22 * scale);
+    const computed = window.getComputedStyle(textEl);
+    fontSize = parseFloat(textEl.getAttribute('font-size') || computed.fontSize || 13) * scale;
+    fontWeight = textEl.getAttribute('font-weight') || computed.fontWeight || 700;
+    fontFamily = textEl.getAttribute('font-family') || computed.fontFamily || fontFamily;
+    textAnchor = textEl.getAttribute('text-anchor') || 'start';
+  } else {
+    // Cover just the label text area (not the whole element)
+    const r = textEl.getBoundingClientRect();
+    const elRect = cellView.el.getBoundingClientRect();
+    const pad = 4;
+    const minW = Math.min(elRect.width, 120 * scale);
+    const minH = 22 * scale;
+    if (r.width > 0 && r.height > 0) {
+      width = Math.max(r.width + pad * 2, minW);
+      width = Math.min(width, elRect.width + pad * 2);
+      height = Math.max(r.height + pad * 2, minH);
+      left = r.left + r.width / 2 - width / 2 - containerRect.left;
+      top = r.top + r.height / 2 - height / 2 - containerRect.top;
+    } else {
+      // Empty label — center inside the element
+      width = Math.min(Math.max(elRect.width * 0.8, minW), elRect.width);
+      height = minH;
+      left = elRect.left + elRect.width / 2 - width / 2 - containerRect.left;
+      top = elRect.top + elRect.height / 2 - height / 2 - containerRect.top;
+    }
+    const computed = window.getComputedStyle(textEl);
+    fontSize = parseFloat(textEl.getAttribute('font-size') || computed.fontSize || 13) * scale;
+    fontWeight = textEl.getAttribute('font-weight') || computed.fontWeight || 'normal';
+    fontFamily = textEl.getAttribute('font-family') || computed.fontFamily || fontFamily;
+    textAnchor = textEl.getAttribute('text-anchor') || 'middle';
+  }
+
   const overlay = document.createElement('div');
   overlay.className = 'sf-inline-edit';
 
@@ -453,21 +581,12 @@ function startInlineEdit(cellView, evt) {
   textarea.className = 'sf-inline-edit__input';
   textarea.value = currentText;
 
-  // Match font styling from the SVG text
-  const computed = window.getComputedStyle(textEl);
-  const fontSize = parseFloat(textEl.getAttribute('font-size') || computed.fontSize || 13) * scale;
-  const fontWeight = textEl.getAttribute('font-weight') || computed.fontWeight || 'normal';
-  const fontFamily = textEl.getAttribute('font-family') || computed.fontFamily || 'system-ui, -apple-system, sans-serif';
-  const textAnchor = textEl.getAttribute('text-anchor') || 'middle';
-
-  // Position the textarea over the element
-  const pad = 2;
   textarea.style.cssText = `
     position: absolute;
-    left: ${elRect.left - containerRect.left - pad}px;
-    top: ${elRect.top - containerRect.top - pad}px;
-    width: ${elRect.width + pad * 2}px;
-    height: ${elRect.height + pad * 2}px;
+    left: ${left}px;
+    top: ${top}px;
+    width: ${width}px;
+    height: ${height}px;
     font-size: ${fontSize}px;
     font-weight: ${fontWeight};
     font-family: ${fontFamily};
@@ -488,14 +607,28 @@ function startInlineEdit(cellView, evt) {
   overlay.appendChild(textarea);
   canvasContainer.appendChild(overlay);
 
-  // Hide the original text while editing
-  textEl.style.opacity = '0';
-  // Also hide subtitle if editing the main label
-  const subtitleEl = cellView.el.querySelector('text[joint-selector="subtitle"]');
-  if (subtitleEl && selector === 'label') subtitleEl.style.opacity = '0';
+  // Hide the source text (and subtitle for primary label) while editing
+  if (textEl) textEl.style.opacity = '0';
+  const subtitleEl = target.kind === 'attr' && target.selector === 'label'
+    ? cellView.el.querySelector('text[joint-selector="subtitle"]')
+    : null;
+  if (subtitleEl) subtitleEl.style.opacity = '0';
+
+  // Grow the textarea vertically as the user adds lines (keeps centering fixed)
+  const initialTop = top;
+  const initialHeight = height;
+  const autosize = () => {
+    textarea.style.height = 'auto';
+    const grown = Math.max(textarea.scrollHeight, initialHeight);
+    textarea.style.height = grown + 'px';
+    // Re-center vertically around the original midline so extra lines grow both ways
+    textarea.style.top = (initialTop - (grown - initialHeight) / 2) + 'px';
+  };
+  textarea.addEventListener('input', autosize);
 
   textarea.focus();
   textarea.select();
+  autosize();
 
   const finish = () => {
     if (overlay._finished) return;
@@ -503,28 +636,24 @@ function startInlineEdit(cellView, evt) {
 
     const newText = textarea.value;
     if (newText !== currentText) {
-      cell.attr(attrPath, newText);
-      // Trigger layout updates for SimpleNode
+      commit(newText);
       if (type === 'sf.SimpleNode') updateSimpleNodeLayout(cell);
-      // Refresh properties panel if visible
       const ids = selection.getSelectedIds();
       if (ids.length === 1 && ids[0] === cell.id) showProperties(cell);
     }
 
-    // Restore text visibility
-    textEl.style.opacity = '';
-    if (subtitleEl && selector === 'label') subtitleEl.style.opacity = '';
+    if (textEl) textEl.style.opacity = '';
+    if (subtitleEl) subtitleEl.style.opacity = '';
     overlay.remove();
   };
 
   textarea.addEventListener('blur', finish);
   textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      textarea.value = currentText; // revert
+      textarea.value = currentText;
       textarea.blur();
     }
-    // Allow Enter for multiline; Shift is not needed
-    e.stopPropagation(); // prevent keyboard shortcuts
+    e.stopPropagation();
   });
 }
 
@@ -593,6 +722,7 @@ function showProperties(cell) {
   else if (type === 'sf.SequenceActivation')  renderSequenceActivationProps(cell);
   else if (type === 'sf.SequenceFragment')    renderSequenceFragmentProps(cell);
   else if (type === 'sf.Line')     renderLineProps(cell);
+  else if (type === 'sf.Link')     renderLinkElementProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
 
   // Don't auto-focus inputs on single click — single click selects, double click edits.
@@ -1070,6 +1200,47 @@ function renderLineProps(cell) {
     'Height', cell.size().height, h => cell.resize(cell.size().width, h));
   addAutoSizeBtn(size, () => {
     const def = DEFAULT_SIZES['sf.Line'];
+    cell.resize(def.width, def.height);
+  });
+  addOrderButtons(size, cell, 'Node layer');
+
+  // Footer
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderLinkElementProps(cell) {
+  // Content
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.attr('label/text'), v => {
+    cell.attr('label/text', v);
+    titleEl.textContent = v || 'Link';
+  });
+  addText(content, 'URL', cell.get('url') || '', v => {
+    cell.set('url', v);
+    const domain = extractLinkDomain(v);
+    cell.attr('domain/text', domain);
+    cell.attr('label/y', domain ? 'calc(0.5 * h - 8)' : 'calc(0.5 * h)');
+  });
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Label & Icon color', cell.attr('label/fill'), v => {
+    cell.attr('label/fill', v);
+    cell.attr('iconImage/href', getStencilSvgDataUri(TEMPLATE_SVG.linkIcon, v, 20));
+  });
+  addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
+  addNumber(appearance, 'Font size', cell.attr('label/fontSize') ?? 14,
+    v => cell.attr('label/fontSize', v));
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.Link'];
     cell.resize(def.width, def.height);
   });
   addOrderButtons(size, cell, 'Node layer');

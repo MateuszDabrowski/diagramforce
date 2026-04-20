@@ -7,7 +7,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.6.2",
+  "appVersion": "1.7.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -24,7 +24,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.6.2"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.7.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"data"`, `"organisation"`, `"gantt"`, `"sequence"` |
@@ -103,7 +103,7 @@ Most shapes need ports for connecting links. Include this `ports` block for any 
 }
 ```
 
-Shapes that do NOT have ports: `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Zone`, `sf.BpmnPool`.
+Shapes that do NOT have ports: `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Link`, `sf.Zone`, `sf.BpmnPool`.
 
 ## Link Structure
 
@@ -143,7 +143,7 @@ Links connect two elements via ports:
 | `labels` | No | Array of label objects (see below) |
 | `lineStyle` | No | Dashed/dotted dash pattern as a raw SVG `stroke-dasharray` string (`"8 4"` dashed, `"2 4"` dotted, `"6 4"` for sequence replies). Stored as a **top-level cell property** — NOT `attrs.line.strokeDasharray`. Rendered as a bg-coloured overlay clone because Safari leaks `stroke-dasharray` into `<marker>` content. Omitted / `null` means solid. |
 
-**Why `lineStyle` and not `attrs.line.strokeDasharray` (v1.6.2+):** Safari propagates a path's `stroke-dasharray` into its SVG `<marker>` elements at the renderer level, causing arrowheads / ER notation to render dashed along with the line. The app keeps the real path solid and paints a canvas-bg-coloured clone (with the dash pattern) on top to simulate dashes. `lineStyle` is the canonical storage; legacy `attrs.line.strokeDasharray` values on loaded diagrams are auto-migrated to `lineStyle` and the attr is cleared.
+**Why `lineStyle` and not `attrs.line.strokeDasharray` (v1.7.0+):** Safari propagates a path's `stroke-dasharray` into its SVG `<marker>` elements at the renderer level, causing arrowheads / ER notation to render dashed along with the line. The app keeps the real path solid and paints a canvas-bg-coloured clone (with the dash pattern) on top to simulate dashes. `lineStyle` is the canonical storage; legacy `attrs.line.strokeDasharray` values on loaded diagrams are auto-migrated to `lineStyle` and the attr is cleared.
 
 ### Link Labels
 
@@ -446,6 +446,52 @@ Decorative horizontal line separator. Available in all diagram types.
 - `dashed` → `12 6`
 - `dotted` → `3 4`
 - `breaks` → `16 8 2 8`
+
+No ports.
+
+### sf.Link
+
+Clickable external-link element with a terminator (pill) shape: label + external-link icon. Clicking the right end of the element (where the icon sits) opens `url` in a new tab. Available in all diagram types.
+
+**Default size:** `220 x 44`
+
+```json
+{
+  "id": "link-1",
+  "type": "sf.Link",
+  "position": { "x": 100, "y": 300 },
+  "size": { "width": 220, "height": 44 },
+  "z": 2000,
+  "url": "https://example.com",
+  "attrs": {
+    "body": {
+      "x": 0, "y": 0, "width": "calc(w)", "height": "calc(h)",
+      "rx": "calc(0.5 * h)", "ry": "calc(0.5 * h)",
+      "fill": "var(--card-bg, #FFFFFF)",
+      "stroke": "var(--border-muted, #D0D5DD)", "strokeWidth": 1
+    },
+    "label": {
+      "x": 12, "y": "calc(0.5 * h)",
+      "textAnchor": "start", "textVerticalAnchor": "middle",
+      "fontSize": 14, "fontWeight": 600,
+      "fill": "#1D73C9", "textDecoration": "underline",
+      "text": "Link"
+    },
+    "iconImage": {
+      "x": "calc(w - 28)", "y": "calc(0.5 * h - 9)",
+      "width": 18, "height": 18,
+      "href": "data:image/svg+xml,..."
+    },
+    "iconHit": {
+      "x": "calc(w - 34)", "y": "calc(0.5 * h - 14)",
+      "width": 28, "height": 28,
+      "fill": "transparent", "stroke": "none"
+    }
+  }
+}
+```
+
+**`url`** — Target URL. Opened in a new tab (`noopener,noreferrer`) when the icon is clicked. Empty string disables click-through.
 
 No ports.
 
@@ -1106,7 +1152,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.6.2",
+  "appVersion": "1.7.1",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1262,7 +1308,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.6.2",
+  "appVersion": "1.7.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "data",
@@ -1382,7 +1428,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Pa
 ```json
 {
   "version": 1,
-  "appVersion": "1.6.2",
+  "appVersion": "1.7.1",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

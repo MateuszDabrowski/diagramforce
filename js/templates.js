@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.6.3';
+import { getIconDataUri } from './icons.js?v=1.7.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -12,6 +12,18 @@ export function getStencilSvgDataUri(svgContent, color = '#FFFFFF', size = 32) {
   const svg = svgContent.replace(/currentColor/g, safeColor);
   const full = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="${size}" height="${size}">${svg}</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(full);
+}
+
+/** Extract a display hostname from a URL string for the sf.Link subtitle.
+ *  Strips a leading "www.". Empty string if the URL is missing or invalid. */
+export function extractLinkDomain(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    const normalized = /^[a-z]+:\/\//i.test(url) ? url : `https://${url}`;
+    return new URL(normalized).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
 }
 
 // WCAG luminance-based contrast — returns dark or white text for a given bg
@@ -43,6 +55,13 @@ export const SVG = {
   note:       '<path d="M4 3h9l3 3v11H4z"/><path d="M13 3v3h3"/>',
   zone:       '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><line x1="4" y1="6" x2="10" y2="6" stroke-width="1" opacity="0.5"/>',
   line:       '<line x1="2" y1="10" x2="18" y2="10" stroke-width="2" stroke-linecap="round"/>',
+  // linkIcon — external-link glyph (SVG Repo "External_Link"), translated to crop
+  // the 24×24 source into the 20×20 viewBox and with the arrow head pulled one
+  // unit toward the shape centre (M19 5 instead of M20 4).
+  linkIcon:   '<g transform="translate(-3 -2)" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.0002 5H8.2002C7.08009 5 6.51962 5 6.0918 5.21799C5.71547 5.40973 5.40973 5.71547 5.21799 6.0918C5 6.51962 5 7.08009 5 8.2002V15.8002C5 16.9203 5 17.4801 5.21799 17.9079C5.40973 18.2842 5.71547 18.5905 6.0918 18.7822C6.5192 19 7.07899 19 8.19691 19H15.8031C16.921 19 17.48 19 17.9074 18.7822C18.2837 18.5905 18.5905 18.2839 18.7822 17.9076C19 17.4802 19 16.921 19 15.8031V14M19 9V5M19 5H15M19 5L13 11"/></g>',
+  // link — stencil thumbnail: terminator pill with ONLY the arrow portion of the
+  // external-link glyph centered inside (no inner square — readable at 20×20).
+  link:       '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="18" height="10" rx="5" stroke-width="1.5"/><path d="M7.5 12.5 L12.5 7.5 M10 7.5 H12.5 V10" stroke-width="1.3"/></g>',
   // Flowchart
   flowProcess:    '<rect x="2" y="4" width="16" height="12" rx="2"/>',
   flowDecision:   '<path d="M10 3L18 10L10 17L2 10Z"/>',
@@ -96,6 +115,7 @@ export const TEMPLATE_CATEGORIES = [
       { type: 'sf.TextLabel',   label: 'Text',       stencilSvg: SVG.text  },
       { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
+      { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
   // ── Salesforce Products ────────────────────────────────────────────
@@ -380,6 +400,7 @@ export const BPMN_CATEGORIES = [
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
 ];
@@ -454,6 +475,7 @@ export const GANTT_CATEGORIES = [
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
 ];
@@ -479,6 +501,7 @@ export const ORG_CATEGORIES = [
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
 ];
@@ -517,6 +540,7 @@ export const SEQUENCE_CATEGORIES = [
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
 ];
@@ -540,6 +564,7 @@ export const DATAMODEL_CATEGORIES = [
       { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
+      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
     ],
   },
   {
@@ -1027,6 +1052,26 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
 
     case 'sf.Line':
       return new joint.shapes.sf.Line({ position });
+
+    case 'sf.Link': {
+      const color = '#1D73C9';
+      const iconHref = getStencilSvgDataUri(SVG.linkIcon, color, 20);
+      const url = template.url || '';
+      const domain = extractLinkDomain(url);
+      return new joint.shapes.sf.Link({
+        position,
+        url,
+        attrs: {
+          label: {
+            text: label || 'Link',
+            fill: color,
+            y: domain ? 'calc(0.5 * h - 8)' : 'calc(0.5 * h)',
+          },
+          domain: { text: domain },
+          iconImage: { href: iconHref },
+        },
+      });
+    }
 
     case 'sf.Note': {
       const noteIconId = iconName || 'light_bulb';

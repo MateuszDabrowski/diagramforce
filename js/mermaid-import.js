@@ -11,7 +11,7 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromTemplate } from './templates.js?v=1.6.3';
+import { createElementFromTemplate } from './templates.js?v=1.7.1';
 
 let modules = {};
 

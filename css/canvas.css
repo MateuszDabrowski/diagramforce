@@ -21,6 +21,16 @@
   pointer-events: all;
 }
 
+/* sf.Link: the external-link icon hit area is a circle button — highlight on hover
+   to signal it's clickable (opens the URL). The rest of the element just selects. */
+.joint-element[data-type="sf.Link"] [joint-selector="iconHit"] {
+  transition: fill var(--transition-fast), stroke var(--transition-fast);
+}
+.joint-element[data-type="sf.Link"] [joint-selector="iconHit"]:hover {
+  fill: rgba(29, 115, 201, 0.12);
+  stroke: #1D73C9;
+}
+
 /* Selection highlight — applied via JS classList.add('selected') */
 .joint-element.selected .body,
 .joint-element.selected rect.body {

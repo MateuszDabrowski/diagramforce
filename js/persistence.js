@@ -6,7 +6,7 @@ import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.6.3';
+const APP_VERSION = '1.7.1';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)

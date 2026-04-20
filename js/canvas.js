@@ -902,6 +902,20 @@ export function init() {
     }
   });
 
+  // Click the external-link icon on sf.Link to open `url` in a new tab.
+  // Uses click position (not evt.target) because some browsers retarget evt.target
+  // to the body rect beneath the transparent iconHit. The icon occupies the rightmost
+  // ~40px of the element, so we open the URL only when the click lands there.
+  paper.on('element:pointerclick', (cellView, evt, x, y) => {
+    if (cellView.model.get('type') !== 'sf.Link') return;
+    const url = cellView.model.get('url');
+    if (!url) return;
+    const bbox = cellView.model.getBBox();
+    if (x >= bbox.x + bbox.width - 40) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  });
+
   // Start the dashed/dotted line overlay manager (Safari-safe rendering).
   // Must run after the paper is mounted so the SVG viewport exists.
   startLineStyleOverlays();

@@ -305,6 +305,72 @@ export function register() {
     }
   );
 
+  // --- Link ---
+  // Clickable external-link element: label + icon that opens `url` in a new tab.
+  // The icon is a separate SVG image; a transparent hit rect on top enlarges
+  // the click target. Click handling lives in js/canvas.js (paper pointerclick).
+  joint.dia.Element.define(
+    'sf.Link',
+    {
+      size: { width: 220, height: 44 },
+      z: 2000,
+      url: '',
+      attrs: {
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)', height: 'calc(h)',
+          rx: 'calc(0.5 * h)', ry: 'calc(0.5 * h)',
+          fill: 'var(--card-bg, #FFFFFF)',
+          stroke: 'var(--border-muted, #D0D5DD)',
+          strokeWidth: 1,
+        },
+        label: {
+          x: 20, y: 'calc(0.5 * h)',
+          textAnchor: 'start', textVerticalAnchor: 'middle',
+          fontSize: 14, fontWeight: 600,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: '#1D73C9',
+          text: 'Link',
+          textWrap: { width: 'calc(w - 60)', maxLineCount: 1, ellipsis: true },
+        },
+        domain: {
+          x: 20, y: 'calc(0.5 * h + 10)',
+          textAnchor: 'start', textVerticalAnchor: 'middle',
+          fontSize: 10, fontWeight: 400,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-muted, #6B7280)',
+          text: '',
+          textWrap: { width: 'calc(w - 60)', maxLineCount: 1, ellipsis: true },
+        },
+        iconImage: {
+          x: 'calc(w - 34)', y: 'calc(0.5 * h - 10)',
+          width: 20, height: 20,
+          href: '',
+          cursor: 'pointer',
+          pointerEvents: 'none',
+        },
+        iconHit: {
+          x: 'calc(w - 40)', y: 'calc(0.5 * h - 16)',
+          width: 32, height: 32,
+          rx: 16, ry: 16,
+          fill: 'transparent',
+          stroke: 'var(--border-muted, #D0D5DD)',
+          strokeWidth: 1,
+          cursor: 'pointer',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'text', selector: 'label' },
+        { tagName: 'text', selector: 'domain' },
+        { tagName: 'image', selector: 'iconImage' },
+        { tagName: 'rect', selector: 'iconHit' },
+      ],
+    }
+  );
+
   // --- Note ---
   // A post-it note style element for descriptions and annotations.
   // No ports — purely informational.
