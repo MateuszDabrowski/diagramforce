@@ -6,7 +6,7 @@ import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.7.3';
+const APP_VERSION = '1.7.4';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -547,7 +547,7 @@ export async function exportGIF(transparent = false) {
       );
       const viewport = svgClone.querySelector('.joint-viewport');
       if (viewport) viewport.removeAttribute('transform');
-      svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
+      svgClone.querySelectorAll('pattern, .joint-port, .sf-flow-overlay').forEach(el => el.remove());
       const spritesContainer = document.getElementById('slds-icons');
       if (spritesContainer) {
         const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
