@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.8.1';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.8.1';
-import * as stencilModule from './stencil.js?v=1.8.1';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.8.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.8.2';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.8.2';
+import * as stencilModule from './stencil.js?v=1.8.2';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.8.2';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,8 +13,8 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.8.1';
-import * as history from './history.js?v=1.8.1';
+} from './clipboard.js?v=1.8.2';
+import * as history from './history.js?v=1.8.2';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many

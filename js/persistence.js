@@ -6,7 +6,7 @@ import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -935,7 +935,13 @@ export async function loadFromURL() {
   if (!hash || !hash.includes('diagram=')) return false;
 
   const match = hash.match(/diagram=([A-Za-z0-9_-]+)/);
-  if (!match) return false;
+  // Hash is present but the payload contains characters outside the
+  // url-safe-base64 alphabet — almost always a copy/paste truncation.
+  if (!match) {
+    showShareLoadError('This share link is invalid. Please check that you copied the whole link, or ask the sender for a new one.');
+    history.replaceState(null, '', window.location.pathname);
+    return false;
+  }
 
   try {
     // Restore standard base64 from URL-safe encoding
@@ -951,7 +957,8 @@ export async function loadFromURL() {
     const data = JSON.parse(json);
 
     if (!data.graph || !data.type) {
-      console.warn('SF Diagrams: Invalid share URL data');
+      showShareLoadError('This share link is invalid. Please check that you copied the whole link, or ask the sender for a new one.');
+      history.replaceState(null, '', window.location.pathname);
       return false;
     }
 
@@ -974,8 +981,35 @@ export async function loadFromURL() {
     return false;
   } catch (err) {
     console.error('SF Diagrams: Failed to load shared diagram:', err);
+    showShareLoadError('This share link is invalid. Please check that you copied the whole link, or ask the sender for a new one.');
+    history.replaceState(null, '', window.location.pathname);
     return false;
   }
+}
+
+/** Show a non-blocking error toast for share-URL load failures. */
+function showShareLoadError(message) {
+  document.querySelector('.sf-share-error-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'sf-share-error-modal sf-modal';
+  overlay.style.zIndex = '10001';
+  overlay.innerHTML = `
+    <div class="sf-modal__overlay"></div>
+    <div class="sf-modal__dialog" style="width:440px">
+      <div class="sf-modal__header">
+        <h2 class="sf-modal__title">Couldn't load shared diagram</h2>
+      </div>
+      <div class="sf-modal__body" style="padding:16px 20px">
+        <p style="margin:0;color:var(--text-secondary);line-height:1.5">${escHtml(message)}</p>
+      </div>
+      <div class="sf-modal__footer" style="justify-content:flex-end">
+        <button class="sf-modal__btn sf-modal__btn--primary" data-action="dismiss">OK</button>
+      </div>
+    </div>`;
+  const dismiss = () => overlay.remove();
+  overlay.querySelector('[data-action="dismiss"]').addEventListener('click', dismiss);
+  overlay.querySelector('.sf-modal__overlay').addEventListener('click', dismiss);
+  document.body.appendChild(overlay);
 }
 
 function showShareModal(url) {
