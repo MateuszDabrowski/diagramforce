@@ -85,7 +85,6 @@
   gap: 2px;
 }
 
-/* Duplicate removed — canonical rule below at .sf-toolbar__saved-label */
 
 .sf-toolbar__separator {
   width: 1px;
@@ -254,15 +253,6 @@
   padding: 4px 2px;
 }
 
-.sf-toolbar__saved-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  margin-left: 6px;
-  padding: 0 var(--spacing-sm);
-  font-variant-numeric: tabular-nums;
-}
-
 .sf-toolbar__menu-separator {
   border-top: 1px solid var(--border-color);
   margin: 4px 0;
@@ -370,7 +360,6 @@
   /* Hide all main toolbar sections on mobile */
   .sf-toolbar__left > .sf-toolbar__group,
   .sf-toolbar__left > .sf-toolbar__dropdown,
-  .sf-toolbar__left > .sf-toolbar__saved-label,
   .sf-toolbar__left > .sf-toolbar__separator,
   .sf-toolbar__center,
   .sf-toolbar__right > #btn-share-url,

@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.8.0';
+import { getIconDataUri } from './icons.js?v=1.8.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO

@@ -85,6 +85,26 @@ export function init(_graph) {
     });
   });
 
+  // Link labels — `cell.labels()`, `cell.label()`, and `cell.appendLabel()` all
+  // mutate the `labels` property, NOT `attrs`, so `change:attrs` never fires.
+  // Without this handler, editing or removing a connector label is invisible to
+  // undo/redo.
+  graph.on('change:labels', (cell) => {
+    if (isUndoRedoing) return;
+    const oldLabels = cell.previous('labels');
+    const newLabels = cell.get('labels');
+    const oldStr = JSON.stringify(oldLabels ?? []);
+    const newStr = JSON.stringify(newLabels ?? []);
+    if (oldStr === newStr) return;
+    const oldCopy = JSON.parse(oldStr);
+    const newCopy = JSON.parse(newStr);
+    const id = cell.id;
+    pushCommand({
+      undo: () => { const c = graph.getCell(id); if (c) c.labels(oldCopy); },
+      redo: () => { const c = graph.getCell(id); if (c) c.labels(newCopy); },
+    });
+  });
+
   // Custom `lineStyle` prop (Safari-safe dashed/dotted connectors).
   // Stored separately from `line/strokeDasharray` so the real line never
   // carries a dasharray; see canvas.js → startLineStyleOverlays().

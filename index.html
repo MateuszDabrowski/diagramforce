@@ -30,15 +30,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@joint/core@4.0.4/dist/joint.min.css" integrity="sha384-W68LL3jsbqfNeDZD23ZWpZ6cMqF7EWlc5Bp5uVXIDJAQ4IT21p8irMFyAmrunfCU" crossorigin="anonymous">
 
   <!-- App CSS (order matters) -->
-  <link rel="stylesheet" href="css/variables.css?v=1.8.0">
-  <link rel="stylesheet" href="css/theme.css?v=1.8.0">
-  <link rel="stylesheet" href="css/layout.css?v=1.8.0">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.8.0">
-  <link rel="stylesheet" href="css/stencil.css?v=1.8.0">
-  <link rel="stylesheet" href="css/properties.css?v=1.8.0">
-  <link rel="stylesheet" href="css/tabs.css?v=1.8.0">
-  <link rel="stylesheet" href="css/canvas.css?v=1.8.0">
-  <link rel="stylesheet" href="css/modals.css?v=1.8.0">
+  <link rel="stylesheet" href="css/variables.css?v=1.8.1">
+  <link rel="stylesheet" href="css/theme.css?v=1.8.1">
+  <link rel="stylesheet" href="css/layout.css?v=1.8.1">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.8.1">
+  <link rel="stylesheet" href="css/stencil.css?v=1.8.1">
+  <link rel="stylesheet" href="css/properties.css?v=1.8.1">
+  <link rel="stylesheet" href="css/tabs.css?v=1.8.1">
+  <link rel="stylesheet" href="css/canvas.css?v=1.8.1">
+  <link rel="stylesheet" href="css/modals.css?v=1.8.1">
 </head>
 <body>
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
@@ -66,6 +66,8 @@
               <button id="btn-save-json" class="sf-toolbar__menu-item">Save to JSON</button>
               <button id="btn-save-png" class="sf-toolbar__menu-item">Save to PNG</button>
               <button id="btn-save-png-t" class="sf-toolbar__menu-item">Save to transparent PNG</button>
+              <button id="btn-save-webp" class="sf-toolbar__menu-item">Save to WEBP</button>
+              <button id="btn-save-webp-t" class="sf-toolbar__menu-item">Save to transparent WEBP</button>
               <div class="sf-toolbar__menu-separator" role="separator"></div>
               <button id="btn-save-share" class="sf-toolbar__menu-item">Share as URL</button>
             </div>
@@ -79,7 +81,8 @@
             <div class="sf-toolbar__menu">
               <button id="btn-load-browser" class="sf-toolbar__menu-item">Load from Browser</button>
               <button id="btn-load-json" class="sf-toolbar__menu-item">Load from JSON</button>
-              <button id="btn-load-mermaid" class="sf-toolbar__menu-item">Import from Mermaid <span style="margin-left:6px;padding:1px 5px;font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span></button>
+              <button id="btn-load-paste-json" class="sf-toolbar__menu-item">Paste JSON</button>
+              <button id="btn-load-mermaid" class="sf-toolbar__menu-item">Paste Mermaid <span style="margin-left:6px;padding:1px 5px;font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span></button>
             </div>
           </div>
         </div>
@@ -121,7 +124,6 @@
               <button id="btn-gantt-progress" class="sf-toolbar__menu-item">Show Completion %</button>
             </div>
           </div>
-        <span id="last-saved" class="sf-toolbar__saved-label" style="display:none"></span>
         <div class="sf-toolbar__separator"></div>
         <div class="sf-toolbar__group">
           <button id="btn-undo" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
@@ -333,6 +335,7 @@
         <p class="sf-about__tagline">Visual Salesforce architecture diagramming tool</p>
         <div class="sf-about__info">
           <p>Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams for Salesforce projects. Runs entirely in your browser — no data is sent to any server.</p>
+          <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
         <div class="sf-about__meta">
@@ -357,6 +360,6 @@
   <!-- Scripts: JointJS as global, then app as ES module -->
   <script defer src="https://cdn.jsdelivr.net/npm/@joint/core@4.0.4/dist/joint.min.js" integrity="sha384-fNdkeEn04ykjJJcUJiNFCANrCKn6m3AJgdpkIqgUF2hbTHQMCXbxsldLijUxJEEb" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js" integrity="sha384-rNlaE5fs9dGIjmxWDALQh/RBAaGRYT5ChrzHo6tRfgrZ36iRFAiquP5g41Jsv+0j" crossorigin="anonymous"></script>
-  <script type="module" src="js/app.js?v=1.8.0"></script>
+  <script type="module" src="js/app.js?v=1.8.1"></script>
 </body>
 </html>

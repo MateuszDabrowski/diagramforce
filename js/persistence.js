@@ -6,7 +6,7 @@ import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -411,26 +411,8 @@ export function importJSON() {
     for (const file of files) {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          const savedVer = data.appVersion || null;
-          const name = data.title || file.name.replace(/\.json$/i, '') || 'Imported';
-          const ok = await checkVersionWarning(savedVer, name, data);
-          if (!ok) return;
-          if (data?.graph) sanitizeGraphJSON(data.graph);
-          if (onImportCallback && data?.graph) {
-            // Load into a new tab
-            const type = normalizeDiagramType(data.diagramType);
-            onImportCallback(name, type, data.graph, data.viewport);
-          } else if (data?.graph) {
-            // Fallback: load into current canvas
-            canvasModule.setLoadingJSON(true);
-            try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }
-            if (data?.viewport) canvasModule.setViewport(data.viewport);
-          }
-        } catch (err) {
-          alert(`Failed to load "${file.name}": ${err.message}`);
-        }
+        const fallbackName = file.name.replace(/\.json$/i, '') || 'Imported';
+        await loadJSONText(e.target.result, fallbackName);
       };
       reader.readAsText(file);
     }
@@ -439,12 +421,134 @@ export function importJSON() {
   input.click();
 }
 
+/**
+ * Parse a JSON string and load it into a new tab (or fallback to current canvas).
+ * Used by `importJSON` (file picker) and `pasteJSON` (textarea modal).
+ * Returns true on success, false on parse/validation failure.
+ */
+async function loadJSONText(jsonText, fallbackName) {
+  try {
+    const data = JSON.parse(jsonText);
+    const savedVer = data.appVersion || null;
+    const name = data.title || fallbackName || 'Imported';
+    const ok = await checkVersionWarning(savedVer, name, data);
+    if (!ok) return false;
+    if (data?.graph) sanitizeGraphJSON(data.graph);
+    if (onImportCallback && data?.graph) {
+      const type = normalizeDiagramType(data.diagramType);
+      onImportCallback(name, type, data.graph, data.viewport);
+    } else if (data?.graph) {
+      canvasModule.setLoadingJSON(true);
+      try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }
+      if (data?.viewport) canvasModule.setViewport(data.viewport);
+    } else {
+      throw new Error('No graph data found in JSON.');
+    }
+    return true;
+  } catch (err) {
+    alert(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Paste-from-JSON modal: shows a textarea, validates the input is parseable
+ * JSON with a `graph` field, and loads it via the same pipeline as `importJSON`.
+ */
+export function pasteJSON() {
+  document.querySelector('.sf-paste-json-modal')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'sf-paste-json-modal sf-modal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="sf-modal__overlay"></div>
+    <div class="sf-modal__dialog" style="width:620px;max-width:92vw">
+      <div class="sf-modal__header">
+        <h2 class="sf-modal__title">Paste JSON</h2>
+        <button class="sf-toolbar__button sf-paste-json-modal__close" aria-label="Close">
+          <svg class="sf-toolbar__icon"><use href="#close"></use></svg>
+        </button>
+      </div>
+      <div class="sf-modal__body" style="padding:var(--spacing-md) var(--spacing-lg)">
+        <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+          Paste a Diagramforce JSON:
+        </p>
+        <textarea class="sf-paste-json-modal__input" spellcheck="false" rows="14"
+          placeholder='{ "appVersion": "${APP_VERSION}", "diagramType": "architecture", "graph": { "cells": [...] } }'
+          style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
+        <p class="sf-paste-json-modal__status" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5;min-height:1.4em">
+          Paste a diagram exported via <strong>Save → Save to JSON</strong> or generated using <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" style="color:var(--color-primary)">Diagram JSON Spec for LLMs</a>.
+        </p>
+      </div>
+      <div class="sf-modal__footer" style="justify-content:flex-end;gap:8px">
+        <button class="sf-modal__btn sf-paste-json-modal__cancel">Cancel</button>
+        <button class="sf-modal__btn sf-modal__btn--primary sf-paste-json-modal__load" disabled>Load</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector('.sf-paste-json-modal__input');
+  const status = overlay.querySelector('.sf-paste-json-modal__status');
+  const loadBtn = overlay.querySelector('.sf-paste-json-modal__load');
+  const errColor = 'var(--color-error, #ba0517)';
+  const okColor = 'var(--text-secondary)';
+
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('.sf-modal__overlay').addEventListener('click', close);
+  overlay.querySelector('.sf-paste-json-modal__close').addEventListener('click', close);
+  overlay.querySelector('.sf-paste-json-modal__cancel').addEventListener('click', close);
+
+  const validate = () => {
+    const text = input.value.trim();
+    if (!text) {
+      status.style.color = okColor;
+      status.innerHTML = 'Paste a diagram exported via <strong>Save → Save to JSON</strong> or generated using <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" style="color:var(--color-primary)">Diagram JSON Spec for LLMs</a>.';
+      loadBtn.disabled = true;
+      return;
+    }
+    try {
+      const data = JSON.parse(text);
+      if (!data?.graph?.cells) throw new Error('Missing graph.cells field.');
+      status.style.color = okColor;
+      const t = normalizeDiagramType(data.diagramType);
+      status.innerHTML = `Detected: <strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(t)}, ${data.graph.cells.length} cells)`;
+      loadBtn.disabled = false;
+    } catch (err) {
+      status.style.color = errColor;
+      status.textContent = `Invalid JSON: ${err.message}`;
+      loadBtn.disabled = true;
+    }
+  };
+  input.addEventListener('input', validate);
+
+  loadBtn.addEventListener('click', async () => {
+    const ok = await loadJSONText(input.value, 'Pasted');
+    if (ok) close();
+  });
+
+  setTimeout(() => input.focus(), 50);
+}
+
 // Keep old name as alias
 export const openJSON = importJSON;
 
-export function exportPNG(transparent = false) {
-  // transparent param used below for canvas background
+export function exportWEBP(transparent = false) {
+  return exportRaster(transparent, 'webp');
+}
 
+export function exportPNG(transparent = false) {
+  return exportRaster(transparent, 'png');
+}
+
+function exportRaster(transparent, format) {
+  const mimeType = format === 'webp' ? 'image/webp' : 'image/png';
+  const ext = format === 'webp' ? 'webp' : 'png';
+  const fmtLabel = format.toUpperCase();
   try {
     const contentBBox = paper.getContentBBox();
     if (!contentBBox || contentBBox.width === 0) {
@@ -509,21 +613,21 @@ export function exportPNG(transparent = false) {
       ctx.drawImage(img, 0, 0, exportW, exportH);
 
       canvas.toBlob(blob => {
-        const pngName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
-        if (blob) triggerDownload(URL.createObjectURL(blob), `${pngName}_${dateSuffix()}.png`);
+        const baseName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
+        if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateSuffix()}.${ext}`);
         URL.revokeObjectURL(svgUrl);
-      }, 'image/png');
+      }, mimeType);
     };
 
     img.onerror = () => {
-      alert('PNG export failed. Try saving as JSON instead.');
+      alert(`${fmtLabel} export failed. Try saving as JSON instead.`);
       URL.revokeObjectURL(svgUrl);
     };
 
     img.src = svgUrl;
   } catch (err) {
-    alert('PNG export failed: ' + err.message);
-    console.error('SF Diagrams: PNG export failed:', err);
+    alert(`${fmtLabel} export failed: ` + err.message);
+    console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
   }
 }
 

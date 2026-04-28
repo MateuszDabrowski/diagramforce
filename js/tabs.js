@@ -1,7 +1,7 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType } from './persistence.js?v=1.8.0';
+import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType } from './persistence.js?v=1.8.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -535,7 +535,6 @@ export function markSaved(saveType) {
     tab.lastSavedAt = Date.now();
     tab.lastSaveType = saveType;
     render();
-    updateLastSavedLabel();
   }
 
   // If a "Save and Close" was pending, close the tab now
@@ -585,7 +584,7 @@ export function getTabDiagramType(tabId) {
 }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
-function notifyChange() { onChangeCallbacks.forEach(cb => cb()); updateLastSavedLabel(); }
+function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }
 
 // ── Internal ─────────────────────────────────────────────────────────
 
@@ -658,25 +657,6 @@ function saveTabs() {
   }
 }
 
-function updateLastSavedLabel() {
-  const el = document.getElementById('last-saved');
-  if (!el) return;
-  const tab = tabs.find(t => t.id === activeTabId);
-  if (!tab?.lastSavedAt) {
-    el.textContent = '';
-    el.style.display = 'none';
-    return;
-  }
-  const d = new Date(tab.lastSavedAt);
-  const day = d.getDate().toString().padStart(2, '0');
-  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  const typeLabel = tab.lastSaveType === 'json' ? 'JSON' : 'Browser';
-  el.textContent = `Last Saved to ${typeLabel}: ${day} ${mon} ${h}:${m}`;
-  el.style.display = '';
-}
-
 /** Populate tabs array and load the active tab from parsed session data. */
 function doRestoreTabData(data) {
   if (data.nextId) nextId = data.nextId;
@@ -741,7 +721,6 @@ function restoreTabs() {
           showNewDiagramModal();
         }
         render();
-        updateLastSavedLabel();
       });
       return;
     }

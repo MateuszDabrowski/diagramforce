@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.8.0';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.8.0';
-import * as stencilModule from './stencil.js?v=1.8.0';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.8.0';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.8.1';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.8.1';
+import * as stencilModule from './stencil.js?v=1.8.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.8.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,8 +13,8 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.8.0';
-import * as history from './history.js?v=1.8.0';
+} from './clipboard.js?v=1.8.1';
+import * as history from './history.js?v=1.8.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -479,20 +479,19 @@ function startInlineEdit(cellView, evt) {
       const labels = cell.labels();
       const fontSize = labels?.[0]?.attrs?.text?.fontSize ?? 13;
       const lineColor = cell.attr('line/stroke') || '#888888';
-      cell.labels([]);
-      if (newText) {
-        cell.appendLabel({
-          markup: [
-            { tagName: 'rect', selector: 'body' },
-            { tagName: 'text', selector: 'text' },
-          ],
-          attrs: {
-            text: { text: newText, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
-            body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
-          },
-          position: { distance: 0.5, offset: 0 },
-        });
-      }
+      // Single labels() call so the change emits exactly one `change:labels`
+      // event — keeps undo/redo at one entry per edit.
+      cell.labels(newText ? [{
+        markup: [
+          { tagName: 'rect', selector: 'body' },
+          { tagName: 'text', selector: 'text' },
+        ],
+        attrs: {
+          text: { text: newText, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+          body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
+        },
+        position: { distance: 0.5, offset: 0 },
+      }] : []);
       titleEl.textContent = newText || 'Unnamed';
     };
   } else if (target.kind === 'model') {
@@ -2733,20 +2732,17 @@ function renderLinkProps(cell) {
   addText(labelSec, 'Text', currentLabel, v => {
     const fontSize = cell.labels()?.[0]?.attrs?.text?.fontSize ?? 13;
     const lineColor = cell.attr('line/stroke') || '#888888';
-    cell.labels([]);
-    if (v) {
-      cell.appendLabel({
-        markup: [
-          { tagName: 'rect', selector: 'body' },
-          { tagName: 'text', selector: 'text' },
-        ],
-        attrs: {
-          text: { text: v, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
-          body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
-        },
-        position: { distance: 0.5, offset: 0 },
-      });
-    }
+    cell.labels(v ? [{
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'text', selector: 'text' },
+      ],
+      attrs: {
+        text: { text: v, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+        body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
+      },
+      position: { distance: 0.5, offset: 0 },
+    }] : []);
     titleEl.textContent = v || 'Unnamed';
   });
   addNumber(labelSec, 'Text size', currentLabelSize, v => {
@@ -3157,6 +3153,16 @@ function addText(parent, label, value, onChange, cell) {
   };
   autoSize();
   input.addEventListener('input', () => { onChange(input.value); autoSize(); });
+  // Coalesce all per-keystroke graph events from a single focus session into
+  // one undo entry — Cmd+Z restores the whole prior text in one click instead
+  // of letter-by-letter.
+  let editing = false;
+  input.addEventListener('focus', () => {
+    if (!editing) { history.startBatch(); editing = true; }
+  });
+  input.addEventListener('blur', () => {
+    if (editing) { history.endBatch(); editing = false; }
+  });
   // Highlight label on canvas when editing (auto-detect cell from selection if not passed)
   const targetCell = cell || getActiveCell();
   if (targetCell) wireCanvasLabelHighlight(input, targetCell);
@@ -3322,6 +3328,14 @@ function addTextarea(parent, label, value, onChange) {
   };
   autoSize();
   ta.addEventListener('input', () => { onChange(ta.value); autoSize(); });
+  // Coalesce per-keystroke events into one undo entry per focus session.
+  let editing = false;
+  ta.addEventListener('focus', () => {
+    if (!editing) { history.startBatch(); editing = true; }
+  });
+  ta.addEventListener('blur', () => {
+    if (editing) { history.endBatch(); editing = false; }
+  });
   f.appendChild(ta);
 }
 

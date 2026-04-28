@@ -24,6 +24,8 @@ export function init(_modules) {
       modules.persistence.exportPNG(true);
     }
   });
+  btn('btn-save-webp').addEventListener('click', () => modules.persistence.exportWEBP(false));
+  btn('btn-save-webp-t').addEventListener('click', () => modules.persistence.exportWEBP(true));
   btn('btn-save-share').addEventListener('click', () => modules.persistence.shareAsURL());
   document.getElementById('btn-share-url').addEventListener('click', () => modules.persistence.shareAsURL());
 
@@ -34,6 +36,7 @@ export function init(_modules) {
   setupDropdown('btn-load');
   btn('btn-load-browser').addEventListener('click', () => showLoadModal());
   btn('btn-load-json').addEventListener('click', () => modules.persistence.importJSON());
+  btn('btn-load-paste-json').addEventListener('click', () => modules.persistence.pasteJSON());
   btn('btn-load-mermaid').addEventListener('click', () => showMermaidImportModal());
 
   // Display dropdown (hidden for Gantt, some options data-model only)
@@ -508,7 +511,7 @@ function showMermaidImportModal() {
     <div class="sf-modal__dialog" style="width:620px;max-width:92vw">
       <div class="sf-modal__header">
         <h2 class="sf-modal__title">
-          Import from Mermaid
+          Paste Mermaid
           <span class="sf-badge sf-badge--beta" style="margin-left:8px;padding:2px 6px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>
         </h2>
         <button class="sf-toolbar__button sf-mermaid-modal__close" aria-label="Close">
