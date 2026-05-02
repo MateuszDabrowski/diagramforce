@@ -10,6 +10,8 @@ export function init(_modules) {
   setupDropdown('btn-save');
   btn('btn-save-browser').addEventListener('click', () => showSaveModal());
   btn('btn-save-json').addEventListener('click', () => modules.persistence.exportJSON());
+  btn('btn-save-svg').addEventListener('click', () => modules.persistence.exportSVG(false));
+  btn('btn-save-svg-t').addEventListener('click', () => modules.persistence.exportSVG(true));
   btn('btn-save-png').addEventListener('click', () => {
     if (document.getElementById('paper')?.classList.contains('sf-animate-flow')) {
       modules.persistence.exportGIF(false);
