@@ -1109,3 +1109,130 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Extensible details (v1.11+): row has label input + value input + × remove */
+.sf-detail-row__label-input {
+  flex: 0 0 80px !important;
+  min-width: 60px !important;
+}
+
+.sf-detail-row__remove {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sf-detail-row__remove:hover {
+  background: rgba(218, 78, 85, 0.18);
+  color: var(--brand-red);
+}
+
+/* ── Chip input (Tags) ─────────────────────────────────── */
+
+.sf-chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-surface);
+  min-height: 32px;
+  cursor: text;
+}
+
+.sf-chip-input:focus-within {
+  border-color: var(--color-primary);
+}
+
+.sf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  background: var(--bg-surface-raised);
+  color: var(--text-primary);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.sf-chip__remove {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.sf-chip__remove:hover {
+  background: rgba(218, 78, 85, 0.18);
+  color: var(--brand-red);
+}
+
+.sf-chip-input__input {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  padding: 2px 4px;
+}
+
+/* ── RACI picker ───────────────────────────────────────── */
+
+.sf-raci-picker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.sf-raci-picker__btn {
+  padding: 6px 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  text-align: center;
+}
+
+.sf-raci-picker__btn:hover {
+  border-color: var(--text-secondary);
+}
+
+.sf-raci-picker__btn--active {
+  color: #FFFFFF;
+  border-color: transparent;
+}
+
+.sf-raci-picker__btn--active[data-raci="R"] { background: var(--brand-blue); }
+.sf-raci-picker__btn--active[data-raci="A"] { background: var(--brand-red); }
+.sf-raci-picker__btn--active[data-raci="C"] { background: var(--brand-amber); }
+.sf-raci-picker__btn--active[data-raci="I"] { background: #8A9099; }

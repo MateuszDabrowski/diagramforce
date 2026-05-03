@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.9.2';
+import { getIconDataUri } from './icons.js?v=1.10.0';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -75,6 +75,7 @@ export const SVG = {
   orgPerson:     '<rect x="2" y="3" width="16" height="14" rx="3"/><line x1="2" y1="6" x2="18" y2="6" stroke-width="1.5"/><circle cx="7" cy="11" r="2" stroke-width="0.8"/><line x1="11" y1="10" x2="16" y2="10" stroke-width="1"/><line x1="11" y1="13" x2="15" y2="13" stroke-width="0.8" opacity="0.5"/>',
   orgDepartment: '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><circle cx="7" cy="8" r="1.5" stroke-width="0.8"/><circle cx="13" cy="8" r="1.5" stroke-width="0.8"/><circle cx="10" cy="13" r="1.5" stroke-width="0.8"/>',
   orgTeam:       '<rect x="2" y="3" width="16" height="14" rx="2"/><rect x="2" y="5" width="2" height="10" rx="1" fill="currentColor" stroke="none" opacity="0.6"/><text x="7" y="8" font-size="4" font-weight="bold" fill="currentColor" stroke="none" opacity="0.5">Team</text><circle cx="8" cy="13" r="1.5" stroke-width="0.8"/><circle cx="13" cy="13" r="1.5" stroke-width="0.8"/>',
+  orgTask:       '<rect x="2" y="5" width="16" height="10" rx="2"/><line x1="10" y1="5" x2="10" y2="15"/><line x1="3.5" y1="8.5" x2="8.5" y2="8.5" stroke-width="1.2"/><line x1="3.5" y1="11.5" x2="7" y2="11.5" stroke-width="0.9" opacity="0.7"/><circle cx="14" cy="10" r="1.5" stroke-width="0.8"/>',
   // BPMN Events
   eventStart:        '<circle cx="10" cy="10" r="7" stroke-width="1.5"/>',
   eventEnd:          '<circle cx="10" cy="10" r="7" stroke-width="4"/>',
@@ -494,6 +495,7 @@ export const ORG_CATEGORIES = [
       { type: 'sf.OrgPerson', label: 'Person', personName: 'Full Name', jobTitle: 'Job Title', stencilSvg: SVG.orgPerson },
       { type: 'sf.Zone',      label: 'Department', stencilSvg: SVG.orgDepartment },
       { type: 'sf.Container',  label: 'Team',       stencilSvg: SVG.orgTeam },
+      { type: 'sf.Task',      label: 'Task',       stencilSvg: SVG.orgTask },
     ],
   },
   {
@@ -1423,6 +1425,18 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
       const jt = template.jobTitle || '';
       const pName = template.personName || 'Name';
       const initials = pName.split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase();
+      // Seed the extensible details list with the inspirational starter set
+      // (Email/Phone/Role/Stream/Location/Company, all empty values). The
+      // user adds/removes/reorders these in the property panel; legacy
+      // top-level fields stay alongside for forward-compat with rollbacks.
+      const seedDetails = [
+        { label: 'Email',    value: template.email || '' },
+        { label: 'Phone',    value: template.phone || '' },
+        { label: 'Role',     value: template.role || '' },
+        { label: 'Stream',   value: template.stream || '' },
+        { label: 'Location', value: template.location || '' },
+        { label: 'Company',  value: template.company || '' },
+      ];
       return new joint.shapes.sf.OrgPerson({
         position,
         personName: pName,
@@ -1433,12 +1447,26 @@ export function createElementFromTemplate(template, position = { x: 100, y: 100 
         stream: template.stream || '',
         location: template.location || '',
         company: template.company || '',
+        details: seedDetails,
         attrs: {
           nameLabel: { text: pName },
           positionLabel: { text: jt },
           avatarText: { text: initials },
           accentBar: { fill: template.accentColor || '#1D73C9' },
           accentBarMask: { fill: template.accentColor || '#1D73C9' },
+        },
+      });
+    }
+
+    case 'sf.Task': {
+      const tName = template.taskName || label || 'Task';
+      return new joint.shapes.sf.Task({
+        position,
+        taskName: tName,
+        taskDescription: template.taskDescription || '',
+        attrs: {
+          nameLabel: { text: tName },
+          descLabel: { text: template.taskDescription || '' },
         },
       });
     }

@@ -1,7 +1,7 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.9.2';
+import { diagramHasImage } from './image-component.js?v=1.10.0';
 
 let modules = {};
 

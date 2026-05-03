@@ -2,13 +2,13 @@
 // (Auto-save is handled by the tabs module now.)
 
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.9.2';
-import { diagramHasImage } from './image-component.js?v=1.9.2';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.10.0';
+import { diagramHasImage } from './image-component.js?v=1.10.0';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '1.10.0';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)

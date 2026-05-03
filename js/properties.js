@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.9.2';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.9.2';
-import * as stencilModule from './stencil.js?v=1.9.2';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.9.2';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.10.0';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.10.0';
+import * as stencilModule from './stencil.js?v=1.10.0';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.10.0';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,9 +13,9 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.9.2';
-import * as history from './history.js?v=1.9.2';
-import { startImageAddFlow } from './image-component.js?v=1.9.2';
+} from './clipboard.js?v=1.10.0';
+import * as history from './history.js?v=1.10.0';
+import { startImageAddFlow } from './image-component.js?v=1.10.0';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -50,6 +50,7 @@ const TYPE_LABELS = {
   'sf.TextLabel':      'Text',
   'sf.Note':           'Note',
   'sf.Image':          'Image',
+  'sf.Task':           'Task',
   'sf.Zone':           'Zone',
   'sf.BpmnEvent':      'Event',
   'sf.BpmnTask':       'Task',
@@ -90,6 +91,7 @@ const DEFAULT_SIZES = {
   'sf.TextLabel':      { width: 200, height: 32 },
   'sf.Note':           { width: 200, height: 120 },
   'sf.Image':          { width: 240, height: 180 },
+  'sf.Task':           { width: 520, height: 160 },
   'sf.BpmnEvent':      { width: 40,  height: 40 },
   'sf.BpmnTask':       { width: 120, height: 60 },
   'sf.BpmnGateway':    { width: 48,  height: 48 },
@@ -721,6 +723,7 @@ function showProperties(cell) {
   else if (type === 'sf.GanttTimeline') renderGanttTimelineProps(cell);
   else if (type === 'sf.GanttGroup') renderGanttGroupProps(cell);
   else if (type === 'sf.OrgPerson') renderOrgPersonProps(cell);
+  else if (type === 'sf.Task')      renderTaskProps(cell);
   else if (type === 'sf.SequenceParticipant') renderSequenceParticipantProps(cell);
   else if (type === 'sf.SequenceActor')       renderSequenceActorProps(cell);
   else if (type === 'sf.SequenceActivation')  renderSequenceActivationProps(cell);
@@ -1152,6 +1155,11 @@ function renderContainerProps(cell) {
   addTextarea(content, 'Description', cell.attr('headerSubtitle/text'), v => cell.attr('headerSubtitle/text', v));
   addIconPicker(content, 'Icon', cell.attr('headerIcon/href'), v => cell.attr('headerIcon/href', v),
     () => resolveColor(cell.attr('headerLabel/fill')) || '#FFFFFF');
+  // Tags + RACI — primarily for the Team variant in Org Chart diagrams, but
+  // available on every Container. Empty values render nothing on canvas, so
+  // they're invisible until used.
+  addChipInput(content, 'Tags', cell.get('tags') || [], v => cell.set('tags', v));
+  addRaciPicker(content, 'RACI', cell.get('raci') || {}, v => cell.set('raci', v));
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
@@ -2457,7 +2465,15 @@ function renderOrgPersonProps(cell) {
     cell.set('personName', v);
     titleEl.textContent = v || 'Person';
   });
-  addText(info, 'Position', cell.get('jobTitle') || '', v => cell.set('jobTitle', v));
+  // Description (multi-line). The model field stays `jobTitle` for back-compat
+  // with diagrams saved before the rename — the visible label is what changed.
+  addTextarea(info, 'Description', cell.get('jobTitle') || '', v => cell.set('jobTitle', v));
+
+  // Tags — comma-separated chips at the bottom of the card
+  addChipInput(info, 'Tags', cell.get('tags') || [], v => cell.set('tags', v));
+
+  // RACI multi-pick — coloured pills in the top-right corner of the card
+  addRaciPicker(info, 'RACI', cell.get('raci') || {}, v => cell.set('raci', v));
 
   // Image / Avatar section
   const imageSec = section(bodyEl, 'Image');
@@ -2533,29 +2549,50 @@ function renderOrgPersonProps(cell) {
   photoField.appendChild(photoControls);
   imageSec.appendChild(photoField);
 
-  // Detail fields with reorderable list
-  const DETAIL_FIELDS = {
-    email:    'Email',
-    phone:    'Phone',
-    role:     'Role',
-    stream:   'Stream',
-    location: 'Location',
-    company:  'Company',
+  // Extensible details list — each entry is `{ label, value }`. Cells from
+  // pre-v1.11 stored values on top-level fields (`email`/`phone`/...); the
+  // OrgPersonView migrates those into `details` on first render so by the
+  // time we see the cell here the array is populated. We still fall back to
+  // a legacy build here in case the user opens the panel before the view's
+  // render-side migration kicks in.
+  const DEFAULT_DETAIL_LABELS = ['Email', 'Phone', 'Role', 'Stream', 'Location', 'Company'];
+  const LEGACY_KEYS = { Email: 'email', Phone: 'phone', Role: 'role', Stream: 'stream', Location: 'location', Company: 'company' };
+
+  const initialDetails = (() => {
+    const stored = cell.get('details');
+    if (Array.isArray(stored) && stored.length > 0) {
+      return stored.map(d => ({ label: String(d?.label ?? ''), value: String(d?.value ?? '') }));
+    }
+    // Legacy migration fallback — order respects `detailOrder` if present.
+    const order = cell.get('detailOrder') || ['email', 'phone', 'role', 'stream', 'location', 'company'];
+    const labelByKey = { email: 'Email', phone: 'Phone', role: 'Role', stream: 'Stream', location: 'Location', company: 'Company' };
+    return order.map(k => ({ label: labelByKey[k] || k, value: cell.get(k) || '' }));
+  })();
+
+  // Working copy — committed back to the cell on every mutation.
+  let detailsState = [...initialDetails];
+  const commitDetails = () => {
+    // Mirror values back to legacy fields where the label matches a known
+    // key, so cells saved by 1.11+ still degrade gracefully if loaded by an
+    // older version that only knows about the hardcoded fields.
+    cell.set('details', detailsState.map(d => ({ ...d })));
+    for (const lbl of DEFAULT_DETAIL_LABELS) {
+      const legacyKey = LEGACY_KEYS[lbl];
+      const match = detailsState.find(d => d.label === lbl);
+      cell.set(legacyKey, match ? match.value : '');
+    }
   };
 
   const detailSec = section(bodyEl, 'Details');
 
-  // Build reorderable detail rows
   function buildDetailList() {
-    // Remove old detail rows
-    detailSec.querySelectorAll('.sf-detail-row').forEach(r => r.remove());
+    detailSec.querySelectorAll('.sf-detail-row, .sf-detail-add').forEach(r => r.remove());
 
-    const currentOrder = cell.get('detailOrder') || Object.keys(DETAIL_FIELDS);
-    currentOrder.forEach((key, idx) => {
+    detailsState.forEach((entry, idx) => {
       const row = document.createElement('div');
       row.className = 'sf-detail-row';
       row.draggable = true;
-      row.dataset.key = key;
+      row.dataset.idx = String(idx);
 
       // Drag handle
       const handle = document.createElement('span');
@@ -2564,22 +2601,44 @@ function renderOrgPersonProps(cell) {
       handle.title = 'Drag to reorder';
       row.appendChild(handle);
 
-      // Label
-      const label = document.createElement('label');
-      label.className = 'sf-properties__label';
-      label.textContent = DETAIL_FIELDS[key] || key;
-      label.style.minWidth = '56px';
-      row.appendChild(label);
+      // Label input — plain text, freely editable
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.className = 'sf-properties__input sf-detail-row__label-input';
+      labelInput.value = entry.label;
+      labelInput.placeholder = 'Label';
+      labelInput.addEventListener('input', () => {
+        detailsState[idx].label = labelInput.value;
+        commitDetails();
+      });
+      row.appendChild(labelInput);
 
-      // Input
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'sf-properties__input';
-      input.value = cell.get(key) || '';
-      input.addEventListener('input', () => cell.set(key, input.value));
-      row.appendChild(input);
+      // Value input
+      const valueInput = document.createElement('input');
+      valueInput.type = 'text';
+      valueInput.className = 'sf-properties__input';
+      valueInput.value = entry.value;
+      valueInput.placeholder = 'Value';
+      valueInput.addEventListener('input', () => {
+        detailsState[idx].value = valueInput.value;
+        commitDetails();
+      });
+      row.appendChild(valueInput);
 
-      // Drag events
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'sf-detail-row__remove';
+      removeBtn.innerHTML = '×';
+      removeBtn.title = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        detailsState.splice(idx, 1);
+        commitDetails();
+        buildDetailList();
+      });
+      row.appendChild(removeBtn);
+
+      // Drag-and-drop to reorder
       row.addEventListener('dragstart', (e) => {
         e.dataTransfer.effectAllowed = 'move';
         row.classList.add('sf-detail-row--dragging');
@@ -2598,20 +2657,38 @@ function renderOrgPersonProps(cell) {
       row.addEventListener('drop', (e) => {
         e.preventDefault();
         row.classList.remove('sf-detail-row--over');
-        const draggedKey = detailSec.querySelector('.sf-detail-row--dragging')?.dataset.key;
-        if (!draggedKey || draggedKey === key) return;
-        const order = [...(cell.get('detailOrder') || Object.keys(DETAIL_FIELDS))];
-        const fromIdx = order.indexOf(draggedKey);
-        const toIdx = order.indexOf(key);
-        if (fromIdx === -1 || toIdx === -1) return;
-        order.splice(fromIdx, 1);
-        order.splice(toIdx, 0, draggedKey);
-        cell.set('detailOrder', order);
+        const draggingEl = detailSec.querySelector('.sf-detail-row--dragging');
+        if (!draggingEl || draggingEl === row) return;
+        const fromIdx = parseInt(draggingEl.dataset.idx, 10);
+        const toIdx = parseInt(row.dataset.idx, 10);
+        if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return;
+        const [moved] = detailsState.splice(fromIdx, 1);
+        detailsState.splice(toIdx, 0, moved);
+        commitDetails();
         buildDetailList();
       });
 
       detailSec.appendChild(row);
     });
+
+    // + Add detail button
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'sf-properties__btn sf-properties__btn--auto-size sf-detail-add';
+    addBtn.style.marginTop = '6px';
+    addBtn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+      Add detail`;
+    addBtn.addEventListener('click', () => {
+      detailsState.push({ label: '', value: '' });
+      commitDetails();
+      buildDetailList();
+      // Focus the new label input so the user starts typing immediately
+      const rows = detailSec.querySelectorAll('.sf-detail-row');
+      const last = rows[rows.length - 1];
+      last?.querySelector('.sf-detail-row__label-input')?.focus();
+    });
+    detailSec.appendChild(addBtn);
   }
   buildDetailList();
 
@@ -2621,6 +2698,11 @@ function renderOrgPersonProps(cell) {
     cell.attr('accentBar/fill', v);
     cell.attr('accentBarMask/fill', v);
   });
+
+  // Mark-as-vacant toggle — dashed borders + faded text mark the card as a
+  // recruitment placeholder or unassigned RACI slot.
+  addToggle(appearance, 'Mark as vacant', !!cell.get('vacant'),
+    v => cell.set('vacant', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -2639,6 +2721,40 @@ function renderOrgPersonProps(cell) {
   addOrderButtons(size, cell, 'Node layer');
 
   // Delete
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderTaskProps(cell) {
+  // Content
+  const content = section(bodyEl, 'Task');
+  addText(content, 'Name', cell.get('taskName') || '', v => {
+    cell.set('taskName', v);
+    titleEl.textContent = v || 'Task';
+  });
+  addTextarea(content, 'Description', cell.get('taskDescription') || '',
+    v => cell.set('taskDescription', v));
+  // Fixed left-column width — the right column absorbs any task resize so
+  // the description column stays the size the user picked. Min clamp of
+  // 120 px is enforced inside `_effectiveDescWidth` on the shape side.
+  addNumber(content, 'Description Width', cell.get('descriptionWidth') ?? 260, v => {
+    cell.set('descriptionWidth', Math.max(120, v));
+  });
+
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.attr('body/fill') || 'var(--node-bg)',
+    v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke') || 'var(--node-border)',
+    v => cell.attr('body/stroke', v));
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addOrderButtons(size, cell, 'Node layer');
+
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
 }
@@ -3458,6 +3574,106 @@ function addTextarea(parent, label, value, onChange) {
     if (editing) { history.endBatch(); editing = false; }
   });
   f.appendChild(ta);
+}
+
+/**
+ * Chip-style tag input. Tokens commit on Enter/comma/blur. Each chip has an
+ * × button. `onChange` receives the full string array on every mutation.
+ *
+ * Single-undo-batch per add/remove: one entry per chip mutation, not per
+ * keystroke into the input itself (which doesn't change the model).
+ */
+function addChipInput(parent, label, values, onChange) {
+  const f = field(parent, label);
+  const wrap = document.createElement('div');
+  wrap.className = 'sf-chip-input';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'sf-chip-input__input';
+  let chips = Array.isArray(values) ? [...values] : [];
+
+  const commitInput = () => {
+    const raw = input.value.trim().replace(/,$/, '').trim();
+    if (!raw) { input.value = ''; return false; }
+    if (!chips.includes(raw)) {
+      chips.push(raw);
+      onChange([...chips]);
+      renderChips();
+    }
+    input.value = '';
+    return true;
+  };
+
+  const renderChips = () => {
+    // Remove all existing chip elements (keep the input at the end)
+    [...wrap.querySelectorAll('.sf-chip')].forEach(c => c.remove());
+    for (const tag of chips) {
+      const chip = document.createElement('span');
+      chip.className = 'sf-chip';
+      chip.textContent = tag;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'sf-chip__remove';
+      x.setAttribute('aria-label', `Remove ${tag}`);
+      x.textContent = '×';
+      x.addEventListener('click', (e) => {
+        e.stopPropagation();
+        chips = chips.filter(t => t !== tag);
+        onChange([...chips]);
+        renderChips();
+      });
+      chip.appendChild(x);
+      wrap.insertBefore(chip, input);
+    }
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      commitInput();
+    } else if (e.key === 'Backspace' && input.value === '' && chips.length > 0) {
+      // Backspace on empty input pops the last chip
+      chips.pop();
+      onChange([...chips]);
+      renderChips();
+    }
+  });
+  input.addEventListener('blur', () => commitInput());
+  // Click anywhere in the wrap focuses the input — feels like a normal field.
+  wrap.addEventListener('click', () => input.focus());
+
+  wrap.appendChild(input);
+  f.appendChild(wrap);
+  renderChips();
+  return wrap;
+}
+
+/**
+ * RACI multi-pick segmented control. Each of R/A/C/I is independently
+ * toggleable; selected buttons are color-coded (blue / red / amber / grey).
+ * `value` is an object like `{ R: true, A: false, C: false, I: true }`.
+ */
+function addRaciPicker(parent, label, value, onChange) {
+  const f = field(parent, label);
+  const grid = document.createElement('div');
+  grid.className = 'sf-raci-picker';
+  const state = { R: !!value?.R, A: !!value?.A, C: !!value?.C, I: !!value?.I };
+  const NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+  for (const key of ['R', 'A', 'C', 'I']) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sf-raci-picker__btn' + (state[key] ? ' sf-raci-picker__btn--active' : '');
+    btn.dataset.raci = key;
+    btn.title = NAMES[key];
+    btn.textContent = key;
+    btn.addEventListener('click', () => {
+      state[key] = !state[key];
+      btn.classList.toggle('sf-raci-picker__btn--active', state[key]);
+      onChange({ ...state });
+    });
+    grid.appendChild(btn);
+  }
+  f.appendChild(grid);
 }
 
 function addColor(parent, label, value, onChange) {

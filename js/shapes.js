@@ -173,6 +173,8 @@ export function register() {
     {
       size: { width: 360, height: 240 },
       z: 1000,    // Container tier: 1000 – 1499
+      tags: [],     // string[] — pills in header (Team use case)
+      raci: {},     // { R?, A?, C?, I? } — top-right pills (Team use case)
       attrs: {
         body: {
           width: 'calc(w)',
@@ -242,9 +244,179 @@ export function register() {
         { tagName: 'image', selector: 'headerIcon' },
         { tagName: 'text', selector: 'headerLabel' },
         { tagName: 'text', selector: 'headerSubtitle' },
+        { tagName: 'g', selector: 'raciGroup' },
+        { tagName: 'g', selector: 'tagsGroup' },
       ],
     }
   );
+
+  // Custom view: re-renders RACI pills (top-right corner) and tag pills
+  // (header, after title) whenever the relevant model props change. Pulls
+  // double-duty for plain Containers (no tags/RACI → groups stay empty) and
+  // Team variants in Org Chart diagrams (tags + RACI populated).
+  joint.shapes.sf.ContainerView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.listenTo(this.model, 'change:tags change:raci change:size change:attrs', () => this._updatePills());
+    },
+    render() {
+      joint.dia.ElementView.prototype.render.apply(this, arguments);
+      this._updatePills();
+      return this;
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._updatePills();
+    },
+    _updatePills() {
+      const m = this.model;
+      const { width } = m.size();
+      const tags = Array.isArray(m.get('tags')) ? m.get('tags').filter(Boolean) : [];
+      const raci = m.get('raci') || {};
+      const ns = 'http://www.w3.org/2000/svg';
+
+      // RACI: top-right corner of the accent bar. White-outlined pills so the
+      // colour-coded fills stay legible against the coloured header.
+      const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
+      if (raciGroupEl) {
+        raciGroupEl.innerHTML = '';
+        const RACI_COLORS = { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' };
+        const RACI_NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+        const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
+        if (active.length > 0) {
+          const PILL = 16;
+          const GAP = 3;
+          let xPos = width - 10 - active.length * PILL - (active.length - 1) * GAP;
+          const yPos = 12;
+          for (const key of active) {
+            const g = document.createElementNS(ns, 'g');
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', String(xPos));
+            rect.setAttribute('y', String(yPos));
+            rect.setAttribute('width', String(PILL));
+            rect.setAttribute('height', String(PILL));
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('ry', '4');
+            rect.setAttribute('fill', RACI_COLORS[key]);
+            rect.setAttribute('stroke', '#FFFFFF');
+            rect.setAttribute('stroke-width', '1.2');
+            g.appendChild(rect);
+            const text = document.createElementNS(ns, 'text');
+            text.setAttribute('x', String(xPos + PILL / 2));
+            text.setAttribute('y', String(yPos + PILL / 2 + 0.5));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('fill', '#FFFFFF');
+            text.setAttribute('font-size', '10');
+            text.setAttribute('font-weight', '700');
+            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+            text.setAttribute('pointer-events', 'none');
+            text.textContent = key;
+            g.appendChild(text);
+            const title = document.createElementNS(ns, 'title');
+            title.textContent = RACI_NAMES[key];
+            g.appendChild(title);
+            raciGroupEl.appendChild(g);
+            xPos += PILL + GAP;
+          }
+        }
+      }
+
+      // Tags: header row, RIGHT-aligned. The pill group sits flush against
+      // the right edge of the header (carving out space for any active RACI
+      // pills), and pills flow left-to-right inside that group with text
+      // centred horizontally and vertically inside each pill.
+      const tagsGroupEl = this.el.querySelector('[joint-selector="tagsGroup"]');
+      if (tagsGroupEl) {
+        tagsGroupEl.innerHTML = '';
+        if (tags.length > 0) {
+          const PILL_H = 16;
+          const PILL_PAD = 10;
+          const GAP = 4;
+          const FONT = 10;
+          const yPos = 21 - PILL_H / 2;
+          // Right-edge anchor — RACI pills (if any) shift the anchor leftward.
+          const raciActive = ['R', 'A', 'C', 'I'].filter(k => raci[k]).length;
+          const raciW = raciActive ? raciActive * 16 + (raciActive - 1) * 3 + 8 : 0;
+          const rightAnchor = width - 10 - raciW;
+          // Reserve enough space so pills don't crash into the title — start
+          // no closer than 80 px from the left edge.
+          const titleText = m.attr('headerLabel/text') || '';
+          const titleEstW = Math.min(titleText.length * 7, width * 0.5);
+          const minStartX = 44 + titleEstW + 12;
+          // Pre-compute total width of all pills so we can right-align them.
+          const widths = tags.map(t => Math.ceil(t.length * 5.5) + PILL_PAD * 2);
+          // Try fitting all tags. If they overflow the available band, drop
+          // the LEAST-recent tags (left side) until they fit, replaced by a
+          // "+N" overflow pill.
+          let firstIdx = 0;
+          let totalW = widths.reduce((a, b) => a + b, 0) + GAP * Math.max(0, tags.length - 1);
+          while (firstIdx < tags.length - 1 && rightAnchor - totalW < minStartX) {
+            totalW -= widths[firstIdx] + GAP;
+            firstIdx++;
+          }
+          const showOverflow = firstIdx > 0;
+          const overflowW = 24;
+          if (showOverflow) totalW += overflowW + GAP;
+          let curX = Math.max(minStartX, rightAnchor - totalW);
+          if (showOverflow) {
+            const ellipsis = document.createElementNS(ns, 'g');
+            const r = document.createElementNS(ns, 'rect');
+            r.setAttribute('x', String(curX));
+            r.setAttribute('y', String(yPos));
+            r.setAttribute('width', String(overflowW));
+            r.setAttribute('height', String(PILL_H));
+            r.setAttribute('rx', '8');
+            r.setAttribute('ry', '8');
+            r.setAttribute('fill', 'rgba(255, 255, 255, 0.18)');
+            ellipsis.appendChild(r);
+            const t = document.createElementNS(ns, 'text');
+            t.setAttribute('x', String(curX + overflowW / 2));
+            t.setAttribute('y', String(yPos + PILL_H / 2));
+            t.setAttribute('text-anchor', 'middle');
+            t.setAttribute('dominant-baseline', 'central');
+            t.setAttribute('fill', '#FFFFFF');
+            t.setAttribute('font-size', String(FONT));
+            t.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+            t.textContent = `+${firstIdx}`;
+            ellipsis.appendChild(t);
+            const title = document.createElementNS(ns, 'title');
+            title.textContent = tags.slice(0, firstIdx).join(', ');
+            ellipsis.appendChild(title);
+            tagsGroupEl.appendChild(ellipsis);
+            curX += overflowW + GAP;
+          }
+          for (let i = firstIdx; i < tags.length; i++) {
+            const tag = tags[i];
+            const pillW = widths[i];
+            const g = document.createElementNS(ns, 'g');
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', String(curX));
+            rect.setAttribute('y', String(yPos));
+            rect.setAttribute('width', String(pillW));
+            rect.setAttribute('height', String(PILL_H));
+            rect.setAttribute('rx', '8');
+            rect.setAttribute('ry', '8');
+            rect.setAttribute('fill', 'rgba(255, 255, 255, 0.18)');
+            g.appendChild(rect);
+            const text = document.createElementNS(ns, 'text');
+            // Centred horizontally + vertically inside the pill.
+            text.setAttribute('x', String(curX + pillW / 2));
+            text.setAttribute('y', String(yPos + PILL_H / 2));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('fill', '#FFFFFF');
+            text.setAttribute('font-size', String(FONT));
+            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+            text.textContent = tag;
+            g.appendChild(text);
+            tagsGroupEl.appendChild(g);
+            curX += pillW + GAP;
+          }
+        }
+      }
+    },
+  });
 
   // --- TextLabel ---
   // A standalone text annotation with no background
@@ -2276,8 +2448,18 @@ export function register() {
       location: '',
       company: '',
       detailOrder: ['email', 'phone', 'role', 'stream', 'location', 'company'],
+      // Extensible details list — replaces the hardcoded `email/phone/role/...`
+      // fields. Entries render as `Label: Value` rows in the card body.
+      // Pre-1.11 cells stored values on top-level fields (`email`, `phone`,
+      // ...) ordered by `detailOrder`; the view auto-migrates those into this
+      // array on first render. The legacy fields stay on the cell so old
+      // exports keep working for users who roll back.
+      details: [],      // [{ label, value }]
       imageUrl: '',     // data URI or URL for photo
       iconText: '',     // up to 4 letters shown in avatar circle
+      tags: [],         // string[] — rendered as pills along bottom of card
+      raci: {},         // { R?, A?, C?, I? } booleans — coloured pills top-right
+      vacant: false,    // mark as recruitment placeholder: dashed borders + faded text
       attrs: {
         body: {
           width: 'calc(w)',
@@ -2389,6 +2571,8 @@ export function register() {
         { tagName: 'text', selector: 'nameLabel' },
         { tagName: 'text', selector: 'positionLabel' },
         { tagName: 'text', selector: 'detailsLabel' },
+        { tagName: 'g', selector: 'raciGroup' },
+        { tagName: 'g', selector: 'tagsGroup' },
       ],
     }
   );
@@ -2397,7 +2581,7 @@ export function register() {
   joint.shapes.sf.OrgPersonView = joint.dia.ElementView.extend({
     initialize() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
-      this.listenTo(this.model, 'change:personName change:jobTitle change:email change:phone change:role change:stream change:location change:company change:detailOrder change:imageUrl change:iconText', () => this._updateCard());
+      this.listenTo(this.model, 'change:personName change:jobTitle change:email change:phone change:role change:stream change:location change:company change:detailOrder change:details change:imageUrl change:iconText change:tags change:raci change:vacant', () => this._updateCard());
     },
     render() {
       joint.dia.ElementView.prototype.render.apply(this, arguments);
@@ -2412,6 +2596,13 @@ export function register() {
       const m = this.model;
       const name = m.get('personName') || 'Name';
       const pos = m.get('jobTitle') || '';
+      // Description supports multi-line via newlines. Each line renders as its
+      // own <tspan> so wrapping survives JointJS' silent-attr round-trip.
+      const posLines = pos ? pos.split(/\n/) : [];
+      const POS_LINE_H = 14;
+      const POS_GAP = 12; // gap below last description line; bumped from 8 to
+                          // sit comfortably under Safari's hanging-baseline
+                          // text metrics, which run a hair lower than Chrome's
       const email = m.get('email') || '';
       const phone = m.get('phone') || '';
       const role = m.get('role') || '';
@@ -2422,6 +2613,10 @@ export function register() {
       const iconText = (m.get('iconText') || '').substring(0, 4);
       const hasPhoto = !!imageUrl;
       const hasCustomAvatar = hasPhoto || !!iconText;
+      const tags = Array.isArray(m.get('tags')) ? m.get('tags').filter(Boolean) : [];
+      const raci = m.get('raci') || {};
+      const vacant = !!m.get('vacant');
+      const TAG_ROW_H = 30; // pill row + 8px bottom margin
 
       // Standard avatar layout — consistent size for all persons
       // Padding from left border = padding from accent bar bottom (y=4)
@@ -2439,12 +2634,17 @@ export function register() {
       m.attr('avatarClip/r', avatarR, { silent: true });
       m.attr('avatarClip/cx', avatarCx, { silent: true });
       m.attr('avatarClip/cy', avatarCy, { silent: true });
+      // Detail block sits below name + (multi-line) description. Cached so
+      // height calc, silent attrs, and direct-DOM updates all agree.
+      const detailStartY = pos
+        ? nameY + 16 + posLines.length * POS_LINE_H + POS_GAP
+        : nameY + 16;
       m.attr('nameLabel/x', textX, { silent: true });
       m.attr('nameLabel/y', nameY, { silent: true });
       m.attr('positionLabel/x', textX, { silent: true });
       m.attr('positionLabel/y', nameY + 16, { silent: true });
       m.attr('detailsLabel/x', textX, { silent: true });
-      m.attr('detailsLabel/y', pos ? nameY + 32 : nameY + 16, { silent: true });
+      m.attr('detailsLabel/y', detailStartY, { silent: true });
 
       // Avatar text — icon text or name initials
       let displayText;
@@ -2480,21 +2680,40 @@ export function register() {
         m.attr('avatar/fill', 'transparent', { silent: true });
       }
 
-      // Detail labels — build "Label: Value" pairs
+      // Detail labels — built from the new `details` array (since v1.11).
+      // Pre-v1.11 cells used hardcoded fields (email/phone/role/stream/...) ordered
+      // by `detailOrder`. The view auto-migrates them into `details` on first
+      // render so subsequent saves use the new shape; the legacy fields stay
+      // on the cell untouched for forward-compat with rollbacks.
       const DETAIL_LABELS = { email: 'Email', phone: 'Phone', role: 'Role', stream: 'Stream', location: 'Location', company: 'Company' };
       const fieldValues = { email, phone, role, stream, location, company };
-      const order = m.get('detailOrder') || ['email', 'phone', 'role', 'stream', 'location', 'company'];
-      const details = [];
-      for (const key of order) {
-        if (fieldValues[key]) details.push({ label: DETAIL_LABELS[key], value: fieldValues[key] });
+      let detailEntries = m.get('details');
+      if (!Array.isArray(detailEntries) || detailEntries.length === 0) {
+        const order = m.get('detailOrder') || ['email', 'phone', 'role', 'stream', 'location', 'company'];
+        const migrated = order.map(key => ({
+          label: DETAIL_LABELS[key] || key,
+          value: fieldValues[key] || '',
+        }));
+        // Persist the migration so it ships into the next save / share.
+        if (migrated.some(d => d.value)) {
+          m.set('details', migrated, { silent: true });
+          detailEntries = migrated;
+        } else {
+          detailEntries = [];
+        }
       }
+      // Hide entries with empty values (current behaviour).
+      const details = detailEntries
+        .filter(d => d && d.value && String(d.value).trim() !== '')
+        .map(d => ({ label: String(d.label ?? ''), value: String(d.value ?? '') }));
 
-      // Adapt height — auto-size based on content
-      const detailStartY = pos ? nameY + 32 : nameY + 16;
+      // Adapt height — auto-size based on content. Tag row, when present,
+      // sits at the very bottom and adds a fixed extra slice.
       const detailH = details.length * 14;
       const contentH = detailStartY + detailH + 10;
       const avatarBottom = avatarCy + avatarR + 8;
-      const totalH = Math.max(contentH, avatarBottom, 60);
+      const tagsExtraH = tags.length > 0 ? TAG_ROW_H : 0;
+      const totalH = Math.max(contentH, avatarBottom, 60) + tagsExtraH;
       let { width, height } = m.size();
       let sizeChanged = false;
       if (width < 280) { width = 280; sizeChanged = true; }
@@ -2521,6 +2740,9 @@ export function register() {
         nameEl.setAttribute('x', String(textX));
         nameEl.setAttribute('y', String(nameY));
         nameEl.setAttribute('dominant-baseline', 'hanging');
+        // JointJS' renderer occasionally stamps `display="none"` on text
+        // elements that were updated via silent attrs; clear it explicitly.
+        nameEl.removeAttribute('display');
       }
       const avatarTextEl = this.el.querySelector('[joint-selector="avatarText"]');
       if (avatarTextEl) {
@@ -2540,10 +2762,27 @@ export function register() {
       }
       const posEl = this.el.querySelector('[joint-selector="positionLabel"]');
       if (posEl) {
-        posEl.textContent = pos;
+        // Clear and rebuild as tspans so newlines wrap correctly. SVG <text>
+        // collapses literal \n to a space, so single-line textContent loses
+        // multi-line descriptions entirely.
+        posEl.textContent = '';
         posEl.setAttribute('x', String(textX));
         posEl.setAttribute('y', String(nameY + 16));
         posEl.setAttribute('dominant-baseline', 'hanging');
+        posEl.removeAttribute('display');
+        posLines.forEach((line, i) => {
+          const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+          tspan.setAttribute('x', String(textX));
+          // Absolute y per line. Safari ignores the parent's
+          // `dominant-baseline="hanging"` for the first tspan when only `dy`
+          // is set, falling back to alphabetic — that pulls the first line up
+          // ~9 px and overlaps the name. Setting `y` and re-asserting the
+          // hanging baseline on every tspan keeps Chrome and Safari aligned.
+          tspan.setAttribute('y', String(nameY + 16 + i * POS_LINE_H));
+          tspan.setAttribute('dominant-baseline', 'hanging');
+          tspan.textContent = line;
+          posEl.appendChild(tspan);
+        });
       }
 
       // Avatar image + clip path
@@ -2577,8 +2816,9 @@ export function register() {
       if (detailEl) {
         detailEl.textContent = '';
         detailEl.setAttribute('x', String(textX));
-        detailEl.setAttribute('y', String(pos ? nameY + 32 : nameY + 16));
+        detailEl.setAttribute('y', String(detailStartY));
         detailEl.setAttribute('dominant-baseline', 'hanging');
+        detailEl.removeAttribute('display');
         const maxValWidth = m.size().width - textX - 10;
         const labelW = 52; // fixed tab stop for labels
         if (details.length > 0) {
@@ -2601,6 +2841,323 @@ export function register() {
           });
         }
       }
+
+      // ── Vacant state ────────────────────────────────────────
+      // Dashed body + dashed/transparent avatar + faded text. Used as a
+      // recruitment placeholder ("position to be filled") or a RACI slot
+      // that hasn't been assigned yet.
+      const bodyEl = this.el.querySelector('[joint-selector="body"]');
+      if (bodyEl) {
+        if (vacant) bodyEl.setAttribute('stroke-dasharray', '6 4');
+        else bodyEl.removeAttribute('stroke-dasharray');
+      }
+      if (avatarEl) {
+        if (vacant) {
+          avatarEl.setAttribute('stroke-dasharray', '4 3');
+          avatarEl.setAttribute('fill', 'transparent');
+        } else {
+          avatarEl.removeAttribute('stroke-dasharray');
+          // (fill is set above based on photo/iconText state — restored on
+          // toggle-off via the existing avatar-fill logic in this same pass)
+        }
+      }
+      if (avatarTextEl) avatarTextEl.style.opacity = vacant ? '0.5' : '1';
+      if (nameEl) nameEl.style.opacity = vacant ? '0.55' : '1';
+      if (posEl) posEl.style.opacity = vacant ? '0.55' : '1';
+      const detailLblEl = this.el.querySelector('[joint-selector="detailsLabel"]');
+      if (detailLblEl) detailLblEl.style.opacity = vacant ? '0.55' : '1';
+
+      // ── RACI pills (top-right) ──────────────────────────────
+      // Each active role is a coloured letter pill with a <title> tooltip
+      // for the full name. Pills only render when their role is set.
+      const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
+      if (raciGroupEl) {
+        raciGroupEl.innerHTML = '';
+        const RACI_COLORS = { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' };
+        const RACI_NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+        const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
+        if (active.length > 0) {
+          const PILL = 16;
+          const GAP = 3;
+          const ns = 'http://www.w3.org/2000/svg';
+          // Right-aligned, sitting just below the accent bar
+          let xPos = width - 10 - active.length * PILL - (active.length - 1) * GAP;
+          const yPos = 10;
+          for (const key of active) {
+            const g = document.createElementNS(ns, 'g');
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', String(xPos));
+            rect.setAttribute('y', String(yPos));
+            rect.setAttribute('width', String(PILL));
+            rect.setAttribute('height', String(PILL));
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('ry', '4');
+            rect.setAttribute('fill', RACI_COLORS[key]);
+            g.appendChild(rect);
+            const text = document.createElementNS(ns, 'text');
+            text.setAttribute('x', String(xPos + PILL / 2));
+            text.setAttribute('y', String(yPos + PILL / 2 + 0.5));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('fill', '#FFFFFF');
+            text.setAttribute('font-size', '10');
+            text.setAttribute('font-weight', '700');
+            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+            text.setAttribute('pointer-events', 'none');
+            text.textContent = key;
+            g.appendChild(text);
+            const title = document.createElementNS(ns, 'title');
+            title.textContent = RACI_NAMES[key];
+            g.appendChild(title);
+            raciGroupEl.appendChild(g);
+            xPos += PILL + GAP;
+          }
+        }
+      }
+
+      // ── Tag pills (bottom row, full width, single line + ellipsis) ──
+      // Background uses a theme-neutral semi-transparent grey — `var(--*)`
+      // resolves unreliably when set via setAttribute, so a literal rgba
+      // gives consistent pills in both light and dark modes.
+      const tagsGroupEl = this.el.querySelector('[joint-selector="tagsGroup"]');
+      if (tagsGroupEl) {
+        tagsGroupEl.innerHTML = '';
+        if (tags.length > 0) {
+          const ns = 'http://www.w3.org/2000/svg';
+          const PILL_H = 18;
+          const PILL_PAD = 10;
+          const GAP = 4;
+          const FONT = 10;
+          const PILL_FILL = 'rgba(127, 127, 127, 0.22)';
+          const startX = 10;
+          const yPos = totalH - PILL_H - 8;
+          const maxX = width - 10;
+          let curX = startX;
+          for (let i = 0; i < tags.length; i++) {
+            const tag = tags[i];
+            const textW = Math.ceil(tag.length * 5.5);
+            const pillW = textW + PILL_PAD * 2;
+            if (curX + pillW > maxX && curX > startX) {
+              const ellipsis = document.createElementNS(ns, 'g');
+              const r = document.createElementNS(ns, 'rect');
+              r.setAttribute('x', String(curX));
+              r.setAttribute('y', String(yPos));
+              r.setAttribute('width', '24');
+              r.setAttribute('height', String(PILL_H));
+              r.setAttribute('rx', '9');
+              r.setAttribute('ry', '9');
+              r.setAttribute('fill', PILL_FILL);
+              ellipsis.appendChild(r);
+              const t = document.createElementNS(ns, 'text');
+              t.setAttribute('x', String(curX + 12));
+              t.setAttribute('y', String(yPos + PILL_H / 2));
+              t.setAttribute('text-anchor', 'middle');
+              t.setAttribute('dominant-baseline', 'central');
+              t.setAttribute('fill', 'var(--text-secondary)');
+              t.setAttribute('font-size', String(FONT));
+              t.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+              t.textContent = `+${tags.length - i}`;
+              ellipsis.appendChild(t);
+              const title = document.createElementNS(ns, 'title');
+              title.textContent = tags.slice(i).join(', ');
+              ellipsis.appendChild(title);
+              tagsGroupEl.appendChild(ellipsis);
+              break;
+            }
+            const g = document.createElementNS(ns, 'g');
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', String(curX));
+            rect.setAttribute('y', String(yPos));
+            rect.setAttribute('width', String(pillW));
+            rect.setAttribute('height', String(PILL_H));
+            rect.setAttribute('rx', '9');
+            rect.setAttribute('ry', '9');
+            rect.setAttribute('fill', PILL_FILL);
+            g.appendChild(rect);
+            const text = document.createElementNS(ns, 'text');
+            // Centred horizontally + vertically inside the pill.
+            text.setAttribute('x', String(curX + pillW / 2));
+            text.setAttribute('y', String(yPos + PILL_H / 2));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('fill', 'var(--text-secondary)');
+            text.setAttribute('font-size', String(FONT));
+            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+            text.textContent = tag;
+            g.appendChild(text);
+            tagsGroupEl.appendChild(g);
+            curX += pillW + GAP;
+          }
+        }
+      }
+    },
+  });
+
+  // --- Task ---
+  // RACI workflow row: two-column card. Left column holds the task name +
+  // description. Right column accepts embedded Person/Team cards (auto-stacks
+  // vertically on drop). Each embedded card carries its own RACI pills, so
+  // the Task itself doesn't need separate R/A/C/I slots.
+  joint.dia.Element.define(
+    'sf.Task',
+    {
+      size: { width: 540, height: 160 },
+      // Below Container (1000) AND Person (2000) so embedded Person/Team
+      // cards always render ABOVE the Task body. With Task at 1500 the
+      // task overlapped Teams sitting next to it on the canvas — z=900
+      // also keeps Tasks from obscuring nearby Containers in non-embed
+      // layouts.
+      z: 900,
+      taskName: 'Task',
+      taskDescription: '',
+      // Width of the LEFT column (name + description). Stays fixed when the
+      // task is resized — the right column grows instead. User can override
+      // explicitly via the "Task description width" property panel input.
+      descriptionWidth: 260,
+      attrs: {
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)',
+          height: 'calc(h)',
+          rx: 8,
+          ry: 8,
+          fill: 'var(--node-bg)',
+          stroke: 'var(--node-border)',
+          strokeWidth: 1.5,
+        },
+        rightBg: {
+          // x / width are set by TaskView from descriptionWidth (defaults
+          // here are placeholders — the view overrides them on render).
+          x: 260,
+          y: 1,
+          width: 'calc(w - 261)',
+          height: 'calc(h - 2)',
+          rx: 7,
+          ry: 7,
+          fill: 'rgba(127, 127, 127, 0.04)',
+          stroke: 'none',
+        },
+        divider: {
+          x1: 260,
+          y1: 12,
+          x2: 260,
+          y2: 'calc(h - 12)',
+          stroke: 'var(--node-border)',
+          strokeWidth: 1,
+        },
+        nameLabel: {
+          x: 16,
+          y: 16,
+          textAnchor: 'start',
+          textVerticalAnchor: 'top',
+          fontSize: 14,
+          fontWeight: 700,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--node-text)',
+          text: 'Task',
+          textWrap: { width: 232, maxLineCount: 3, ellipsis: true },
+        },
+        descLabel: {
+          x: 16,
+          y: 60,
+          textAnchor: 'start',
+          textVerticalAnchor: 'top',
+          fontSize: 11,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-secondary)',
+          text: '',
+          textWrap: { width: 232, maxLineCount: 8, ellipsis: true },
+        },
+        emptyHint: {
+          x: 400,
+          y: 'calc(0.5 * h)',
+          textAnchor: 'middle',
+          dominantBaseline: 'central',
+          fontSize: 11,
+          fontStyle: 'italic',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-muted)',
+          text: 'Drop a person or team',
+        },
+      },
+      ports: {
+        groups: portGroups,
+        items: portItems,
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'rect', selector: 'rightBg' },
+        { tagName: 'line', selector: 'divider' },
+        { tagName: 'text', selector: 'nameLabel' },
+        { tagName: 'text', selector: 'descLabel' },
+        { tagName: 'text', selector: 'emptyHint' },
+      ],
+    }
+  );
+
+  // Custom view for Task — syncs label text + textWrap widths to
+  // descriptionWidth, auto-stacks embedded Person/Team cards in the right
+  // column, and grows the task height when children overflow.
+  joint.shapes.sf.TaskView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.listenTo(this.model, 'change:taskName change:taskDescription', () => this._updateLabels());
+      this.listenTo(this.model, 'change:descriptionWidth change:size', () => { this._updateLayout(); this._restackEmbeds(); });
+      this.listenTo(this.model, 'change:embeds change:position', () => this._restackEmbeds());
+    },
+    render() {
+      joint.dia.ElementView.prototype.render.apply(this, arguments);
+      this._updateLayout();
+      this._updateLabels();
+      this._restackEmbeds();
+      return this;
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._updateLabels();
+    },
+    /** Read descriptionWidth, clamp to a sensible range given current size. */
+    _effectiveDescWidth() {
+      const m = this.model;
+      const sz = m.size();
+      const raw = m.get('descriptionWidth') ?? 260;
+      // Always leave at least 100 px for the right column.
+      return Math.max(120, Math.min(sz.width - 100, raw));
+    },
+    _updateLayout() {
+      const m = this.model;
+      const sz = m.size();
+      const dw = this._effectiveDescWidth();
+      m.attr('divider/x1', dw, { silent: true });
+      m.attr('divider/x2', dw, { silent: true });
+      m.attr('rightBg/x', dw, { silent: true });
+      m.attr('rightBg/width', sz.width - dw - 1, { silent: true });
+      m.attr('emptyHint/x', dw + (sz.width - dw) / 2, { silent: true });
+      const wrapW = Math.max(40, dw - 28);
+      m.attr('nameLabel/textWrap/width', wrapW, { silent: true });
+      m.attr('descLabel/textWrap/width', wrapW, { silent: true });
+    },
+    _updateLabels() {
+      const m = this.model;
+      m.attr('nameLabel/text', m.get('taskName') || 'Task', { silent: true });
+      m.attr('descLabel/text', m.get('taskDescription') || '', { silent: true });
+      const hasChildren = (m.get('embeds') || []).length > 0;
+      m.attr('emptyHint/visibility', hasChildren ? 'hidden' : 'visible', { silent: true });
+      const hintEl = this.el.querySelector('[joint-selector="emptyHint"]');
+      if (hintEl) hintEl.style.visibility = hasChildren ? 'hidden' : 'visible';
+    },
+    _restackEmbeds() {
+      // Task captures children like a Zone — they are embedded so they move
+      // together when the Task is dragged, but their positions stay where
+      // the user dropped them. (Auto-stacking previously implemented here
+      // was removed in 1.10.3 because it constrained users who wanted to
+      // arrange RACI assignees freely inside the right column.)
+      const task = this.model;
+      const hasChildren = (task.get('embeds') || []).length > 0;
+      const hintEl = this.el.querySelector('[joint-selector="emptyHint"]');
+      if (hintEl) hintEl.style.visibility = hasChildren ? 'hidden' : 'visible';
     },
   });
 

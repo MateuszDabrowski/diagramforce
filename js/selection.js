@@ -1,7 +1,7 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.9.2';
+import * as clipboard from './clipboard.js?v=1.10.0';
 
 let graph, paper;
 const selectedIds = new Set();

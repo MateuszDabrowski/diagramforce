@@ -1,10 +1,10 @@
 // Stencil panel — draggable component library
 // Organizes templates by category, supports search, handles drag-to-canvas
 
-import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.9.2';
-import { getAllIcons, getCategories } from './icons.js?v=1.9.2';
-import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.9.2';
-import { startImageAddFlow } from './image-component.js?v=1.9.2';
+import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.10.0';
+import { getAllIcons, getCategories } from './icons.js?v=1.10.0';
+import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.10.0';
+import { startImageAddFlow } from './image-component.js?v=1.10.0';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -424,6 +424,9 @@ function tryEmbed(element) {
       valid = childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
     } else if (parentType === 'sf.SequenceParticipant' || parentType === 'sf.SequenceActor') {
       valid = childType === 'sf.SequenceActivation';
+    } else if (parentType === 'sf.Task') {
+      // Task right column accepts Person/Team cards as RACI assignees.
+      valid = childType === 'sf.OrgPerson' || childType === 'sf.Container';
     }
     if (valid) {
       candidate.embed(element);

@@ -607,6 +607,10 @@ export function init() {
       if (parentType === 'sf.SequenceParticipant' || parentType === 'sf.SequenceActor') {
         return childType === 'sf.SequenceActivation';
       }
+      // Task captures Person/Team cards as RACI assignees in its right column.
+      if (parentType === 'sf.Task') {
+        return childType === 'sf.OrgPerson' || childType === 'sf.Container';
+      }
       return false;
     },
 

@@ -7,7 +7,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.8.0",
+  "appVersion": "1.10.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -37,12 +37,14 @@
 
 | Type | Use For | Primary Shapes |
 |------|---------|----------------|
-| `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel |
+| `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image |
 | `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnPool, Flow* shapes |
 | `datamodel` | ERDs, Salesforce object models | DataObject |
-| `org` | Org charts, team structures | OrgPerson, Container, Zone |
+| `org` | Org charts, team structures, RACI workflows | OrgPerson, Container (Team), Zone, Task |
 | `gantt` | Project timelines | GanttTimeline, GanttTask, GanttMilestone, GanttGroup, GanttMarker |
 | `sequence` | UML sequence diagrams, message flows | SequenceParticipant, SequenceActor, SequenceActivation, SequenceFragment |
+
+> **`sf.Image`** is available in every diagram type's "Generic Shapes" stencil group (since v1.9). Note that any tab containing `sf.Image` cells has Share-as-URL automatically disabled — see [sf.Image](#sfimage-since-v19) for details.
 
 ## Cell Structure (Elements)
 
@@ -308,6 +310,10 @@ Position children so they fall within the container's bounds (below the 40px hea
 - Sales: `#032E61`, Service: `#7F2B82`, Marketing: `#F49825`
 - Platform: `#1D73C9`, Data: `#0D9DDA`, Commerce: `#61C754`
 
+**`tags` (since v1.10)** — Optional `string[]` rendered as right-aligned pills in the header (after the title). Primary use case is the Team variant in Org Chart diagrams; available on every Container regardless of diagram type. Empty / unset arrays render nothing. Overflow on the left side is replaced by a `+N` chip with hover tooltip listing the dropped tags.
+
+**`raci` (since v1.10)** — Optional `{ R?, A?, C?, I? }` of booleans. Renders coloured pills in the top-right corner of the header (white-outlined for contrast against the coloured accent bar). Same colour mapping and tooltip behaviour as `sf.OrgPerson.raci`.
+
 ### sf.Zone
 
 Background grouping area with dashed border. Always renders behind other elements.
@@ -413,6 +419,47 @@ Post-it style sticky note.
   }
 }
 ```
+
+No ports.
+
+### sf.Image (since v1.9)
+
+Raster image embedded directly into the diagram via a `data:` URI. Available in every diagram type's "Generic Shapes" stencil group.
+
+**Default size:** `240 x 180` (aspect-ratio-aware, displayed up to 320 px on the long edge after upload)
+
+```json
+{
+  "id": "image-1",
+  "type": "sf.Image",
+  "position": { "x": 100, "y": 100 },
+  "size": { "width": 240, "height": 180 },
+  "z": 1500,
+  "attrs": {
+    "body": {
+      "x": 0, "y": 0,
+      "width": "calc(w)", "height": "calc(h)",
+      "fill": "transparent",
+      "stroke": "var(--node-border)",
+      "strokeWidth": 1,
+      "rx": 8, "ry": 8
+    },
+    "image": {
+      "x": 0, "y": 0,
+      "width": "calc(w)", "height": "calc(h)",
+      "href": "data:image/webp;base64,UklGRiIAAABXRUJQVlA4...",
+      "preserveAspectRatio": "xMidYMid meet",
+      "style": "clip-path:inset(0 round 8px);-webkit-clip-path:inset(0 round 8px)"
+    }
+  }
+}
+```
+
+**Tips:**
+- The `image/href` is a `data:` URI. Uploads from the property panel are auto-resized to max 1280 px on the long edge and re-encoded as WEBP at quality 0.85 (PNG fallback in browsers without WEBP encoding).
+- SVG uploads are rejected (security: SVG can carry scripts). Allowed input formats: PNG, JPG, WEBP, GIF.
+- The `image/style` clip-path keeps the rendered raster inside the rounded body; if you change `body/rx` and `body/ry`, change the `inset(0 round Npx)` value to match.
+- **URL sharing is disabled when any `sf.Image` cell is in the active tab.** Image bytes blow past every messaging-app URL-length limit; the Save → Share-as-URL menu item disables itself reactively. Use Save → Save to JSON to share image-laden diagrams.
 
 No ports.
 
@@ -597,7 +644,7 @@ Apply ER markers (see Marker Types section) to represent cardinality.
 
 Person card for organisation charts with avatar circle and detail fields.
 
-**Default size:** `280 x 90` (height auto-adjusts based on visible details)
+**Default size:** `280 x 90` (height auto-adjusts based on visible details + tag row)
 
 ```json
 {
@@ -607,7 +654,18 @@ Person card for organisation charts with avatar circle and detail fields.
   "size": { "width": 280, "height": 90 },
   "z": 2000,
   "personName": "Jane Smith",
-  "jobTitle": "VP Engineering",
+  "jobTitle": "VP Engineering — Platform & Data",
+  "details": [
+    { "label": "Email", "value": "jane@example.com" },
+    { "label": "Role", "value": "Leadership" },
+    { "label": "Location", "value": "London" },
+    { "label": "Company", "value": "Acme Corp" }
+  ],
+  "tags": ["leadership", "platform"],
+  "raci": { "R": true, "A": true },
+  "vacant": false,
+  "imageUrl": "",
+  "iconText": "JS",
   "email": "jane@example.com",
   "phone": "",
   "role": "Leadership",
@@ -615,8 +673,6 @@ Person card for organisation charts with avatar circle and detail fields.
   "location": "London",
   "company": "Acme Corp",
   "detailOrder": ["email", "phone", "role", "stream", "location", "company"],
-  "imageUrl": "",
-  "iconText": "JS",
   "attrs": {
     "body": {
       "width": "calc(w)", "height": "calc(h)",
@@ -680,8 +736,84 @@ Person card for organisation charts with avatar circle and detail fields.
 **Tips:**
 - Set `iconText` to 1-4 characters for the avatar circle (typically initials).
 - Set `avatar/fill` to match `accentBar/fill` for a cohesive look.
-- The `detailsLabel/text` is a newline-separated string of `"Label: Value"` pairs, built from the non-empty detail fields in `detailOrder`.
-- Height auto-adjusts: ~60px base + ~14px per visible detail line. Set height to accommodate.
+- Height auto-adjusts: ~60 px base + ~14 px per visible detail row + 30 px when `tags` is non-empty.
+
+**`details` (since v1.11)** — Extensible array of `{ label, value }` rows shown beneath the position label. The view renders one line per entry where `value` is non-empty; empty rows are hidden. Entries with `value === ""` are kept in the model so the user can fill them in later.
+
+When loading a pre-v1.11 diagram, the view auto-migrates the legacy hardcoded fields (`email`, `phone`, `role`, `stream`, `location`, `company`) into `details` using `detailOrder` for the row order. The legacy fields stay on the cell so the JSON also opens cleanly in older versions.
+
+**`tags` (since v1.10)** — Array of strings rendered as muted pills along the bottom of the card. Empty array hides the tag row entirely. If many tags would overflow the card width, the trailing ones are hidden behind a `+N` overflow chip whose hover tooltip shows the missing tags.
+
+**`raci` (since v1.10)** — Object `{ R?, A?, C?, I? }` of booleans. Each truthy key renders a coloured pill in the top-right corner with the letter (R/A/C/I) and a tooltip for the full role name (Responsible / Accountable / Consulted / Informed). Multiple roles allowed simultaneously. Pill colours: R=brand blue (`#1D73C9`), A=brand red (`#DA4E55`), C=brand amber (`#F6B355`), I=neutral grey (`#8A9099`).
+
+**`vacant` (since v1.10)** — When `true`, the card renders with dashed body border, dashed transparent avatar (no fill), and faded text/details (~55 % opacity). Use as a recruitment placeholder ("position to be filled") or to mark an unassigned RACI slot.
+
+**Position field rename (since v1.10)** — The property panel label changed from "Position" to "Description". The underlying model field is still `jobTitle` for backward compatibility — pre-v1.10 diagrams keep working unchanged.
+
+### sf.Task (since v1.10)
+
+RACI workflow row for Org Chart diagrams. Two-column layout: left column holds the task name + description, right column captures embedded `sf.OrgPerson` and `sf.Container` (Team) cards as RACI assignees. Each embedded card carries its own RACI pills, so the Task itself does not duplicate R/A/C/I slots.
+
+**Default size:** `540 x 160` (`descriptionWidth` defaults to 260 px)
+
+```json
+{
+  "id": "task-1",
+  "type": "sf.Task",
+  "position": { "x": 600, "y": 100 },
+  "size": { "width": 540, "height": 160 },
+  "z": 900,
+  "taskName": "Quarterly architecture review",
+  "taskDescription": "Review platform changes and align on next quarter's roadmap.",
+  "descriptionWidth": 260,
+  "embeds": ["person-1", "team-1"],
+  "attrs": {
+    "body": {
+      "x": 0, "y": 0,
+      "width": "calc(w)", "height": "calc(h)",
+      "rx": 8, "ry": 8,
+      "fill": "var(--node-bg)", "stroke": "var(--node-border)", "strokeWidth": 1.5
+    },
+    "rightBg": {
+      "x": 260, "y": 1,
+      "width": "calc(w - 261)", "height": "calc(h - 2)",
+      "rx": 7, "ry": 7,
+      "fill": "rgba(127, 127, 127, 0.04)", "stroke": "none"
+    },
+    "divider": {
+      "x1": 260, "y1": 12,
+      "x2": 260, "y2": "calc(h - 12)",
+      "stroke": "var(--node-border)", "strokeWidth": 1
+    },
+    "nameLabel": {
+      "x": 16, "y": 16,
+      "textAnchor": "start", "textVerticalAnchor": "top",
+      "fontSize": 14, "fontWeight": 700,
+      "fontFamily": "system-ui, -apple-system, sans-serif",
+      "fill": "var(--node-text)",
+      "text": "Quarterly architecture review",
+      "textWrap": { "width": 232, "maxLineCount": 3, "ellipsis": true }
+    },
+    "descLabel": {
+      "x": 16, "y": 60,
+      "textAnchor": "start", "textVerticalAnchor": "top",
+      "fontSize": 11,
+      "fontFamily": "system-ui, -apple-system, sans-serif",
+      "fill": "var(--text-secondary)",
+      "text": "Review platform changes and align on next quarter's roadmap.",
+      "textWrap": { "width": 232, "maxLineCount": 8, "ellipsis": true }
+    }
+  }
+}
+```
+
+**Tips:**
+- `descriptionWidth` controls the LEFT column. The right column absorbs any size changes when the task is resized — left column stays at this width unless the user explicitly edits it.
+- `nameLabel` and `descLabel` `textWrap.width` should equal `descriptionWidth - 28` (padding accommodation). The view recomputes these automatically when `descriptionWidth` or `size` changes.
+- Embedded children (Person/Team cards) are captured like a Zone capture — they move with the task when dragged but the user controls their position inside the right column.
+- Task `z` is intentionally below Container (1000) and OrgPerson (2000) so embedded cards always render above the Task body.
+
+Standard 4 ports (top, right, bottom, left) — use them to link Tasks to other tasks or deliverables.
 
 ### BPMN Shapes (Process Diagrams)
 
@@ -1175,7 +1307,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.8.0",
+  "appVersion": "1.10.0",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1331,7 +1463,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.8.0",
+  "appVersion": "1.10.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -1451,7 +1583,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.8.0",
+  "appVersion": "1.10.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
