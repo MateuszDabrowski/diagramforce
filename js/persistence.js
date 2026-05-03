@@ -2,12 +2,13 @@
 // (Auto-save is handled by the tabs module now.)
 
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.8.4';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.9.2';
+import { diagramHasImage } from './image-component.js?v=1.9.2';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const APP_VERSION = '1.8.4';
+const APP_VERSION = '1.9.2';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -906,6 +907,16 @@ function resolveCssVars(svgRoot) {
 
 export function shareAsURL() {
   if (!getTabNameCallback || !getDiagramTypeCallback) return;
+  // Belt-and-braces: the dropdown button is already disabled when images are
+  // present, but keyboard shortcut / hamburger entry / `share` action route
+  // straight into this function and need the same gate.
+  if (diagramHasImage(graph)) {
+    showShareLoadError(
+      'URL sharing is unavailable while this diagram contains images. Use Save → Save to JSON to share, or remove every image to re-enable URL sharing.',
+      'Sharing unavailable',
+    );
+    return;
+  }
   const data = {
     v: 1,
     av: APP_VERSION,
@@ -993,7 +1004,7 @@ export async function loadFromURL() {
 }
 
 /** Show a non-blocking error toast for share-URL load failures. */
-function showShareLoadError(message) {
+function showShareLoadError(message, title = "Couldn't load shared diagram") {
   document.querySelector('.sf-share-error-modal')?.remove();
   const overlay = document.createElement('div');
   overlay.className = 'sf-share-error-modal sf-modal';
@@ -1002,7 +1013,7 @@ function showShareLoadError(message) {
     <div class="sf-modal__overlay"></div>
     <div class="sf-modal__dialog" style="width:440px">
       <div class="sf-modal__header">
-        <h2 class="sf-modal__title">Couldn't load shared diagram</h2>
+        <h2 class="sf-modal__title">${escHtml(title)}</h2>
       </div>
       <div class="sf-modal__body" style="padding:16px 20px">
         <p style="margin:0;color:var(--text-secondary);line-height:1.5">${escHtml(message)}</p>

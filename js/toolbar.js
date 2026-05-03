@@ -1,6 +1,8 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
+import { diagramHasImage } from './image-component.js?v=1.9.2';
+
 let modules = {};
 
 export function init(_modules) {
@@ -28,6 +30,26 @@ export function init(_modules) {
   btn('btn-save-webp-t').addEventListener('click', () => modules.persistence.exportWEBP(true));
   btn('btn-save-share').addEventListener('click', () => modules.persistence.shareAsURL());
   document.getElementById('btn-share-url').addEventListener('click', () => modules.persistence.shareAsURL());
+
+  // Share-as-URL is unavailable while the diagram contains image cells —
+  // embedded image bytes blow past every messaging/chat URL-length limit.
+  // We mirror the state on the dropdown menu item (with explanatory tooltip)
+  // and also gate inside `persistence.shareAsURL` for the keyboard shortcut /
+  // hamburger entry.
+  const SHARE_DISABLED_MSG = 'URL sharing is unavailable while this diagram contains images. Use Save → Save to JSON to share, or remove every image to re-enable URL sharing.';
+  const refreshShareAvailability = () => {
+    const shareBtn = btn('btn-save-share');
+    if (!shareBtn) return;
+    const blocked = diagramHasImage(modules.graph);
+    shareBtn.disabled = blocked;
+    shareBtn.title = blocked ? SHARE_DISABLED_MSG : '';
+  };
+  if (modules.graph) {
+    modules.graph.on('add', refreshShareAvailability);
+    modules.graph.on('remove', refreshShareAvailability);
+  }
+  if (modules.tabs) modules.tabs.onChange(refreshShareAvailability);
+  refreshShareAvailability();
 
   // Wire save modal callback so persistence.namedSave() can also open it
   modules.persistence.setShowSaveModal(() => showSaveModal());

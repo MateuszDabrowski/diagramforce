@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.8.4';
+import { getIconDataUri } from './icons.js?v=1.9.2';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -55,6 +55,7 @@ export const SVG = {
   note:       '<path d="M4 3h9l3 3v11H4z"/><path d="M13 3v3h3"/>',
   zone:       '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><line x1="4" y1="6" x2="10" y2="6" stroke-width="1" opacity="0.5"/>',
   line:       '<line x1="2" y1="10" x2="18" y2="10" stroke-width="2" stroke-linecap="round"/>',
+  image:      '<rect x="2" y="3" width="16" height="14" rx="2"/><circle cx="6.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/><path d="M3 16l4-5 3 3 3-4 4 5"/>',
   // linkIcon — external-link glyph (SVG Repo "External_Link"), translated to crop
   // the 24×24 source into the 20×20 viewBox and with the arrow head pulled one
   // unit toward the shape centre (M19 5 instead of M20 4).
@@ -116,6 +117,7 @@ export const TEMPLATE_CATEGORIES = [
       { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
       { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
   // ── Salesforce Products ────────────────────────────────────────────
@@ -401,6 +403,7 @@ export const BPMN_CATEGORIES = [
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
       { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
 ];
@@ -476,6 +479,7 @@ export const GANTT_CATEGORIES = [
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
       { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
 ];
@@ -502,6 +506,7 @@ export const ORG_CATEGORIES = [
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
       { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
 ];
@@ -541,6 +546,7 @@ export const SEQUENCE_CATEGORIES = [
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
       { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
 ];
@@ -565,6 +571,7 @@ export const DATAMODEL_CATEGORIES = [
       { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
       { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
       { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
   },
   {

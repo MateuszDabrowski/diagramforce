@@ -1,9 +1,10 @@
 // Stencil panel — draggable component library
 // Organizes templates by category, supports search, handles drag-to-canvas
 
-import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.8.4';
-import { getAllIcons, getCategories } from './icons.js?v=1.8.4';
-import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.8.4';
+import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.9.2';
+import { getAllIcons, getCategories } from './icons.js?v=1.9.2';
+import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.9.2';
+import { startImageAddFlow } from './image-component.js?v=1.9.2';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -213,10 +214,19 @@ function setupDropZone() {
       return;
     }
 
+    // Convert raw client coordinates to paper-local coordinates
+    // clientToLocalPoint handles the paper offset internally — pass raw clientX/Y
+    const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
+
+    // Image drops route through a callback flow that keeps the chain to
+    // `input.click()` synchronous from this drop event — Safari rejects the
+    // file picker otherwise. See js/image-component.js header comment.
+    if (template.customDrop === 'image') {
+      startImageAddFlow(graph, (result) => addImageCellAt(result, localPoint));
+      return;
+    }
+
     try {
-      // Convert raw client coordinates to paper-local coordinates
-      // clientToLocalPoint handles the paper offset internally — pass raw clientX/Y
-      const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
       const gridSize = paper.options.gridSize || 4;
 
       // Create element at origin first, then center on drop point
@@ -242,6 +252,34 @@ function setupDropZone() {
       console.warn('SF Diagrams: Drop failed:', err);
     }
   });
+}
+
+/**
+ * Place a processed image at the given local point. Caps the on-canvas
+ * footprint so a 1280-wide source doesn't blow out the viewport — the user
+ * can resize via the corner handles afterward.
+ */
+function addImageCellAt(result, localPoint) {
+  if (!result) return;
+  const { dataURI, width, height } = result;
+  const MAX_DISPLAY = 320;
+  let dispW = width, dispH = height;
+  if (dispW > MAX_DISPLAY || dispH > MAX_DISPLAY) {
+    const ratio = Math.min(MAX_DISPLAY / dispW, MAX_DISPLAY / dispH);
+    dispW = Math.round(dispW * ratio);
+    dispH = Math.round(dispH * ratio);
+  }
+  const gridSize = paper.options.gridSize || 4;
+  const cx = Math.round((localPoint.x - dispW / 2) / gridSize) * gridSize;
+  const cy = Math.round((localPoint.y - dispH / 2) / gridSize) * gridSize;
+
+  const element = new joint.shapes.sf.Image({
+    position: { x: cx, y: cy },
+    size: { width: dispW, height: dispH },
+    attrs: { image: { href: dataURI } },
+  });
+  graph.addCell(element);
+  tryEmbed(element);
 }
 
 function addToCenter(template) {
@@ -270,6 +308,13 @@ function addToCenter(template) {
   const centerClient = { x: rect.left + rect.width / 2, y: visibleTop + (visibleBottom - visibleTop) / 2 };
   const localCenter = paper.clientToLocalPoint(centerClient.x, centerClient.y);
   const gridSize = paper.options.gridSize || 4;
+
+  // Dblclick on the Image stencil — same callback flow as drag-drop so the
+  // picker click stays in the user-gesture chain (Safari requirement).
+  if (template.customDrop === 'image') {
+    startImageAddFlow(graph, (result) => addImageCellAt(result, localCenter));
+    return;
+  }
 
   const element = createElementFromTemplate(template, { x: 0, y: 0 });
   if (!element) return;
@@ -530,6 +575,10 @@ function setupTouchDrag() {
 function dropTemplateAtClient(template, clientX, clientY) {
   try {
     const localPoint = paper.clientToLocalPoint(clientX, clientY);
+    if (template.customDrop === 'image') {
+      startImageAddFlow(graph, (result) => addImageCellAt(result, localPoint));
+      return;
+    }
     const gridSize = paper.options.gridSize || 4;
     const element = createElementFromTemplate(template, { x: 0, y: 0 });
     if (!element) return;

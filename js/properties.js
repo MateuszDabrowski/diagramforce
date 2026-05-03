@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.8.4';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.8.4';
-import * as stencilModule from './stencil.js?v=1.8.4';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.8.4';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.9.2';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.9.2';
+import * as stencilModule from './stencil.js?v=1.9.2';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.9.2';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,8 +13,9 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.8.4';
-import * as history from './history.js?v=1.8.4';
+} from './clipboard.js?v=1.9.2';
+import * as history from './history.js?v=1.9.2';
+import { startImageAddFlow } from './image-component.js?v=1.9.2';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -48,6 +49,7 @@ const TYPE_LABELS = {
   'sf.Container':      'Container',
   'sf.TextLabel':      'Text',
   'sf.Note':           'Note',
+  'sf.Image':          'Image',
   'sf.Zone':           'Zone',
   'sf.BpmnEvent':      'Event',
   'sf.BpmnTask':       'Task',
@@ -87,6 +89,7 @@ const DEFAULT_SIZES = {
   'sf.Zone':           { width: 400, height: 300 },
   'sf.TextLabel':      { width: 200, height: 32 },
   'sf.Note':           { width: 200, height: 120 },
+  'sf.Image':          { width: 240, height: 180 },
   'sf.BpmnEvent':      { width: 40,  height: 40 },
   'sf.BpmnTask':       { width: 120, height: 60 },
   'sf.BpmnGateway':    { width: 48,  height: 48 },
@@ -377,8 +380,10 @@ export function init(_graph, _paper, _selection) {
       const cell = graph.getCell(ids[0]);
       if (cell) showProperties(cell);
     } else if (ids.length > 1) {
+      clearActiveSizeListener();
       showMultiProperties(ids.length);
     } else {
+      clearActiveSizeListener();
       panelEl.classList.add('sf-properties--hidden');
       footerEl.innerHTML = '';
       restoreStencilAfterProperties();
@@ -722,9 +727,47 @@ function showProperties(cell) {
   else if (type === 'sf.SequenceFragment')    renderSequenceFragmentProps(cell);
   else if (type === 'sf.Line')     renderLineProps(cell);
   else if (type === 'sf.Link')     renderLinkElementProps(cell);
+  else if (type === 'sf.Image')    renderImageProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
 
+  // Generic: keep any "Width"/"Height" inputs in the rendered panel synced
+  // with the live cell size, so corner-handle resizes update the numbers in
+  // real time instead of waiting for the next selection cycle.
+  bindLiveSizeInputs(cell);
+
   // Don't auto-focus inputs on single click — single click selects, double click edits.
+}
+
+// ── Live size sync ──────────────────────────────────────────────────
+// Holds the currently-bound { cell, handler } so we can detach when the
+// panel re-renders or hides. Detached listeners would otherwise keep firing
+// against stale DOM references.
+let activeSizeListener = null;
+
+function clearActiveSizeListener() {
+  if (!activeSizeListener) return;
+  try { activeSizeListener.cell.off('change:size', activeSizeListener.fn); } catch {}
+  activeSizeListener = null;
+}
+
+function bindLiveSizeInputs(cell) {
+  clearActiveSizeListener();
+  const findInput = (labelText) => {
+    const lbl = [...bodyEl.querySelectorAll('.sf-properties__label')]
+      .find(l => l.textContent.trim() === labelText);
+    return lbl?.parentElement?.querySelector('input[type="number"]') || null;
+  };
+  const widthInput = findInput('Width');
+  const heightInput = findInput('Height');
+  if (!widthInput && !heightInput) return;
+  const fn = () => {
+    const sz = cell.size();
+    // Don't clobber a value the user is actively typing into.
+    if (widthInput && document.activeElement !== widthInput) widthInput.value = sz.width;
+    if (heightInput && document.activeElement !== heightInput) heightInput.value = sz.height;
+  };
+  cell.on('change:size', fn);
+  activeSizeListener = { cell, fn };
 }
 
 function showMultiProperties(count) {
@@ -1280,6 +1323,77 @@ function renderNoteProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
+  addOrderButtons(size, cell, 'Node layer');
+
+  // Footer
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+function renderImageProps(cell) {
+  // Appearance
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Border', cell.attr('body/stroke') ?? 'var(--node-border)',
+    v => cell.attr('body/stroke', v));
+  addNumber(appearance, 'Border width', cell.attr('body/strokeWidth') ?? 1,
+    v => cell.attr('body/strokeWidth', Math.max(0, v)));
+  // Corner radius — drives both the body's rounded border AND the image's
+  // CSS clip-path so the photo itself is clipped to match the rounded edges
+  // (an SVG <image> doesn't accept rx/ry directly, so clip-path is required).
+  addNumber(appearance, 'Corner radius', cell.attr('body/rx') ?? 8, v => {
+    const r = Math.max(0, v);
+    history.startBatch();
+    try {
+      cell.attr('body/rx', r);
+      cell.attr('body/ry', r);
+      cell.attr('image/style', `clip-path:inset(0 round ${r}px);-webkit-clip-path:inset(0 round ${r}px)`);
+    } finally {
+      history.endBatch();
+    }
+  });
+
+  // Replace image — runs the same pick+resize pipeline used for the initial
+  // drop, then swaps the data URI in place.
+  const replaceBtn = document.createElement('button');
+  replaceBtn.className = 'sf-properties__btn sf-properties__btn--auto-size';
+  replaceBtn.style.marginTop = '6px';
+  replaceBtn.innerHTML = `
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+      <circle cx="5" cy="6" r="1" fill="currentColor" stroke="none"/>
+      <path d="M2 12l3-3 2 2 3-3 4 4"/>
+    </svg>
+    Replace image`;
+  // Click handler stays SYNCHRONOUS into startImageAddFlow so Safari's
+  // user-gesture chain reaches `input.click()` intact (same constraint as
+  // the stencil drop path).
+  replaceBtn.addEventListener('click', () => {
+    startImageAddFlow(graph, (result) => {
+      history.startBatch();
+      try {
+        cell.attr('image/href', result.dataURI);
+        // Resize the cell to match the new image's aspect ratio while keeping
+        // the user's chosen on-canvas footprint roughly intact.
+        const current = cell.size();
+        const { width: nw, height: nh } = result;
+        if (nw && nh) {
+          const ratio = Math.min(current.width / nw, current.height / nh);
+          const w = Math.round(nw * ratio);
+          const h = Math.round(nh * ratio);
+          cell.resize(w, h);
+        }
+      } finally {
+        history.endBatch();
+      }
+    });
+  });
+  appearance.appendChild(replaceBtn);
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
   addOrderButtons(size, cell, 'Node layer');
 
   // Footer

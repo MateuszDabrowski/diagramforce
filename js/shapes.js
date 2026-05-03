@@ -305,6 +305,49 @@ export function register() {
     }
   );
 
+  // --- Image ---
+  // Raster image element. The data URI lives on `attrs.image.href`; the body
+  // rect is a transparent hit area for selection bbox. No ports — images are
+  // not connectable. See js/image-component.js for upload/resize and the
+  // first-drop consent flow.
+  joint.dia.Element.define(
+    'sf.Image',
+    {
+      size: { width: 240, height: 180 },
+      z: 1500,
+      attrs: {
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)',
+          height: 'calc(h)',
+          fill: 'transparent',
+          stroke: 'var(--node-border)',
+          strokeWidth: 1,
+          rx: 8,
+          ry: 8,
+        },
+        image: {
+          x: 0, y: 0,
+          width: 'calc(w)',
+          height: 'calc(h)',
+          href: '',
+          preserveAspectRatio: 'xMidYMid meet',
+          // CSS clip-path keeps the rendered raster inside the rounded body
+          // (SVG <image> doesn't accept rx/ry). The number is the default
+          // corner radius and stays in sync with body/rx via the property
+          // panel's "Corner radius" control.
+          style: 'clip-path:inset(0 round 8px);-webkit-clip-path:inset(0 round 8px)',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'image', selector: 'image' },
+      ],
+    }
+  );
+
   // --- Link ---
   // Clickable external-link element: label + icon that opens `url` in a new tab.
   // The icon is a separate SVG image; a transparent hit rect on top enlarges
