@@ -16,36 +16,36 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Multi-tab** — Work on multiple diagrams simultaneously with independent undo/redo per tab
 - **Smart Node Layout** — Content auto-centers: text-only, icon+text, or description layout
 - **Resize Guides** — Tracking lines extend from resized edges for easy alignment
-- **Export** — Save to browser, export as JSON or PNG, share via copyable URL
+- **Export** — Save to browser, export as JSON / PNG / SVG / WEBP, share via copyable URL
 - **Mermaid Import (beta)** — Paste mermaid.js source (`graph` / `flowchart` / `stateDiagram` → Process, `erDiagram` → Data Model, `sequenceDiagram` → Sequence) and convert it into a native diagramforce diagram with auto-layout
 - **Fit to Content** — Automatically fits viewport when loading shared or saved diagrams
 - **No Backend** — Everything runs client-side; your diagrams never leave your browser
 
 ## Keyboard Shortcuts
 
-| Action | Shortcut |
-|--------|----------|
-| Undo | Cmd/Ctrl + Z |
-| Redo | Cmd/Ctrl + Shift + Z |
-| Copy | Cmd/Ctrl + C |
-| Paste | Cmd/Ctrl + V |
-| Duplicate | Cmd/Ctrl + D |
-| Select All | Cmd/Ctrl + A |
-| Delete | Delete / Backspace |
-| Multi-select | Cmd/Ctrl + Click |
-| Rubber-band select | Shift + Drag |
-| Zoom in/out | Cmd/Ctrl + +/- or scroll |
-| Fit to screen | Ctrl + 0 |
+| Action             | Shortcut                 |
+| ------------------ | ------------------------ |
+| Undo               | Cmd/Ctrl + Z             |
+| Redo               | Cmd/Ctrl + Shift + Z     |
+| Copy               | Cmd/Ctrl + C             |
+| Paste              | Cmd/Ctrl + V             |
+| Duplicate          | Cmd/Ctrl + D             |
+| Select All         | Cmd/Ctrl + A             |
+| Delete             | Delete / Backspace       |
+| Multi-select       | Cmd/Ctrl + Click         |
+| Rubber-band select | Shift + Drag             |
+| Zoom in/out        | Cmd/Ctrl + +/- or scroll |
+| Fit to screen      | Ctrl + 0                 |
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Diagramming | [JointJS v4](https://www.jointjs.com/) (open-source, via CDN) |
+| Layer         | Technology                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Diagramming   | [JointJS v4](https://www.jointjs.com/) (open-source, via CDN)                                |
 | UI Components | [Salesforce Lightning Design System v2.29](https://www.lightningdesignsystem.com/) (via CDN) |
-| Icons | SLDS SVG sprites (self-hosted for same-origin `<use>`) |
-| Code | Vanilla JavaScript with ES modules — no framework, no bundler |
-| Styling | CSS custom properties with theme switching |
+| Icons         | SLDS SVG sprites (self-hosted for same-origin `<use>`)                                       |
+| Code          | Vanilla JavaScript with ES modules — no framework, no bundler                                |
+| Styling       | CSS custom properties with theme switching                                                   |
 
 ## Project Structure
 

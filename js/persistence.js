@@ -1,4 +1,4 @@
-// Persistence — named saves, JSON import/export, PNG/GIF export
+// Persistence — named saves, JSON import/export, SVG/PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm';
@@ -547,52 +547,25 @@ export function exportPNG(transparent = false) {
   return exportRaster(transparent, 'png');
 }
 
+export function exportSVG(transparent = false) {
+  try {
+    const { svgClone } = buildExportSvgClone({ transparent });
+    const svgStr = new XMLSerializer().serializeToString(svgClone);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    triggerDownload(URL.createObjectURL(blob), `${getExportBaseName()}_${dateSuffix()}.svg`);
+    if (onSaveCompleteCallback) onSaveCompleteCallback('svg');
+  } catch (err) {
+    alert('SVG export failed: ' + err.message);
+    console.error('SF Diagrams: SVG export failed:', err);
+  }
+}
+
 function exportRaster(transparent, format) {
   const mimeType = format === 'webp' ? 'image/webp' : 'image/png';
   const ext = format === 'webp' ? 'webp' : 'png';
   const fmtLabel = format.toUpperCase();
   try {
-    const contentBBox = paper.getContentBBox();
-    if (!contentBBox || contentBBox.width === 0) {
-      alert('The diagram is empty — nothing to export.');
-      return;
-    }
-
-    const padding = 32;
-    const exportW = contentBBox.width + padding * 2;
-    const exportH = contentBBox.height + padding * 2;
-
-    // Clone the paper SVG element and adjust for export
-    const svgEl = paper.svg;
-    const svgClone = svgEl.cloneNode(true);
-    svgClone.setAttribute('width', exportW);
-    svgClone.setAttribute('height', exportH);
-    svgClone.setAttribute('viewBox',
-      `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`
-    );
-
-    // Remove the viewport transform (scale+translate used for pan/zoom)
-    const viewport = svgClone.querySelector('.joint-viewport');
-    if (viewport) viewport.removeAttribute('transform');
-
-    // Hide grid pattern and port circles for clean export
-    svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
-
-    // Inline the SLDS icon sprites so they render in the exported SVG
-    const spritesContainer = document.getElementById('slds-icons');
-    if (spritesContainer) {
-      const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      defsEl.innerHTML = spritesContainer.innerHTML;
-      svgClone.insertBefore(defsEl, svgClone.firstChild);
-    }
-
-    // Replace foreignObject elements with SVG text — HTML inside SVG Blob URLs
-    // is blocked by browsers during Image rendering (security restriction)
-    replaceForeignObjects(svgClone);
-
-    // Resolve CSS custom properties — standalone SVG images can't access page CSS vars
-    resolveCssVars(svgClone);
-
+    const { svgClone, exportW, exportH } = buildExportSvgClone({ transparent });
     const svgStr = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
     const svgUrl = URL.createObjectURL(svgBlob);
@@ -606,8 +579,7 @@ function exportRaster(transparent, format) {
       const ctx = canvas.getContext('2d');
 
       if (!transparent) {
-        const theme = document.documentElement.getAttribute('data-theme');
-        ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
+        ctx.fillStyle = getExportBackgroundColor();
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
@@ -615,8 +587,7 @@ function exportRaster(transparent, format) {
       ctx.drawImage(img, 0, 0, exportW, exportH);
 
       canvas.toBlob(blob => {
-        const baseName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
-        if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateSuffix()}.${ext}`);
+        if (blob) triggerDownload(URL.createObjectURL(blob), `${getExportBaseName()}_${dateSuffix()}.${ext}`);
         URL.revokeObjectURL(svgUrl);
       }, mimeType);
     };
@@ -631,6 +602,76 @@ function exportRaster(transparent, format) {
     alert(`${fmtLabel} export failed: ` + err.message);
     console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
   }
+}
+
+// Build the standalone SVG document used by direct SVG export and by the
+// SVG→Image→Canvas raster pipeline so every format exports the same diagram.
+function buildExportSvgClone({ transparent = false } = {}) {
+  const contentBBox = paper.getContentBBox();
+  if (!contentBBox || contentBBox.width === 0) {
+    throw new Error('The diagram is empty — nothing to export.');
+  }
+
+  const padding = 32;
+  const exportW = contentBBox.width + padding * 2;
+  const exportH = contentBBox.height + padding * 2;
+  const viewBoxX = contentBBox.x - padding;
+  const viewBoxY = contentBBox.y - padding;
+
+  const svgEl = paper.svg;
+  const svgClone = svgEl.cloneNode(true);
+  svgClone.setAttribute('width', exportW);
+  svgClone.setAttribute('height', exportH);
+  svgClone.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${exportW} ${exportH}`);
+
+  const viewport = svgClone.querySelector('.joint-viewport');
+  if (viewport) viewport.removeAttribute('transform');
+
+  svgClone.querySelectorAll('pattern, .joint-port, .sf-flow-overlay').forEach(el => el.remove());
+
+  inlineExportSprites(svgClone);
+
+  if (!transparent) {
+    const bgColor = getExportBackgroundColor();
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', String(viewBoxX));
+    bgRect.setAttribute('y', String(viewBoxY));
+    bgRect.setAttribute('width', String(exportW));
+    bgRect.setAttribute('height', String(exportH));
+    bgRect.setAttribute('fill', bgColor);
+    const insertBeforeNode = svgClone.firstElementChild?.tagName?.toLowerCase() === 'defs'
+      ? svgClone.firstElementChild.nextSibling
+      : svgClone.firstChild;
+    svgClone.insertBefore(bgRect, insertBeforeNode);
+  }
+
+  replaceForeignObjects(svgClone);
+  resolveCssVars(svgClone);
+
+  return { svgClone, exportW, exportH };
+}
+
+function inlineExportSprites(svgClone) {
+  const spritesContainer = document.getElementById('slds-icons');
+  if (!spritesContainer) return;
+
+  let defsEl = svgClone.querySelector('defs');
+  if (!defsEl) {
+    defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svgClone.insertBefore(defsEl, svgClone.firstChild);
+  }
+
+  const spriteWrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  spriteWrapper.innerHTML = spritesContainer.innerHTML;
+  while (spriteWrapper.firstChild) defsEl.appendChild(spriteWrapper.firstChild);
+}
+
+function getExportBackgroundColor() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? '#1A1A1A' : '#FAFAFA';
+}
+
+function getExportBaseName() {
+  return (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
 }
 
 /**
