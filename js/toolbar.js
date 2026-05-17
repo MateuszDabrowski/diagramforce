@@ -1,9 +1,9 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.11.8';
-import { resizeDataObjectToFit } from './templates.js?v=1.11.8';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents } from './canvas.js?v=1.11.8';
+import { diagramHasImage } from './image-component.js?v=1.11.9';
+import { resizeDataObjectToFit } from './templates.js?v=1.11.9';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents } from './canvas.js?v=1.11.9';
 
 let modules = {};
 

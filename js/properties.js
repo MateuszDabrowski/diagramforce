@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.11.8';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.11.8';
-import * as stencilModule from './stencil.js?v=1.11.8';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.11.8';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.11.9';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.11.9';
+import * as stencilModule from './stencil.js?v=1.11.9';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.11.9';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,9 +13,10 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.11.8';
-import * as history from './history.js?v=1.11.8';
-import { startImageAddFlow } from './image-component.js?v=1.11.8';
+} from './clipboard.js?v=1.11.9';
+import * as history from './history.js?v=1.11.9';
+import { startImageAddFlow } from './image-component.js?v=1.11.9';
+import { escHtml } from './persistence.js?v=1.11.9';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -1850,7 +1851,7 @@ function openFieldEditorModal(cell, onClose) {
     <div class="sf-modal__overlay sf-field-modal__backdrop"></div>
     <div class="sf-modal__dialog sf-field-modal__dialog">
       <div class="sf-modal__header">
-        <h2 class="sf-modal__title">Edit Fields — ${cell.get('objectName') || 'Object'}</h2>
+        <h2 class="sf-modal__title">Edit Fields — ${escHtml(cell.get('objectName') || 'Object')}</h2>
         <button class="sf-modal__close sf-field-modal__close" title="Close">✕</button>
       </div>
       <div class="sf-modal__body sf-field-modal__body"></div>

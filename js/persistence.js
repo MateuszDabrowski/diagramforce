@@ -1,14 +1,14 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.11.8';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.11.8';
-import { diagramHasImage } from './image-component.js?v=1.11.8';
+import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.11.9';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.11.9';
+import { diagramHasImage } from './image-component.js?v=1.11.9';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-const APP_VERSION = '1.11.8';
+const APP_VERSION = '1.11.9';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -24,11 +24,18 @@ function sanitizeGraphJSON(graphData) {
   const stripAttrs = (obj) => {
     if (!obj || typeof obj !== 'object') return;
     for (const key of Object.keys(obj)) {
+      // Drop prototype-pollution vectors from untrusted JSON.
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        delete obj[key];
+        continue;
+      }
       // Remove event handler attributes (onclick, onload, etc.)
       if (/^on[a-z]/i.test(key)) { delete obj[key]; continue; }
       const val = obj[key];
-      // Remove javascript: URIs in string values
-      if (typeof val === 'string' && /^\s*javascript\s*:/i.test(val)) {
+      // Neutralise script-bearing URIs (javascript:/vbscript:/data:text/html).
+      // data:image/* is intentionally left intact — image cells rely on it.
+      if (typeof val === 'string'
+          && /^\s*(javascript|vbscript)\s*:|^\s*data\s*:\s*text\/html/i.test(val)) {
         obj[key] = '';
       } else if (typeof val === 'object' && val !== null) {
         stripAttrs(val);
@@ -1020,6 +1027,8 @@ export async function loadFromURL() {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const json = pako.inflateRaw(bytes, { to: 'string' });
+      // Decompression-bomb guard: a legitimate share is far under this ceiling.
+      if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
       data = JSON.parse(json);
     }
 

@@ -955,11 +955,20 @@ export function init() {
   // ~40px of the element, so we open the URL only when the click lands there.
   paper.on('element:pointerclick', (cellView, evt, x, y) => {
     if (cellView.model.get('type') !== 'sf.Link') return;
-    const url = cellView.model.get('url');
-    if (!url) return;
+    const rawUrl = cellView.model.get('url');
+    if (!rawUrl) return;
+    // Link `url` can originate from an untrusted share URL / imported JSON.
+    // Only open http(s)/mailto — block javascript:/data:/vbscript:/file: etc.
+    let safeUrl;
+    try {
+      const normalized = /^[a-z][a-z0-9+.-]*:/i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      const parsed = new URL(normalized);
+      if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+      safeUrl = parsed.href;
+    } catch { return; }
     const bbox = cellView.model.getBBox();
     if (x >= bbox.x + bbox.width - 40) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(safeUrl, '_blank', 'noopener,noreferrer');
     }
   });
 

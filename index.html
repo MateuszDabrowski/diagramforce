@@ -6,7 +6,8 @@
   <meta name="description" content="Visual Salesforce architecture diagram editor for data models, process flows, org charts, Gantt charts, and UML sequence diagrams. Free, browser-based, no sign-up required.">
   <meta name="theme-color" content="#1D73C9" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#DA4E55" media="(prefers-color-scheme: dark)">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; child-src 'none'; upgrade-insecure-requests;">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Diagramforce</title>
 
   <!-- Open Graph -->
@@ -27,15 +28,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.11.8">
-  <link rel="stylesheet" href="css/theme.css?v=1.11.8">
-  <link rel="stylesheet" href="css/layout.css?v=1.11.8">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.11.8">
-  <link rel="stylesheet" href="css/stencil.css?v=1.11.8">
-  <link rel="stylesheet" href="css/properties.css?v=1.11.8">
-  <link rel="stylesheet" href="css/tabs.css?v=1.11.8">
-  <link rel="stylesheet" href="css/canvas.css?v=1.11.8">
-  <link rel="stylesheet" href="css/modals.css?v=1.11.8">
+  <link rel="stylesheet" href="css/variables.css?v=1.11.9">
+  <link rel="stylesheet" href="css/theme.css?v=1.11.9">
+  <link rel="stylesheet" href="css/layout.css?v=1.11.9">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.11.9">
+  <link rel="stylesheet" href="css/stencil.css?v=1.11.9">
+  <link rel="stylesheet" href="css/properties.css?v=1.11.9">
+  <link rel="stylesheet" href="css/tabs.css?v=1.11.9">
+  <link rel="stylesheet" href="css/canvas.css?v=1.11.9">
+  <link rel="stylesheet" href="css/modals.css?v=1.11.9">
 </head>
 <body>
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
@@ -359,8 +360,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.11.8"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.11.8"></script>
-  <script type="module" src="js/app.js?v=1.11.8"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.11.9"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.11.9"></script>
+  <script type="module" src="js/app.js?v=1.11.9"></script>
 </body>
 </html>

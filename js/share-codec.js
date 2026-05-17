@@ -135,5 +135,7 @@ export function decodeShareV1(payload) {
   if (!payload.startsWith('v1.')) throw new Error('Not a v1 share payload');
   const bytes = urlSafeToBytes(payload.slice(3));
   const json = pako.inflateRaw(bytes, { dictionary: DICT_V1, to: 'string' });
+  // Decompression-bomb guard: a legitimate share is far under this ceiling.
+  if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
   return remapKeys(JSON.parse(json), EXPAND);
 }
