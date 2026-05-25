@@ -1,21 +1,21 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.11.10';
-import * as icons       from './icons.js?v=1.11.10';
-import { getAllStencilSvgs } from './templates.js?v=1.11.10';
-import * as shapes      from './shapes.js?v=1.11.10';
-import * as canvas      from './canvas.js?v=1.11.10';
-import * as stencil     from './stencil.js?v=1.11.10';
-import * as selection   from './selection.js?v=1.11.10';
-import * as history     from './history.js?v=1.11.10';
-import * as clipboard   from './clipboard.js?v=1.11.10';
-import * as keyboard    from './keyboard.js?v=1.11.10';
-import * as toolbar     from './toolbar.js?v=1.11.10';
-import * as properties  from './properties.js?v=1.11.10';
-import * as persistence from './persistence.js?v=1.11.10';
-import * as tabs        from './tabs.js?v=1.11.10';
-import * as mermaidImport from './mermaid-import.js?v=1.11.10';
+import * as theme       from './theme.js?v=1.12.1';
+import * as icons       from './icons.js?v=1.12.1';
+import { getAllStencilSvgs } from './templates.js?v=1.12.1';
+import * as shapes      from './shapes.js?v=1.12.1';
+import * as canvas      from './canvas.js?v=1.12.1';
+import * as stencil     from './stencil.js?v=1.12.1';
+import * as selection   from './selection.js?v=1.12.1';
+import * as history     from './history.js?v=1.12.1';
+import * as clipboard   from './clipboard.js?v=1.12.1';
+import * as keyboard    from './keyboard.js?v=1.12.1';
+import * as toolbar     from './toolbar.js?v=1.12.1';
+import * as properties  from './properties.js?v=1.12.1';
+import * as persistence from './persistence.js?v=1.12.1';
+import * as tabs        from './tabs.js?v=1.12.1';
+import * as mermaidImport from './mermaid-import.js?v=1.12.1';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -95,6 +95,20 @@ async function main() {
   // --- Phase 9: Check for shared diagram in URL hash ---
   persistence.loadFromURL();
 
+  // --- Phase 10: beforeunload guard (Gap 21, v1.12.0) ---
+  // Prevent silent data loss on ⌘R / browser close / back nav when any
+  // open tab has uncommitted changes. Session backup catches most cases
+  // but quota errors + Private Mode can break the safety net, so a
+  // native confirmation is the last line of defence. Modern browsers
+  // ignore the custom string (showing their own generic prompt) but
+  // both the legacy `returnValue` and event.preventDefault() are
+  // required for cross-browser support.
+  window.addEventListener('beforeunload', evt => {
+    if (!tabs.hasAnyDirty()) return;
+    evt.preventDefault();
+    evt.returnValue = '';
+    return '';
+  });
 }
 
 main().catch(err => {

@@ -1,7 +1,8 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.11.10';
+import * as clipboard from './clipboard.js?v=1.12.1';
+import * as history from './history.js?v=1.12.1';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -51,6 +52,12 @@ function addResizeHandles(view) {
     const onDown = (evt) => {
       evt.stopPropagation();
       evt.preventDefault();
+      // v1.12.1 fix — wrap the entire drag in a history batch so the
+      // hundreds of intermediate `position()` + `resize()` calls fired by
+      // pointermove collapse into ONE undo entry instead of one per
+      // frame. Without this, a 200-px drag created ~30 history entries
+      // and required ~30 ⌘Z presses to revert one drag.
+      history.startBatch();
       const startX = evt.clientX;
       const startY = evt.clientY;
       const origPos = { ...model.position() };
@@ -180,6 +187,8 @@ function addResizeHandles(view) {
         document.removeEventListener('pointerup', onUp);
         guideH.remove();
         guideV.remove();
+        // Close the batch started in onDown — the whole drag is one undo step.
+        history.endBatch();
       };
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);

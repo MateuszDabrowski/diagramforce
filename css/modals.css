@@ -137,6 +137,83 @@
   background: rgba(229, 57, 53, 0.08);
 }
 
+/* ── Confirm modal (v1.12.0) ────────────────────────
+   Custom-styled replacement for window.confirm(). Reuses the existing
+   .sf-modal structure so confirmations look like every other dialog in
+   the app. Slightly narrower than file/save dialogs since the body is
+   typically one or two lines. */
+.sf-confirm-modal__dialog {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+}
+.sf-confirm-modal__body {
+  padding: 0 var(--spacing-md) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.sf-confirm-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+}
+
+/* ── Toast (v1.12.0) ────────────────────────────────
+   Non-blocking transient notifications. Stack in a fixed bottom-centre
+   container; each toast slides in from below, auto-dismisses after 2s,
+   click-to-dismiss available. Four kinds: success / info / warning /
+   error — each with its own accent colour drawn from the brand tokens. */
+.sf-toast-container {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 10100;
+  pointer-events: none;
+}
+.sf-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-family);
+  max-width: min(560px, calc(100vw - 32px));
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+}
+.sf-toast--shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+.sf-toast__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.sf-toast__message {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-toast--success .sf-toast__icon { color: var(--brand-green); }
+.sf-toast--info    .sf-toast__icon { color: var(--brand-blue); }
+.sf-toast--warning .sf-toast__icon { color: var(--brand-amber); }
+.sf-toast--error   .sf-toast__icon { color: var(--brand-red); }
+
 /* ── About modal ───────────────────────────────────── */
 
 .sf-about {

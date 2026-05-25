@@ -61,6 +61,13 @@
   text-overflow: ellipsis;
 }
 
+/* When the title carries no user-supplied label (which `:empty` catches once
+   the renderers stop writing type-name fallbacks), collapse the row so the
+   panel doesn't show a redundant duplicate of the type badge above. */
+.sf-properties__title:empty {
+  display: none;
+}
+
 /* ── Scrollable body ───────────────────────────────────── */
 
 .sf-properties__body {
@@ -197,6 +204,32 @@
   overflow: hidden;
   line-height: 1.4;
   field-sizing: content;
+}
+
+/* Gap 9 (v1.12.0) — brief red-border flash when an input rejects a bad
+   value (currently the color hex field for malformed hex codes). The
+   class is applied for ~400 ms then removed; the user sees the input
+   "shake" visually without a modal/toast interruption. */
+.sf-properties__input--invalid {
+  border-color: var(--brand-red) !important;
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.18) !important;
+  transition: border-color 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+/* CR-6.1: inline-markdown shortcut hint, shown below text fields on shapes
+   that accept formatting (sf.TextLabel content, sf.Note description). */
+.sf-properties__hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.sf-properties__hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: var(--stencil-item-hover);
 }
 
 .sf-properties__input:focus {
@@ -390,6 +423,34 @@
   font-size: var(--font-size-xs);
 }
 
+/* Gap 20 (v1.12.0) — reset-to-default ↺ button on color fields that
+   declare an opts.defaultValue. Sits on the right of the row; dimmed
+   when the current value already equals the default. */
+.sf-prop-color-reset {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
+}
+.sf-prop-color-reset:hover:not(:disabled) {
+  background: var(--toolbar-button-hover);
+  color: var(--color-primary);
+}
+.sf-prop-color-reset.is-default,
+.sf-prop-color-reset:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* ── Icon picker ───────────────────────────────────────── */
 
 .sf-prop-icon-preview {
@@ -503,10 +564,20 @@
 
 /* ── Order section ─────────────────────────────────────────────── */
 
+/* Order section grouping (v1.12.1) — the Bring to Front / Send to Back
+   buttons + the "Move within other …" hint form a single conceptual
+   group inside the Size & Order section. The button row pulls away
+   from whatever sits above (typically Width / Height fields) via a
+   larger top margin, while the hint sits tight underneath the buttons
+   so the trio reads as one unit rather than three loose siblings. */
+.sf-prop-pair--order {
+  margin-top: 14px;
+}
+
 .sf-prop-order-hint {
   font-size: 10px;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-top: 4px;
   font-style: italic;
 }
 

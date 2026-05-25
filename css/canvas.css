@@ -104,6 +104,42 @@
   stroke-width: 2px !important;
 }
 
+/* Gap 3 (v1.12.0) — empty-canvas onboarding hint. Sits inside the
+   joint-layers group at the viewport centre. Pointer-events:none lets
+   pan + zoom pass through. Fades when present so it doesn't visually
+   compete with the grid. */
+.sf-canvas-hint {
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 500;
+  fill: var(--text-muted);
+  opacity: 0.55;
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+
+/* CR-6.1: inline markdown inside sf.TextLabel / sf.Note foreignObjects.
+   `<strong>`, `<em>`, `<del>` get default browser styling, but `<code>`
+   doesn't always pick up monospace in an SVG foreignObject context. Make
+   these explicit so live rendering matches the export pipeline output
+   (replaceForeignObjects in persistence.js applies the same conventions
+   when converting to tspans for raster export). */
+foreignObject[data-md] code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.08);
+  color: #C8553D;
+}
+[data-theme="dark"] foreignObject[data-md] code {
+  background: rgba(255,255,255,0.10);
+  color: #F08367;
+}
+foreignObject[data-md] strong { font-weight: 700; }
+foreignObject[data-md] em { font-style: italic; }
+foreignObject[data-md] del { text-decoration: line-through; }
+
 /* Blinking caret on canvas label */
 .sf-canvas-caret {
   animation: sf-blink 1s step-end infinite;

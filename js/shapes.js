@@ -2,6 +2,78 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
+import { parseMarkdown } from './markdown.js?v=1.12.1';
+
+// ── Markdown foreignObject helper (CR-6.1) ─────────────────────────
+// sf.TextLabel and sf.Note render their text as native HTML inside an SVG
+// <foreignObject> so inline markdown markers (**bold**, *italic*, ~~strike~~,
+// `code`) round-trip through to visible markup. Raster export then converts
+// the FO + HTML back into tspans via persistence.js → replaceForeignObjects.
+//
+// Idempotent — finds an existing FO by `data-md` marker or creates one. Safe
+// to call from initialize/render/update without leaking DOM.
+const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+const SVG_NS_SHAPES = 'http://www.w3.org/2000/svg';
+
+function ensureMarkdownFO(view, key, text, opts) {
+  if (!view?.el) return;
+  let fo = view.el.querySelector(`:scope > foreignObject[data-md="${key}"]`);
+  if (!fo) {
+    fo = document.createElementNS(SVG_NS_SHAPES, 'foreignObject');
+    fo.setAttribute('data-md', key);
+    // The FO must be hit-testable: shapes like sf.TextLabel and sf.Annotation
+    // (text area, not bracket) have no <rect>/<path> body, so the FO is the
+    // ONLY geometry available for JointJS element selection / drag. Without
+    // this the cell becomes unclickable — only Shift-drag rubber-band catches
+    // it. Children of the FO inherit pointer-events:auto, but the helper sets
+    // inner content to pointer-events:none below so text selections don't
+    // start when the user just wants to drag.
+    fo.setAttribute('pointer-events', 'all');
+    view.el.appendChild(fo);
+  }
+  fo.setAttribute('x', String(opts.x));
+  fo.setAttribute('y', String(opts.y));
+  fo.setAttribute('width', String(Math.max(0, opts.width)));
+  fo.setAttribute('height', String(Math.max(0, opts.height)));
+
+  // Two-level structure: outer `frame` div does flex-based centring (the
+  // shape decides via opts.css whether to centre vertically/horizontally);
+  // inner `content` div is block-level so `<br>` line breaks and inline
+  // markdown elements lay out naturally. Without this nesting the inner
+  // <br>s become flex items and stop working as line breaks.
+  let frame = fo.firstChild;
+  if (!frame || frame.nodeType !== 1 || frame.localName !== 'div' || !frame.dataset?.mdFrame) {
+    while (fo.firstChild) fo.removeChild(fo.firstChild);
+    frame = document.createElementNS(XHTML_NS, 'div');
+    frame.setAttribute('xmlns', XHTML_NS);
+    frame.dataset.mdFrame = '';
+    const content = document.createElementNS(XHTML_NS, 'div');
+    content.setAttribute('xmlns', XHTML_NS);
+    content.dataset.mdContent = '';
+    frame.appendChild(content);
+    fo.appendChild(frame);
+  }
+  // Append `pointer-events:none; user-select:none` to the frame so the FO
+  // itself catches the JointJS pointerdown (selection / drag) and the HTML
+  // children don't start a browser text-selection mid-drag. The FO element's
+  // `pointer-events="all"` attribute remains the actual hit target.
+  frame.style.cssText = opts.css + ';pointer-events:none;user-select:none;';
+  // The inner content div carries the rendered HTML; explicit display:block
+  // so <br> + inline marks behave normally regardless of frame's flex.
+  const content = frame.firstChild;
+  content.style.cssText = 'display:block;max-width:100%;pointer-events:none;user-select:none;';
+  // parseMarkdown escHtml's first, then applies only the four whitelisted
+  // tags + <br>. innerHTML is safe here.
+  content.innerHTML = parseMarkdown(text);
+  // Hide the original SVG <text> node JointJS still emits (so its rendering
+  // doesn't shadow / sit underneath our HTML). Done via inline style so it
+  // survives JointJS attr-pass re-renders.
+  if (opts.hideSelector) {
+    const orig = view.el.querySelector(`[joint-selector="${opts.hideSelector}"]`);
+    if (orig) orig.style.display = 'none';
+  }
+}
+
 export function register() {
   // Shared port configuration — each side uses the same attrs & markup
   const portAttrs = {
@@ -446,6 +518,44 @@ export function register() {
     }
   );
 
+  // Custom view: renders the label through an HTML foreignObject so inline
+  // markdown (**bold**, *italic*, ~~strike~~, `code`) round-trips natively.
+  // The SVG <text> stays in the markup (so model.attr() paths keep working
+  // for theme/colour edits) but is display:none'd — the FO above it shows.
+  joint.shapes.sf.TextLabelView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.listenTo(this.model, 'change:attrs change:size', () => this._renderMarkdown());
+    },
+    render() {
+      joint.dia.ElementView.prototype.render.apply(this, arguments);
+      this._renderMarkdown();
+      return this;
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._renderMarkdown();
+    },
+    _renderMarkdown() {
+      const m = this.model;
+      const { width, height } = m.size();
+      const label = m.attr('label') || {};
+      const text = label.text ?? 'Label';
+      const fontSize = label.fontSize ?? 16;
+      const fontWeight = label.fontWeight ?? 600;
+      const fontFamily = label.fontFamily ?? 'system-ui, -apple-system, sans-serif';
+      const fill = label.fill ?? 'var(--text-primary)';
+      const textAnchor = label.textAnchor ?? 'middle';
+      const justify = textAnchor === 'middle' ? 'center' : textAnchor === 'end' ? 'flex-end' : 'flex-start';
+      const css = `display:flex;align-items:center;justify-content:${justify};`
+        + `width:100%;height:100%;`
+        + `font-size:${fontSize}px;font-weight:${fontWeight};font-family:${fontFamily};`
+        + `color:${fill};line-height:1.3;text-align:${textAnchor === 'middle' ? 'center' : textAnchor === 'end' ? 'right' : 'left'};`
+        + `white-space:pre-wrap;word-break:break-word;overflow:hidden;`;
+      ensureMarkdownFO(this, 'label', text, { x: 0, y: 0, width, height, css, hideSelector: 'label' });
+    },
+  });
+
   // --- Line ---
   // A decorative line element — horizontal by default, resizable.
   // Supports solid, dotted, dashed, and break styles via lineStyle property.
@@ -663,6 +773,48 @@ export function register() {
       ],
     }
   );
+
+  // Custom view: subtitle (the multi-line body) renders through a foreignObject
+  // so inline markdown markers work. The heading (`label`) stays as plain SVG
+  // text — single-line headings don't benefit from markdown and keeping them
+  // as SVG keeps the existing ellipsis behaviour intact.
+  joint.shapes.sf.NoteView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.listenTo(this.model, 'change:attrs change:size', () => this._renderMarkdown());
+    },
+    render() {
+      joint.dia.ElementView.prototype.render.apply(this, arguments);
+      this._renderMarkdown();
+      return this;
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._renderMarkdown();
+    },
+    _renderMarkdown() {
+      const m = this.model;
+      const { width, height } = m.size();
+      const subtitle = m.attr('subtitle') || {};
+      const text = subtitle.text ?? '';
+      const fontSize = subtitle.fontSize ?? 11;
+      const fontFamily = subtitle.fontFamily ?? 'system-ui, -apple-system, sans-serif';
+      const fill = subtitle.fill ?? '#795548';
+      const css = `width:100%;height:100%;`
+        + `font-size:${fontSize}px;font-family:${fontFamily};`
+        + `color:${fill};line-height:1.3;text-align:left;`
+        + `white-space:pre-wrap;word-break:break-word;overflow:hidden;`;
+      // Subtitle position matches the original SVG text origin (x:12, y:38,
+      // width: w-24, height: h-48 — same maths as the model's attrs.subtitle.
+      ensureMarkdownFO(this, 'subtitle', text, {
+        x: 12, y: 38,
+        width: width - 24,
+        height: height - 48,
+        css,
+        hideSelector: 'subtitle',
+      });
+    },
+  });
 
   // ═══════════════════════════════════════════════════════════
   // BPMN Shapes (Process Diagrams)
@@ -1390,6 +1542,51 @@ export function register() {
       ],
     }
   );
+
+  // Custom view: like sf.TextLabel/sf.Note, render the annotation text through
+  // a foreignObject so inline markdown (**bold**, *italic*, ~~strike~~, `code`)
+  // round-trips natively. Foreign-object position respects the `bracketSide`
+  // model prop (text on the left when bracket is right, and vice-versa).
+  joint.shapes.sf.AnnotationView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.listenTo(this.model, 'change:attrs change:size change:bracketSide',
+        () => this._renderMarkdown());
+    },
+    render() {
+      joint.dia.ElementView.prototype.render.apply(this, arguments);
+      this._renderMarkdown();
+      return this;
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._renderMarkdown();
+    },
+    _renderMarkdown() {
+      const m = this.model;
+      const { width, height } = m.size();
+      const label = m.attr('label') || {};
+      const text = label.text ?? 'Annotation';
+      const fontSize = label.fontSize ?? 12;
+      const fontFamily = label.fontFamily ?? 'system-ui, -apple-system, sans-serif';
+      const fill = label.fill ?? 'var(--text-secondary)';
+      // 18 px = bracket gutter (matches the original textWrap width math).
+      const GUTTER = 18;
+      const isRight = (m.get('bracketSide') || 'right') === 'right';
+      const x = isRight ? 0 : GUTTER;
+      const w = Math.max(0, width - GUTTER);
+      const css = `display:flex;align-items:center;justify-content:flex-start;`
+        + `width:100%;height:100%;`
+        + `font-size:${fontSize}px;font-family:${fontFamily};color:${fill};`
+        + `line-height:1.3;text-align:left;`
+        + `white-space:pre-wrap;word-break:break-word;overflow:hidden;`;
+      ensureMarkdownFO(this, 'label', text, {
+        x, y: 0, width: w, height,
+        css,
+        hideSelector: 'label',
+      });
+    },
+  });
 
   // ═══════════════════════════════════════════════════════════
   // Data Model Shapes

@@ -68,6 +68,49 @@ select:focus-visible {
   }
 }
 
+/* A8 (v1.12.0) — visually-hidden utility for content that should be
+   announced by screen readers but not painted. Standard "sr-only" pattern.
+   Clip method is used over `display:none` so the element stays in the
+   accessibility tree. */
+.sf-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A2 (v1.12.0) — skip-to-canvas link. Hidden off-screen until it receives
+   keyboard focus, at which point it animates into the top-left corner
+   above all chrome. Keyboard-only users can press Tab once on page load
+   to bypass the toolbar / tabs / stencil and jump straight to the canvas. */
+.sf-skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 10100;
+  padding: 8px 14px;
+  background: var(--color-primary);
+  color: var(--text-inverse, #fff);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
+  transition: top var(--transition-fast);
+}
+.sf-skip-link:focus,
+.sf-skip-link:focus-visible {
+  top: 8px;
+  outline: 2px solid var(--text-inverse, #fff);
+  outline-offset: 2px;
+}
+
 /* ── Drag handle for mobile bottom sheets ─────────────────────── */
 .sf-drag-handle {
   display: none;

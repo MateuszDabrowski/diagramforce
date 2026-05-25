@@ -124,6 +124,9 @@ export function init(_graph) {
 
   graph.on('change:position', (cell) => {
     if (isUndoRedoing) return;
+    // v1.12.1 — `recordPositionsBatch()` snapshots positions itself and
+    // doesn't want the debounced merge to double-record the same moves.
+    if (_suppressPositionTracking) return;
     const oldPos = cell.previous('position');
     if (!oldPos) return;
     const newPos = { ...cell.get('position') };
@@ -229,6 +232,47 @@ export function init(_graph) {
     });
   });
 
+  // Link source / target — fired when `link.source({id, port})` or
+  // `link.target(...)` is called (port re-wiring, reconnecting a link
+  // to a different cell). Without these handlers the user can re-route
+  // a connector and Cmd+Z silently does nothing. Stored as raw objects
+  // because the source/target value is the full descriptor (point,
+  // {id, port}, or {x, y}). v1.12.1.
+  graph.on('change:source', (cell) => {
+    if (isUndoRedoing) return;
+    if (_suppressPositionTracking) return;  // recordPositionsBatch handles this
+    const oldSrc = cell.previous('source');
+    const newSrc = cell.get('source');
+    if (oldSrc == null && newSrc == null) return;
+    const oldStr = JSON.stringify(oldSrc ?? null);
+    const newStr = JSON.stringify(newSrc ?? null);
+    if (oldStr === newStr) return;
+    const oldCopy = JSON.parse(oldStr);
+    const newCopy = JSON.parse(newStr);
+    const id = cell.id;
+    pushCommand({
+      undo: () => { const c = graph.getCell(id); if (c) c.source(oldCopy); },
+      redo: () => { const c = graph.getCell(id); if (c) c.source(newCopy); },
+    });
+  });
+  graph.on('change:target', (cell) => {
+    if (isUndoRedoing) return;
+    if (_suppressPositionTracking) return;
+    const oldTgt = cell.previous('target');
+    const newTgt = cell.get('target');
+    if (oldTgt == null && newTgt == null) return;
+    const oldStr = JSON.stringify(oldTgt ?? null);
+    const newStr = JSON.stringify(newTgt ?? null);
+    if (oldStr === newStr) return;
+    const oldCopy = JSON.parse(oldStr);
+    const newCopy = JSON.parse(newStr);
+    const id = cell.id;
+    pushCommand({
+      undo: () => { const c = graph.getCell(id); if (c) c.target(oldCopy); },
+      redo: () => { const c = graph.getCell(id); if (c) c.target(newCopy); },
+    });
+  });
+
   // Custom `lineStyle` prop (Safari-safe dashed/dotted connectors).
   // Stored separately from `line/strokeDasharray` so the real line never
   // carries a dasharray; see canvas.js → startLineStyleOverlays().
@@ -294,6 +338,113 @@ export function redo() {
   notifyChange();
 }
 
+/**
+ * Atomic snapshot-based history helper for programmatic batch operations
+ * like Auto-Layout (v1.12.1).
+ *
+ * The change:position handler routes events through a debounced merge
+ * that fires 80 ms later — that's the right behaviour for interactive
+ * drags, but it makes startBatch/endBatch wrapping unreliable for
+ * programmatic operations because the merge can outlive the batch's
+ * close. Worse, `snapLinksToPorts()` (called after every auto-layout)
+ * fires `change:source` / `change:target` events on links to switch
+ * which port each end connects to, and history has no handlers for
+ * those events at all — so undo would restore positions but leave the
+ * connectors snapped to whatever port the layout chose.
+ *
+ * This helper sidesteps both issues. It snapshots every element's
+ * position AND every link's source/target endpoint BEFORE running the
+ * callback, sets a suppression flag so the change:position handler
+ * doesn't double-record into pendingChanges, runs the callback, then
+ * snapshots AFTER, builds ONE composite command from the full diff
+ * (positions + link endpoints) and pushes it to the undo stack.
+ *
+ * Use this for operations that move multiple elements OR re-wire link
+ * endpoints programmatically — auto-layout, alignment actions, anything
+ * that should collapse N changes into a single undo step.
+ */
+export function recordPositionsBatch(callback) {
+  // Land any pending interactive-drag merge first so its entry doesn't
+  // get blended into the programmatic snapshot below.
+  commitPendingDrag();
+
+  // Snapshot positions of every element + endpoints of every link
+  // BEFORE the callback fires its mutations.
+  const beforePos = new Map();
+  for (const el of graph.getElements()) {
+    beforePos.set(el.id, { ...el.position() });
+  }
+  const beforeEndpoints = new Map();
+  for (const link of graph.getLinks()) {
+    beforeEndpoints.set(link.id, {
+      source: JSON.parse(JSON.stringify(link.get('source') || {})),
+      target: JSON.parse(JSON.stringify(link.get('target') || {})),
+    });
+  }
+
+  // Suppress the change:position handler's pendingChanges recording for
+  // the duration of the callback — we'll record the diff ourselves.
+  const prevSuppress = _suppressPositionTracking;
+  _suppressPositionTracking = true;
+  try {
+    callback();
+  } finally {
+    _suppressPositionTracking = prevSuppress;
+  }
+
+  // Snapshot AFTER; build per-cell undo/redo from the diff.
+  const undos = [];
+  const redos = [];
+
+  // 1. Position diffs.
+  for (const el of graph.getElements()) {
+    const oldPos = beforePos.get(el.id);
+    const newPos = { ...el.position() };
+    if (!oldPos) continue;
+    if (oldPos.x === newPos.x && oldPos.y === newPos.y) continue;
+    const id = el.id;
+    const ox = oldPos.x, oy = oldPos.y, nx = newPos.x, ny = newPos.y;
+    undos.push(() => { const c = graph.getCell(id); if (c) c.position(ox, oy); });
+    redos.push(() => { const c = graph.getCell(id); if (c) c.position(nx, ny); });
+  }
+
+  // 2. Link endpoint diffs — `snapLinksToPorts()` is the main producer.
+  //    `link.source({…})` and `link.target({…})` fire change:source /
+  //    change:target which history would otherwise miss entirely.
+  for (const link of graph.getLinks()) {
+    const oldEp = beforeEndpoints.get(link.id);
+    if (!oldEp) continue;
+    const newSource = link.get('source') || {};
+    const newTarget = link.get('target') || {};
+    const oldSrcStr = JSON.stringify(oldEp.source);
+    const newSrcStr = JSON.stringify(newSource);
+    const oldTgtStr = JSON.stringify(oldEp.target);
+    const newTgtStr = JSON.stringify(newTarget);
+    const id = link.id;
+    if (oldSrcStr !== newSrcStr) {
+      const oldSrc = JSON.parse(oldSrcStr);
+      const newSrc = JSON.parse(newSrcStr);
+      undos.push(() => { const c = graph.getCell(id); if (c) c.source(oldSrc); });
+      redos.push(() => { const c = graph.getCell(id); if (c) c.source(newSrc); });
+    }
+    if (oldTgtStr !== newTgtStr) {
+      const oldTgt = JSON.parse(oldTgtStr);
+      const newTgt = JSON.parse(newTgtStr);
+      undos.push(() => { const c = graph.getCell(id); if (c) c.target(oldTgt); });
+      redos.push(() => { const c = graph.getCell(id); if (c) c.target(newTgt); });
+    }
+  }
+
+  if (undos.length === 0) return;
+
+  pushCommand({
+    undo: () => { for (let i = undos.length - 1; i >= 0; i--) undos[i](); },
+    redo: () => { redos.forEach(fn => fn()); },
+  });
+}
+
+let _suppressPositionTracking = false;
+
 export function startBatch() {
   // Land any in-flight drag merge before opening an explicit batch — otherwise
   // the deferred commit could land inside the batch and disappear on undo.
@@ -303,6 +454,25 @@ export function startBatch() {
 }
 
 export function endBatch() {
+  // v1.12.1 fix — synchronously commit any pending drag-merge entries
+  // WHILE WE'RE STILL INSIDE THE BATCH, so position / size / vertex
+  // changes that fired during this batch get folded into the batch's
+  // own command list rather than landing on the undo stack 80 ms later
+  // as a separate orphaned entry.
+  //
+  // Without this, programmatic operations like auto-layout that touch
+  // positions are routed through the drag-merge debounce — and because
+  // the debounce timer outlives endBatch(), the changes don't show up
+  // in the batch the caller carefully wrapped them in. Worst symptom:
+  // horizontal auto-layout's pending merge stays uncommitted; vertical
+  // auto-layout's startBatch then flushes the stale entry but with the
+  // first horizontal's `oldPos` still pinned — so undo from vertical
+  // jumps straight back to the pre-horizontal state, silently
+  // collapsing two batches. `isBatching` is still true here, so
+  // commitPendingDrag → pushCommand routes the merge into
+  // `currentBatch` correctly.
+  commitPendingDrag();
+
   isBatching = false;
   if (currentBatch && currentBatch.length > 0) {
     undoStack.push(currentBatch);

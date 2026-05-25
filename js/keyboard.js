@@ -3,9 +3,71 @@
 
 let modules = {};
 
+// ── Platform-aware key-combo formatting (Gap #6, v1.12.0) ────────────
+// Detect macOS once at module load. `navigator.platform` is technically
+// deprecated but still the most reliable cross-browser signal and works in
+// every browser the app targets. Modern UA-Client-Hints (`userAgentData`)
+// is preferred when available — Chrome / Edge / Vivaldi report it; Safari
+// and Firefox still fall back to `navigator.platform`.
+const IS_MAC = (() => {
+  const uaPlatform = navigator.userAgentData?.platform;
+  if (uaPlatform) return /mac/i.test(uaPlatform);
+  return /Mac/.test(navigator.platform || navigator.userAgent || '');
+})();
+
+// Token → symbol mapping. macOS uses the Apple key glyphs (⌘ ⌥ ⌃ ⇧);
+// every other platform uses the plain English words separated by `+`.
+const MAC_TOKENS = { Ctrl: '⌘', Cmd: '⌘', Meta: '⌘', Alt: '⌥', Option: '⌥', Shift: '⇧' };
+const PC_TOKENS  = { Ctrl: 'Ctrl', Cmd: 'Ctrl', Meta: 'Ctrl', Alt: 'Alt', Option: 'Alt', Shift: 'Shift' };
+
+/**
+ * Format a key combo for tooltips / hint text. Accepts tokens separated by
+ * `+`, e.g. `kbd('Ctrl+S')` → `'⌘S'` on macOS, `'Ctrl+S'` on Windows/Linux.
+ *
+ * Note: `Ctrl` is treated as the canonical "primary modifier" token — on
+ * macOS it maps to ⌘ (Command), not ⌃ (Control), because the app's actual
+ * shortcut handlers accept either Ctrl or Cmd as `mod`. This matches user
+ * mental model — a Mac user reads "Ctrl+S" in source and thinks "⌘S".
+ *
+ * Final glyphs on macOS are joined without a `+` separator (Apple HIG
+ * convention: "⌘S", "⌘⇧Z"). Other platforms use plain "Ctrl+S".
+ */
+export function kbd(combo) {
+  if (typeof combo !== 'string' || !combo) return '';
+  const parts = combo.split('+').map(p => p.trim()).filter(Boolean);
+  if (IS_MAC) {
+    return parts.map(p => MAC_TOKENS[p] ?? p).join('');
+  }
+  return parts.map(p => PC_TOKENS[p] ?? p).join('+');
+}
+
+/**
+ * Rewrite every static `(Ctrl+…)` substring inside the toolbar tooltips at
+ * boot, so the HTML can stay platform-neutral while users see the right
+ * glyphs. Idempotent — running it twice is harmless because the kbd()
+ * output never contains a literal "Ctrl+" on macOS.
+ */
+export function applyPlatformShortcutsToTooltips() {
+  // Match `(Ctrl+X)`, `(Ctrl+Shift+Z)`, etc. inside a title=. Outer parens
+  // are preserved; only the combo inside gets rewritten when it contains
+  // at least one named modifier (Ctrl/Shift/Alt/Cmd/Meta). Bare-token
+  // tooltips like "(+)" or "(-)" aren't matched and pass through untouched.
+  const COMBO_RE = /\((?:Ctrl|Shift|Alt|Cmd|Meta)(?:\+[^)]+)?\)/g;
+  document.querySelectorAll('[title]').forEach(el => {
+    const original = el.getAttribute('title');
+    if (!original) return;
+    const rewritten = original.replace(COMBO_RE, (match) => {
+      const combo = match.slice(1, -1); // strip the outer parens
+      return `(${kbd(combo)})`;
+    });
+    if (rewritten !== original) el.setAttribute('title', rewritten);
+  });
+}
+
 export function init(_modules) {
   modules = _modules;
   document.addEventListener('keydown', handleKeydown);
+  applyPlatformShortcutsToTooltips();
 }
 
 function handleKeydown(evt) {

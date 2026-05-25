@@ -230,6 +230,24 @@
   opacity: 0.7;
 }
 
+.sf-toolbar__button {
+  position: relative;
+}
+
+/* Gap 14 (v1.12.0 → refined v1.12.1) — visual indicator that one or more
+   Display-menu toggles are at a non-default value. Originally a 6 px
+   amber corner dot on the button; refined to colour the eye-icon's
+   pupil instead so the signal reads as part of the icon rather than a
+   notification-badge floating above it. The pupil <circle> sits over
+   the eye path's pupil hole — transparent by default, fills brand-amber
+   when the parent button has the `--has-active` modifier. */
+.sf-display-icon__pupil {
+  transition: fill var(--transition-fast);
+}
+.sf-toolbar__button--has-active .sf-display-icon__pupil {
+  fill: var(--brand-amber);
+}
+
 /* Checkbox-style toggle items (Display menu). The SVG carries both the
    empty box and the tick path; the tick is hidden by default and revealed
    via CSS when the parent button has `.is-checked`. JS only toggles the

@@ -1,7 +1,8 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType } from './persistence.js?v=1.11.10';
+import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.12.1';
+import { showError, showToast } from './feedback.js?v=1.12.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -33,6 +34,28 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   stencilModule = _stencil;
 
   tabListEl = document.getElementById('tab-list');
+
+  // Gap 13 (v1.12.0) — gradient mask state on the tab list. CSS-side fade
+  // hints at horizontal overflow; the listener toggles `--scrolled` /
+  // `--scrolled-end` modifiers so the fade only renders where there's
+  // actually clipped content. ResizeObserver covers the case where the
+  // viewport shrinks and tabs that fit before now overflow.
+  const refreshTabScrollMask = () => {
+    if (!tabListEl) return;
+    const { scrollLeft, scrollWidth, clientWidth } = tabListEl;
+    const overflows = scrollWidth > clientWidth + 1;
+    const atEnd = scrollLeft + clientWidth >= scrollWidth - 1;
+    // The `--overflowing` modifier gates the base right-edge fade mask.
+    // Without it, the mask would fade the rightmost tab's right border
+    // even when nothing is clipped — the regression v1.12.1 fixes.
+    tabListEl.classList.toggle('sf-tabs__list--overflowing', overflows);
+    tabListEl.classList.toggle('sf-tabs__list--scrolled', overflows && scrollLeft > 0);
+    tabListEl.classList.toggle('sf-tabs__list--scrolled-end', overflows && atEnd);
+  };
+  tabListEl.addEventListener('scroll', refreshTabScrollMask, { passive: true });
+  new ResizeObserver(refreshTabScrollMask).observe(tabListEl);
+  // First-render check after the initial tab render lands.
+  setTimeout(refreshTabScrollMask, 0);
 
   // + button opens new diagram modal
   document.getElementById('btn-new-tab').addEventListener('click', () => showNewDiagramModal());
@@ -69,6 +92,14 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
 
   // Notify listeners so toolbar Display menu, etc. update for the restored tab type
   notifyChange();
+
+  // CR-7.1 / Gap 32 (v1.12.0) — boot-time storage-pressure check. Catches
+  // the case where the user returns to the app with a near-full store
+  // from previous sessions — by far the highest-value moment to warn,
+  // since they have a fresh page to digest the toast before editing.
+  // Deferred to a timeout so it doesn't slow first paint; the warning
+  // toast itself fades after ~4 s either way.
+  setTimeout(checkStoragePressure, 0);
 
   // Keep the active tab indicator aligned on resize/scroll
   window.addEventListener('resize', () => updateActiveTabIndicator());
@@ -286,9 +317,9 @@ function showCloseConfirmModal(tabId, tabName) {
           </p>
         </div>
         <div style="display:flex;gap:var(--spacing-sm);padding:var(--spacing-sm) var(--spacing-lg) var(--spacing-md);justify-content:flex-end">
-          <button class="sf-close-confirm__btn sf-close-confirm__btn--cancel">No</button>
+          <button class="sf-close-confirm__btn sf-close-confirm__btn--cancel">Cancel</button>
           <button class="sf-close-confirm__btn sf-close-confirm__btn--save">Save and Close</button>
-          <button class="sf-close-confirm__btn sf-close-confirm__btn--discard">Yes, Close</button>
+          <button class="sf-close-confirm__btn sf-close-confirm__btn--discard">Discard</button>
         </div>
       </div>
     </div>`;
@@ -551,6 +582,18 @@ export function getActiveTabSaveInfo() {
   return { lastSavedAt: tab.lastSavedAt, lastSaveType: tab.lastSaveType };
 }
 
+/**
+ * Gap 21 (v1.12.0) — true when any open tab has uncommitted changes that
+ * the user hasn't yet persisted via Save-to-Browser / JSON export. Used by
+ * the global `beforeunload` guard in app.js so a stray ⌘R / browser close
+ * doesn't silently drop work. The session-restore safety net usually
+ * catches refreshes, but quota errors and Private Mode can break it — the
+ * native confirmation is a belt-and-braces guarantee.
+ */
+export function hasAnyDirty() {
+  return tabs.some(t => t.dirty);
+}
+
 /** Return lightweight info for every open tab (used by save modal). */
 export function getAllTabs() {
   return tabs.map(t => ({
@@ -652,9 +695,61 @@ function saveTabs() {
       viewport: t.id === activeTabId ? canvasModule.getViewport() : t.viewport,
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...meta, tabs: full }));
+    // CR-7.1 / Gap 32 (v1.12.0) — proactive pressure check, sampled every
+    // 5 successful saves. The deterministic counter (not random) makes
+    // behaviour reproducible for debugging. The footprint loop itself is
+    // O(keys) and well under a millisecond, so we could check on every
+    // save without measurable cost — the sampling is purely to avoid
+    // doing work whose result can't realistically change in <5 saves.
+    if (++saveCounter % 5 === 0) checkStoragePressure();
   } catch (err) {
+    // Gap 22 (v1.12.0) — distinguish quota errors so the user sees a
+    // clear recovery path. Throttle the toast to once per session so we
+    // don't spam during continuous editing — the user only needs the
+    // warning the first time the backup starts dropping writes.
+    if (isQuotaError(err) && !quotaToastShown) {
+      quotaToastShown = true;
+      showError('Browser storage full — session backup paused. Export to JSON or delete saved diagrams to make space.');
+    }
     console.warn('SF Diagrams: Tab save failed:', err);
   }
+}
+
+// Module-level flag so the quota toast fires at most once per page load
+// (Gap 22, v1.12.0). Reset by reload — that's the natural moment for the
+// user to address the underlying storage issue.
+let quotaToastShown = false;
+
+// CR-7.1 / Gap 32 (v1.12.0) — pressure-gauge state. The counter sampling
+// every 5 saves is documented above at the call site. The toast-shown
+// flag ensures at most one pressure warning per page load — same
+// throttling rationale as `quotaToastShown`: once shown, the user owns
+// the next action, and re-firing every few saves would be nagging.
+let saveCounter = 0;
+let pressureToastShown = false;
+
+/**
+ * CR-7.1 / Gap 32 (v1.12.0) — read the current storage footprint and
+ * fire a single warning toast if we're approaching the quota wall.
+ * Idempotent after the first fire (the `pressureToastShown` flag stays
+ * set until reload). Called once on boot and every 5th successful save.
+ */
+function checkStoragePressure() {
+  if (pressureToastShown) return;
+  let bytes;
+  try {
+    bytes = getStorageFootprint();
+  } catch {
+    // Defensive: some Private Mode contexts throw on `localStorage.length`
+    // access. Bail silently — the worst case is no warning, never a crash.
+    return;
+  }
+  if (bytes < STORAGE_WARNING_BYTES) return;
+  pressureToastShown = true;
+  showToast(
+    'Browser storage almost full. Export to JSON and delete saved diagrams to free space.',
+    'warning'
+  );
 }
 
 /** Populate tabs array and load the active tab from parsed session data. */
@@ -916,10 +1011,20 @@ function render() {
 
     const dot = document.createElement('span');
     dot.className = 'sf-tab__dirty';
+    // A7 (v1.12.0) — surface the dirty state in text so screen readers
+    // and users with colour-vision deficiency aren't reliant on the
+    // small muted dot alone (WCAG 1.4.1). aria-hidden on the visual dot
+    // keeps the announcement from saying "bullet point" before the name.
+    dot.setAttribute('aria-hidden', 'true');
 
     const label = document.createElement('span');
     label.className = 'sf-tab__label';
     label.textContent = tab.name;
+
+    // Compose the row title so the dirty hint reaches both pointer-hover
+    // and screen-reader announcements via the same channel.
+    el.setAttribute('title', tab.dirty ? `${tab.name} (unsaved)` : tab.name);
+    el.setAttribute('aria-label', tab.dirty ? `${tab.name} — unsaved changes` : tab.name);
 
     const close = document.createElement('button');
     close.className = 'sf-tab__close';

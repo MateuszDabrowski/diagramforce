@@ -1,10 +1,12 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.11.10';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.11.10';
-import * as stencilModule from './stencil.js?v=1.11.10';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.11.10';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.12.1';
+import { confirmModal, showToast } from './feedback.js?v=1.12.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.12.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.12.1';
+import * as stencilModule from './stencil.js?v=1.12.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.12.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,10 +15,10 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.11.10';
-import * as history from './history.js?v=1.11.10';
-import { startImageAddFlow } from './image-component.js?v=1.11.10';
-import { escHtml } from './persistence.js?v=1.11.10';
+} from './clipboard.js?v=1.12.1';
+import * as history from './history.js?v=1.12.1';
+import { startImageAddFlow } from './image-component.js?v=1.12.1';
+import { escHtml } from './persistence.js?v=1.12.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -146,7 +148,7 @@ const COLOR_SCHEMA = {
     { label: 'Border',
       get: c => c.attr('body/stroke'),
       set: (c, v) => c.attr('body/stroke', v) },
-    { label: 'Label & Icon color',
+    { label: 'Label color',
       get: c => c.attr('label/fill'),
       set: (c, v) => { c.attr('label/fill', v); c.attr('subtitle/fill', v); } },
   ],
@@ -160,12 +162,12 @@ const COLOR_SCHEMA = {
     { label: 'Border',
       get: c => c.attr('body/stroke'),
       set: (c, v) => c.attr('body/stroke', v) },
-    { label: 'Label & Icon color',
+    { label: 'Label color',
       get: c => c.attr('headerLabel/fill'),
       set: (c, v) => c.attr('headerLabel/fill', v) },
   ],
   'sf.TextLabel': [
-    { label: 'Color',
+    { label: 'Label color',
       get: c => c.attr('label/fill'),
       set: (c, v) => c.attr('label/fill', v) },
   ],
@@ -186,7 +188,7 @@ const COLOR_SCHEMA = {
       set: (c, v) => c.attr('body/stroke', v) },
   ],
   'sf.Line': [
-    { label: 'Color',
+    { label: 'Label color',
       get: c => c.attr('line/stroke'),
       set: (c, v) => c.attr('line/stroke', v) },
   ],
@@ -194,12 +196,12 @@ const COLOR_SCHEMA = {
     { label: 'Bracket color',
       get: c => c.attr('bracket/stroke'),
       set: (c, v) => c.attr('bracket/stroke', v) },
-    { label: 'Text color',
+    { label: 'Label color',
       get: c => c.attr('label/fill'),
       set: (c, v) => c.attr('label/fill', v) },
   ],
   'sf.DataObject': [
-    { label: 'Header Color',
+    { label: 'Header fill',
       get: c => c.get('headerColor') || '#1D73C9',
       set: (c, v) => {
         c.set('headerColor', v);
@@ -208,18 +210,18 @@ const COLOR_SCHEMA = {
       } },
   ],
   'sf.OrgPerson': [
-    { label: 'Accent Color',
+    { label: 'Accent',
       get: c => c.attr('accentBar/fill') || '#1D73C9',
       set: (c, v) => { c.attr('accentBar/fill', v); c.attr('accentBarMask/fill', v); } },
   ],
   'sf.GanttTask': [
-    { label: 'Completion Bar',
+    { label: 'Completion bar',
       get: c => c.attr('progressBar/fill') || '#1D73C9',
       set: (c, v) => c.attr('progressBar/fill', v) },
-    { label: 'Text',
+    { label: 'Label color',
       get: c => c.get('userTextColor') || c.attr('label/fill') || '#FFFFFF',
       set: (c, v) => { c.set('userTextColor', v); c.attr('label/fill', v); } },
-    { label: 'Background',
+    { label: 'Fill',
       get: c => c.attr('body/fill'),
       set: (c, v) => c.attr('body/fill', v) },
     { label: 'Border',
@@ -249,10 +251,10 @@ const COLOR_SCHEMA = {
       set: (c, v) => c.attr('label/fill', v) },
   ],
   'sf.GanttTimeline': [
-    { label: 'Background',
+    { label: 'Fill',
       get: c => c.attr('body/fill'),
       set: (c, v) => c.attr('body/fill', v) },
-    { label: 'Top Row',
+    { label: 'Top row',
       get: c => c.attr('topRow/fill'),
       set: (c, v) => c.attr('topRow/fill', v) },
     { label: 'Border',
@@ -260,7 +262,7 @@ const COLOR_SCHEMA = {
       set: (c, v) => c.attr('body/stroke', v) },
   ],
   'sf.GanttGroup': [
-    { label: 'Bar Color',
+    { label: 'Bar color',
       get: c => c.attr('body/fill'),
       set: (c, v) => c.attr('body/fill', v) },
     { label: 'Label color',
@@ -696,11 +698,17 @@ function showProperties(cell) {
 
   if (cell.isLink()) {
     typeBadgeEl.textContent = 'Connector';
-    titleEl.textContent = cell.labels()?.[0]?.attrs?.text?.text || 'Unnamed';
+    // titleEl carries ONLY the user's label — if the connector has none, the
+    // title row collapses (CSS `:empty { display: none }`). Previous behaviour
+    // showed 'Unnamed' here, which duplicated information the badge already
+    // gave and added zero signal.
+    titleEl.textContent = cell.labels()?.[0]?.attrs?.text?.text || '';
   } else {
     typeBadgeEl.textContent = cell.get('iconMode') ? 'Icon' : typeLabel;
     const labelText = cell.get('_savedLabel') || cell.get('objectName') || cell.attr('label/text') || cell.attr('headerLabel/text') || '';
-    titleEl.textContent = labelText || typeLabel;
+    // Same convention: titleEl is the user's label only. When empty, the
+    // title row hides, leaving just the type badge above the first section.
+    titleEl.textContent = labelText;
   }
 
   if (type === 'sf.SimpleNode')       renderSimpleNodeProps(cell);
@@ -778,8 +786,13 @@ function showMultiProperties(count) {
   const wasHidden = panelEl.classList.contains('sf-properties--hidden');
   panelEl.classList.remove('sf-properties--hidden');
   if (wasHidden) hideStencilForProperties();
-  typeBadgeEl.textContent = 'Selection';
-  titleEl.textContent = `${count} elements`;
+  // Multi-select follows the same convention as single-select: the typeBadge
+  // carries the system-supplied identifier (count + "Selected"), the titleEl
+  // is reserved for the user's own content and stays empty here. The CSS
+  // `:empty` rule collapses the title row so the panel looks structurally
+  // identical to a single shape with no label.
+  typeBadgeEl.textContent = `${count} Selected`;
+  titleEl.textContent = '';
   bodyEl.innerHTML = '';
   footerEl.innerHTML = '';
 
@@ -804,7 +817,7 @@ function showMultiProperties(count) {
       .filter(label => perTypeSchemas.every(schema => schema.some(e => e.label === label)));
 
   if (sharedLabels.length > 0) {
-    const colorSec = section(bodyEl, 'Colors');
+    const colorSec = section(bodyEl, 'Appearance');
     sharedLabels.forEach(label => {
       // Collect current value + per-element setter for this label
       const entries = elements.map(c => {
@@ -994,8 +1007,28 @@ function showMultiProperties(count) {
     });
   }
 
-  // Convert buttons (if all are Nodes or all are Containers)
-  if (allNodes) {
+  // Convert buttons (if all are Nodes or all are Containers). Gap 7
+  // (v1.12.0) — surface the icon-mode-aware option too so a multi-select
+  // of icon nodes mirrors the single-element panel's "Convert to Node".
+  const allIconNodes = allNodes && elements.every(c => c.get('iconMode'));
+  const noIconNodes = allNodes && elements.every(c => !c.get('iconMode'));
+  if (allIconNodes) {
+    addActionBtn(footerEl, 'Convert all to Node', () => {
+      const selectedBefore = [...ids];
+      selectedBefore.forEach(id => {
+        const c = graph.getCell(id);
+        if (c && c.get('type') === 'sf.SimpleNode' && c.get('iconMode')) convertFromIcon(c);
+      });
+    });
+    addActionBtn(footerEl, 'Convert all to Container', () => {
+      const selectedBefore = [...ids];
+      selection.clearSelection();
+      selectedBefore.forEach(id => {
+        const c = graph.getCell(id);
+        if (c && c.get('type') === 'sf.SimpleNode') convertToContainer(c);
+      });
+    });
+  } else if (noIconNodes) {
     addActionBtn(footerEl, 'Convert all to Container', () => {
       const selectedBefore = [...ids];
       selection.clearSelection();
@@ -1011,6 +1044,17 @@ function showMultiProperties(count) {
         if (c && c.get('type') === 'sf.SimpleNode') convertToIcon(c);
       });
     });
+  } else if (allNodes) {
+    // Mixed (some icon, some regular SimpleNodes) — only the cross-type
+    // conversion makes sense; "to Icon" would no-op on already-icons.
+    addActionBtn(footerEl, 'Convert all to Container', () => {
+      const selectedBefore = [...ids];
+      selection.clearSelection();
+      selectedBefore.forEach(id => {
+        const c = graph.getCell(id);
+        if (c && c.get('type') === 'sf.SimpleNode') convertToContainer(c);
+      });
+    });
   }
   if (allContainers) {
     addActionBtn(footerEl, 'Convert all to Node', () => {
@@ -1019,6 +1063,13 @@ function showMultiProperties(count) {
       selectedBefore.forEach(id => {
         const c = graph.getCell(id);
         if (c && c.get('type') === 'sf.Container') convertToNode(c);
+      });
+    });
+    addActionBtn(footerEl, 'Convert all to Icon', () => {
+      const selectedBefore = [...ids];
+      selectedBefore.forEach(id => {
+        const c = graph.getCell(id);
+        if (c && c.get('type') === 'sf.Container') convertContainerToIcon(c);
       });
     });
   }
@@ -1067,7 +1118,7 @@ function renderSimpleNodeProps(cell) {
       cell.attr('label/text', v);
       updateSimpleNodeLayout(cell);
     }
-    titleEl.textContent = v || 'Node';
+    titleEl.textContent = v || '';
   }, cell);
   addTextarea(content, 'Description', subtitleValue, v => {
     if (isIcon) {
@@ -1093,7 +1144,7 @@ function renderSimpleNodeProps(cell) {
     }
   });
   addColor(appearance, 'Border',        cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
-  addColor(appearance, 'Label & Icon color',   cell.attr('label/fill'),  v => {
+  addColor(appearance, 'Label color',   cell.attr('label/fill'),  v => {
     cell.attr('label/fill', v);
     cell.attr('subtitle/fill', v);
     recolorCellIcon(cell, v);
@@ -1133,7 +1184,7 @@ function renderSimpleNodeProps(cell) {
     }
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Convert + Delete (in footer)
   if (cell.get('iconMode')) {
@@ -1149,9 +1200,9 @@ function renderSimpleNodeProps(cell) {
 function renderContainerProps(cell) {
   // Content
   const content = section(bodyEl, 'Content');
-  addText(content, 'Title', cell.attr('headerLabel/text'), v => {
+  addText(content, 'Label', cell.attr('headerLabel/text'), v => {
     cell.attr('headerLabel/text', v);
-    titleEl.textContent = v || 'Container';
+    titleEl.textContent = v || '';
   }, cell);
   addTextarea(content, 'Description', cell.attr('headerSubtitle/text'), v => cell.attr('headerSubtitle/text', v));
   addIconPicker(content, 'Icon', cell.attr('headerIcon/href'), v => cell.attr('headerIcon/href', v),
@@ -1167,7 +1218,7 @@ function renderContainerProps(cell) {
   addColor(appearance, 'Accent',      cell.attr('accent/fill'),     v => { cell.attr('accent/fill', v); cell.attr('accentFill/fill', v); });
   addColor(appearance, 'Fill',        cell.attr('body/fill'),        v => cell.attr('body/fill', v));
   addColor(appearance, 'Border',      cell.attr('body/stroke'),      v => cell.attr('body/stroke', v));
-  addColor(appearance, 'Label & Icon color', cell.attr('headerLabel/fill'), v => {
+  addColor(appearance, 'Label color', cell.attr('headerLabel/fill'), v => {
     cell.attr('headerLabel/fill', v);
     recolorCellIcon(cell, v);
   });
@@ -1192,7 +1243,7 @@ function renderContainerProps(cell) {
     }
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   // Convert + Delete (in footer)
   addConvertBtn(footerEl, 'Convert to Node', () => convertToNode(cell));
@@ -1201,15 +1252,32 @@ function renderContainerProps(cell) {
 }
 
 function renderTextLabelProps(cell) {
-  const text = section(bodyEl, 'Text');
-  addText(text, 'Content', cell.attr('label/text'), v => {
+  // Content — primary editable text only.
+  const content = section(bodyEl, 'Content');
+  const labelInput = addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Text';
+    titleEl.textContent = v || '';
   });
-  addColor(text, 'Color',    cell.attr('label/fill'), v => cell.attr('label/fill', v));
-  addNumber(text, 'Font size', cell.attr('label/fontSize') ?? 16,
-    v => cell.attr('label/fontSize', v));
-  addOrderButtons(text, cell, 'Node layer');
+  // CR-6.1: markdown shortcuts (Cmd+B/I/Shift+X/E) + hint below the input.
+  wireMarkdownShortcuts(labelInput, content);
+
+  // Appearance — typography styling. Sits in its own section so the panel
+  // matches the universal Content / Appearance / Size & Order rhythm.
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
+  addNumber(appearance, 'Font size', cell.attr('label/fontSize') ?? 16,
+    v => cell.attr('label/fontSize', v), { min: 6, max: 96 });
+
+  // Size & Order
+  const size = section(bodyEl, 'Size & Order');
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addAutoSizeBtn(size, () => {
+    const def = DEFAULT_SIZES['sf.TextLabel'];
+    cell.resize(def.width, def.height);
+  });
+  addOrderButtons(size, cell);
 
   // Delete (in footer)
   addCloneBtn(footerEl, cell);
@@ -1238,11 +1306,12 @@ function renderLineProps(cell) {
     }
   }
 
-  // Appearance
+  // Appearance — canonical line ordering: Color → Line style → Line width
+  // (identity first, then variant, then measurement).
   const appearance = section(bodyEl, 'Appearance');
-  addSelect(appearance, 'Style', cell.get('lineStyle') || 'solid', LINE_STYLES, v => applyLineStyle(v));
   addColor(appearance, 'Color', cell.attr('line/stroke'), v => cell.attr('line/stroke', v));
-  addNumber(appearance, 'Thickness', cell.attr('line/strokeWidth') ?? 2, v => cell.attr('line/strokeWidth', v));
+  addSelect(appearance, 'Line style', cell.get('lineStyle') || 'solid', LINE_STYLES, v => applyLineStyle(v));
+  addNumber(appearance, 'Line width', cell.attr('line/strokeWidth') ?? 2, v => cell.attr('line/strokeWidth', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -1253,7 +1322,7 @@ function renderLineProps(cell) {
     const def = DEFAULT_SIZES['sf.Line'];
     cell.resize(def.width, def.height);
   });
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Footer
   addCloneBtn(footerEl, cell);
@@ -1265,7 +1334,7 @@ function renderLinkElementProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Link';
+    titleEl.textContent = v || '';
   });
   addText(content, 'URL', cell.get('url') || '', v => {
     cell.set('url', v);
@@ -1274,16 +1343,16 @@ function renderLinkElementProps(cell) {
     cell.attr('label/y', domain ? 'calc(0.5 * h - 8)' : 'calc(0.5 * h)');
   });
 
-  // Appearance
+  // Appearance — canonical: Fill → Border → typography (Label color, Font size)
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Label & Icon color', cell.attr('label/fill'), v => {
+  addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
+  addColor(appearance, 'Label color', cell.attr('label/fill'), v => {
     cell.attr('label/fill', v);
     cell.attr('iconImage/href', getStencilSvgDataUri(TEMPLATE_SVG.linkIcon, v, 20));
   });
-  addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
-  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
   addNumber(appearance, 'Font size', cell.attr('label/fontSize') ?? 14,
-    v => cell.attr('label/fontSize', v));
+    v => cell.attr('label/fontSize', v), { min: 6, max: 96 });
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -1294,7 +1363,7 @@ function renderLinkElementProps(cell) {
     const def = DEFAULT_SIZES['sf.Link'];
     cell.resize(def.width, def.height);
   });
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Footer
   addCloneBtn(footerEl, cell);
@@ -1306,9 +1375,14 @@ function renderNoteProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Note';
+    titleEl.textContent = v || '';
   }, cell);
-  addTextarea(content, 'Description', cell.attr('subtitle/text'), v => cell.attr('subtitle/text', v));
+  // CR-6.1: the multi-line Description gets the markdown shortcuts + hint.
+  // The single-line Label heading stays plain text — markdown there would
+  // be inconsistent with the ellipsis/truncation behaviour.
+  const descInput = addTextarea(content, 'Description', cell.attr('subtitle/text'),
+    v => cell.attr('subtitle/text', v));
+  wireMarkdownShortcuts(descInput, content);
   addIconPicker(content, 'Icon', cell.attr('icon/href'), v => cell.attr('icon/href', v),
     () => cell.attr('label/fill') || '#5D4037');
 
@@ -1332,7 +1406,7 @@ function renderNoteProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Footer
   addCloneBtn(footerEl, cell);
@@ -1403,7 +1477,7 @@ function renderImageProps(cell) {
   addNumberPair(size,
     'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
     'Height', cell.size().height, h => cell.resize(cell.size().width, h));
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Footer
   addCloneBtn(footerEl, cell);
@@ -1415,13 +1489,13 @@ function renderZoneProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Zone';
+    titleEl.textContent = v || '';
   });
 
-  // Appearance
+  // Appearance — canonical order: Fill → Border
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
   addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
+  addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -1433,7 +1507,7 @@ function renderZoneProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Zone layer');
+  addOrderButtons(size, cell);
 
   // Delete (in footer)
   addCloneBtn(footerEl, cell);
@@ -1445,9 +1519,9 @@ function renderBpmnEventProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Event';
+    titleEl.textContent = v || '';
   });
-  addSelect(content, 'Event Type', cell.get('eventType') || 'start', [
+  addSelect(content, 'Type', cell.get('eventType') || 'start', [
     { value: 'start',        label: 'Start' },
     { value: 'intermediate', label: 'Intermediate' },
     { value: 'end',          label: 'End' },
@@ -1493,7 +1567,7 @@ function renderBpmnEventProps(cell) {
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Diameter', cell.size().width, v => cell.resize(v, v));
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1505,7 +1579,7 @@ function renderBpmnTaskProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Task';
+    titleEl.textContent = v || '';
   });
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
@@ -1529,7 +1603,7 @@ function renderBpmnTaskProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1541,10 +1615,10 @@ function renderBpmnGatewayProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Gateway';
+    titleEl.textContent = v || '';
   });
   const markers = { exclusive: '\u00D7', parallel: '+', inclusive: '\u25CB', event: '\u25C7' };
-  addSelect(content, 'Gateway Type', cell.get('gatewayType') || 'exclusive', [
+  addSelect(content, 'Type', cell.get('gatewayType') || 'exclusive', [
     { value: 'exclusive', label: 'Exclusive (XOR)' },
     { value: 'parallel',  label: 'Parallel (AND)' },
     { value: 'inclusive',  label: 'Inclusive (OR)' },
@@ -1563,7 +1637,7 @@ function renderBpmnGatewayProps(cell) {
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Size', cell.size().width, v => cell.resize(v, v));
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1575,7 +1649,7 @@ function renderBpmnSubprocessProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Subprocess';
+    titleEl.textContent = v || '';
   });
 
   // Appearance
@@ -1593,7 +1667,7 @@ function renderBpmnSubprocessProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1605,7 +1679,7 @@ function renderBpmnLoopProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Loop';
+    titleEl.textContent = v || '';
   });
 
   // Appearance
@@ -1623,7 +1697,7 @@ function renderBpmnLoopProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1635,14 +1709,14 @@ function renderBpmnPoolProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Pool';
+    titleEl.textContent = v || '';
   });
 
-  // Appearance
+  // Appearance — canonical: Fill → sub-element fills → Border → typography
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Fill',        cell.attr('body/fill'),   v => cell.attr('body/fill', v));
-  addColor(appearance, 'Border',      cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
   addColor(appearance, 'Header fill', cell.attr('header/fill'), v => cell.attr('header/fill', v));
+  addColor(appearance, 'Border',      cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
   addColor(appearance, 'Label color', cell.attr('label/fill'),  v => cell.attr('label/fill', v));
 
   // Size & Order
@@ -1651,7 +1725,7 @@ function renderBpmnPoolProps(cell) {
     'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
     'Height', cell.size().height, h => cell.resize(cell.size().width, h));
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Zone layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1663,7 +1737,7 @@ function renderBpmnDataObjectProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Data Object';
+    titleEl.textContent = v || '';
   });
 
   // Appearance
@@ -1680,7 +1754,7 @@ function renderBpmnDataObjectProps(cell) {
     'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
     'Height', cell.size().height, h => cell.resize(cell.size().width, h));
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -1696,18 +1770,24 @@ const SF_FIELD_TYPES = [
 ];
 
 function renderDataObjectProps(cell) {
-  // Object Name
-  const content = section(bodyEl, 'Object');
-  addText(content, 'Object Name', cell.get('objectName'), v => {
+  // Content (stores into `objectName` — placeholder hints at the data-model
+  // semantic, but the UI label stays "Label" for cross-shape consistency).
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.get('objectName'), v => {
     cell.set('objectName', v);
     cell.attr('headerLabel/text', v);
-    titleEl.textContent = v || 'Object';
-  });
-  addColor(content, 'Header Color', cell.get('headerColor') || '#1D73C9', v => {
+    titleEl.textContent = v || '';
+  }, cell, { placeholder: 'Object name' });
+
+  // Appearance — header fill is an appearance property, kept here so DataObject
+  // matches the consistent Content / Appearance / Fields / Size & Order layout
+  // used by every other shape with a coloured header (BpmnPool, Container…).
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Header fill', cell.get('headerColor') || '#1D73C9', v => {
     cell.set('headerColor', v);
     cell.attr('header/fill', v);
     cell.attr('headerCover/fill', v);
-  });
+  }, { defaultValue: '#1D73C9' });
 
   // Fields
   const fieldsSec = section(bodyEl, 'Fields');
@@ -1720,7 +1800,7 @@ function renderDataObjectProps(cell) {
     cell.resize(w, cell.size().height);
   });
   addAutoSizeBtn(size, () => resizeDataObjectToFit(cell));
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2084,7 +2164,7 @@ function renderFlowShapeProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || typeLabel;
+    titleEl.textContent = v || '';
   });
 
   // Appearance
@@ -2115,7 +2195,7 @@ function renderFlowShapeProps(cell) {
     if (def) cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2123,16 +2203,19 @@ function renderFlowShapeProps(cell) {
 }
 
 function renderAnnotationProps(cell) {
-  // Content
+  // Content (uses addText for consistency — auto-grows on newlines, supports
+  // markdown shortcuts, no need for a dedicated textarea widget).
   const content = section(bodyEl, 'Content');
-  addTextarea(content, 'Text', cell.attr('label/text'), v => {
+  const labelInput = addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Annotation';
-  });
+    titleEl.textContent = v || '';
+  }, cell);
+  // CR-6.1: markdown shortcuts (Cmd+B/I/Shift+X/E) + hint below the input.
+  wireMarkdownShortcuts(labelInput, content);
 
   // Bracket side
   const currentSide = cell.get('bracketSide') || 'left';
-  addSelect(content, 'Bracket Side', currentSide, [
+  addSelect(content, 'Bracket side', currentSide, [
     { value: 'left',  label: 'Left' },
     { value: 'right', label: 'Right' },
   ], v => {
@@ -2155,7 +2238,7 @@ function renderAnnotationProps(cell) {
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Bracket color', cell.attr('bracket/stroke'), v => cell.attr('bracket/stroke', v));
-  addColor(appearance, 'Text color',    cell.attr('label/fill'),     v => cell.attr('label/fill', v));
+  addColor(appearance, 'Label color',    cell.attr('label/fill'),     v => cell.attr('label/fill', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -2167,7 +2250,7 @@ function renderAnnotationProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2178,17 +2261,17 @@ function renderAnnotationProps(cell) {
 
 function renderGanttTaskProps(cell) {
   // Content
-  const content = section(bodyEl, 'Task');
+  const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
     cell.set('taskLabel', v);
-    titleEl.textContent = v || 'Task';
+    titleEl.textContent = v || '';
   });
   // Only show progress input if showProgress is enabled
   if (cell.get('showProgress') !== false) {
     addNumber(content, 'Progress (%)', cell.get('progress') ?? 0, v => {
       cell.set('progress', Math.max(0, Math.min(100, v)));
-    });
+    }, { min: 0, max: 100 });
   }
   // Only show assignee input if showAssignee is enabled
   if (cell.get('showAssignee') !== false) {
@@ -2198,23 +2281,23 @@ function renderGanttTaskProps(cell) {
     });
   }
 
-  // Appearance
+  // Appearance — canonical: Fill → Border → typography → custom features
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Completion Bar', cell.attr('progressBar/fill') || '#1D73C9', v => {
-    cell.attr('progressBar/fill', v);
-  });
-  addColor(appearance, 'Text', cell.get('userTextColor') || cell.attr('label/fill') || '#FFFFFF', v => {
-    cell.set('userTextColor', v);
-    cell.attr('label/fill', v);
-    cell.attr('percentLabel/fill', v);
-    cell.attr('assigneeLabel/fill', v);
-  });
-  addColor(appearance, 'Background', cell.attr('body/fill') || 'var(--node-bg)', v => {
+  addColor(appearance, 'Fill', cell.attr('body/fill') || 'var(--node-bg)', v => {
     cell.attr('body/fill', v);
   });
   addColor(appearance, 'Border', cell.attr('body/stroke') || 'var(--node-border)', v => {
     cell.attr('body/stroke', v);
   });
+  addColor(appearance, 'Label color', cell.get('userTextColor') || cell.attr('label/fill') || '#FFFFFF', v => {
+    cell.set('userTextColor', v);
+    cell.attr('label/fill', v);
+    cell.attr('percentLabel/fill', v);
+    cell.attr('assigneeLabel/fill', v);
+  }, { defaultValue: '#FFFFFF' });
+  addColor(appearance, 'Completion bar', cell.attr('progressBar/fill') || '#1D73C9', v => {
+    cell.attr('progressBar/fill', v);
+  }, { defaultValue: '#1D73C9' });
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -2225,7 +2308,7 @@ function renderGanttTaskProps(cell) {
     const def = DEFAULT_SIZES['sf.GanttTask'];
     cell.resize(def.width, def.height);
   });
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2234,23 +2317,23 @@ function renderGanttTaskProps(cell) {
 
 function renderGanttMilestoneProps(cell) {
   // Content
-  const content = section(bodyEl, 'Milestone');
+  const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Milestone';
+    titleEl.textContent = v || '';
   });
   addDate(content, 'Date', cell.get('milestoneDate') || '', v => cell.set('milestoneDate', v));
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Fill', cell.attr('body/fill') || '#F6B355', v => cell.attr('body/fill', v));
-  addColor(appearance, 'Border', cell.attr('body/stroke') || '#D4942A', v => cell.attr('body/stroke', v));
+  addColor(appearance, 'Fill', cell.attr('body/fill') || '#F6B355', v => cell.attr('body/fill', v), { defaultValue: '#F6B355' });
+  addColor(appearance, 'Border', cell.attr('body/stroke') || '#D4942A', v => cell.attr('body/stroke', v), { defaultValue: '#D4942A' });
   addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Size', cell.size().width, v => cell.resize(v, v));
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2259,10 +2342,10 @@ function renderGanttMilestoneProps(cell) {
 
 function renderGanttMarkerProps(cell) {
   // Content
-  const content = section(bodyEl, 'Today Marker');
+  const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Today';
+    titleEl.textContent = v || '';
   });
 
   // Direction toggle
@@ -2302,14 +2385,14 @@ function renderGanttMarkerProps(cell) {
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Fill', cell.attr('body/fill') || '#DA4E55', v => cell.attr('body/fill', v));
-  addColor(appearance, 'Border', cell.attr('body/stroke') || '#B03A40', v => cell.attr('body/stroke', v));
+  addColor(appearance, 'Fill', cell.attr('body/fill') || '#DA4E55', v => cell.attr('body/fill', v), { defaultValue: '#DA4E55' });
+  addColor(appearance, 'Border', cell.attr('body/stroke') || '#B03A40', v => cell.attr('body/stroke', v), { defaultValue: '#B03A40' });
   addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Size', cell.size().width, v => cell.resize(v, Math.round(v * 0.8)));
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2322,8 +2405,9 @@ function renderGanttTimelineProps(cell) {
 
   // Title & Description
   const titleSec = section(bodyEl, 'Content');
-  addText(titleSec, 'Title', cell.get('timelineTitle') || 'Tasks', v => {
+  addText(titleSec, 'Label', cell.get('timelineTitle') || 'Tasks', v => {
     cell.set('timelineTitle', v);
+    titleEl.textContent = v || '';
   });
   addTextarea(titleSec, 'Description', cell.get('timelineDescription') || '', v => {
     cell.set('timelineDescription', v);
@@ -2411,10 +2495,10 @@ function renderGanttTimelineProps(cell) {
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Background', cell.attr('body/fill') || 'var(--bg-surface-raised)', v => {
+  addColor(appearance, 'Fill', cell.attr('body/fill') || 'var(--bg-surface-raised)', v => {
     cell.attr('body/fill', v);
   });
-  addColor(appearance, 'Top Row', cell.attr('topRow/fill') || 'var(--node-bg)', v => {
+  addColor(appearance, 'Top row', cell.attr('topRow/fill') || 'var(--node-bg)', v => {
     cell.attr('topRow/fill', v);
   });
   addColor(appearance, 'Border', cell.attr('body/stroke') || 'var(--node-border)', v => {
@@ -2425,7 +2509,7 @@ function renderGanttTimelineProps(cell) {
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Width', cell.size().width, w => cell.resize(w, cell.size().height));
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2434,25 +2518,25 @@ function renderGanttTimelineProps(cell) {
 
 function renderGanttGroupProps(cell) {
   // Content
-  const content = section(bodyEl, 'Phase');
+  const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Phase';
+    titleEl.textContent = v || '';
   });
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Bar Color', cell.attr('body/fill') || '#2A2D32', v => {
+  addColor(appearance, 'Bar color', cell.attr('body/fill') || '#2A2D32', v => {
     cell.attr('body/fill', v);
     cell.attr('leftProng/fill', v);
     cell.attr('rightProng/fill', v);
-  });
+  }, { defaultValue: '#2A2D32' });
   addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
   addNumber(size, 'Width', cell.size().width, w => cell.resize(w, cell.size().height));
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2460,15 +2544,26 @@ function renderGanttGroupProps(cell) {
 }
 
 function renderOrgPersonProps(cell) {
-  // Person Info
-  const info = section(bodyEl, 'Person');
-  addText(info, 'Name', cell.get('personName') || '', v => {
+  // Content (uniform section name across all shapes; stored fields keep their
+  // historical prop names for back-compat — `personName`, `jobTitle`).
+  const info = section(bodyEl, 'Content');
+  addText(info, 'Label', cell.get('personName') || '', v => {
     cell.set('personName', v);
-    titleEl.textContent = v || 'Person';
+    titleEl.textContent = v || '';
   });
-  // Description (multi-line). The model field stays `jobTitle` for back-compat
-  // with diagrams saved before the rename — the visible label is what changed.
-  addTextarea(info, 'Description', cell.get('jobTitle') || '', v => cell.set('jobTitle', v));
+  // Description (multi-line) backed by `jobTitle` for back-compat. Placeholder
+  // hints at the typical use ("job title") while leaving room for a project
+  // role, team name, or any other short secondary label per user preference.
+  addTextarea(info, 'Description', cell.get('jobTitle') || '',
+    v => cell.set('jobTitle', v),
+    { placeholder: 'job title' });
+
+  // Mark-as-vacant toggle — dashed borders + faded text mark the card as a
+  // recruitment placeholder or unassigned RACI slot. Lives in Content (a
+  // status flag, not an aesthetic choice) immediately below Description so
+  // the Appearance section stays exclusively about design tokens.
+  addToggle(info, 'Mark as vacant', !!cell.get('vacant'),
+    v => cell.set('vacant', v));
 
   // Tags — comma-separated chips at the bottom of the card
   addChipInput(info, 'Tags', cell.get('tags') || [], v => cell.set('tags', v));
@@ -2480,7 +2575,7 @@ function renderOrgPersonProps(cell) {
   const imageSec = section(bodyEl, 'Image');
 
   // Icon Text input (up to 4 characters)
-  addText(imageSec, 'Icon Text', cell.get('iconText') || '', v => {
+  addText(imageSec, 'Icon text', cell.get('iconText') || '', v => {
     cell.set('iconText', v.substring(0, 4));
   });
 
@@ -2693,17 +2788,13 @@ function renderOrgPersonProps(cell) {
   }
   buildDetailList();
 
-  // Appearance
+  // Appearance — design tokens only (the vacant toggle moved to Content
+  // above, since it's a status flag rather than a colour choice).
   const appearance = section(bodyEl, 'Appearance');
-  addColor(appearance, 'Accent Color', cell.attr('accentBar/fill') || '#1D73C9', v => {
+  addColor(appearance, 'Accent', cell.attr('accentBar/fill') || '#1D73C9', v => {
     cell.attr('accentBar/fill', v);
     cell.attr('accentBarMask/fill', v);
-  });
-
-  // Mark-as-vacant toggle — dashed borders + faded text mark the card as a
-  // recruitment placeholder or unassigned RACI slot.
-  addToggle(appearance, 'Mark as vacant', !!cell.get('vacant'),
-    v => cell.set('vacant', v));
+  }, { defaultValue: '#1D73C9' });
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -2719,7 +2810,7 @@ function renderOrgPersonProps(cell) {
     cell.trigger('change:size');
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   // Delete
   addCloneBtn(footerEl, cell);
@@ -2727,20 +2818,14 @@ function renderOrgPersonProps(cell) {
 }
 
 function renderTaskProps(cell) {
-  // Content
-  const content = section(bodyEl, 'Task');
-  addText(content, 'Name', cell.get('taskName') || '', v => {
+  // Content — primary text only.
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.get('taskName') || '', v => {
     cell.set('taskName', v);
-    titleEl.textContent = v || 'Task';
+    titleEl.textContent = v || '';
   });
   addTextarea(content, 'Description', cell.get('taskDescription') || '',
     v => cell.set('taskDescription', v));
-  // Fixed left-column width — the right column absorbs any task resize so
-  // the description column stays the size the user picked. Min clamp of
-  // 120 px is enforced inside `_effectiveDescWidth` on the shape side.
-  addNumber(content, 'Description Width', cell.get('descriptionWidth') ?? 260, v => {
-    cell.set('descriptionWidth', Math.max(120, v));
-  });
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
@@ -2749,12 +2834,19 @@ function renderTaskProps(cell) {
   addColor(appearance, 'Border', cell.attr('body/stroke') || 'var(--node-border)',
     v => cell.attr('body/stroke', v));
 
-  // Size & Order
+  // Size & Order — Description width lives here, alongside Width/Height,
+  // since it's a layout/dimension property of the shape, not text content.
   const size = section(bodyEl, 'Size & Order');
   addNumberPair(size,
     'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
     'Height', cell.size().height, h => cell.resize(cell.size().width, h));
-  addOrderButtons(size, cell, 'Node layer');
+  // Fixed left-column width — the right column absorbs any task resize so
+  // the description column stays the size the user picked. Min clamp of
+  // 120 px is enforced inside `_effectiveDescWidth` on the shape side.
+  addNumber(size, 'Description width', cell.get('descriptionWidth') ?? 260, v => {
+    cell.set('descriptionWidth', Math.max(120, v));
+  });
+  addOrderButtons(size, cell);
 
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
@@ -2767,7 +2859,7 @@ function renderSequenceParticipantProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Participant';
+    titleEl.textContent = v || '';
   }, cell);
 
   // Appearance
@@ -2794,7 +2886,7 @@ function renderSequenceParticipantProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
@@ -2804,13 +2896,13 @@ function renderSequenceActorProps(cell) {
   const content = section(bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), v => {
     cell.attr('label/text', v);
-    titleEl.textContent = v || 'Actor';
+    titleEl.textContent = v || '';
   }, cell);
 
   const appearance = section(bodyEl, 'Appearance');
   // Stick figure stroke (optional tint) — lifeline keeps its own theme-aware
   // default so hiding the figure tint doesn't also wipe the lifeline colour.
-  addColor(appearance, 'Stroke', cell.attr('actorHead/stroke'), v => {
+  addColor(appearance, 'Color', cell.attr('actorHead/stroke'), v => {
     cell.attr('actorHead/stroke', v);
     cell.attr('actorBody/stroke', v);
     cell.attr('actorArms/stroke', v);
@@ -2847,7 +2939,7 @@ function renderSequenceActorProps(cell) {
     cell.resize(def.width, h);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
@@ -2873,7 +2965,7 @@ function renderSequenceActivationProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Node layer');
+  addOrderButtons(size, cell);
 
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
@@ -2892,8 +2984,17 @@ function renderSequenceFragmentProps(cell) {
     cell.attr('elseText/text', isAlt ? (elseCond ? `[${elseCond}]` : '[else]') : '');
   };
 
-  // Content
+  // Content — canonical order: Label first, then Type, then condition fields.
+  // labelInput is captured in the Type onChange below so the Type switch can
+  // sync the visible Label when it's still on a default keyword.
   const content = section(bodyEl, 'Content');
+  const labelInput = addText(content, 'Label', cell.get('fragmentLabel') || cell.attr('titleText/text') || '', v => {
+    cell.set('fragmentLabel', v);
+    cell.attr('titleText/text', v);
+    titleEl.textContent = v || '';
+    // Resize the trapezoidal tab to fit the new label.
+    joint.shapes.sf.updateFragmentTitleTab?.(cell);
+  });
   addSelect(content, 'Type', cell.get('fragmentType') || 'standard', FRAGMENT_TYPES, v => {
     cell.set('fragmentType', v);
     const isAlt = v === 'alternative';
@@ -2909,12 +3010,6 @@ function renderSequenceFragmentProps(cell) {
       joint.shapes.sf.updateFragmentTitleTab?.(cell);
     }
   });
-  const labelInput = addText(content, 'Label', cell.get('fragmentLabel') || cell.attr('titleText/text') || '', v => {
-    cell.set('fragmentLabel', v);
-    cell.attr('titleText/text', v);
-    // Resize the trapezoidal tab to fit the new label.
-    joint.shapes.sf.updateFragmentTitleTab?.(cell);
-  });
   addText(content, 'Condition', cell.get('condition') ?? 'if', v => {
     cell.set('condition', v);
     cell.attr('conditionText/text', v ? `[${v}]` : '');
@@ -2925,14 +3020,14 @@ function renderSequenceFragmentProps(cell) {
     cell.attr('elseText/text', isAlt ? (v ? `[${v}]` : '[else]') : '');
   });
 
-  // Appearance
+  // Appearance — canonical order: Fill → Border → Label color
   const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.attr('body/fill') || 'transparent', v => cell.attr('body/fill', v));
   addColor(appearance, 'Border', cell.attr('body/stroke'), v => {
     cell.attr('body/stroke', v);
     cell.attr('titleTab/stroke', v);
     cell.attr('dividerLine/stroke', v);
   });
-  addColor(appearance, 'Fill', cell.attr('body/fill') || 'transparent', v => cell.attr('body/fill', v));
   addColor(appearance, 'Label color', cell.attr('titleText/fill'), v => {
     cell.attr('titleText/fill', v);
     cell.attr('conditionText/fill', v);
@@ -2949,18 +3044,19 @@ function renderSequenceFragmentProps(cell) {
     cell.resize(def.width, def.height);
   });
   addApplySizeBtn(size, cell);
-  addOrderButtons(size, cell, 'Container layer');
+  addOrderButtons(size, cell);
 
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
 }
 
 function renderLinkProps(cell) {
-  // Label
-  const labelSec = section(bodyEl, 'Label');
+  // Content — primary text only (Font size moved to Appearance for
+  // consistency with every other shape's typography placement).
+  const labelSec = section(bodyEl, 'Content');
   const currentLabel = cell.labels()?.[0]?.attrs?.text?.text ?? '';
   const currentLabelSize = cell.labels()?.[0]?.attrs?.text?.fontSize ?? 13;
-  addText(labelSec, 'Text', currentLabel, v => {
+  addText(labelSec, 'Label', currentLabel, v => {
     const fontSize = cell.labels()?.[0]?.attrs?.text?.fontSize ?? 13;
     const lineColor = cell.attr('line/stroke') || '#888888';
     cell.labels(v ? [{
@@ -2974,13 +3070,7 @@ function renderLinkProps(cell) {
       },
       position: { distance: 0.5, offset: 0 },
     }] : []);
-    titleEl.textContent = v || 'Unnamed';
-  });
-  addNumber(labelSec, 'Text size', currentLabelSize, v => {
-    const labels = cell.labels();
-    if (labels.length > 0) {
-      cell.label(0, { attrs: { text: { fontSize: Math.max(8, Math.min(24, v)) } } });
-    }
+    titleEl.textContent = v || '';
   });
 
   // Appearance
@@ -3010,8 +3100,6 @@ function renderLinkProps(cell) {
         else parent.appendChild(view.el);
       }
     });
-  addNumber(appearance, 'Stroke width', cell.attr('line/strokeWidth') ?? 2,
-    v => cell.attr('line/strokeWidth', v));
   addSelect(appearance, 'Line style', cell.prop('lineStyle') || 'none', [
     { value: 'none', label: 'Solid' },
     { value: '8 4',  label: 'Dashed' },
@@ -3028,6 +3116,17 @@ function renderLinkProps(cell) {
     // on the real path, even if some legacy code path writes it.
     if (cell.attr('line/strokeDasharray')) cell.attr('line/strokeDasharray', null);
   });
+  addNumber(appearance, 'Line width', cell.attr('line/strokeWidth') ?? 2,
+    v => cell.attr('line/strokeWidth', v));
+  // Font size — connector label typography. Lives in Appearance for
+  // consistency with the universal convention (text content in Content;
+  // text styling in Appearance).
+  addNumber(appearance, 'Font size', currentLabelSize, v => {
+    const labels = cell.labels();
+    if (labels.length > 0) {
+      cell.label(0, { attrs: { text: { fontSize: Math.max(8, Math.min(24, v)) } } });
+    }
+  }, { min: 8, max: 24 });
   const stroke = cell.attr('line/stroke') || '#333333';
   // ER crow's foot markers — negative-x convention (toward element).
   // Crow's foot prongs fan out toward negative-x (toward the entity).
@@ -3147,12 +3246,13 @@ function renderLinkProps(cell) {
     oneMany:   '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="18" y1="3" x2="18" y2="15" stroke="currentColor" stroke-width="2"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
     zeroMany:  '<line x1="2" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
   };
+  const lineStroke = cell.attr('line/stroke') || '#888888';
   addMarkerPicker(appearance, 'Source end', detectMarker(cell.attr('line/sourceMarker')), markerOpts, markerSvgs, v => {
     applyMarker(cell, 'sourceMarker', markerDefs[v]);
-  });
+  }, { strokeColor: lineStroke });
   addMarkerPicker(appearance, 'Target end', detectMarker(cell.attr('line/targetMarker')), markerOpts, markerSvgs, v => {
     applyMarker(cell, 'targetMarker', markerDefs[v]);
-  });
+  }, { strokeColor: lineStroke });
 
   // Simplify path button
   const simplifyBtn = document.createElement('button');
@@ -3211,17 +3311,51 @@ function section(parent, title, open = true) {
 // Bring to Front / Send to Back operate WITHIN the element's z-tier
 // so that type-based layering (Zone < Container < Node) is never violated.
 
-function addOrderButtons(sec, cell, layerLabel) {
-  // Layer label
-  const hint = document.createElement('div');
-  hint.className = 'sf-prop-order-hint';
-  hint.textContent = `Layer: ${layerLabel}`;
-  sec.appendChild(hint);
+/**
+ * Plain-language label for the peer set affected by Bring to Front /
+ * Send to Back on this cell. Defaults to the generic z-tier name
+ * (`backgrounds` / `containers` / `shapes`) but swaps in a more
+ * diagram-specific phrase where the generic word reads awkwardly — e.g.
+ * a Gantt user thinks in "timelines and groups", not "containers"; a
+ * sequence-diagram user thinks in "fragments". The peer SET is unchanged
+ * (still everything in the same z-tier on this tab's graph); only the
+ * wording is sharpened.
+ *
+ * Order of precedence: per-type override → generic tier name.
+ */
+function orderPeerLabel(cell) {
+  const type = cell.get('type');
+  const SPECIFIC = {
+    // Process — backgrounds tier is dominated by BpmnPool
+    'sf.BpmnPool':            'pools',
+    // Sequence — containers tier maps cleanly to fragments
+    'sf.SequenceFragment':    'fragments',
+    // Sequence — shapes tier dominated by participants / actors / activations
+    'sf.SequenceParticipant': 'participants and actors',
+    'sf.SequenceActor':       'participants and actors',
+    'sf.SequenceActivation':  'participants and actors',
+    // Gantt — containers tier maps to timelines + groups
+    'sf.GanttTimeline':       'timelines and groups',
+    'sf.GanttGroup':          'timelines and groups',
+    // Gantt — shapes tier maps to tasks + milestones + markers
+    'sf.GanttTask':           'tasks and milestones',
+    'sf.GanttMilestone':      'tasks and milestones',
+    'sf.GanttMarker':         'tasks and milestones',
+  };
+  return SPECIFIC[type] || tierNameForType(type);
+}
+
+function addOrderButtons(sec, cell) {
+  const type = cell.get('type');
+  const peerLabel = orderPeerLabel(cell);
 
   const btnRow = document.createElement('div');
-  btnRow.className = 'sf-prop-pair';
+  // Order-specific modifier (v1.12.1) lets us visually group the buttons
+  // with the hint below them rather than with whatever sits above
+  // (typically the Width / Height inputs). Pure CSS-side change — the
+  // base `.sf-prop-pair` flex behaviour is preserved.
+  btnRow.className = 'sf-prop-pair sf-prop-pair--order';
 
-  const type = cell.get('type');
   const tierBase = Z_BASE[type] ?? 20000;
   const tierMax  = tierBase + Z_TIER_SPAN;
 
@@ -3239,7 +3373,7 @@ function addOrderButtons(sec, cell, layerLabel) {
       <path d="M2 2h12v2H2zM4 6h8v2H4zM6 10h4v4H6z"/>
     </svg>
     Bring to Front`;
-  frontBtn.title = `Bring to front within ${layerLabel}`;
+  frontBtn.title = `Bring in front of other ${peerLabel}`;
   frontBtn.addEventListener('click', () => {
     const peers = sameTierElements();
     const maxZ = peers.length
@@ -3256,7 +3390,7 @@ function addOrderButtons(sec, cell, layerLabel) {
       <path d="M6 2h4v4H6zM4 8h8v2H4zM2 12h12v2H2z"/>
     </svg>
     Send to Back`;
-  backBtn.title = `Send to back within ${layerLabel}`;
+  backBtn.title = `Send behind other ${peerLabel}`;
   backBtn.addEventListener('click', () => {
     const peers = sameTierElements();
     const minZ = peers.length
@@ -3268,6 +3402,14 @@ function addOrderButtons(sec, cell, layerLabel) {
   btnRow.appendChild(frontBtn);
   btnRow.appendChild(backBtn);
   sec.appendChild(btnRow);
+
+  // Hint appears BELOW the buttons (v1.12.1) — the action is the headline,
+  // the scope is the footnote. Previously rendered above, which competed
+  // visually with the Width input directly above the section.
+  const hint = document.createElement('div');
+  hint.className = 'sf-prop-order-hint';
+  hint.textContent = `Move within other ${peerLabel}`;
+  sec.appendChild(hint);
 }
 
 // ── Standalone convert button (not inside accordion) ───────────────
@@ -3391,11 +3533,56 @@ function field(parent, label) {
   return f;
 }
 
-function addText(parent, label, value, onChange, cell) {
+/**
+ * CR-6.1 (v1.12.0) — wire markdown formatting shortcuts onto a text input or
+ * textarea, and (optionally) append a subtle hint below it. Used by the
+ * property-panel renderers for sf.TextLabel and sf.Note.
+ *
+ * Shortcuts mirror common markdown editors:
+ *   Cmd/Ctrl + B        → wrap selection with **bold**
+ *   Cmd/Ctrl + I        → wrap with *italic*
+ *   Cmd/Ctrl + Shift+X  → wrap with ~~strike~~
+ *   Cmd/Ctrl + E        → wrap with `code`
+ *
+ * After wrapping, dispatches an 'input' event so the field's existing
+ * onChange wiring (and the focus-coalesced history batch) captures the
+ * change naturally — no special history plumbing here.
+ */
+function wireMarkdownShortcuts(inputEl, hintParent) {
+  if (!inputEl) return;
+  const SHORTCUTS = {
+    b: '**',
+    i: '*',
+    e: '`',
+    // Strike uses Shift+X to avoid colliding with text-cut (Cmd+X).
+  };
+  inputEl.addEventListener('keydown', (evt) => {
+    const mod = evt.ctrlKey || evt.metaKey;
+    if (!mod) return;
+    const key = evt.key.toLowerCase();
+    let marker = null;
+    if (evt.shiftKey && key === 'x') marker = '~~';
+    else if (!evt.shiftKey && SHORTCUTS[key]) marker = SHORTCUTS[key];
+    if (!marker) return;
+    evt.preventDefault();
+    if (wrapSelectionWithMarker(inputEl, marker)) {
+      inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  if (hintParent) {
+    const hint = document.createElement('div');
+    hint.className = 'sf-properties__hint';
+    hint.innerHTML = 'Supports <strong>**bold**</strong>, <em>*italic*</em>, <del>~~strike~~</del>, <code>`code`</code>';
+    hintParent.appendChild(hint);
+  }
+}
+
+function addText(parent, label, value, onChange, cell, opts) {
   const f = field(parent, label);
   const input = document.createElement('textarea');
   input.className = 'sf-properties__input sf-properties__text-input';
   input.value = value ?? '';
+  if (opts?.placeholder) input.placeholder = opts.placeholder;
   input.rows = 1;
   // Return the input so callers can imperatively sync its value (e.g. when
   // another control changes the underlying model and the field must reflect it).
@@ -3569,11 +3756,12 @@ function addDate(parent, label, value, onChange) {
   f.appendChild(wrap);
 }
 
-function addTextarea(parent, label, value, onChange) {
+function addTextarea(parent, label, value, onChange, opts) {
   const f = field(parent, label);
   const ta = document.createElement('textarea');
   ta.className = 'sf-properties__input sf-properties__textarea';
   ta.value = value ?? '';
+  if (opts?.placeholder) ta.placeholder = opts.placeholder;
   // Auto-size: show one more line than current text
   const autoSize = () => {
     const lines = (ta.value.match(/\n/g) || []).length + 1;
@@ -3590,6 +3778,7 @@ function addTextarea(parent, label, value, onChange) {
     if (editing) { history.endBatch(); editing = false; }
   });
   f.appendChild(ta);
+  return ta;
 }
 
 /**
@@ -3692,7 +3881,7 @@ function addRaciPicker(parent, label, value, onChange) {
   f.appendChild(grid);
 }
 
-function addColor(parent, label, value, onChange) {
+function addColor(parent, label, value, onChange, opts = {}) {
   // Group every attr mutation the setter performs into one undo entry
   // (a SimpleNode Fill pick touches body/fill + label/fill + subtitle/fill
   // + subtitle/opacity — without batching, Cmd+Z would only revert one).
@@ -3715,19 +3904,78 @@ function addColor(parent, label, value, onChange) {
   // Always display as hex — never raw CSS vars or rgba strings
   textInput.value = value ? hex : '';
 
+  // Track the last-known-good value so an invalid commit can revert cleanly.
+  let lastValid = hex;
+
+  // Gap 20 (v1.12.0) — optional reset-to-default ↺ button. When the field
+  // declares a clear default value (e.g. brand blue for a Header fill), we
+  // render a small icon button that snaps the swatch back to that default
+  // and fires the onChange. The button is dimmed when the current value
+  // already matches the default so users can see the "nothing to reset"
+  // state at a glance.
+  const defaultHex = opts.defaultValue ? toHex(opts.defaultValue) : null;
+  let resetBtn = null;
+  const refreshResetState = () => {
+    if (!resetBtn) return;
+    const matches = (lastValid || '').toLowerCase() === defaultHex.toLowerCase();
+    resetBtn.classList.toggle('is-default', matches);
+    resetBtn.disabled = matches;
+  };
+
   swatch.addEventListener('input', () => {
     textInput.value = swatch.value;
+    lastValid = swatch.value;
     batched(swatch.value);
+    refreshResetState();
   });
   textInput.addEventListener('change', () => {
-    const h = toHex(textInput.value);
+    // Gap 9 (v1.12.0) — strict hex validation. Accept 3, 4, 6, or 8-digit
+    // hex with optional leading `#`. Anything else: revert to the last
+    // valid value AND briefly flash a red border so the user sees their
+    // input was rejected (no modal — text-level inline feedback only).
+    const raw = textInput.value.trim();
+    const stripped = raw.replace(/^#/, '');
+    const isValidHex = /^[0-9a-fA-F]{3,8}$/.test(stripped) &&
+      [3, 4, 6, 8].includes(stripped.length);
+    if (!isValidHex && raw !== '') {
+      textInput.value = lastValid;
+      textInput.classList.add('sf-properties__input--invalid');
+      setTimeout(() => textInput.classList.remove('sf-properties__input--invalid'), 400);
+      return;
+    }
+    const h = toHex(raw);
     swatch.value = h;
     textInput.value = h;
+    lastValid = h;
     batched(h);
+    refreshResetState();
   });
 
   row.appendChild(swatch);
   row.appendChild(textInput);
+
+  if (defaultHex) {
+    resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'sf-prop-color-reset';
+    resetBtn.title = `Reset to default (${defaultHex})`;
+    resetBtn.setAttribute('aria-label', 'Reset colour to default');
+    // Counter-clockwise arrow ↺ — matches the visual idiom users already
+    // associate with "reset" / "undo" without conflicting with the toolbar
+    // undo icon.
+    resetBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.46-3.54"/><path d="M3 2.5V5h2.5"/></svg>`;
+    resetBtn.addEventListener('click', () => {
+      if (resetBtn.disabled) return;
+      swatch.value = defaultHex;
+      textInput.value = defaultHex;
+      lastValid = defaultHex;
+      batched(defaultHex);
+      refreshResetState();
+    });
+    row.appendChild(resetBtn);
+    refreshResetState();
+  }
+
   f.appendChild(row);
 }
 
@@ -3785,28 +4033,58 @@ function addColorMulti(parent, label, value, onChange) {
   f.appendChild(row);
 }
 
-function addNumber(parent, label, value, onChange) {
+/**
+ * Number input. Optional `opts.min` / `opts.max` clamp the value on commit
+ * AND reflect the clamped value back into the input. Default `min` is 1 so
+ * existing callers keep their behaviour — pass a stricter floor for fields
+ * that must never go to zero (font size, line width, etc. all benefit).
+ */
+function addNumber(parent, label, value, onChange, opts = {}) {
+  const min = opts.min ?? 1;
+  const max = opts.max;
   const f = field(parent, label);
   const input = document.createElement('input');
   input.type = 'number';
   input.className = 'sf-properties__input';
   input.value = value ?? 0;
-  input.min = 1;
+  input.min = min;
+  if (max != null) input.max = max;
+  // Gap 31 (v1.12.0) — track the last committed value so a cleared input
+  // reverts to the *current* cell state rather than the stale value
+  // captured at render time. Without this, editing 100 → 200 → clear
+  // would snap the visible input back to 100 while the cell holds 200.
+  let lastValid = value ?? min;
   input.addEventListener('change', () => {
-    const v = parseFloat(input.value);
-    if (!isNaN(v) && v > 0) onChange(v);
+    let v = parseFloat(input.value);
+    if (isNaN(v)) { input.value = String(lastValid); return; }
+    if (v < min) v = min;
+    if (max != null && v > max) v = max;
+    input.value = String(v); // reflect the clamped value
+    lastValid = v;
+    onChange(v);
   });
   f.appendChild(input);
 }
 
-function addNumberPair(parent, labelA, valueA, onChangeA, labelB, valueB, onChangeB) {
+/**
+ * Side-by-side pair (Width / Height). Default minimum is **16 px** (one
+ * grid unit) — a safe layout floor that prevents the "unselectable
+ * single-pixel dot" footgun without overriding drag-resize, which still
+ * enforces shape-specific stricter minimums (see `selection.js`). Caller
+ * can override per-axis via `opts.minA` / `opts.minB`.
+ */
+function addNumberPair(parent, labelA, valueA, onChangeA, labelB, valueB, onChangeB, opts = {}) {
+  const minA = opts.minA ?? 16;
+  const minB = opts.minB ?? 16;
+  const maxA = opts.maxA;
+  const maxB = opts.maxB;
   const pair = document.createElement('div');
   pair.className = 'sf-prop-pair';
 
   [
-    [labelA, valueA, onChangeA],
-    [labelB, valueB, onChangeB],
-  ].forEach(([lbl, val, onCh]) => {
+    [labelA, valueA, onChangeA, minA, maxA],
+    [labelB, valueB, onChangeB, minB, maxB],
+  ].forEach(([lbl, val, onCh, lo, hi]) => {
     const f = document.createElement('div');
     f.className = 'sf-prop-field';
     const l = document.createElement('div');
@@ -3816,10 +4094,18 @@ function addNumberPair(parent, labelA, valueA, onChangeA, labelB, valueB, onChan
     inp.type = 'number';
     inp.className = 'sf-properties__input';
     inp.value = val ?? 0;
-    inp.min = 1;
+    inp.min = lo;
+    if (hi != null) inp.max = hi;
+    // Gap 31 (v1.12.0) — track lastValid per-axis. See addNumber comment.
+    let lastValid = val ?? lo;
     inp.addEventListener('change', () => {
-      const v = parseFloat(inp.value);
-      if (!isNaN(v) && v > 0) onCh(v);
+      let v = parseFloat(inp.value);
+      if (isNaN(v)) { inp.value = String(lastValid); return; }
+      if (v < lo) v = lo;
+      if (hi != null && v > hi) v = hi;
+      inp.value = String(v); // reflect the clamped value
+      lastValid = v;
+      onCh(v);
     });
     f.appendChild(l);
     f.appendChild(inp);
@@ -3884,18 +4170,46 @@ function addApplySizeBtn(parent, cell) {
     </svg>
     Apply this size to all ${typePlural}`;
   btn.title = `Resize every ${typePlural.toLowerCase()} to match this element's width and height`;
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     const { width, height } = cell.size();
-    graph.getElements().forEach(el => {
-      if (el.get('type') === type && el.id !== cell.id) {
-        el.resize(width, height);
-        // Force view to re-render with new size (async paper may skip queued updates)
-        const view = paper.findViewByModel(el);
-        if (view?.update) view.update();
-        // Re-fire so selection handles + ports reposition to final size
-        el.trigger('change:size');
-      }
+    // Count peers BEFORE confirming so the dialog can quote the exact number
+    // of cells the user is about to change — critical for "did I really
+    // mean to resize 47 nodes?" moments.
+    const peers = graph.getElements().filter(
+      el => el.get('type') === type && el.id !== cell.id
+    );
+    if (peers.length === 0) return; // nothing to do
+    const ok = await confirmModal({
+      title: `Apply size to all ${typePlural.toLowerCase()}?`,
+      // Wording note (v1.12.1): the old "This is undoable" was ambiguous —
+      // English natively reads "undoable" as "cannot be undone" even though
+      // the technical meaning is "can be undone". The new phrasing names
+      // the keyboard shortcut so the user knows the safety net is one
+      // keystroke away.
+      message: `${peers.length} other ${peers.length === 1 ? typePlural.toLowerCase().replace(/s$/, '') : typePlural.toLowerCase()} on this diagram will be resized to ${Math.round(width)} × ${Math.round(height)} px. You can undo with ⌘Z (Ctrl+Z).`,
+      okLabel: 'Apply',
+      cancelLabel: 'Cancel',
+      tone: 'primary',
     });
+    if (!ok) return;
+    // v1.12.1 fix — the previous loop combined el.resize() with a manual
+    // view.update() and an extra change:size trigger. JointJS v4 async
+    // paper coalesces same-microtask resizes, so only one peer ended up
+    // visibly resized even though every peer model fired its event.
+    // Atomic prop('size', ...) commits both dimensions in one set() call
+    // and fires exactly one change:size that the view picks up on its
+    // own. updateViews() at the end flushes the queued visual updates
+    // as a single render.
+    history.startBatch();
+    try {
+      peers.forEach(el => {
+        el.prop('size', { width, height });
+      });
+    } finally {
+      history.endBatch();
+    }
+    paper.updateViews();
+    showToast(`Resized ${peers.length} ${peers.length === 1 ? typePlural.toLowerCase().replace(/s$/, '') : typePlural.toLowerCase()} ✓`, 'success');
   });
   parent.appendChild(btn);
 }
@@ -4144,10 +4458,16 @@ function addSelect(parent, label, value, options, onChange) {
   f.appendChild(sel);
 }
 
-function addMarkerPicker(parent, label, current, options, svgs, onChange) {
+function addMarkerPicker(parent, label, current, options, svgs, onChange, opts = {}) {
   const f = field(parent, label);
   const wrap = document.createElement('div');
   wrap.className = 'sf-marker-picker';
+  // Gap 11 (v1.12.0) — when the caller passes the active line stroke, paint
+  // the thumbnail SVGs in that colour by setting the wrapper's `color`
+  // CSS property. The thumbs already use `currentColor` for stroke/fill,
+  // so they inherit automatically. When omitted, fallback to the prior
+  // currentColor (theme text colour).
+  if (opts.strokeColor) wrap.style.color = opts.strokeColor;
 
   // Current selected display
   const btn = document.createElement('button');

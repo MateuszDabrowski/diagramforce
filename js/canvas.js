@@ -55,6 +55,23 @@ export const Z_BASE = {
 export const Z_TIER_SPAN = 499;   // 500 slots per tier (0–499 relative to base)
 export const Z_LINK_BASE  = 3000;
 
+// Plain-language tier names used by the property-panel reorder controls.
+// One source of truth so per-renderer call sites don't have to memorise the
+// "Node layer" / "Container layer" / "Zone layer" jargon (which also drifted
+// inconsistent — sf.BpmnSubprocess and sf.BpmnLoop sit in the same z-tier
+// but had different labels in properties.js). Grouping:
+//   z <   500  → "backgrounds"   (Zone, BpmnPool)
+//   z <  2000  → "containers"    (Container, BpmnSubprocess, BpmnLoop,
+//                                 SequenceFragment, GanttTimeline, GanttGroup)
+//   z >= 2000  → "shapes"        (every regular cell — SimpleNode, Note,
+//                                 BpmnTask, OrgPerson, DataObject, etc.)
+export function tierNameForType(type) {
+  const base = Z_BASE[type] ?? 2000;
+  if (base < 500) return 'backgrounds';
+  if (base < 2000) return 'containers';
+  return 'shapes';
+}
+
 // Flag set by persistence.js around every graph.fromJSON() call so the
 // 'add' listener skips z-assignment and preserves the saved values.
 let _isLoadingJSON = false;
@@ -1313,6 +1330,49 @@ export function init() {
     if (cell.isElement?.()) scheduleReroute();
   });
 
+  // ── Gap 3 (v1.12.0) — empty-canvas onboarding hint ─────────────────
+  // Render a faded SVG text inside the joint-layers group reading
+  // "Drag a shape from the sidebar to start →" whenever the active
+  // graph has zero cells. Visibility toggles automatically on every
+  // add/remove. Per-tab — each tab's empty state shows the hint until
+  // its first drop. CSS `pointer-events: none` so it never blocks pan.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  let hintEl = null;
+  const ensureHint = () => {
+    if (hintEl && hintEl.parentNode) return hintEl;
+    const layers = paper.svg.querySelector('.joint-layers') || paper.svg;
+    hintEl = document.createElementNS(SVG_NS, 'text');
+    hintEl.setAttribute('class', 'sf-canvas-hint');
+    hintEl.setAttribute('text-anchor', 'middle');
+    hintEl.setAttribute('pointer-events', 'none');
+    hintEl.textContent = 'Drag a shape from the sidebar to start →';
+    layers.appendChild(hintEl);
+    return hintEl;
+  };
+  const refreshHint = () => {
+    const empty = graph.getCells().length === 0;
+    if (!empty) {
+      if (hintEl?.parentNode) hintEl.style.display = 'none';
+      return;
+    }
+    const el = ensureHint();
+    // Position at the visible viewport centre in model coordinates so the
+    // hint stays put regardless of zoom / pan when the canvas is empty.
+    const rect = paper.el.getBoundingClientRect();
+    const scale = paper.scale().sx;
+    const t = paper.translate();
+    const mx = (rect.width / 2 - t.tx) / scale;
+    const my = (rect.height / 2 - t.ty) / scale;
+    el.setAttribute('x', String(mx));
+    el.setAttribute('y', String(my));
+    el.style.display = '';
+  };
+  graph.on('add remove', refreshHint);
+  // Re-position on pan/zoom/resize so the hint follows the viewport centre.
+  paper.on('translate scale', refreshHint);
+  new ResizeObserver(refreshHint).observe(paper.el);
+  refreshHint();
+
   return { graph, paper };
 }
 
@@ -1915,6 +1975,36 @@ export function initMobileDragHandles() {
     const targetId = handle.dataset.target;
     const target = document.getElementById(targetId);
     if (!target) return;
+
+    // Gap 25 (v1.12.0) — make the handle a real a11y citizen. Without
+    // these attributes it's a bare <div> with `cursor: ns-resize`,
+    // discoverable only by sighted pointer users. The `separator` role
+    // with `aria-orientation="horizontal"` is the ARIA-defined match for
+    // a draggable splitter that resizes adjacent regions.
+    if (!handle.hasAttribute('role'))            handle.setAttribute('role', 'separator');
+    if (!handle.hasAttribute('aria-orientation')) handle.setAttribute('aria-orientation', 'horizontal');
+    if (!handle.hasAttribute('aria-label'))      handle.setAttribute('aria-label', 'Resize panel — use arrow keys');
+    if (!handle.hasAttribute('tabindex'))        handle.setAttribute('tabindex', '0');
+
+    // Gap 25 (v1.12.0) — keyboard nudge. Up/Down adjust height by 16 px
+    // (one grid unit); PageUp/PageDown by 64 px for coarse moves;
+    // Home/End jump to min/max. Mirrors the splitter pattern in the
+    // ARIA Authoring Practices Guide.
+    handle.addEventListener('keydown', (evt) => {
+      if (window.innerWidth > MOBILE_BP) return;
+      const step = (evt.key === 'PageUp' || evt.key === 'PageDown') ? 64 : 16;
+      const curH = target.getBoundingClientRect().height;
+      const maxH = window.innerHeight * 0.8;
+      let newH = curH;
+      if (evt.key === 'ArrowUp' || evt.key === 'PageUp')         newH = Math.min(maxH, curH + step);
+      else if (evt.key === 'ArrowDown' || evt.key === 'PageDown') newH = Math.max(80,   curH - step);
+      else if (evt.key === 'Home')                                newH = maxH;
+      else if (evt.key === 'End')                                 newH = 80;
+      else return;
+      evt.preventDefault();
+      target.style.height = newH + 'px';
+      localStorage.setItem(PANEL_HEIGHT_KEY, Math.round(newH));
+    });
 
     restorePanelHeight(target);
 

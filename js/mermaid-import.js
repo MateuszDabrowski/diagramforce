@@ -11,7 +11,8 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromTemplate } from './templates.js?v=1.11.10';
+import { createElementFromTemplate } from './templates.js?v=1.12.1';
+import { showError, showToast } from './feedback.js?v=1.12.1';
 
 let modules = {};
 
@@ -52,24 +53,24 @@ function parseFrontmatter(text) {
 
 /**
  * Parse + import mermaid text into a new tab.
- * Returns true on success, false on failure (with alert shown).
+ * Returns true on success, false on failure (with error toast shown).
  */
 export function importMermaidText(text) {
-  if (!text || !text.trim()) { alert('Mermaid import failed: Empty input.'); return false; }
+  if (!text || !text.trim()) { showError('Mermaid import failed: empty input.'); return false; }
   const { title: fmTitle, body } = parseFrontmatter(text);
   const type = detectDiagramType(body);
-  if (!type) { alert('Mermaid import failed: Could not detect a supported diagram type.'); return false; }
+  if (!type) { showError('Mermaid import failed: unsupported diagram type.'); return false; }
 
   let parsed;
   try {
     parsed = parseMermaid(body, type);
   } catch (err) {
     console.error('Mermaid parse error:', err);
-    alert('Mermaid import failed: ' + err.message);
+    showError('Mermaid import failed: ' + err.message);
     return false;
   }
   if (!parsed || !parsed.elements || parsed.elements.length === 0) {
-    alert('Mermaid import failed: no nodes found.');
+    showError('Mermaid import failed: no nodes found.');
     return false;
   }
 
@@ -137,6 +138,7 @@ export function importMermaidText(text) {
     requestAnimationFrame(() => {
       try { modules.canvas.fitContent(); } catch {}
     });
+    showToast(`Imported ${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'} from Mermaid`, 'success');
     return true;
   }
 
@@ -155,6 +157,7 @@ export function importMermaidText(text) {
   requestAnimationFrame(() => {
     try { modules.canvas.fitContent(); } catch {}
   });
+  showToast(`Imported ${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'} from Mermaid`, 'success');
   return true;
 }
 

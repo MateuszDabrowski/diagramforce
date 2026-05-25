@@ -21,3 +21,10 @@ diagramforce.mdx
 
 # Local examples
 examples/
+
+# Dev-only debug utilities (cache reset + CSS pipeline diagnostic). Kept
+# locally for any future Safari / SW cache investigation but not shipped.
+reset.html
+diag.html
+test-min.html
+test-nocsp.html

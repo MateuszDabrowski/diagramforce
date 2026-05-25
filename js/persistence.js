@@ -1,14 +1,15 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.11.10';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.11.10';
-import { diagramHasImage } from './image-component.js?v=1.11.10';
+import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.12.1';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.12.1';
+import { diagramHasImage } from './image-component.js?v=1.12.1';
+import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.1';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-const APP_VERSION = '1.11.10';
+const APP_VERSION = '1.12.1';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -16,6 +17,36 @@ const MAX_CELL_COUNT = 2000;
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
+// S4 (v1.12.0) — allowlist of cell types the renderer accepts from untrusted
+// JSON (share URL, file import, paste-JSON). Anything outside this set is
+// dropped during sanitization. Mirrors the shapes registered in shapes.js
+// plus the JointJS standard link. If a new shape lands in shapes.js, add
+// its type here too — verified at audit time, but a runtime test on a
+// fresh codebase would be even safer.
+const ALLOWED_CELL_TYPES = new Set([
+  // Architecture
+  'sf.SimpleNode', 'sf.Container', 'sf.Zone', 'sf.TextLabel', 'sf.Note',
+  'sf.Annotation', 'sf.Image', 'sf.Link', 'sf.Line', 'sf.Task',
+  // BPMN / Process
+  'sf.BpmnEvent', 'sf.BpmnTask', 'sf.BpmnGateway', 'sf.BpmnSubprocess',
+  'sf.BpmnLoop', 'sf.BpmnPool', 'sf.BpmnDataObject',
+  // Flow
+  'sf.FlowProcess', 'sf.FlowDecision', 'sf.FlowTerminator', 'sf.FlowDatabase',
+  'sf.FlowDocument', 'sf.FlowIO', 'sf.FlowPredefined', 'sf.FlowOffPage',
+  // Data Model
+  'sf.DataObject',
+  // Organisation
+  'sf.OrgPerson',
+  // Gantt
+  'sf.GanttTask', 'sf.GanttMilestone', 'sf.GanttMarker', 'sf.GanttTimeline',
+  'sf.GanttGroup',
+  // Sequence
+  'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation',
+  'sf.SequenceFragment',
+  // JointJS link
+  'standard.Link',
+]);
+
 function sanitizeGraphJSON(graphData) {
   if (!graphData || !Array.isArray(graphData.cells)) return graphData;
   if (graphData.cells.length > MAX_CELL_COUNT) {
@@ -42,6 +73,15 @@ function sanitizeGraphJSON(graphData) {
       }
     }
   };
+  // S4 (v1.12.0) — drop any cell whose type isn't in the registered shape
+  // allowlist. Closes the fuzzing surface where a crafted share URL could
+  // ship a cell with an unknown `type` that JointJS would silently render
+  // with default attrs (or worse, with attrs the app's renderer never
+  // expected to handle). Drop silently — a noisy error would help an
+  // attacker probe the allowlist boundaries.
+  graphData.cells = graphData.cells.filter(c =>
+    c && typeof c === 'object' && typeof c.type === 'string' && ALLOWED_CELL_TYPES.has(c.type)
+  );
   for (const cell of graphData.cells) { stripAttrs(cell); }
   return graphData;
 }
@@ -238,13 +278,20 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
       btn.dataset.saved = '1';
     });
     overlay.querySelector('[data-action="load"]').addEventListener('click', () => {
+      releaseTrap();
       overlay.remove();
       resolve(true);
     });
     overlay.querySelector('.sf-modal__overlay').addEventListener('click', () => {
+      releaseTrap();
       overlay.remove(); resolve(false);
     });
     document.body.appendChild(overlay);
+    const releaseTrap = trapFocus(overlay, { onEscape: () => {
+      releaseTrap();
+      overlay.remove();
+      resolve(false);
+    }});
   });
 }
 
@@ -252,11 +299,18 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
 // This keeps backward compat for keyboard.js (Ctrl+N).
 let newDiagramHandler = null;
 export function setNewDiagramHandler(fn) { newDiagramHandler = fn; }
-export function newDiagram() {
+export async function newDiagram() {
   if (newDiagramHandler) { newDiagramHandler(); return; }
   // Fallback (no tabs module)
   if (graph.getCells().length > 0) {
-    if (!confirm('Start a new diagram? Unsaved changes will be lost.')) return;
+    const ok = await confirmModal({
+      title: 'Start a new diagram?',
+      message: 'Unsaved changes will be lost.',
+      okLabel: 'Start new',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (!ok) return;
   }
   graph.clear();
   canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
@@ -285,10 +339,11 @@ function namedSaveSingle() {
 }
 
 /** Save multiple tabs by id with a name prefix. */
-export function saveMultipleTabs(tabIds, namePrefix) {
+export async function saveMultipleTabs(tabIds, namePrefix) {
   if (!getAllTabsCallback || !getTabGraphCallback) return;
   const allTabs = getAllTabsCallback();
   let savedCount = 0;
+  const silent = tabIds.length > 1;
   for (const tabId of tabIds) {
     const tab = allTabs.find(t => t.id === tabId);
     if (!tab) continue;
@@ -300,18 +355,32 @@ export function saveMultipleTabs(tabIds, namePrefix) {
     const saveName = namePrefix
       ? `${namePrefix} — ${tab.name}`
       : tab.name;
-    saveSingleTab(saveName, graphJSON, viewport, diagramType, tabIds.length > 1);
-    savedCount++;
+    const ok = await saveSingleTab(saveName, graphJSON, viewport, diagramType, silent);
+    if (ok) savedCount++;
   }
   if (savedCount > 0 && onSaveCompleteCallback) {
     onSaveCompleteCallback('browser');
   }
+  // For multi-tab saves, emit a single summary toast (single-tab path
+  // already gets its own toast from saveSingleTab in non-silent mode).
+  if (silent && savedCount > 0) {
+    showToast(`Saved ${savedCount} ${savedCount === 1 ? 'tab' : 'tabs'} to browser ✓`, 'success');
+  }
 }
 
-function saveSingleTab(name, graphJSON, viewport, diagramType, silent = false) {
+async function saveSingleTab(name, graphJSON, viewport, diagramType, silent = false) {
   const key = NAMED_SAVE_PREFIX + name;
   const alreadyExists = localStorage.getItem(key) !== null;
-  if (alreadyExists && !silent && !confirm(`"${name}" already exists. Overwrite?`)) return;
+  if (alreadyExists && !silent) {
+    const ok = await confirmModal({
+      title: 'Overwrite existing save?',
+      message: `A save named "${name}" already exists.`,
+      okLabel: 'Overwrite',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (!ok) return false;
+  }
 
   const data = {
     name,
@@ -326,11 +395,80 @@ function saveSingleTab(name, graphJSON, viewport, diagramType, silent = false) {
     localStorage.setItem(key, JSON.stringify(data));
     if (!silent) {
       if (onNamedSaveCallback) onNamedSaveCallback(name);
+      showToast(`Saved to browser ✓`, 'success');
     }
+    return true;
   } catch (err) {
-    alert('Save failed: ' + err.message);
+    // Gap 22 (v1.12.0) — distinguish quota errors from generic failures so
+    // the user gets actionable recovery advice. Browsers report quota as
+    // either `QuotaExceededError`, the legacy code 22, or (Firefox) the
+    // numeric code 1014. A few Safari builds set neither — fall through
+    // to the human-readable message as a last-resort check.
+    if (isQuotaError(err)) {
+      showError('Browser storage full — export to JSON to keep your work safe, then delete older saves.');
+    } else {
+      showError('Save failed: ' + (err.message || 'unknown error'));
+    }
+    return false;
   }
 }
+
+/**
+ * Gap 22 (v1.12.0) — shared quota-error sniffer. Browsers disagree on the
+ * exact shape of a `QuotaExceededError` (name vs. legacy numeric code vs.
+ * Firefox's 1014), so we cast a wide net. Exported so tabs.js can reuse
+ * the same heuristic for the session-backup writer.
+ */
+export function isQuotaError(err) {
+  if (!err) return false;
+  return (
+    err.name === 'QuotaExceededError' ||
+    err.code === 22 ||
+    err.code === 1014 ||
+    /quota/i.test(err.message || '')
+  );
+}
+
+/**
+ * CR-7.1 / Gap 32 (v1.12.0) — proactive storage-pressure gauge.
+ *
+ * Browsers cap localStorage around 5-10 MB. Once it fills, the session
+ * backup silently starts dropping writes (Gap 22 surfaces this, but
+ * after the fact). This helper measures current usage *before* the
+ * brick wall so we can warn the user while they still have room.
+ *
+ * Cheap on purpose: O(keys), not O(bytes). UTF-16 string `.length` is
+ * O(1) and `getItem()` returns a reference (no copy), so the per-key
+ * work is constant. Typical Diagramforce store has 10-30 keys, so the
+ * whole loop completes well under a millisecond even at the 5 MB
+ * ceiling — safe to call after every save.
+ *
+ * Returns approximate bytes consumed by the entire localStorage of the
+ * current origin (UTF-16, so character count × 2). Note: shared across
+ * any other apps on the same origin — fine for `diagramforce.mateuszdabrowski.pl`
+ * but worth knowing if the app is ever co-hosted.
+ */
+export function getStorageFootprint() {
+  let bytes = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key == null) continue;
+    const val = localStorage.getItem(key) || '';
+    bytes += (key.length + val.length) * 2;
+  }
+  return bytes;
+}
+
+/**
+ * CR-7.1 / Gap 32 (v1.12.0) — warning threshold for the storage gauge.
+ *
+ * 4 MB. Chrome / Firefox cap localStorage at ~10 MB, Safari at ~5 MB —
+ * so 4 MB is roughly 40 % of the comfortable ceiling and 80 % of the
+ * tight one. That's late enough to avoid nuisance toasts on the first
+ * named save, but early enough that the user has room to export + delete
+ * before hitting the wall.
+ */
+export const STORAGE_WARNING_BYTES = 4_000_000;
 
 export function getNamedSaves() {
   const saves = [];
@@ -363,7 +501,7 @@ export function getNamedSaves() {
 export async function loadNamedSave(key) {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) { alert('Save not found.'); return false; }
+    if (!raw) { showError('Save not found.'); return false; }
     const data = JSON.parse(raw);
     const savedVer = data.appVersion || null;
     const name = data.name || key.replace(NAMED_SAVE_PREFIX, '');
@@ -380,7 +518,7 @@ export async function loadNamedSave(key) {
     }
     return true;
   } catch (err) {
-    alert('Failed to load: ' + err.message);
+    showError('Failed to load: ' + err.message);
     return false;
   }
 }
@@ -410,6 +548,7 @@ export function exportJSON() {
   const safeName = tabName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
   triggerDownload(URL.createObjectURL(blob), `${safeName}_${dateSuffix()}.json`);
   if (onSaveCompleteCallback) onSaveCompleteCallback('json');
+  showToast('JSON downloaded ✓', 'success');
 }
 
 export function importJSON() {
@@ -453,9 +592,10 @@ async function loadJSONText(jsonText, fallbackName) {
     } else {
       throw new Error('No graph data found in JSON.');
     }
+    showToast(`Loaded "${name}" ✓`, 'success');
     return true;
   } catch (err) {
-    alert(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`);
+    showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`);
     return false;
   }
 }
@@ -505,9 +645,11 @@ export function pasteJSON() {
   const errColor = 'var(--color-error, #ba0517)';
   const okColor = 'var(--text-secondary)';
 
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
+  // Focus trap — Tab cycles inside the modal; Escape closes. Replaces the
+  // previous standalone Escape handler.
+  let releaseTrap;
+  const close = () => { releaseTrap?.(); overlay.remove(); };
+  releaseTrap = trapFocus(overlay, { onEscape: close });
   overlay.querySelector('.sf-modal__overlay').addEventListener('click', close);
   overlay.querySelector('.sf-paste-json-modal__close').addEventListener('click', close);
   overlay.querySelector('.sf-paste-json-modal__cancel').addEventListener('click', close);
@@ -561,7 +703,7 @@ function exportRaster(transparent, format) {
   try {
     const contentBBox = paper.getContentBBox();
     if (!contentBBox || contentBBox.width === 0) {
-      alert('The diagram is empty — nothing to export.');
+      showError('Diagram is empty — nothing to export.');
       return;
     }
 
@@ -629,19 +771,22 @@ function exportRaster(transparent, format) {
 
       canvas.toBlob(blob => {
         const baseName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
-        if (blob) triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateSuffix()}.${ext}`);
+        if (blob) {
+          triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateSuffix()}.${ext}`);
+          showToast(`${fmtLabel} downloaded ✓`, 'success');
+        }
         URL.revokeObjectURL(svgUrl);
       }, mimeType);
     };
 
     img.onerror = () => {
-      alert(`${fmtLabel} export failed. Try saving as JSON instead.`);
+      showError(`${fmtLabel} export failed. Try saving as JSON instead.`);
       URL.revokeObjectURL(svgUrl);
     };
 
     img.src = svgUrl;
   } catch (err) {
-    alert(`${fmtLabel} export failed: ` + err.message);
+    showError(`${fmtLabel} export failed: ` + err.message);
     console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
   }
 }
@@ -651,13 +796,42 @@ function exportRaster(transparent, format) {
  * Renders multiple frames with varying stroke-dashoffset on link lines,
  * then encodes them as an animated GIF using gifenc.
  */
+// Module-level flag — set true while a GIF is being encoded, read by
+// toolbar's refreshShareAvailability() so the Save dropdown items disable
+// during the long-running encode. Prevents the user from queuing a second
+// export on top of the first.
+let _gifEncodingInProgress = false;
+export function isGifEncodingInProgress() { return _gifEncodingInProgress; }
+let _onEncodingChange = null;
+export function setGifEncodingListener(fn) { _onEncodingChange = fn; }
+function setGifEncoding(state) {
+  _gifEncodingInProgress = state;
+  _onEncodingChange?.();
+}
+
 export async function exportGIF(transparent = false) {
+  if (_gifEncodingInProgress) {
+    showToast('A GIF export is already running.', 'warning');
+    return;
+  }
+  let progressToastDismiss = null;
   try {
     const contentBBox = paper.getContentBBox();
     if (!contentBBox || contentBBox.width === 0) {
-      alert('The diagram is empty — nothing to export.');
+      showError('Diagram is empty — nothing to export.');
       return;
     }
+
+    // Mark encoding active so the Save dropdown items grey out. The toast
+    // sits until the encoding finishes (8s upper bound — gifenc can be
+    // slow on large diagrams; we'd rather have the toast linger than
+    // disappear mid-encode).
+    setGifEncoding(true);
+    // Gap 27 (v1.12.0) — toast carries an `.update(msg)` channel so we
+    // can rewrite the frame counter in place without flashing the toast
+    // in and out per frame. Initial copy is the static fallback for the
+    // brief window before the first frame finishes rendering.
+    progressToastDismiss = showToast('Generating GIF… 0/12', 'info', { duration: 12000 });
 
     const padding = 32;
     const exportW = contentBBox.width + padding * 2;
@@ -777,17 +951,36 @@ export async function exportGIF(transparent = false) {
       }
 
       gif.writeFrame(index, canvasW, canvasH, writeOpts);
+
+      // Gap 27 (v1.12.0) — push the post-frame counter to the toast so
+      // users see steady progress (1/12, 2/12, …) instead of a static
+      // spinner. Update happens AFTER writeFrame so the displayed
+      // number always matches a frame that's fully encoded into the
+      // GIF buffer — no "lying about progress" if the encode crashes
+      // mid-loop. Update is a single textContent write, ~microseconds.
+      progressToastDismiss?.update?.(`Generating GIF… ${i + 1}/${TOTAL_FRAMES}`);
     }
 
+    // Final palette + container assembly step. Quick, but worth telling
+    // the user something's still happening so the last counter doesn't
+    // sit there for a beat while finish() runs.
+    progressToastDismiss?.update?.('Finalising GIF…');
     gif.finish();
     const bytes = gif.bytes();
     const blob = new Blob([bytes], { type: 'image/gif' });
     const gifName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
     triggerDownload(URL.createObjectURL(blob), `${gifName}_${dateSuffix()}.gif`);
+    progressToastDismiss?.();
+    showToast('GIF downloaded ✓', 'success');
 
   } catch (err) {
-    alert('GIF export failed: ' + err.message);
+    progressToastDismiss?.();
+    showError('GIF export failed: ' + err.message);
     console.error('SF Diagrams: GIF export failed:', err);
+  } finally {
+    // ALWAYS clear the in-progress flag, even if encoding threw — otherwise
+    // the Save dropdown stays disabled forever after a failed encode.
+    setGifEncoding(false);
   }
 }
 
@@ -798,67 +991,173 @@ export async function exportGIF(transparent = false) {
  */
 function replaceForeignObjects(svgRoot) {
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const foList = [...svgRoot.querySelectorAll('foreignObject')];
-  for (const fo of foList) {
+  // CR-6.1 inline-markdown tag → tspan attribute mapping for the new
+  // sf.TextLabel / sf.Note foreignObjects. Browsers won't render HTML in an
+  // SVG Blob URL, so we walk each FO's HTML tree, build (text, marks[]) runs,
+  // word-wrap them across lines, and emit per-segment tspans with the marks
+  // applied. Inline tags outside this whitelist degrade to plain text.
+  const MARK_TO_TSPAN = {
+    strong: { 'font-weight': 'bold' },
+    b:      { 'font-weight': 'bold' },
+    em:     { 'font-style': 'italic' },
+    i:      { 'font-style': 'italic' },
+    del:    { 'text-decoration': 'line-through' },
+    s:      { 'text-decoration': 'line-through' },
+    code:   { 'font-family': 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'fill': '#C8553D' },
+  };
+  // Approximate per-char width contribution by font-style. SVG text in raster
+  // export is laid out by char count, so the wrap calc cares only about
+  // relative width — bold and code take more space; italic about the same.
+  const charWidthMultiplier = (marks) => {
+    let mult = 1;
+    if (marks.includes('strong') || marks.includes('b') || marks.includes('code')) mult *= 1.05;
+    return mult;
+  };
+
+  // Walk a foreignObject's HTML subtree, returning an ordered array of
+  // text runs. Each run carries the markdown marks active on it (e.g.
+  // ['strong'], ['code']). `<br>` elements become explicit '\n' tokens so
+  // the line-wrap below treats them as hard breaks; inline whitespace is
+  // preserved.
+  function collectRuns(node, marks, runs) {
+    if (node.nodeType === 3) { // text node
+      runs.push({ text: node.nodeValue, marks: marks.slice() });
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    const tag = node.localName.toLowerCase();
+    if (tag === 'br') {
+      runs.push({ text: '\n', marks: marks.slice() });
+      return;
+    }
+    const nextMarks = MARK_TO_TSPAN[tag] ? marks.concat(tag) : marks;
+    for (const child of node.childNodes) collectRuns(child, nextMarks, runs);
+  }
+
+  for (const fo of [...svgRoot.querySelectorAll('foreignObject')]) {
     const x = parseFloat(fo.getAttribute('x') || '0');
     const y = parseFloat(fo.getAttribute('y') || '0');
     const w = parseFloat(fo.getAttribute('width') || '100');
+    const h = parseFloat(fo.getAttribute('height') || '100');
 
-    // Extract text content from the HTML child
-    const textContent = fo.textContent?.trim() || '';
-    if (!textContent) { fo.remove(); continue; }
-
-    // Get styling from the HTML child
     const htmlChild = fo.querySelector('div, p, span');
-    let fontSize = '9';
-    let fontFamily = 'system-ui, -apple-system, sans-serif';
-    let fill = '#888888';
-    if (htmlChild) {
-      const cs = htmlChild.style;
-      if (cs.fontSize) fontSize = cs.fontSize.replace('px', '');
-      if (cs.fontFamily) fontFamily = cs.fontFamily;
-      if (cs.color) fill = cs.color;
-    }
+    if (!htmlChild || !htmlChild.textContent.trim()) { fo.remove(); continue; }
 
-    // Create SVG text with word-wrapping approximation
-    const textEl = document.createElementNS(SVG_NS, 'text');
-    textEl.setAttribute('x', String(x));
-    textEl.setAttribute('y', String(y + parseFloat(fontSize) * 1.2));
-    textEl.setAttribute('font-size', fontSize);
-    textEl.setAttribute('font-family', fontFamily);
-    textEl.setAttribute('fill', fill);
+    // Style: read from the HTML child's inline style, with sensible fallbacks.
+    const cs = htmlChild.style;
+    const fontSize = parseFloat(cs.fontSize) || 9;
+    const fontFamily = cs.fontFamily || 'system-ui, -apple-system, sans-serif';
+    const fill = cs.color || '#888888';
+    const fontWeight = cs.fontWeight || 'normal';
+    const textAlign = cs.textAlign || 'left';
+    const lineHeight = 1.3;
+    const charWidth = fontSize * 0.52;
+    const maxChars = Math.max(4, Math.floor(w / charWidth));
 
-    // Simple line-break: split text into lines that fit the width
-    const charWidth = parseFloat(fontSize) * 0.52;
-    const maxChars = Math.floor(w / charWidth);
-    const words = textContent.split(/\s+/);
-    const lines = [];
-    let currentLine = '';
-    for (const word of words) {
-      const test = currentLine ? currentLine + ' ' + word : word;
-      if (test.length > maxChars && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
+    // Tokenize the HTML into formatted runs.
+    const runs = [];
+    collectRuns(htmlChild, [], runs);
+
+    // Word-wrap across runs: split each run into words while preserving marks
+    // per-word, then greedy-pack into lines. Each line is an array of segments
+    // [{ text, marks }] which become per-segment tspans.
+    const lines = [[]];
+    let lineWidth = 0;
+    const pushSegment = (text, marks) => {
+      if (!text) return;
+      const segWidth = text.length * charWidthMultiplier(marks);
+      const lastLine = lines[lines.length - 1];
+      lineWidth += segWidth;
+      // Merge with previous segment if same marks (avoid tspan fragmentation
+      // for plain text broken only by tokenisation).
+      const last = lastLine[lastLine.length - 1];
+      if (last && JSON.stringify(last.marks) === JSON.stringify(marks)) {
+        last.text += text;
       } else {
-        currentLine = test;
+        lastLine.push({ text, marks });
+      }
+    };
+    const breakLine = () => {
+      lines.push([]);
+      lineWidth = 0;
+    };
+    for (const run of runs) {
+      // Preserve explicit '\n' in the source text as hard breaks.
+      const parts = run.text.split(/(\n)/);
+      for (const part of parts) {
+        if (part === '\n') { breakLine(); continue; }
+        if (!part) continue;
+        // Split on whitespace boundaries, keeping spaces.
+        const tokens = part.split(/(\s+)/).filter(t => t.length > 0);
+        for (const tok of tokens) {
+          const tokWidth = tok.length * charWidthMultiplier(run.marks);
+          // If the token overflows the current line and the line isn't empty,
+          // wrap. Whitespace tokens at line-start are swallowed.
+          const onlyWhitespace = /^\s+$/.test(tok);
+          if (lineWidth > 0 && lineWidth + tokWidth > maxChars) {
+            breakLine();
+            if (onlyWhitespace) continue;
+          }
+          pushSegment(tok, run.marks);
+        }
       }
     }
-    if (currentLine) lines.push(currentLine);
 
-    // Limit to 4 lines (matching the original -webkit-line-clamp: 4)
-    const maxLines = 4;
+    // Clamp to maxLines (4) when the FO is short, matching the original
+    // -webkit-line-clamp:4 visual. For full-height FOs (TextLabel/Note body),
+    // compute from height/lineHeight so multi-line notes don't get truncated.
+    const fitLines = Math.max(1, Math.floor(h / (fontSize * lineHeight))) || 1;
+    const maxLines = Math.max(fitLines, 4);
     const visibleLines = lines.slice(0, maxLines);
     if (lines.length > maxLines) {
-      const last = visibleLines[maxLines - 1];
-      visibleLines[maxLines - 1] = last.substring(0, last.length - 1) + '…';
+      const last = visibleLines[visibleLines.length - 1];
+      if (last && last.length) {
+        const tail = last[last.length - 1];
+        tail.text = tail.text.replace(/.$/, '…');
+      }
     }
 
+    // Build the SVG <text> with per-line + per-segment tspans.
+    const textEl = document.createElementNS(SVG_NS, 'text');
+    textEl.setAttribute('x', String(x));
+    textEl.setAttribute('y', String(y + fontSize * 1.2));
+    textEl.setAttribute('font-size', String(fontSize));
+    textEl.setAttribute('font-family', fontFamily);
+    textEl.setAttribute('fill', fill);
+    if (fontWeight && fontWeight !== 'normal') textEl.setAttribute('font-weight', fontWeight);
+    if (textAlign === 'center') textEl.setAttribute('text-anchor', 'middle');
+    else if (textAlign === 'right') textEl.setAttribute('text-anchor', 'end');
+
+    const lineXOffset = textAlign === 'center' ? w / 2 : textAlign === 'right' ? w : 0;
     visibleLines.forEach((line, i) => {
-      const tspan = document.createElementNS(SVG_NS, 'tspan');
-      tspan.setAttribute('x', String(x));
-      tspan.setAttribute('dy', i === 0 ? '0' : String(parseFloat(fontSize) * 1.3));
-      tspan.textContent = line;
-      textEl.appendChild(tspan);
+      if (line.length === 0) {
+        // Empty line (hard break) — still consume vertical space.
+        const tspan = document.createElementNS(SVG_NS, 'tspan');
+        tspan.setAttribute('x', String(x + lineXOffset));
+        tspan.setAttribute('dy', i === 0 ? '0' : String(fontSize * lineHeight));
+        tspan.textContent = ' ';
+        textEl.appendChild(tspan);
+        return;
+      }
+      line.forEach((seg, j) => {
+        const tspan = document.createElementNS(SVG_NS, 'tspan');
+        // Each line's FIRST tspan carries x + dy so the whole line begins at
+        // the correct horizontal anchor and drops to the next baseline.
+        // Continuation tspans on the same line inherit position.
+        if (j === 0) {
+          tspan.setAttribute('x', String(x + lineXOffset));
+          tspan.setAttribute('dy', i === 0 ? '0' : String(fontSize * lineHeight));
+        }
+        for (const mark of seg.marks) {
+          const tspanAttrs = MARK_TO_TSPAN[mark];
+          if (!tspanAttrs) continue;
+          for (const [k, v] of Object.entries(tspanAttrs)) {
+            tspan.setAttribute(k, v);
+          }
+        }
+        tspan.textContent = seg.text;
+        textEl.appendChild(tspan);
+      });
     });
 
     fo.parentNode.replaceChild(textEl, fo);
@@ -991,7 +1290,7 @@ export function shareAsURL() {
     showShareModal(url);
   } catch (err) {
     console.error('SF Diagrams: Share URL failed:', err);
-    alert('Failed to generate share URL. The diagram may be too large.');
+    showError('Failed to generate share URL — diagram may be too large.');
   }
 }
 
@@ -1082,10 +1381,12 @@ function showShareLoadError(message, title = "Couldn't load shared diagram") {
         <button class="sf-modal__btn sf-modal__btn--primary" data-action="dismiss">OK</button>
       </div>
     </div>`;
-  const dismiss = () => overlay.remove();
+  let releaseTrap;
+  const dismiss = () => { releaseTrap?.(); overlay.remove(); };
   overlay.querySelector('[data-action="dismiss"]').addEventListener('click', dismiss);
   overlay.querySelector('.sf-modal__overlay').addEventListener('click', dismiss);
   document.body.appendChild(overlay);
+  releaseTrap = trapFocus(overlay, { onEscape: dismiss });
 }
 
 function showShareModal(url, opts = {}) {
@@ -1105,7 +1406,7 @@ function showShareModal(url, opts = {}) {
         <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
           Anyone with this link can open a copy of your diagram:
         </p>
-        <input type="text" class="sf-share-modal__url" readonly spellcheck="false">`;
+        <input type="text" class="sf-share-modal__url" readonly aria-readonly="true" aria-label="Shareable diagram URL" spellcheck="false">`;
 
   const footerHtml = isWarning
     ? `<button class="sf-close-confirm__btn sf-share-modal__close-btn">Close</button>`
@@ -1130,9 +1431,11 @@ function showShareModal(url, opts = {}) {
 
   document.body.appendChild(wrapper);
 
-  const close = () => wrapper.remove();
+  let releaseTrap;
+  const close = () => { releaseTrap?.(); wrapper.remove(); };
   wrapper.querySelector('.sf-share-modal__close-btn').addEventListener('click', close);
   wrapper.querySelector('.sf-modal__overlay').addEventListener('click', close);
+  releaseTrap = trapFocus(wrapper, { onEscape: close });
 
   if (isWarning) return;
 
@@ -1155,7 +1458,14 @@ function showShareModal(url, opts = {}) {
         copyBtn.classList.remove('is-copied');
       }, 2000);
     }).catch(() => {
+      // Gap 23 (v1.12.0) — clipboard write rejection is silent on the
+      // success affordance (no green "Copied!"), so users assumed the
+      // app broke. Select the URL as a manual-copy fallback AND surface
+      // a warning toast naming the platform shortcut so the next step
+      // is obvious. Common causes: insecure origin, missing permission,
+      // older Safari without async clipboard.
       urlInput.select();
+      showToast('Could not copy automatically — press ⌘C / Ctrl+C on the selected link.', 'warning');
     });
   });
 

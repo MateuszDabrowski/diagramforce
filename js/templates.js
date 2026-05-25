@@ -1,7 +1,7 @@
 // Pre-built Salesforce architecture templates
 // Each template is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.11.10';
+import { getIconDataUri } from './icons.js?v=1.12.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -492,7 +492,11 @@ export const ORG_CATEGORIES = [
     id: 'org-components',
     label: 'Components',
     templates: [
-      { type: 'sf.OrgPerson', label: 'Person', personName: 'Full Name', jobTitle: 'Job Title', stencilSvg: SVG.orgPerson },
+      // jobTitle starts empty so the property-panel input's "job title"
+      // placeholder is visible — invites repurposing for role / team / etc.
+      // personName keeps "Full Name" because it's the primary visible label
+      // and an empty caption would render a blank avatar block.
+      { type: 'sf.OrgPerson', label: 'Person', personName: 'Full Name', jobTitle: '', stencilSvg: SVG.orgPerson },
       { type: 'sf.Zone',      label: 'Department', stencilSvg: SVG.orgDepartment },
       { type: 'sf.Container',  label: 'Team',       stencilSvg: SVG.orgTeam },
       { type: 'sf.Task',      label: 'Task',       stencilSvg: SVG.orgTask },

@@ -6,7 +6,20 @@
   <meta name="description" content="Visual Salesforce architecture diagram editor for data models, process flows, org charts, Gantt charts, and UML sequence diagrams. Free, browser-based, no sign-up required.">
   <meta name="theme-color" content="#1D73C9" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#DA4E55" media="(prefers-color-scheme: dark)">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; child-src 'none'; upgrade-insecure-requests;">
+  <!--
+    Content Security Policy. Note: `upgrade-insecure-requests` was DELIBERATELY
+    OMITTED from this policy. Safari (verified on macOS 15 / WebKit) silently
+    refuses to apply linked stylesheets on `http://localhost` documents when
+    the directive is present, even though the directive is supposed to be a
+    no-op for secure-context origins. Symptoms: HTML loads, CSS files fetch
+    with 200 + text/css and parse into `document.styleSheets` with the
+    correct rule counts — yet none of the rules apply to the rendering tree.
+    Chromium and Vivaldi are unaffected. Production HTTPS enforcement now
+    lives entirely at the Cloudflare edge (Always Use HTTPS), which is the
+    correct enforcement layer for a static GitHub Pages site anyway.
+    See: Diagramforce-Security.md §3.1 for the full rationale.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; child-src 'none';">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Diagramforce</title>
 
@@ -28,17 +41,26 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.11.10">
-  <link rel="stylesheet" href="css/theme.css?v=1.11.10">
-  <link rel="stylesheet" href="css/layout.css?v=1.11.10">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.11.10">
-  <link rel="stylesheet" href="css/stencil.css?v=1.11.10">
-  <link rel="stylesheet" href="css/properties.css?v=1.11.10">
-  <link rel="stylesheet" href="css/tabs.css?v=1.11.10">
-  <link rel="stylesheet" href="css/canvas.css?v=1.11.10">
-  <link rel="stylesheet" href="css/modals.css?v=1.11.10">
+  <link rel="stylesheet" href="css/variables.css?v=1.12.1">
+  <link rel="stylesheet" href="css/theme.css?v=1.12.1">
+  <link rel="stylesheet" href="css/layout.css?v=1.12.1">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.12.1">
+  <link rel="stylesheet" href="css/stencil.css?v=1.12.1">
+  <link rel="stylesheet" href="css/properties.css?v=1.12.1">
+  <link rel="stylesheet" href="css/tabs.css?v=1.12.1">
+  <link rel="stylesheet" href="css/canvas.css?v=1.12.1">
+  <link rel="stylesheet" href="css/modals.css?v=1.12.1">
 </head>
 <body>
+  <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
+       screen readers, so the heading hierarchy starts at h1 before the modal h2s. -->
+  <h1 class="sf-visually-hidden">Diagramforce — Salesforce architecture diagram editor</h1>
+
+  <!-- A2 (v1.12.0) — skip-to-main link. Visually hidden until focused; lets
+       keyboard users bypass the toolbar + tabs + stencil and land directly on
+       the diagram canvas. -->
+  <a href="#canvas-container" class="sf-skip-link">Skip to diagram canvas</a>
+
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
   <div id="slds-icons" style="display:none" aria-hidden="true"></div>
 
@@ -122,7 +144,15 @@
         </div>
         <div class="sf-toolbar__dropdown" id="display-dropdown">
             <button id="btn-display" class="sf-toolbar__button" title="Display options">
-              <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+              <!-- Eye icon split into two layers (v1.12.1): the outer almond +
+                   iris ring stays `currentColor`; the inner pupil-hole gets a
+                   transparent <circle> that lights up amber when the button
+                   has the `--has-active` modifier, signalling that one or
+                   more Display toggles are at a non-default value. -->
+              <svg class="sf-toolbar__icon sf-toolbar__icon--display" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                <circle class="sf-display-icon__pupil" cx="8" cy="8" r="1.8" fill="transparent"/>
+              </svg>
               <span>Display</span>
               <svg class="sf-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
@@ -343,15 +373,18 @@
       </aside>
 
       <!-- Canvas -->
-      <div id="canvas-container" class="sf-canvas">
+      <main id="canvas-container" class="sf-canvas" role="main" aria-label="Diagram canvas — visual editing area. Use the property panel to inspect or edit selected shapes.">
         <div id="paper"></div>
-      </div>
+      </main>
 
       <!-- Stencil Panel (right sidebar) -->
       <aside id="stencil-panel" class="sf-stencil" aria-label="Component stencil">
         <div class="sf-drag-handle" data-target="stencil-panel"></div>
         <div class="sf-stencil__header">
-          <input type="search" id="stencil-search" class="sf-stencil__search" placeholder="Search components..." aria-label="Search components">
+          <div class="sf-stencil__search-wrap">
+            <input type="search" id="stencil-search" class="sf-stencil__search" placeholder="Search components..." aria-label="Search components">
+            <button id="btn-stencil-search-clear" type="button" class="sf-stencil__search-clear" aria-label="Clear search" title="Clear search" hidden>×</button>
+          </div>
           <button id="btn-close-stencil" class="sf-toolbar__button sf-stencil__close sf-toolbar__mobile-only" title="Close stencil" aria-label="Close stencil">
             <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
           </button>
@@ -421,8 +454,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.11.10"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.11.10"></script>
-  <script type="module" src="js/app.js?v=1.11.10"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.12.1"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.12.1"></script>
+  <script type="module" src="js/app.js?v=1.12.1"></script>
 </body>
 </html>

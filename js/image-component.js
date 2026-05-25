@@ -1,3 +1,5 @@
+import { showError } from './feedback.js?v=1.12.1';
+
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //
 // Storage choice (per the analysis in conversation):
@@ -84,15 +86,15 @@ function openImagePicker(onResult) {
  */
 async function processImageFile(file, onResult) {
   if (file.type === 'image/svg+xml') {
-    alert('SVG images are not supported. Please use PNG, JPG, WEBP, or GIF.');
+    showError('SVG images are not supported. Use PNG, JPG, WEBP, or GIF.');
     return;
   }
   if (!ALLOWED_MIME.test(file.type)) {
-    alert('Unsupported file type. Please use PNG, JPG, WEBP, or GIF.');
+    showError('Unsupported file type. Use PNG, JPG, WEBP, or GIF.');
     return;
   }
   if (file.size > MAX_INPUT_BYTES) {
-    alert('Image is too large (max 10 MB). Please use a smaller file.');
+    showError('Image is too large (max 10 MB). Use a smaller file.');
     return;
   }
   try {
@@ -100,7 +102,7 @@ async function processImageFile(file, onResult) {
     onResult(result);
   } catch (err) {
     console.error('SF Diagrams: Image processing failed:', err);
-    alert(`Could not process image: ${err.message}`);
+    showError(`Could not process image: ${err.message}`);
   }
 }
 

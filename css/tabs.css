@@ -21,6 +21,54 @@
   scrollbar-width: none;
   align-self: stretch;
 }
+/* Gap 13 (v1.12.0) — gradient fade at the right edge so users see when
+   tabs are clipped past the visible area. Mask interpolates from fully
+   opaque on the left to a soft transparent fade in the last 24 px on
+   the right. Webkit needs the prefixed variant.
+
+   Bug fix (v1.12.1): the original CSS applied this mask unconditionally,
+   which faded the rightmost active tab's right border whenever it sat
+   flush with the container edge — even with zero overflow. Now gated
+   behind the `--overflowing` modifier toggled by `refreshTabScrollMask()`
+   in tabs.js so the bar looks identical to pre-Gap-13 when nothing is
+   clipped. */
+.sf-tabs__list--overflowing {
+  -webkit-mask-image: linear-gradient(to right,
+    #000 0,
+    #000 calc(100% - 24px),
+    transparent 100%);
+          mask-image: linear-gradient(to right,
+    #000 0,
+    #000 calc(100% - 24px),
+    transparent 100%);
+}
+/* When the user has scrolled — even one pixel — fade BOTH ends to signal
+   that tabs exist in either direction. Toggled by a small JS listener on
+   scroll position (see tabs.js _refreshScrollMask). Falls back to right-
+   only fade when the listener hasn't run yet. */
+.sf-tabs__list--scrolled {
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%);
+          mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%);
+}
+.sf-tabs__list--scrolled-end {
+  /* Right end fully reached — drop the trailing fade. */
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 24px,
+    #000 100%);
+          mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 24px,
+    #000 100%);
+}
 
 .sf-tabs__list::-webkit-scrollbar {
   height: 0;
@@ -131,6 +179,13 @@
 
 .sf-tab__close:focus-visible {
   opacity: 1;
+  /* Override the global `button:focus-visible` rule from layout.css. The
+     2 px outline at +1 px offset extends past the tab's right padding
+     into the neighbouring tab (gap: 2 px between tabs is not enough
+     room for it). Inset the focus ring instead so it stays within the
+     button's own footprint and never leaks into adjacent tabs. */
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 /* Close-multiple-tabs button (left end of tab bar) */

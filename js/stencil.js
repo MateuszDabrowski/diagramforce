@@ -1,10 +1,10 @@
 // Stencil panel — draggable component library
 // Organizes templates by category, supports search, handles drag-to-canvas
 
-import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.11.10';
-import { getAllIcons, getCategories } from './icons.js?v=1.11.10';
-import { updateSimpleNodeLayout, snapActivationToLifeline } from './canvas.js?v=1.11.10';
-import { startImageAddFlow } from './image-component.js?v=1.11.10';
+import { TEMPLATE_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromTemplate } from './templates.js?v=1.12.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.12.1';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed } from './canvas.js?v=1.12.1';
+import { startImageAddFlow } from './image-component.js?v=1.12.1';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -19,9 +19,36 @@ export function init(_graph, _paper) {
 
   renderCategories();
 
+  // Gap 17 (v1.12.0) — clear-× button shows when the search has a value;
+  // clicks wipe the field and re-run the filter so the user can return to
+  // the full palette without selecting + deleting.
+  const clearBtn = document.getElementById('btn-stencil-search-clear');
+  const refreshClearVisibility = () => {
+    if (!clearBtn) return;
+    clearBtn.hidden = searchEl.value === '';
+  };
+  // Gap 28 (v1.12.0) — debounce the filter pass to 120 ms so fast typers
+  // don't trigger one full re-render per keystroke. The clear-× visibility
+  // refresh stays immediate (it's a single classList toggle) so the chrome
+  // feels live even while the heavier category re-render is queued.
+  // 120 ms picked over 150 to stay below the ~150 ms "feels instant"
+  // threshold while still coalescing typical typing bursts.
+  let filterTimer = null;
   searchEl.addEventListener('input', () => {
-    filterStencil(searchEl.value.trim().toLowerCase());
+    refreshClearVisibility();
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => {
+      filterStencil(searchEl.value.trim().toLowerCase());
+    }, 120);
   });
+  clearBtn?.addEventListener('click', () => {
+    searchEl.value = '';
+    clearTimeout(filterTimer);
+    filterStencil('');
+    refreshClearVisibility();
+    searchEl.focus();
+  });
+  refreshClearVisibility();
 
   setupDropZone();
   setupTouchDrag();
@@ -56,12 +83,31 @@ export function setDiagramType(type) {
 function renderCategories() {
   bodyEl.innerHTML = '';
 
-  const categories = currentDiagramType === 'process' ? BPMN_CATEGORIES
-                   : currentDiagramType === 'datamodel' ? DATAMODEL_CATEGORIES
-                   : currentDiagramType === 'gantt' ? GANTT_CATEGORIES
-                   : currentDiagramType === 'org' ? ORG_CATEGORIES
-                   : currentDiagramType === 'sequence' ? SEQUENCE_CATEGORIES
-                   : TEMPLATE_CATEGORIES;
+  const rawCategories = currentDiagramType === 'process' ? BPMN_CATEGORIES
+                      : currentDiagramType === 'datamodel' ? DATAMODEL_CATEGORIES
+                      : currentDiagramType === 'gantt' ? GANTT_CATEGORIES
+                      : currentDiagramType === 'org' ? ORG_CATEGORIES
+                      : currentDiagramType === 'sequence' ? SEQUENCE_CATEGORIES
+                      : TEMPLATE_CATEGORIES;
+
+  // Pin "Generic Shapes" to the top across every diagram type. For diagram
+  // types where it sat at the bottom (process / gantt / org / sequence) — i.e.
+  // shapes specific to that diagram type matter more than the generic
+  // fallback — present the group collapsed by default. Architecture and
+  // datamodel already lead with Generic Shapes, so leave them expanded.
+  const TYPES_GENERIC_AT_BOTTOM = new Set(['process', 'gantt', 'org', 'sequence']);
+  const isGeneric = (c) => /generic/i.test(c.id || '') || c.label === 'Generic Shapes';
+  const generic = rawCategories.find(isGeneric);
+  const others = rawCategories.filter(c => !isGeneric(c));
+  const categories = generic
+    ? [
+        // Shallow-clone so we never mutate the exported source array — the
+        // `collapsed` flag must be per-render, not stick across re-renders
+        // initiated from a different diagram type later.
+        { ...generic, collapsed: TYPES_GENERIC_AT_BOTTOM.has(currentDiagramType) },
+        ...others,
+      ]
+    : rawCategories;
 
   for (const category of categories) {
     bodyEl.appendChild(buildTemplateSection(category));
@@ -149,14 +195,33 @@ function buildIconSection(cat, icons, displayLabel) {
 function buildCategoryHeader(label, count) {
   const header = document.createElement('div');
   header.className = 'sf-stencil__category-header';
-  const labelSpan = document.createElement('span');
-  labelSpan.textContent = label;
+  // Chevron + label on the left, count on the right. The chevron sits inside
+  // a wrapper so CSS can rotate it based on the parent category's collapsed
+  // class (`.sf-stencil__category--collapsed`).
+  const left = document.createElement('span');
+  left.className = 'sf-stencil__category-label';
+  left.innerHTML = `
+    <svg class="sf-stencil__category-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+      <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>${escapeHtml(label)}</span>`;
   const countSpan = document.createElement('span');
   countSpan.className = 'sf-stencil__category-count';
   countSpan.textContent = count;
-  header.appendChild(labelSpan);
+  header.appendChild(left);
   header.appendChild(countSpan);
   return header;
+}
+
+// Local HTML escape — kept inline so the stencil module has no
+// cross-module dependency on persistence.js just for one helper.
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function buildTemplateItem(template) {
@@ -197,13 +262,56 @@ function buildTemplateItem(template) {
 function setupDropZone() {
   const canvasEl = document.getElementById('canvas-container');
 
+  // Gap 8 (v1.12.0) — during a stencil dragover, highlight the topmost
+  // container-like cell beneath the cursor by adding the existing
+  // `.available-cell` class (same amber outline the connect-from-port
+  // flow uses). Resets on dragleave/drop. The dragged template's TYPE
+  // isn't available from dragover events (only the MIME type is), so
+  // we walk the cursor-point candidates and highlight the topmost cell
+  // that COULD host a child via `canEmbed`. Imperfect (we don't know
+  // the exact child type until drop) but a useful affordance signal.
+  let _highlightedView = null;
+  const clearDropHighlight = () => {
+    if (_highlightedView?.el) _highlightedView.el.classList.remove('available-cell');
+    _highlightedView = null;
+  };
+  const refreshDropHighlight = (clientX, clientY) => {
+    const pt = paper.clientToLocalPoint(clientX, clientY);
+    const candidates = graph.findModelsFromPoint(pt)
+      .sort((a, b) => (b.get('z') || 0) - (a.get('z') || 0));
+    let next = null;
+    for (const cell of candidates) {
+      const t = cell.get('type');
+      // Match any type that accepts SOME child — cheap proxy for "container-like".
+      // Walking is short (< 10 cells in practice) so the per-frame cost is fine.
+      const acceptsAnyChild = ['sf.Container','sf.Zone','sf.BpmnPool',
+        'sf.BpmnSubprocess','sf.BpmnLoop','sf.GanttTimeline',
+        'sf.SequenceParticipant','sf.SequenceActor','sf.Task'].includes(t)
+        && canEmbed(t, 'sf.SimpleNode'); // cheap "does it accept anything?" probe
+      if (acceptsAnyChild) { next = paper.findViewByModel(cell); break; }
+    }
+    if (next === _highlightedView) return;
+    clearDropHighlight();
+    if (next?.el) {
+      next.el.classList.add('available-cell');
+      _highlightedView = next;
+    }
+  };
+
   canvasEl.addEventListener('dragover', (evt) => {
     evt.preventDefault();
     evt.dataTransfer.dropEffect = 'copy';
+    refreshDropHighlight(evt.clientX, evt.clientY);
+  });
+  canvasEl.addEventListener('dragleave', (evt) => {
+    // Only clear when the cursor actually leaves the canvas — dragleave
+    // fires on every child boundary crossing too.
+    if (evt.target === canvasEl) clearDropHighlight();
   });
 
   canvasEl.addEventListener('drop', (evt) => {
     evt.preventDefault();
+    clearDropHighlight();
     const data = evt.dataTransfer.getData('application/sf-diagrams');
     if (!data) return;
 

@@ -32,11 +32,26 @@
   padding: 6px;
 }
 
+/* Gap 17 (v1.12.0) — wrap the search input + clear-× button so the button
+   can absolute-position itself inside the input's visual edge. The wrapper
+   inherits the input's flex sizing; the input still occupies the wrapper's
+   full width and the clear button sits over its right edge. */
+.sf-stencil__search-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+}
+/* Suppress the WebKit-native search cancel button — we render our own so
+   styling stays consistent across browsers (Firefox doesn't show one). */
+.sf-stencil__search::-webkit-search-cancel-button { display: none; }
+
 .sf-stencil__search {
   flex: 1;
   min-width: 0;
   width: 100%;
   padding: 6px var(--spacing-md);
+  padding-right: 28px; /* leave room for the clear button */
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-sm);
   background: var(--bg-app);
@@ -46,6 +61,32 @@
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
+
+.sf-stencil__search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.sf-stencil__search-clear:hover {
+  color: var(--text-primary);
+  background: var(--stencil-item-hover);
+}
+.sf-stencil__search-clear[hidden] { display: none; }
 
 .sf-stencil__search::placeholder {
   color: var(--text-muted);
@@ -115,6 +156,23 @@
 
 .sf-stencil__category--collapsed .sf-stencil__items {
   display: none;
+}
+
+/* CR-6.2 (v1.12.0) — collapse/expand chevron on each stencil category header.
+   The chevron points DOWN when the category is expanded (its content is
+   visible below) and ROTATES -90° to point right when collapsed. */
+.sf-stencil__category-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sf-stencil__category-chevron {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+  transform-origin: center;
+}
+.sf-stencil__category--collapsed .sf-stencil__category-chevron {
+  transform: rotate(-90deg);
 }
 
 .sf-stencil__items {

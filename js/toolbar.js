@@ -1,9 +1,10 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.11.10';
-import { resizeDataObjectToFit } from './templates.js?v=1.11.10';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks } from './canvas.js?v=1.11.10';
+import { diagramHasImage } from './image-component.js?v=1.12.1';
+import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.1';
+import { resizeDataObjectToFit } from './templates.js?v=1.12.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks } from './canvas.js?v=1.12.1';
 
 let modules = {};
 
@@ -39,18 +40,48 @@ export function init(_modules) {
   // and also gate inside `persistence.shareAsURL` for the keyboard shortcut /
   // hamburger entry.
   const SHARE_DISABLED_MSG = 'URL sharing is unavailable while this diagram contains images. Use Save → Save to JSON to share, or remove every image to re-enable URL sharing.';
+  const EMPTY_DIAGRAM_MSG = 'Add a shape to enable export.';
+  const GIF_ENCODING_MSG = 'Wait until the current GIF export finishes.';
+  // Save-dropdown items that depend on the diagram having content. Each is
+  // disabled when the active graph is empty so the user can't click into a
+  // failure modal — replaces the old alert('Diagram is empty…') path.
+  // Save-to-Browser is intentionally left enabled (an empty "Untitled" save
+  // is still a valid checkpoint to come back to later).
+  const EXPORT_BTN_IDS = ['btn-save-json', 'btn-save-png', 'btn-save-png-t',
+    'btn-save-webp', 'btn-save-webp-t'];
   const refreshShareAvailability = () => {
+    const isEmpty = !modules.graph || modules.graph.getCells().length === 0;
+    // GIF encoding lock — set by persistence.js while gifenc is busy; ALL
+    // export items disable so the user can't queue a second slow encode.
+    const gifBusy = modules.persistence.isGifEncodingInProgress?.() ?? false;
+    // Share button — disabled if the diagram has images OR is empty OR GIF is encoding.
     const shareBtn = btn('btn-save-share');
-    if (!shareBtn) return;
-    const blocked = diagramHasImage(modules.graph);
-    shareBtn.disabled = blocked;
-    shareBtn.title = blocked ? SHARE_DISABLED_MSG : '';
+    if (shareBtn) {
+      const blocked = diagramHasImage(modules.graph);
+      const disable = blocked || isEmpty || gifBusy;
+      shareBtn.disabled = disable;
+      shareBtn.title = blocked ? SHARE_DISABLED_MSG
+        : gifBusy ? GIF_ENCODING_MSG
+        : isEmpty ? EMPTY_DIAGRAM_MSG
+        : '';
+    }
+    // Export items — disabled on empty graph OR while GIF encoding.
+    for (const id of EXPORT_BTN_IDS) {
+      const b = btn(id);
+      if (!b) continue;
+      const disable = isEmpty || gifBusy;
+      b.disabled = disable;
+      b.title = gifBusy ? GIF_ENCODING_MSG : (isEmpty ? EMPTY_DIAGRAM_MSG : '');
+    }
   };
   if (modules.graph) {
     modules.graph.on('add', refreshShareAvailability);
     modules.graph.on('remove', refreshShareAvailability);
   }
   if (modules.tabs) modules.tabs.onChange(refreshShareAvailability);
+  // Listen for GIF encoding state flips so the disable refreshes when
+  // encoding starts/finishes.
+  modules.persistence.setGifEncodingListener?.(refreshShareAvailability);
   refreshShareAvailability();
 
   // Wire save modal callback so persistence.namedSave() can also open it
@@ -65,6 +96,11 @@ export function init(_modules) {
 
   // Display dropdown (hidden for Gantt, some options data-model only)
   setupDropdown('btn-display');
+
+  // Gap 14 (v1.12.0) — see `refreshDisplayDotIndicator()` at module scope.
+  // Convenience alias inside init() so the local toggle handlers can call
+  // it without prefixing.
+  const _refreshDisplayDot = refreshDisplayDotIndicator;
   const btnApi = document.getElementById('btn-display-api');
   const btnLen = document.getElementById('btn-display-lengths');
   const btnKeysOnly = document.getElementById('btn-display-keys-only');
@@ -85,6 +121,7 @@ export function init(_modules) {
   const btnAutoSize = document.getElementById('btn-display-auto-size');
   const refreshAutoSizeLabel = () => {
     btnAutoSize?.classList.toggle('is-checked', isAutoSizingEnabled());
+    _refreshDisplayDot();
   };
   refreshAutoSizeLabel();
   btnAutoSize?.addEventListener('click', () => {
@@ -106,6 +143,7 @@ export function init(_modules) {
     // checkbox icon. Checked = spreading is on; unchecked (default) = all
     // connectors converge at the port centre.
     btnGrouping?.classList.toggle('is-checked', isConnectorGroupingEnabled());
+    _refreshDisplayDot();
   };
   refreshGroupingLabel();
   btnGrouping?.addEventListener('click', () => {
@@ -156,7 +194,7 @@ export function init(_modules) {
     document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
     const plan = modules.canvas.analyzeSequenceLayout();
     if (plan.status === 'empty') {
-      alert('Add at least two actors or participants with lifelines to use Auto Layout.');
+      showToast('Add at least two actors or participants with lifelines to use Auto Layout.', 'warning', { duration: 3500 });
       return;
     }
     const run = () => {
@@ -173,13 +211,17 @@ export function init(_modules) {
   // which handles cycles and branching far more cleanly than the generic
   // force-directed layout. All other diagram types keep the original layout.
   //
-  // The whole layout pass (position moves + port snapping) is wrapped in a
-  // single history batch so Undo restores the pre-layout state in one click
-  // and Redo re-applies it in one click.
+  // v1.12.1 — switched from startBatch/endBatch wrapping to the explicit
+  // `recordPositionsBatch()` helper. The old approach relied on the
+  // change:position debounced merge committing before endBatch closed,
+  // which was unreliable under fast consecutive auto-layouts (e.g.
+  // horizontal then vertical) — pending entries could leak across
+  // batches and produce a single undo collapsing both layouts. The new
+  // helper snapshots positions before and after, builds one explicit
+  // composite, and bypasses the merge entirely.
   const runAutoLayout = (direction) => {
     const type = modules.tabs.getActiveTabType?.();
-    modules.history.startBatch();
-    try {
+    modules.history.recordPositionsBatch(() => {
       if (type === 'process') {
         try {
           modules.mermaidImport.hierarchicalLayout(modules.graph, null, direction);
@@ -193,9 +235,7 @@ export function init(_modules) {
         modules.canvas.autoLayout(direction);
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
       }
-    } finally {
-      modules.history.endBatch();
-    }
+    });
     document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
@@ -213,7 +253,7 @@ export function init(_modules) {
 
   // Update Display menu when tab changes
   if (modules.tabs) {
-    modules.tabs.onChange(() => updateDisplayMenuVisibility());
+    modules.tabs.onChange(() => { updateDisplayMenuVisibility(); refreshDisplayDotIndicator(); });
     updateDisplayMenuVisibility();
   }
 
@@ -311,14 +351,80 @@ export function init(_modules) {
 function setupDropdown(triggerId) {
   const trigger = btn(triggerId);
   const dropdown = trigger.closest('.sf-toolbar__dropdown');
-  trigger.addEventListener('click', (evt) => {
-    evt.stopPropagation();
-    // Close other dropdowns
+  const menu = dropdown.querySelector('.sf-toolbar__menu');
+
+  // Helper: list of focusable menu items, filtered live so disabled /
+  // hidden entries are skipped during arrow navigation. Re-queried on
+  // each call because some renderers rebuild the menu DOM at runtime
+  // (e.g. Save when GIF encoding flips the export-disabled state).
+  const focusables = () => Array.from(menu.querySelectorAll('.sf-toolbar__menu-item'))
+    .filter(el => !el.disabled && el.offsetParent !== null);
+
+  const openMenu = () => {
     document.querySelectorAll('.sf-toolbar__dropdown--open').forEach(dd => {
       if (dd !== dropdown) dd.classList.remove('sf-toolbar__dropdown--open');
     });
-    dropdown.classList.toggle('sf-toolbar__dropdown--open');
+    dropdown.classList.add('sf-toolbar__dropdown--open');
+  };
+  const closeMenu = (restoreFocus = true) => {
+    dropdown.classList.remove('sf-toolbar__dropdown--open');
+    if (restoreFocus) trigger.focus();
+  };
+
+  trigger.addEventListener('click', (evt) => {
+    evt.stopPropagation();
+    const isOpen = dropdown.classList.contains('sf-toolbar__dropdown--open');
+    if (isOpen) closeMenu(false);
+    else openMenu();
   });
+
+  // Gap 24 (v1.12.0) — keyboard activation on the trigger. ArrowDown /
+  // Enter / Space open the menu and focus the first item; ArrowUp opens
+  // and focuses the last (the "Reverse-tab into menu" convention used
+  // by macOS menu bars and the ARIA Authoring Practices menu pattern).
+  trigger.addEventListener('keydown', (evt) => {
+    if (evt.key === 'ArrowDown' || evt.key === 'Enter' || evt.key === ' ') {
+      evt.preventDefault();
+      openMenu();
+      focusables()[0]?.focus();
+    } else if (evt.key === 'ArrowUp') {
+      evt.preventDefault();
+      openMenu();
+      const items = focusables();
+      items[items.length - 1]?.focus();
+    }
+  });
+
+  // Gap 24 (v1.12.0) — keyboard nav inside the open menu. Arrow keys
+  // cycle; Home/End jump; Escape closes and returns focus to the
+  // trigger; Tab closes without restoring focus (so Tab continues into
+  // the next toolbar item naturally).
+  menu.addEventListener('keydown', (evt) => {
+    const items = focusables();
+    if (!items.length) return;
+    const idx = items.indexOf(document.activeElement);
+    if (evt.key === 'ArrowDown') {
+      evt.preventDefault();
+      items[(idx + 1) % items.length].focus();
+    } else if (evt.key === 'ArrowUp') {
+      evt.preventDefault();
+      items[(idx - 1 + items.length) % items.length].focus();
+    } else if (evt.key === 'Home') {
+      evt.preventDefault();
+      items[0].focus();
+    } else if (evt.key === 'End') {
+      evt.preventDefault();
+      items[items.length - 1].focus();
+    } else if (evt.key === 'Escape') {
+      evt.preventDefault();
+      closeMenu(true);
+    } else if (evt.key === 'Tab') {
+      // Let Tab move out naturally; just close the menu so the next
+      // toolbar button (not a hidden menu item) receives focus.
+      closeMenu(false);
+    }
+  });
+
   // Close dropdown when a menu item is clicked
   dropdown.querySelectorAll('.sf-toolbar__menu-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -375,11 +481,14 @@ function showLoadModal() {
     });
   }
 
-  document.getElementById('load-modal').classList.remove('sf-modal--hidden');
+  const el = document.getElementById('load-modal');
+  el.classList.remove('sf-modal--hidden');
   document.body.classList.add('sf-modal-open');
+  _loadTrapRelease = trapFocus(el, { onEscape: hideLoadModal });
 }
 
 function hideLoadModal() {
+  _loadTrapRelease?.(); _loadTrapRelease = null;
   document.getElementById('load-modal').classList.add('sf-modal--hidden');
   document.body.classList.remove('sf-modal-open');
   document.querySelector('.sf-modal__footer--load')?.remove();
@@ -505,7 +614,7 @@ function showSaveModal() {
       try {
         localStorage.setItem(key, JSON.stringify(data));
       } catch (err) {
-        alert(`Save failed for "${name}": ${err.message}`);
+        showError(`Save failed for "${name}": ${err.message}`);
       }
     }
 
@@ -619,7 +728,7 @@ function showMermaidImportModal() {
       </div>
       <div class="sf-modal__footer" style="justify-content:flex-end;gap:8px">
         <button class="sf-modal__btn sf-mermaid-modal__cancel">Cancel</button>
-        <button class="sf-modal__btn sf-modal__btn--primary sf-mermaid-modal__import" disabled>Import</button>
+        <button class="sf-modal__btn sf-modal__btn--primary sf-mermaid-modal__import" disabled>Load</button>
       </div>
     </div>
   `;
@@ -748,12 +857,20 @@ function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
 }
 
+// Focus-trap handles for the two statically-rendered modals (about + load).
+// Stored module-scope so the show/hide pair on each can release cleanly.
+let _aboutTrapRelease = null;
+let _loadTrapRelease = null;
+
 function showAboutModal() {
-  document.getElementById('about-modal').classList.remove('sf-modal--hidden');
+  const el = document.getElementById('about-modal');
+  el.classList.remove('sf-modal--hidden');
   document.body.classList.add('sf-modal-open');
+  _aboutTrapRelease = trapFocus(el, { onEscape: hideAboutModal });
 }
 
 function hideAboutModal() {
+  _aboutTrapRelease?.(); _aboutTrapRelease = null;
   document.getElementById('about-modal').classList.add('sf-modal--hidden');
   document.body.classList.remove('sf-modal-open');
 }
@@ -803,10 +920,18 @@ function buildLoadItem(save) {
   deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
     <path d="M6 2h4v1H6V2zm-3 2h10v1H3V4zm1 2h8l-.8 8H4.8L4 6zm2 1v5h1V7H6zm2 0v5h1V7H8z"/>
   </svg>`;
-  deleteBtn.addEventListener('click', () => {
-    if (confirm(`Delete "${save.name}"?`)) {
+  deleteBtn.addEventListener('click', async () => {
+    const ok = await confirmModal({
+      title: 'Delete this save?',
+      message: `"${save.name}" will be permanently removed from your browser. This cannot be undone.`,
+      okLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (ok) {
       modules.persistence.deleteNamedSave(save.key);
       item.remove();
+      showToast(`Deleted "${save.name}"`, 'success');
       const list = document.getElementById('load-modal-list');
       if (list.children.length === 0) {
         list.innerHTML = '<p class="sf-modal__empty">No saved diagrams found.</p>';
@@ -931,6 +1056,7 @@ function updateDisplayToggleLabels() {
     ?.classList.toggle('is-checked', isDisplayFlagOn('showFieldLengths'));
   document.getElementById('btn-display-keys-only')
     ?.classList.toggle('is-checked', isDisplayFlagOn('keyFieldsOnly'));
+  refreshDisplayDotIndicator();
 }
 
 function updateGanttToggleLabels() {
@@ -938,11 +1064,56 @@ function updateGanttToggleLabels() {
     ?.classList.toggle('is-checked', isDisplayFlagOn('showAssignee'));
   document.getElementById('btn-gantt-progress')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showProgress'));
+  refreshDisplayDotIndicator();
 }
 
 function updateSequenceToggleLabels() {
   document.getElementById('btn-sequence-bottom-labels')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showBottomLabel'));
+  refreshDisplayDotIndicator();
+}
+
+// Gap 14 (v1.12.0) — small dot on the Display toolbar button when any
+// toggle is in a non-default state. Defaults pulled from the storage
+// helpers (Auto Sizing defaults ON; Connector Grouping defaults OFF)
+// and the data-model / gantt / sequence flag conventions in
+// isDisplayFlagOn. Module-scope so the per-section label refreshers
+// (updateDisplayToggleLabels / updateGanttToggleLabels /
+// updateSequenceToggleLabels) can call it directly.
+function refreshDisplayDotIndicator() {
+  const btn = document.getElementById('btn-display');
+  if (!btn) return;
+  const nonDefault =
+    isAutoSizingEnabled() === false ||
+    isConnectorGroupingEnabled() === true ||
+    isDisplayFlagOn('showLabels') ||
+    isDisplayFlagOn('showFieldLengths') ||
+    isDisplayFlagOn('keyFieldsOnly') ||
+    // Gantt + sequence flags default ON — non-default = currently off.
+    hasFlagFlippedOff('showAssignee') ||
+    hasFlagFlippedOff('showProgress') ||
+    hasFlagFlippedOff('showBottomLabel');
+  btn.classList.toggle('sf-toolbar__button--has-active', nonDefault);
+  // A6 (v1.12.0) — extend the tooltip when the dot is showing so the
+  // amber indicator isn't conveyed by colour alone (WCAG 1.4.1). Strips
+  // any prior suffix on every refresh so the base label stays clean.
+  const base = btn.getAttribute('data-base-title') || btn.getAttribute('title') || 'Display options';
+  if (!btn.hasAttribute('data-base-title')) btn.setAttribute('data-base-title', base);
+  btn.setAttribute('title', nonDefault ? `${base} — some toggles active` : base);
+}
+function hasFlagFlippedOff(flag) {
+  const graph = modules.graph;
+  if (!graph) return false;
+  const ganttFlags = ['showAssignee', 'showProgress'];
+  const sequenceFlags = ['showBottomLabel'];
+  const objs = graph.getElements().filter(el => {
+    const t = el.get('type');
+    if (ganttFlags.includes(flag)) return t.startsWith('sf.Gantt');
+    if (sequenceFlags.includes(flag)) return t === 'sf.SequenceParticipant';
+    return false;
+  });
+  if (objs.length === 0) return false;
+  return objs.some(el => el.get(flag) === false);
 }
 
 function isDisplayFlagOn(flag) {
@@ -973,20 +1144,30 @@ function applyDisplayFlagToAll(flag, value) {
   const sequenceFlags = ['showBottomLabel'];
   const isGanttFlag = ganttFlags.includes(flag);
   const isSequenceFlag = sequenceFlags.includes(flag);
-  graph.getElements().forEach(el => {
-    const t = el.get('type');
-    const matches = isGanttFlag ? t.startsWith('sf.Gantt')
-      : isSequenceFlag ? t === 'sf.SequenceParticipant'
-      : t === 'sf.DataObject';
-    if (!matches) return;
-    if (flag === 'showBottomLabel' && joint.shapes.sf.setParticipantBottomLabelVisible) {
-      // Route through the helper so the header markup + port layout stay in
-      // sync (mirrored header/accent/underline visibility, correct ports).
-      joint.shapes.sf.setParticipantBottomLabelVisible(el, value);
-    } else {
-      el.set(flag, value);
-    }
-  });
+  // v1.12.1 fix — wrap the per-cell mutation in a history batch so a single
+  // toggle of the Display flag (which touches N cells) collapses into ONE
+  // undo entry, not N. Without this, toggling Bottom Participant Labels off
+  // on a 10-participant diagram created 10 history entries, forcing the
+  // user to press ⌘Z ten times to revert one click.
+  modules.history.startBatch();
+  try {
+    graph.getElements().forEach(el => {
+      const t = el.get('type');
+      const matches = isGanttFlag ? t.startsWith('sf.Gantt')
+        : isSequenceFlag ? t === 'sf.SequenceParticipant'
+        : t === 'sf.DataObject';
+      if (!matches) return;
+      if (flag === 'showBottomLabel' && joint.shapes.sf.setParticipantBottomLabelVisible) {
+        // Route through the helper so the header markup + port layout stay in
+        // sync (mirrored header/accent/underline visibility, correct ports).
+        joint.shapes.sf.setParticipantBottomLabelVisible(el, value);
+      } else {
+        el.set(flag, value);
+      }
+    });
+  } finally {
+    modules.history.endBatch();
+  }
 }
 
 function setupHamburgerMenu() {
