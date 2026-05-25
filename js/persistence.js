@@ -1,14 +1,14 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.11.9';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.11.9';
-import { diagramHasImage } from './image-component.js?v=1.11.9';
+import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.11.10';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.11.10';
+import { diagramHasImage } from './image-component.js?v=1.11.10';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-const APP_VERSION = '1.11.9';
+const APP_VERSION = '1.11.10';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
@@ -1140,13 +1140,20 @@ function showShareModal(url, opts = {}) {
   urlInput.value = url;
 
   const copyBtn = wrapper.querySelector('.sf-share-modal__copy-btn');
+  const ORIGINAL_LABEL = copyBtn.textContent;
+  let revertTimer = null;
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(url).then(() => {
-      copyBtn.textContent = 'Copied!';
-      copyBtn.style.borderColor = '#43A047';
-      copyBtn.style.background = '#43A047';
-      copyBtn.style.color = '#fff';
-      setTimeout(close, 600);
+      // Visual success feedback via CSS class — no inline styles. Modal stays
+      // open so the user can keep selecting/copying; button reverts after 2s
+      // so a second copy attempt still feels responsive.
+      copyBtn.textContent = '✓ Copied!';
+      copyBtn.classList.add('is-copied');
+      clearTimeout(revertTimer);
+      revertTimer = setTimeout(() => {
+        copyBtn.textContent = ORIGINAL_LABEL;
+        copyBtn.classList.remove('is-copied');
+      }, 2000);
     }).catch(() => {
       urlInput.select();
     });

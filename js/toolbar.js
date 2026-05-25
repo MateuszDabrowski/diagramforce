@@ -1,9 +1,9 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.11.9';
-import { resizeDataObjectToFit } from './templates.js?v=1.11.9';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents } from './canvas.js?v=1.11.9';
+import { diagramHasImage } from './image-component.js?v=1.11.10';
+import { resizeDataObjectToFit } from './templates.js?v=1.11.10';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks } from './canvas.js?v=1.11.10';
 
 let modules = {};
 
@@ -84,7 +84,7 @@ export function init(_modules) {
   // disabled), or no-ops if the user just disabled it.
   const btnAutoSize = document.getElementById('btn-display-auto-size');
   const refreshAutoSizeLabel = () => {
-    if (btnAutoSize) btnAutoSize.textContent = isAutoSizingEnabled() ? 'Disable Auto Sizing' : 'Enable Auto Sizing';
+    btnAutoSize?.classList.toggle('is-checked', isAutoSizingEnabled());
   };
   refreshAutoSizeLabel();
   btnAutoSize?.addEventListener('click', () => {
@@ -94,6 +94,24 @@ export function init(_modules) {
     // On re-enable, refit every embedding parent against its current children
     // so anything that drifted while auto-sizing was off snaps back.
     if (next) refitAllParents();
+  });
+
+  // Connector Grouping toggle (v1.11.10 — CR-5.1) — bundles links crowding the
+  // same physical port into shared trunks by visual semantics. Default OFF.
+  // Flipping it re-routes every link on the active graph so the change is
+  // instant. Presentation-only — the graph data model is untouched.
+  const btnGrouping = document.getElementById('btn-display-connector-grouping');
+  const refreshGroupingLabel = () => {
+    // Label is fixed ("Spread Overlapping Connectors"); state shown by the
+    // checkbox icon. Checked = spreading is on; unchecked (default) = all
+    // connectors converge at the port centre.
+    btnGrouping?.classList.toggle('is-checked', isConnectorGroupingEnabled());
+  };
+  refreshGroupingLabel();
+  btnGrouping?.addEventListener('click', () => {
+    setConnectorGroupingEnabled(!isConnectorGroupingEnabled());
+    refreshGroupingLabel();
+    rerouteAllLinks();
   });
 
   btnKeysOnly.addEventListener('click', () => {
@@ -902,31 +920,29 @@ function updateDisplayMenuVisibility() {
   if (isSequence) updateSequenceToggleLabels();
 }
 
+// Display-menu toggle items use a fixed noun-phrase label plus an SVG
+// checkbox icon whose check state is driven by a `.is-checked` class on the
+// button. These helpers just toggle that class — the SVG (empty box + tick
+// path) is pre-rendered in index.html and CSS shows/hides the tick.
 function updateDisplayToggleLabels() {
-  const labelsOn = isDisplayFlagOn('showLabels');
-  const lenOn = isDisplayFlagOn('showFieldLengths');
-  const keysOnly = isDisplayFlagOn('keyFieldsOnly');
-  const apiBtn = document.getElementById('btn-display-api');
-  const lenBtn = document.getElementById('btn-display-lengths');
-  const keysBtn = document.getElementById('btn-display-keys-only');
-  if (apiBtn) apiBtn.textContent = labelsOn ? 'Hide Labels' : 'Show Labels';
-  if (lenBtn) lenBtn.textContent = lenOn ? 'Hide Field Lengths' : 'Show Field Lengths';
-  if (keysBtn) keysBtn.textContent = keysOnly ? 'Show All Fields' : 'Show Key Fields Only';
+  document.getElementById('btn-display-api')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('showLabels'));
+  document.getElementById('btn-display-lengths')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('showFieldLengths'));
+  document.getElementById('btn-display-keys-only')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('keyFieldsOnly'));
 }
 
 function updateGanttToggleLabels() {
-  const assigneeOn = isDisplayFlagOn('showAssignee');
-  const progressOn = isDisplayFlagOn('showProgress');
-  const assigneeBtn = document.getElementById('btn-gantt-assignee');
-  const progressBtn = document.getElementById('btn-gantt-progress');
-  if (assigneeBtn) assigneeBtn.textContent = assigneeOn ? 'Hide Assigned Person' : 'Show Assigned Person';
-  if (progressBtn) progressBtn.textContent = progressOn ? 'Hide Completion %' : 'Show Completion %';
+  document.getElementById('btn-gantt-assignee')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('showAssignee'));
+  document.getElementById('btn-gantt-progress')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('showProgress'));
 }
 
 function updateSequenceToggleLabels() {
-  const bottomOn = isDisplayFlagOn('showBottomLabel');
-  const bottomBtn = document.getElementById('btn-sequence-bottom-labels');
-  if (bottomBtn) bottomBtn.textContent = bottomOn ? 'Hide Bottom Participant Labels' : 'Show Bottom Participant Labels';
+  document.getElementById('btn-sequence-bottom-labels')
+    ?.classList.toggle('is-checked', isDisplayFlagOn('showBottomLabel'));
 }
 
 function isDisplayFlagOn(flag) {

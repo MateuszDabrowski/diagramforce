@@ -8,7 +8,7 @@
  * version bump documented in CLAUDE.md must update this file too.
  */
 
-const APP_VERSION = '1.11.9';
+const APP_VERSION = '1.11.10';
 const CACHE_NAME = `diagramforce-v${APP_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is

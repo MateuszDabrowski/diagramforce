@@ -230,6 +230,24 @@
   opacity: 0.7;
 }
 
+/* Checkbox-style toggle items (Display menu). The SVG carries both the
+   empty box and the tick path; the tick is hidden by default and revealed
+   via CSS when the parent button has `.is-checked`. JS only toggles the
+   class — no innerHTML churn or per-state SVG swap. */
+.sf-toolbar__checkbox {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.sf-toolbar__menu-item--toggle .sf-toolbar__checkbox-tick {
+  display: none;
+}
+.sf-toolbar__menu-item--toggle.is-checked .sf-toolbar__checkbox-tick {
+  display: inline;
+}
+.sf-toolbar__menu-item--toggle.is-checked .sf-toolbar__checkbox {
+  opacity: 1;
+}
+
 /* Theme toggle icon — moon/sun swap */
 #btn-theme .sf-toolbar__icon--theme {
   fill: none;

@@ -367,6 +367,16 @@
   color: #fff;
 }
 
+/* Share modal: temporary success state on the Copy Link button. Driven by
+   `.is-copied` toggled from persistence.js for ~2s after a successful copy.
+   Overrides the hover style above so the green sticks even on hover. */
+.sf-share-modal__copy-btn.is-copied,
+.sf-share-modal__copy-btn.is-copied:hover {
+  background: var(--brand-green);
+  border-color: var(--brand-green);
+  color: #fff;
+}
+
 .sf-close-confirm__btn--discard {
   border-color: #DA4E55;
   color: #DA4E55;

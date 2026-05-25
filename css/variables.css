@@ -1,8 +1,9 @@
 :root {
   /* Brand colors — aligned with mateuszdabrowski.pl palette */
-  --brand-blue: #3578E5;
+  --brand-blue: #1D73C9;
   --brand-red: #DA4E55;
   --brand-amber: #F6B355;
+  --brand-green: #27AE60;   /* Success / confirmation accent (e.g. "Copied!" feedback) */
 
   /* Semantic colors (overridden per theme) */
   --color-primary: var(--brand-blue);

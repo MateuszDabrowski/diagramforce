@@ -1,7 +1,7 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.11.9';
+import * as clipboard from './clipboard.js?v=1.11.10';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -383,7 +383,7 @@ function applyVisual(id) {
   } else if (view.model.isLink()) {
     const endpointAttrs = {
       d: 'M -6 -6 6 -6 6 6 -6 6 Z',
-      fill: 'var(--color-primary, #3578E5)',
+      fill: 'var(--color-primary, #1D73C9)',
       stroke: '#fff',
       'stroke-width': 1.5,
       cursor: 'move',

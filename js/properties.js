@@ -1,10 +1,10 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.11.9';
-import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.11.9';
-import * as stencilModule from './stencil.js?v=1.11.9';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.11.9';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.11.10';
+import { Z_BASE, Z_TIER_SPAN, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.11.10';
+import * as stencilModule from './stencil.js?v=1.11.10';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.11.10';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -13,10 +13,10 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.11.9';
-import * as history from './history.js?v=1.11.9';
-import { startImageAddFlow } from './image-component.js?v=1.11.9';
-import { escHtml } from './persistence.js?v=1.11.9';
+} from './clipboard.js?v=1.11.10';
+import * as history from './history.js?v=1.11.10';
+import { startImageAddFlow } from './image-component.js?v=1.11.10';
+import { escHtml } from './persistence.js?v=1.11.10';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -3085,8 +3085,16 @@ function renderLinkProps(cell) {
     // 1.6.0 build so existing diagrams keep showing the picker as "Line Arrow".
     if (/M\s*0\s+-6\s+L\s*-14\s+0\s+L\s*0\s+6/.test(d)) return 'lineArrow';
     if (/M\s*-14\s+-6\s+L\s*0\s+0\s+L\s*-14\s+6/.test(d)) return 'lineArrow';
-    // Crow's foot detection: has "L 0 0" vertex AND prong "L -12 8", or old format "L 12 0"
-    const isCrowFoot = (d.includes('L 0 0') && /L\s*-12\s+8/.test(d)) || d.includes('L 12 0');
+    // Crow's foot detection: at least one prong must ORIGINATE from the (0,0)
+    // central vertex — i.e. an `(L|M) 0 0` command immediately followed by
+    // `L -12 8` (or symmetric `L -12 -8`). Old format `L 12 0` kept for legacy
+    // diagrams.
+    // Why this stricter check: the "one" marker `M -12 -8 L -12 8 M -12 0 L 0 0`
+    // *also* contains both `L 0 0` (the stem) and a segment ending at `-12 8`
+    // (the vertical bar's far endpoint), so the previous looser regex
+    // misdetected "one" as "many". A genuine crow's foot prong always starts
+    // at (0,0); the "one" bar starts at (-12, -8).
+    const isCrowFoot = /(?:L|M)\s*0\s+0\s+L\s*-12\s+-?8/.test(d) || d.includes('L 12 0');
     const hasCircle = /a [345] [345]/.test(d);
     // Most specific first
     if (isCrowFoot && hasCircle) return 'zeroMany';

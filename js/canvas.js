@@ -105,6 +105,34 @@ export function refitAllParents() {
 }
 let _graphRef = null;
 
+// ── Connector grouping toggle (v1.11.10 — CR-5.1) ───────────────────
+// When enabled, links that crowd the same physical port (same cell + port)
+// are bundled into shared "trunks" by the sfManhattan router. Links are
+// grouped by visual semantics at that port (lineStyle + marker shape on the
+// touching end); each distinct semantic group gets its own offset trunk lane,
+// so e.g. dashed crow's-foot links and solid arrows on one port read as two
+// parallel trunks instead of a tangle. Purely presentation — the graph data
+// model is untouched. Default OFF to preserve existing visuals. Persisted in
+// localStorage, mirroring the Auto-Sizing toggle. The Display menu drives this
+// via setConnectorGroupingEnabled(); flipping it re-routes every link.
+const CONNECTOR_GROUP_LS_KEY = 'sfdiag::connectorGrouping';
+export function isConnectorGroupingEnabled() {
+  try { return localStorage.getItem(CONNECTOR_GROUP_LS_KEY) === 'true'; } catch { return false; }
+}
+export function setConnectorGroupingEnabled(v) {
+  try { localStorage.setItem(CONNECTOR_GROUP_LS_KEY, String(!!v)); } catch {}
+}
+// Synchronously re-run the router on every link in the active graph. Used by
+// the toolbar so toggling connector grouping applies instantly. LinkView.update()
+// recomputes the route (re-invoking sfManhattan) and repaints in place.
+export function rerouteAllLinks() {
+  if (!graph || !paper) return;
+  graph.getLinks().forEach(l => {
+    const lv = paper.findViewByModel(l);
+    lv?.update?.();
+  });
+}
+
 let graph, paper;
 let currentZoom = 1;
 const ZOOM_MIN = 0.1;
@@ -162,6 +190,7 @@ export function canEmbed(parentType, childType) {
 function registerSfRouter() {
   const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
   const PAD = 16;   // clearance around obstacles (must be < STUB so stubs are outside padded zones)
+  const CP_PERP_OFFSET = 16; // matches the original anchor offset — perpendicular stand-off from the cell edge to the visual line end
 
   // Best-effort calc() evaluator covering the handful of forms used by our
   // shape definitions: calc(w), calc(h), calc(<r> * w [+ <o>]), calc(<r> * h
@@ -217,6 +246,127 @@ function registerSfRouter() {
       }
       default: return null;
     }
+  }
+
+  // ── Connector grouping (CR-5.1) ──────────────────────────────────
+  // Visual signature of one link END at a port: links bundle into the same
+  // trunk only when these match. Uses the custom `lineStyle` prop and the
+  // marker SHAPE (path `d`) on the touching end — colour is intentionally
+  // ignored so same-shape links of different colours still bundle.
+  //
+  // The `d` string is normalised so cosmetic differences (extra whitespace,
+  // commas vs spaces, leading/trailing spaces) don't split visually-identical
+  // markers into separate groups. Without this, a user-drawn link and an
+  // imported link with the same marker shape but slightly different `d`
+  // formatting would refuse to bundle.
+  function endSignature(link, end) {
+    const style = link.prop('lineStyle') || 'none';
+    const marker = end === 'source'
+      ? link.attr('line/sourceMarker')
+      : link.attr('line/targetMarker');
+    let d = (marker && marker.d) ? String(marker.d) : 'none';
+    d = d.replace(/\s*,\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    return `${style}|${d}`;
+  }
+
+  // All link ends touching a physical port (cell id + port id), regardless of
+  // whether the link defines that port as its source or target.
+  function gatherPortEnds(gr, cellId, portId) {
+    const ends = [];
+    for (const l of gr.getLinks()) {
+      const s = l.get('source');
+      const t = l.get('target');
+      if (s?.id === cellId && s.port === portId) ends.push({ link: l, end: 'source' });
+      if (t?.id === cellId && t.port === portId) ends.push({ link: l, end: 'target' });
+    }
+    return ends;
+  }
+
+  // Map a port group to a top/right/bottom/left side. Only standard four-side
+  // ports are eligible for edge-fraction grouping; sequence lifeline ports and
+  // DataObject field ports keep their natural anchor points (they're already
+  // y-staggered, or carry UML semantics we don't want to disrupt).
+  function portGroupToSide(group) {
+    return (group === 'top' || group === 'right' || group === 'bottom' || group === 'left')
+      ? group : null;
+  }
+
+  function getSideForPort(cell, portId) {
+    if (!cell?.getPort || !portId) return null;
+    const port = cell.getPort(portId);
+    return portGroupToSide(port?.group);
+  }
+
+  // Edge-fraction offset for one link end at a congested port. When 2+ link
+  // ends touch the same physical port, the cell's edge on that side is divided
+  // into N+2 equal parts (where N = number of distinct semantic groups);
+  // the two outer parts are corner buffers and the N inner parts each host
+  // one group, anchored at its part's centre. Returns the signed offset from
+  // the edge centre, along the edge's tangent direction. Null when the port
+  // isn't congested or the side isn't standard.
+  //
+  // Same-signature link ends share the identical offset → they bundle into
+  // one trunk. Different-signature groups land on distinct points spread
+  // across the edge, so each crow's-foot variant / dashed line reads as its
+  // own visual trunk anchored at its own spot on the cell border.
+  function trunkAnchorOffset(link, end, cell, side) {
+    if (!side || !cell) return null;
+    const gr = link.graph;
+    if (!gr) return null;
+    const portId = link.get(end)?.port;
+    if (!portId) return null;
+    const ends = gatherPortEnds(gr, cell.id, portId);
+    if (ends.length < 2) return null;
+
+    // Bucket each end by visual signature, and collect the far-end coordinate
+    // along the relevant axis for ordering (x for top/bottom edges, y for
+    // left/right). Ordering groups by mean far-end coordinate keeps lines
+    // largely parallel and prevents the auto-layout-creates-crossings issue
+    // that pure alphabetical signature-sort produced.
+    const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
+    const buckets = new Map(); // signature → { coords: [], anySelf: boolean }
+    for (const e of ends) {
+      const sig = endSignature(e.link, e.end);
+      let bucket = buckets.get(sig);
+      if (!bucket) { bucket = { coords: [] }; buckets.set(sig, bucket); }
+      const farRef = e.link.get(e.end === 'source' ? 'target' : 'source');
+      const farCell = farRef?.id ? gr.getCell(farRef.id) : null;
+      const farBB = farCell?.getBBox?.();
+      if (farBB) {
+        bucket.coords.push(tangentAxis === 'x'
+          ? farBB.x + farBB.width / 2
+          : farBB.y + farBB.height / 2);
+      }
+    }
+    const sigEntries = [...buckets.entries()].map(([sig, b]) => ({
+      sig,
+      mean: b.coords.length ? b.coords.reduce((a, c) => a + c, 0) / b.coords.length : Infinity,
+    }));
+    // Primary: mean far-end coord (closest child gets closest anchor).
+    // Tiebreak: signature string so the order stays deterministic.
+    sigEntries.sort((a, b) => a.mean - b.mean || a.sig.localeCompare(b.sig));
+    const N = sigEntries.length;
+    const G = sigEntries.findIndex(e => e.sig === endSignature(link, end));
+    if (G < 0) return null;
+
+    const bb = cell.getBBox();
+    if (!bb) return null;
+    const edgeLen = tangentAxis === 'x' ? bb.width : bb.height;
+    // Position of group G along the edge, normalised to [0,1]:
+    // centre of the (G+1)-th interior part out of (N+2) total parts.
+    const positionFraction = (G + 1.5) / (N + 2);
+    return (positionFraction - 0.5) * edgeLen;
+  }
+
+  // Shift a port's stub point along the edge tangent by `offset` so the
+  // router exits perpendicular from the offset connection point (matching
+  // what the custom connection-point function returns for the same link end).
+  function applyTrunkOffset(info, side, offset) {
+    if (offset == null || !info) return info;
+    const stub = { x: info.stub.x, y: info.stub.y };
+    if (side === 'top' || side === 'bottom') stub.x += offset;
+    else stub.y += offset;
+    return { dir: info.dir, stub };
   }
 
   // Does an axis-aligned segment (a→b) intersect the padded bbox?
@@ -401,6 +551,22 @@ function registerSfRouter() {
       return joint.routers.normal(vertices, args, linkView);
     }
 
+    // Connector grouping (CR-5.1): when enabled, bundle links crowding the
+    // same physical port into shared trunks distributed along the cell edge.
+    // Applied per end independently and never to self-loops (handled by the
+    // same-side override above). The router's stub for each end is shifted
+    // along the edge tangent to match the corresponding offset connection
+    // point computed by joint.connectionPoints.sfConnectionPoint, so the
+    // stub-to-edge segment stays perpendicular and straight.
+    if (isConnectorGroupingEnabled() && srcCell !== tgtCell) {
+      const sSide = getSideForPort(srcCell, srcDef.port);
+      const tSide = getSideForPort(tgtCell, tgtDef.port);
+      const sOff = sSide ? trunkAnchorOffset(link, 'source', srcCell, sSide) : null;
+      const tOff = tSide ? trunkAnchorOffset(link, 'target', tgtCell, tSide) : null;
+      srcInfo = applyTrunkOffset(srcInfo, sSide, sOff);
+      tgtInfo = applyTrunkOffset(tgtInfo, tSide, tOff);
+    }
+
     // Build obstacle list — includes source and target so routes go AROUND them
     // (stubs are already outside the padded zones since STUB > PAD).
     // Exclude only: zones, text labels, parent containers of embedded nodes,
@@ -459,6 +625,47 @@ function registerSfRouter() {
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors
       return vertices;
+    }
+  };
+
+  // ── Custom connection point (CR-5.1) ─────────────────────────────
+  // When connector grouping is enabled and a physical port is congested
+  // (≥2 link ends touch it), each link end's VISUAL termination is moved
+  // along the cell's edge to its semantic group's anchor point — so the
+  // line actually meets the cell border at a distinct spot, not all
+  // crowding the single port centre. The router's stub for the same end
+  // is shifted by the same amount, keeping the stub-to-edge segment
+  // perpendicular and straight.
+  //
+  // Falls back to JointJS's standard `anchor` connection point (offset 16,
+  // matching the original paper option) when grouping is off, the port
+  // isn't congested, or the side isn't one of top/right/bottom/left.
+  joint.connectionPoints.sfConnectionPoint = function(line, view, magnet, opt, type, linkView) {
+    const fallback = () => joint.connectionPoints.anchor(line, view, magnet, { offset: CP_PERP_OFFSET });
+    try {
+      if (!isConnectorGroupingEnabled()) return fallback();
+      const link = linkView?.model;
+      const cell = view?.model;
+      if (!link || !cell) return fallback();
+      const end = link.get(type); // 'source' | 'target'
+      if (!end?.port) return fallback();
+      const side = getSideForPort(cell, end.port);
+      if (!side) return fallback();
+      const offset = trunkAnchorOffset(link, type, cell, side);
+      if (offset == null) return fallback();
+      const bb = cell.getBBox();
+      const cx = bb.x + bb.width / 2;
+      const cy = bb.y + bb.height / 2;
+      // Must return a g.Point — JointJS calls .round() on the result.
+      switch (side) {
+        case 'top':    return new joint.g.Point(cx + offset, bb.y - CP_PERP_OFFSET);
+        case 'bottom': return new joint.g.Point(cx + offset, bb.y + bb.height + CP_PERP_OFFSET);
+        case 'left':   return new joint.g.Point(bb.x - CP_PERP_OFFSET, cy + offset);
+        case 'right':  return new joint.g.Point(bb.x + bb.width + CP_PERP_OFFSET, cy + offset);
+        default:       return fallback();
+      }
+    } catch (_) {
+      return fallback();
     }
   };
 }
@@ -598,7 +805,7 @@ export function init() {
       connector: { name: 'rounded', args: { radius: 8 } },
     }),
 
-    defaultConnectionPoint: { name: 'anchor', args: { offset: 16 } },
+    defaultConnectionPoint: { name: 'sfConnectionPoint', args: { offset: 16 } },
 
     validateConnection: (cellViewS, magnetS, cellViewT, magnetT, end) => {
       // Allow self-connection when the two magnets (ports) are different —
@@ -1069,6 +1276,41 @@ export function init() {
     const parent = graph.getCell(parentId);
     if (!parent) return;
     setTimeout(() => fitParentToChildren(parent), 0);
+  });
+
+  // ── Cascading re-route for connector grouping (CR-5.1) ─────────────
+  // JointJS only re-runs the router for the link that changed — but with
+  // grouping enabled, adding/removing/restyling one link at a port changes
+  // N (and the group ordering) for every OTHER link at that port too.
+  // Without this trigger, the existing 3 links keep their N=3 positions when
+  // a 4th is added, while the new one routes at N=4 — visual misalignment.
+  //
+  // Strategy: when any link-relevant or geometry-relevant event fires and
+  // grouping is on, re-route every link in the active graph. Debounced
+  // (rAF-scale) so a chain of related events collapses into one pass.
+  // Reroute itself only calls LinkView.update(), which doesn't mutate the
+  // model, so we don't re-enter this listener loop.
+  let _rerouteScheduled = false;
+  function scheduleReroute() {
+    if (_isLoadingJSON) return;
+    if (!isConnectorGroupingEnabled()) return;
+    if (_rerouteScheduled) return;
+    _rerouteScheduled = true;
+    requestAnimationFrame(() => {
+      _rerouteScheduled = false;
+      rerouteAllLinks();
+    });
+  }
+  graph.on('add', (cell) => { if (cell.isLink?.()) scheduleReroute(); });
+  graph.on('remove', (cell) => { if (cell.isLink?.()) scheduleReroute(); });
+  graph.on('change:source change:target change:attrs change:lineStyle', (cell) => {
+    if (cell.isLink?.()) scheduleReroute();
+  });
+  // Cell move/resize affects edge length (size) and far-end ordering
+  // (position). Element-only — link `change:position` would be the same as
+  // changes above and already handled.
+  graph.on('change:position change:size', (cell) => {
+    if (cell.isElement?.()) scheduleReroute();
   });
 
   return { graph, paper };
