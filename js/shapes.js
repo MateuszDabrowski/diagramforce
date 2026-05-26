@@ -2,7 +2,7 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.12.1';
+import { parseMarkdown } from './markdown.js?v=1.12.2';
 
 // ── Markdown foreignObject helper (CR-6.1) ─────────────────────────
 // sf.TextLabel and sf.Note render their text as native HTML inside an SVG
@@ -21,14 +21,15 @@ function ensureMarkdownFO(view, key, text, opts) {
   if (!fo) {
     fo = document.createElementNS(SVG_NS_SHAPES, 'foreignObject');
     fo.setAttribute('data-md', key);
-    // The FO must be hit-testable: shapes like sf.TextLabel and sf.Annotation
-    // (text area, not bracket) have no <rect>/<path> body, so the FO is the
-    // ONLY geometry available for JointJS element selection / drag. Without
-    // this the cell becomes unclickable — only Shift-drag rubber-band catches
-    // it. Children of the FO inherit pointer-events:auto, but the helper sets
-    // inner content to pointer-events:none below so text selections don't
-    // start when the user just wants to drag.
-    fo.setAttribute('pointer-events', 'all');
+    // v1.12.1 — pointer-events:none on the FO itself so clicks pass
+    // through to the SVG geometry beneath (hitArea on TextLabel /
+    // Annotation, body on Note, header on DataObject, etc.). The
+    // previous `pointer-events="all"` made the FO catch clicks but
+    // didn't reliably propagate them to JointJS's element-view
+    // delegation in Safari — the cell only became selectable via
+    // Shift-drag rubber-band. Now selection always goes through proper
+    // SVG geometry, which JointJS hit-tests bulletproof.
+    fo.setAttribute('pointer-events', 'none');
     view.el.appendChild(fo);
   }
   fo.setAttribute('x', String(opts.x));
@@ -498,6 +499,23 @@ export function register() {
       size: { width: 200, height: 32 },
       z: 2000,    // Node tier: 2000 – 2499
       attrs: {
+        // v1.12.1 — explicit transparent hit-area rect so JointJS has
+        // real SVG geometry to hit-test against. Previously the only
+        // hit target was the foreignObject (added programmatically in
+        // ensureMarkdownFO) with pointer-events="all" — that worked
+        // for some browsers but not Safari, which silently swallowed
+        // single clicks. The cell was still findable by rubber-band
+        // because its bbox math doesn't go through DOM hit-testing.
+        // pointerEvents:'all' is required because `fill: transparent`
+        // alone doesn't always count as "painted" under the SVG
+        // `visiblePainted` default.
+        hitArea: {
+          width: 'calc(w)',
+          height: 'calc(h)',
+          fill: 'transparent',
+          stroke: 'none',
+          pointerEvents: 'all',
+        },
         label: {
           x: 'calc(0.5 * w)',
           y: 'calc(0.5 * h)',
@@ -513,6 +531,7 @@ export function register() {
     },
     {
       markup: [
+        { tagName: 'rect', selector: 'hitArea' },
         { tagName: 'text', selector: 'label' },
       ],
     }
@@ -1515,6 +1534,17 @@ export function register() {
       z: 2000,
       bracketSide: 'right',
       attrs: {
+        // v1.12.1 — same fix as sf.TextLabel: add a transparent hit-area
+        // rect so JointJS has real SVG geometry to hit-test against. The
+        // bracket path alone is a thin line — most of the cell area is
+        // visually empty and was unclickable before this change.
+        hitArea: {
+          width: 'calc(w)',
+          height: 'calc(h)',
+          fill: 'transparent',
+          stroke: 'none',
+          pointerEvents: 'all',
+        },
         bracket: {
           d: 'M calc(w) 0 Q calc(w - 12) 0 calc(w - 12) calc(0.25 * h) L calc(w - 12) calc(0.45 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 16) calc(0.5 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 12) calc(0.55 * h) L calc(w - 12) calc(0.75 * h) Q calc(w - 12) calc(h) calc(w) calc(h)',
           fill: 'none',
@@ -1537,6 +1567,7 @@ export function register() {
     },
     {
       markup: [
+        { tagName: 'rect', selector: 'hitArea' },
         { tagName: 'path', selector: 'bracket' },
         { tagName: 'text', selector: 'label' },
       ],

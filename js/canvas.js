@@ -133,8 +133,16 @@ let _graphRef = null;
 // localStorage, mirroring the Auto-Sizing toggle. The Display menu drives this
 // via setConnectorGroupingEnabled(); flipping it re-routes every link.
 const CONNECTOR_GROUP_LS_KEY = 'sfdiag::connectorGrouping';
+// Default ON — distributed connectors visually separate parallel links into
+// distinct trunks along the cell edge and make multi-relationship diagrams
+// (ER, architecture) much easier to read. An explicit user opt-out is the
+// only reason this returns false. Existing users with a prior choice keep it.
 export function isConnectorGroupingEnabled() {
-  try { return localStorage.getItem(CONNECTOR_GROUP_LS_KEY) === 'true'; } catch { return false; }
+  try {
+    const v = localStorage.getItem(CONNECTOR_GROUP_LS_KEY);
+    if (v === null) return true;            // never set → default ON
+    return v === 'true';                    // explicit user choice wins
+  } catch { return true; }
 }
 export function setConnectorGroupingEnabled(v) {
   try { localStorage.setItem(CONNECTOR_GROUP_LS_KEY, String(!!v)); } catch {}
@@ -371,6 +379,10 @@ function registerSfRouter() {
     const edgeLen = tangentAxis === 'x' ? bb.width : bb.height;
     // Position of group G along the edge, normalised to [0,1]:
     // centre of the (G+1)-th interior part out of (N+2) total parts.
+    // The visible jog this used to produce at the stub root is fixed in the
+    // router itself via a perpendicular lead-out waypoint when an offset is
+    // applied (see "trunk lead-out" block in joint.routers.sfManhattan) —
+    // routing, not positioning, was the actual culprit.
     const positionFraction = (G + 1.5) / (N + 2);
     return (positionFraction - 0.5) * edgeLen;
   }
@@ -575,11 +587,14 @@ function registerSfRouter() {
     // along the edge tangent to match the corresponding offset connection
     // point computed by joint.connectionPoints.sfConnectionPoint, so the
     // stub-to-edge segment stays perpendicular and straight.
+    // Hoisted so the route-building block below can read whether either end
+    // has a non-trivial trunk offset and add a perpendicular lead-out.
+    let sOff = null, tOff = null;
     if (isConnectorGroupingEnabled() && srcCell !== tgtCell) {
       const sSide = getSideForPort(srcCell, srcDef.port);
       const tSide = getSideForPort(tgtCell, tgtDef.port);
-      const sOff = sSide ? trunkAnchorOffset(link, 'source', srcCell, sSide) : null;
-      const tOff = tSide ? trunkAnchorOffset(link, 'target', tgtCell, tSide) : null;
+      sOff = sSide ? trunkAnchorOffset(link, 'source', srcCell, sSide) : null;
+      tOff = tSide ? trunkAnchorOffset(link, 'target', tgtCell, tSide) : null;
       srcInfo = applyTrunkOffset(srcInfo, sSide, sOff);
       tgtInfo = applyTrunkOffset(tgtInfo, tSide, tOff);
     }
@@ -626,8 +641,40 @@ function registerSfRouter() {
     const from = srcInfo.stub;
     const to = tgtInfo.stub;
 
+    // --- Trunk lead-out -----------------------------------------------
+    // When a stub is shifted along the cell edge by a non-zero trunk offset,
+    // orthoRoute is free to turn immediately at the stub — and it usually
+    // does, producing a visible horizontal jog right at the marker root.
+    // The previous (G + 1.5) / (N + 2) spacing only hid this for the rare
+    // case where a group's offset happened to be 0 (the middle of odd N).
+    // The proper fix is in the route, not the position: insert one extra
+    // waypoint past each offset stub along the same perpendicular direction,
+    // so orthoRoute starts from there. The jog then happens LEAD_OUT pixels
+    // further from the cell, hidden inside the orthogonal route geometry,
+    // and the visible exit stays perpendicular for the full stub+lead-out
+    // length regardless of N parity.
+    const LEAD_OUT = 24;
+    const extendPerp = (pt, dir, dist) => {
+      switch (dir) {
+        case 'top':    return { x: pt.x, y: pt.y - dist };
+        case 'bottom': return { x: pt.x, y: pt.y + dist };
+        case 'left':   return { x: pt.x - dist, y: pt.y };
+        case 'right':  return { x: pt.x + dist, y: pt.y };
+        default: return pt;
+      }
+    };
+    // Only add a lead-out when the trunk offset is non-trivial (|off| > 1).
+    // Zero-offset groups (e.g. middle of odd N) already align with the
+    // natural perpendicular exit and don't need extension.
+    const srcLead = (sOff != null && Math.abs(sOff) > 1)
+      ? extendPerp(from, srcInfo.dir, LEAD_OUT) : null;
+    const tgtLead = (tOff != null && Math.abs(tOff) > 1)
+      ? extendPerp(to, tgtInfo.dir, LEAD_OUT) : null;
+
     try {
       if (vertices.length > 0) {
+        // User has manual vertices — respect them; no lead-out injection
+        // (the user's vertices express the intended bend points already).
         const waypoints = [from, ...vertices, to];
         const route = [from];
         for (let i = 0; i < waypoints.length - 1; i++) {
@@ -638,7 +685,15 @@ function registerSfRouter() {
         return route;
       }
 
-      return [from, ...orthoRoute(from, to, obstacles), to];
+      const orthoStart = srcLead || from;
+      const orthoEnd   = tgtLead || to;
+      const mid = orthoRoute(orthoStart, orthoEnd, obstacles);
+      const route = [from];
+      if (srcLead) route.push(srcLead);
+      route.push(...mid);
+      if (tgtLead) route.push(tgtLead);
+      route.push(to);
+      return route;
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors
       return vertices;
@@ -685,6 +740,7 @@ function registerSfRouter() {
       return fallback();
     }
   };
+
 }
 
 
@@ -920,6 +976,232 @@ export function init() {
     const currentStyle = link.prop('lineStyle');
     if (currentStyle && currentStyle !== 'none') return;
     link.prop('lineStyle', '6 4');
+  });
+
+  // --- Focus highlight: bring hovered/selected link to top of render order ─
+  //
+  // SVG has no z-index — paint order is DOM document order, so a link is
+  // visible above another link only if its <g> appears LATER in the parent.
+  // When multiple connectors overlap (common in ER and architecture
+  // diagrams with shared anchor points or middle-segment crossings), the
+  // user can't tell which line they're inspecting. Bringing the hovered /
+  // clicked link to the end of its parent group lifts it above the rest
+  // while focused, and we restore the original order on mouseleave (unless
+  // the link is selected — selection itself counts as a sustained focus).
+  //
+  // The restore step is what keeps the canvas from drifting into "every
+  // link ever hovered is permanently on top" entropy over a long session.
+  // We stash the original next-sibling and put it back when focus ends.
+  const linkOriginalNext = new WeakMap();
+  const bringLinkToFront = (linkView) => {
+    const el = linkView?.el;
+    const parent = el?.parentNode;
+    if (!el || !parent) return;
+    if (el === parent.lastChild) return;
+    if (!linkOriginalNext.has(linkView)) {
+      linkOriginalNext.set(linkView, el.nextSibling);
+    }
+    parent.appendChild(el);
+  };
+  const restoreLinkOrder = (linkView) => {
+    const el = linkView?.el;
+    const parent = el?.parentNode;
+    if (!el || !parent) return;
+    if (!linkOriginalNext.has(linkView)) return;
+    const next = linkOriginalNext.get(linkView);
+    linkOriginalNext.delete(linkView);
+    // The saved next-sibling may have been removed (e.g. the link it
+    // pointed to was deleted). If so, fall back to appendChild — the link
+    // stays at the end, which is a harmless drift; better than throwing.
+    try {
+      if (next && next.parentNode === parent) parent.insertBefore(el, next);
+      else parent.appendChild(el);
+    } catch { /* defensive — DOM in unexpected state */ }
+  };
+
+  // --- Marker tint (source/target arrowheads + ER notation) -------------
+  //
+  // CSS can recolour the line via `[joint-selector="line"]`, but JointJS
+  // v4 renders sourceMarker/targetMarker as inline SVG <path> children
+  // with their own explicit `stroke` / `fill` attributes — those
+  // attributes have higher specificity than CSS-inherited stroke, so the
+  // markers stay grey even when the line turns blue/red on focus. To get
+  // an end-to-end recolour we walk the link's DOM, snapshot every marker
+  // path's stroke/fill, overwrite with --selection-color while focused,
+  // then restore on unfocus.
+  //
+  // We skip the `wrapper` (transparent hit area) and the `line` itself
+  // (already CSS-driven). Fills that are 'none' / 'transparent' /
+  // reference the canvas bg variable are left alone — those are
+  // "decorative gaps" in open-stroke markers (e.g. the zero-or-one circle
+  // is filled with --bg-canvas to mask the underlying line) and tinting
+  // them would break the masking effect.
+  // Map (not WeakMap) — we need to iterate the set on each selection-
+  // clearing pointerdown to find links that lost their .selected class
+  // without firing a link-level event of their own (e.g. clicking blank
+  // canvas deselects a link but doesn't trigger link:mouseleave).
+  const linkMarkerOriginals = new Map();
+  const SELECTION_COLOR_FALLBACK = '#1D73C9';
+  const getSelectionColor = () => {
+    try {
+      const c = getComputedStyle(document.documentElement)
+        .getPropertyValue('--selection-color').trim();
+      return c || SELECTION_COLOR_FALLBACK;
+    } catch { return SELECTION_COLOR_FALLBACK; }
+  };
+  const isPreservedFill = (val) => {
+    if (!val) return true;
+    const v = val.trim().toLowerCase();
+    return v === 'none' || v === 'transparent' || v.includes('bg-canvas');
+  };
+  const tintPath = (p, color, saved) => {
+    const origStroke = p.getAttribute('stroke');
+    const origFill = p.getAttribute('fill');
+    saved.push({ el: p, origStroke, origFill });
+    // Override stroke unconditionally — markers either have an explicit
+    // stroke we want to swap, or none (auto-inherit) in which case
+    // setting it makes the recolour explicit and visible.
+    p.setAttribute('stroke', color);
+    // Only override "real" fills — leave masking fills (none / bg) intact
+    // so the circular open-stroke markers keep their visual notch.
+    if (!isPreservedFill(origFill)) p.setAttribute('fill', color);
+  };
+  // Counter for unique clone-marker IDs. JointJS pools shared <marker>
+  // defs (every link with the same arrow style points at the SAME
+  // <marker>), so tinting the def in place leaks the colour to every
+  // sibling link. We clone the marker, give it a fresh id, tint the
+  // clone, and re-point the focused line at the clone. Restore puts the
+  // original ref back and removes the clone.
+  let focusMarkerCloneSeq = 0;
+  const tintLinkMarkers = (linkView) => {
+    const el = linkView?.el;
+    if (!el || linkMarkerOriginals.has(linkView)) return;
+    const color = getSelectionColor();
+    const saved = [];           // direct path tints (inline marker case)
+    const markerSwaps = [];     // { lineEl, attrName, origRef, cloneEl }
+
+    // (A) Inline marker paths — JointJS v4 may render
+    // sourceMarker/targetMarker as <path> children of the link group
+    // (with a joint-selector like "line"/"sourceMarker"). Those aren't
+    // shared between links so tinting them in place is safe.
+    el.querySelectorAll('path').forEach(p => {
+      const sel = p.getAttribute('joint-selector');
+      if (sel === 'wrapper' || sel === 'line') return;
+      tintPath(p, color, saved);
+    });
+
+    // (B) <marker> defs — the shared-pool rendering path. Clone, tint
+    // the clone, swap the line's marker-start / marker-end ref.
+    const line = el.querySelector('[joint-selector="line"]');
+    const root = el.ownerSVGElement;
+    const defs = root?.querySelector('defs');
+    if (line && root && defs) {
+      for (const attrName of ['marker-start', 'marker-end']) {
+        const ref = line.getAttribute(attrName);
+        if (!ref) continue;
+        const m = ref.match(/url\(#([^)]+)\)/);
+        if (!m) continue;
+        const origMarker = root.getElementById(m[1]);
+        if (!origMarker) continue;
+        const cloneId = `sf-focus-marker-${++focusMarkerCloneSeq}`;
+        const cloneEl = origMarker.cloneNode(true);
+        cloneEl.setAttribute('id', cloneId);
+        cloneEl.querySelectorAll('path').forEach(p => {
+          const origFill = p.getAttribute('fill');
+          p.setAttribute('stroke', color);
+          if (!isPreservedFill(origFill)) p.setAttribute('fill', color);
+        });
+        defs.appendChild(cloneEl);
+        markerSwaps.push({ lineEl: line, attrName, origRef: ref, cloneEl });
+        line.setAttribute(attrName, `url(#${cloneId})`);
+      }
+    }
+
+    linkMarkerOriginals.set(linkView, { saved, markerSwaps });
+  };
+  const restoreLinkMarkers = (linkView) => {
+    const data = linkMarkerOriginals.get(linkView);
+    if (!data) return;
+    linkMarkerOriginals.delete(linkView);
+    const { saved, markerSwaps } = data;
+    saved.forEach(({ el, origStroke, origFill }) => {
+      if (origStroke == null) el.removeAttribute('stroke');
+      else el.setAttribute('stroke', origStroke);
+      if (origFill == null) el.removeAttribute('fill');
+      else el.setAttribute('fill', origFill);
+    });
+    markerSwaps.forEach(({ lineEl, attrName, origRef, cloneEl }) => {
+      // Only put origRef back if the line is still pointing at OUR clone.
+      // If the user changed the marker style mid-focus (e.g. swapped the
+      // target end via the property picker while the link was selected),
+      // JointJS re-rendered the line with a fresh `url(#new-marker-id)` —
+      // our origRef is now stale and writing it back would resurrect the
+      // pre-change marker on deselect. The clone is removed unconditionally
+      // because it has no further purpose either way.
+      const currentRef = lineEl.getAttribute(attrName) || '';
+      if (currentRef.includes(cloneEl.id)) {
+        lineEl.setAttribute(attrName, origRef);
+      }
+      cloneEl.parentNode?.removeChild(cloneEl);
+    });
+  };
+
+  // Sweep tinted links and restore any that are no longer focused —
+  // i.e. neither hovered (:hover) nor selected (.selected). Called from
+  // pointerdown handlers that could clear selection without firing a
+  // link-level event on the just-deselected link.
+  //
+  // Deferred via queueMicrotask so selection.js's pointerdown handler
+  // (registered AFTER canvas.init by app.js) gets to add/remove .selected
+  // first. Without this defer, sweeping during link:pointerdown would
+  // see the just-deselected link still marked .selected and leave it tinted.
+  const sweepStaleMarkerTints = () => queueMicrotask(() => {
+    for (const linkView of [...linkMarkerOriginals.keys()]) {
+      const el = linkView?.el;
+      if (!el) { linkMarkerOriginals.delete(linkView); continue; }
+      const stillFocused = el.classList.contains('selected') || el.matches(':hover');
+      if (!stillFocused) {
+        restoreLinkMarkers(linkView);
+        restoreLinkOrder(linkView);
+      }
+    }
+  });
+
+  paper.on('link:mouseenter', (linkView) => {
+    bringLinkToFront(linkView);
+    tintLinkMarkers(linkView);
+  });
+  paper.on('link:mouseleave', (linkView) => {
+    // Keep selected links lifted — selection is sustained focus.
+    if (linkView?.el?.classList.contains('selected')) return;
+    restoreLinkOrder(linkView);
+    restoreLinkMarkers(linkView);
+  });
+  paper.on('link:pointerdown', (linkView) => {
+    bringLinkToFront(linkView);
+    tintLinkMarkers(linkView);
+    // Clicking link A deselects link B; sweep restores B's markers.
+    sweepStaleMarkerTints();
+  });
+  paper.on('blank:pointerdown', sweepStaleMarkerTints);
+  paper.on('element:pointerdown', sweepStaleMarkerTints);
+
+  // When attrs change on a currently-focused link (most commonly: the
+  // user changing source/target end style via the property picker while
+  // the link is selected), JointJS re-renders the line with a fresh
+  // marker URL. Our clone is now orphaned and the line is showing the
+  // new (un-tinted) marker. Defer one microtask so JointJS finishes its
+  // re-render, then tear down our stale tint and re-tint against the
+  // freshly rendered markers so the focus colour stays consistent.
+  graph.on('change:attrs', (cell) => {
+    if (!cell.isLink()) return;
+    const linkView = paper.findViewByModel(cell);
+    if (!linkView || !linkMarkerOriginals.has(linkView)) return;
+    queueMicrotask(() => {
+      if (!linkMarkerOriginals.has(linkView)) return;
+      restoreLinkMarkers(linkView);
+      tintLinkMarkers(linkView);
+    });
   });
 
   // --- Pan (drag on blank canvas area) ---

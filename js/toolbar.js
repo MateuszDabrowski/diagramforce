@@ -1,10 +1,10 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.12.1';
-import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.1';
-import { resizeDataObjectToFit } from './templates.js?v=1.12.1';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks } from './canvas.js?v=1.12.1';
+import { diagramHasImage } from './image-component.js?v=1.12.2';
+import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.2';
+import { resizeDataObjectToFit } from './templates.js?v=1.12.2';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks } from './canvas.js?v=1.12.2';
 
 let modules = {};
 
@@ -140,7 +140,7 @@ export function init(_modules) {
   const btnGrouping = document.getElementById('btn-display-connector-grouping');
   const refreshGroupingLabel = () => {
     // Label is fixed ("Spread Overlapping Connectors"); state shown by the
-    // checkbox icon. Checked = spreading is on; unchecked (default) = all
+    // checkbox icon. Checked (default) = spreading is on; unchecked = all
     // connectors converge at the port centre.
     btnGrouping?.classList.toggle('is-checked', isConnectorGroupingEnabled());
     _refreshDisplayDot();
@@ -1080,12 +1080,15 @@ function updateSequenceToggleLabels() {
 // isDisplayFlagOn. Module-scope so the per-section label refreshers
 // (updateDisplayToggleLabels / updateGanttToggleLabels /
 // updateSequenceToggleLabels) can call it directly.
+
 function refreshDisplayDotIndicator() {
   const btn = document.getElementById('btn-display');
   if (!btn) return;
   const nonDefault =
     isAutoSizingEnabled() === false ||
-    isConnectorGroupingEnabled() === true ||
+    // Connector Grouping defaults ON now (canvas.js → isConnectorGroupingEnabled),
+    // so the non-default state is "currently off".
+    isConnectorGroupingEnabled() === false ||
     isDisplayFlagOn('showLabels') ||
     isDisplayFlagOn('showFieldLengths') ||
     isDisplayFlagOn('keyFieldsOnly') ||

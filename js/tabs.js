@@ -1,8 +1,8 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.12.1';
-import { showError, showToast } from './feedback.js?v=1.12.1';
+import { escHtml, APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.12.2';
+import { showError, showToast } from './feedback.js?v=1.12.2';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -980,6 +980,18 @@ export function setupAutoSave() {
 
 function render() {
   tabListEl.innerHTML = '';
+
+  // v1.12.1 safety net — if rendering hits zero tabs AND the new-diagram
+  // modal isn't already open, pop it. Multi-close followed by any
+  // interrupted modal sequence could otherwise leave the user stranded
+  // on a blank app with no obvious recovery path. Belt-and-braces over
+  // the explicit call in doCloseTab's last-tab branch (which can be
+  // missed if doCloseTab itself throws mid-execution). Deferred one
+  // tick so any in-flight state mutation settles before the modal
+  // grabs focus.
+  if (tabs.length === 0 && !document.querySelector('.sf-new-modal')) {
+    setTimeout(showNewDiagramModal, 0);
+  }
 
   for (const tab of tabs) {
     const el = document.createElement('div');

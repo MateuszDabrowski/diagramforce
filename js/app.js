@@ -1,21 +1,21 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.12.1';
-import * as icons       from './icons.js?v=1.12.1';
-import { getAllStencilSvgs } from './templates.js?v=1.12.1';
-import * as shapes      from './shapes.js?v=1.12.1';
-import * as canvas      from './canvas.js?v=1.12.1';
-import * as stencil     from './stencil.js?v=1.12.1';
-import * as selection   from './selection.js?v=1.12.1';
-import * as history     from './history.js?v=1.12.1';
-import * as clipboard   from './clipboard.js?v=1.12.1';
-import * as keyboard    from './keyboard.js?v=1.12.1';
-import * as toolbar     from './toolbar.js?v=1.12.1';
-import * as properties  from './properties.js?v=1.12.1';
-import * as persistence from './persistence.js?v=1.12.1';
-import * as tabs        from './tabs.js?v=1.12.1';
-import * as mermaidImport from './mermaid-import.js?v=1.12.1';
+import * as theme       from './theme.js?v=1.12.2';
+import * as icons       from './icons.js?v=1.12.2';
+import { getAllStencilSvgs } from './templates.js?v=1.12.2';
+import * as shapes      from './shapes.js?v=1.12.2';
+import * as canvas      from './canvas.js?v=1.12.2';
+import * as stencil     from './stencil.js?v=1.12.2';
+import * as selection   from './selection.js?v=1.12.2';
+import * as history     from './history.js?v=1.12.2';
+import * as clipboard   from './clipboard.js?v=1.12.2';
+import * as keyboard    from './keyboard.js?v=1.12.2';
+import * as toolbar     from './toolbar.js?v=1.12.2';
+import * as properties  from './properties.js?v=1.12.2';
+import * as persistence from './persistence.js?v=1.12.2';
+import * as tabs        from './tabs.js?v=1.12.2';
+import * as mermaidImport from './mermaid-import.js?v=1.12.2';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -120,12 +120,31 @@ main().catch(err => {
 // or the registration fails. Cache invalidation is handled inside sw.js by
 // keying on APP_VERSION — a version bump lands in a fresh cache and old
 // caches are purged on activation.
+//
+// DEVELOPMENT BYPASS: on localhost / 127.0.0.1 / file:// we actively
+// UNREGISTER any existing service worker and skip registration. The
+// cache-first strategy is great for shipped builds (offline-capable,
+// fast loads) but murder during development — without a version bump
+// after every edit, the SW serves stale CSS/JS and you have to use
+// reset.html to see changes. Production hostnames keep the SW for the
+// PWA experience. End users are NOT affected by this bypass.
+const isDevHost = ['localhost', '127.0.0.1', '0.0.0.0', ''].includes(location.hostname)
+  || location.protocol === 'file:';
+
 if ('serviceWorker' in navigator) {
-  // Defer registration until after the load event so it doesn't compete with
-  // the initial paint or app bootstrap.
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
-      console.warn('SF Diagrams: Service worker registration failed', err);
+  if (isDevHost) {
+    // Tear down any SW left behind by an earlier visit so dev edits land
+    // immediately. Best-effort — failures are non-fatal.
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => regs.forEach(r => r.unregister()))
+      .catch(() => { /* ignore */ });
+  } else {
+    // Defer registration until after the load event so it doesn't compete
+    // with the initial paint or app bootstrap.
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('SF Diagrams: Service worker registration failed', err);
+      });
     });
-  });
+  }
 }

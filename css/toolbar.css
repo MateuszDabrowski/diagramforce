@@ -239,13 +239,17 @@
    amber corner dot on the button; refined to colour the eye-icon's
    pupil instead so the signal reads as part of the icon rather than a
    notification-badge floating above it. The pupil <circle> sits over
-   the eye path's pupil hole — transparent by default, fills brand-amber
-   when the parent button has the `--has-active` modifier. */
+   the eye path's pupil hole — transparent by default, fills with the
+   brand primary colour when the parent button has the `--has-active`
+   modifier. `--color-primary` resolves to brand-blue in light mode and
+   brand-red in dark mode automatically via the theme cascade — keeps
+   the indicator on-brand instead of borrowing the amber accent the
+   app uses for selection / highlight elsewhere. */
 .sf-display-icon__pupil {
   transition: fill var(--transition-fast);
 }
 .sf-toolbar__button--has-active .sf-display-icon__pupil {
-  fill: var(--brand-amber);
+  fill: var(--color-primary);
 }
 
 /* Checkbox-style toggle items (Display menu). The SVG carries both the

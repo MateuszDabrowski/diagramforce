@@ -69,17 +69,20 @@
   pointer-events: all !important;
 }
 
-/* Link styling */
-.joint-link .connection {
-  transition: stroke-width var(--transition-fast);
+/* Link styling — JointJS v4 renders the link body as
+ * <path joint-selector="line">, NOT the v3 .connection class. Targeting
+ * the joint-selector attribute is the canonical v4 hook. */
+.joint-link [joint-selector="line"] {
+  transition: stroke var(--transition-fast);
 }
 
-.joint-link:hover .connection {
-  stroke-width: 3px !important;
-}
-
-/* Link selection */
-.joint-link.selected .connection {
+/* Hover + selection focus — tint the line in --selection-color so the
+ * focused connector reads clearly when it overlaps siblings. The
+ * canvas.js focus-highlight handler pairs this with a DOM bring-to-front
+ * (line lifted above other links in SVG paint order) AND a JS marker
+ * tint so source/target endpoints recolour end-to-end with the line. */
+.joint-link:hover [joint-selector="line"],
+.joint-link.selected [joint-selector="line"] {
   stroke: var(--selection-color) !important;
 }
 

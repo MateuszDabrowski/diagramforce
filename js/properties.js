@@ -1,12 +1,12 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.12.1';
-import { confirmModal, showToast } from './feedback.js?v=1.12.1';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.12.1';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.12.1';
-import * as stencilModule from './stencil.js?v=1.12.1';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.12.1';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.12.2';
+import { confirmModal, showToast } from './feedback.js?v=1.12.2';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.12.2';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.12.2';
+import * as stencilModule from './stencil.js?v=1.12.2';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.12.2';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -15,10 +15,10 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.12.1';
-import * as history from './history.js?v=1.12.1';
-import { startImageAddFlow } from './image-component.js?v=1.12.1';
-import { escHtml } from './persistence.js?v=1.12.1';
+} from './clipboard.js?v=1.12.2';
+import * as history from './history.js?v=1.12.2';
+import { startImageAddFlow } from './image-component.js?v=1.12.2';
+import { escHtml } from './persistence.js?v=1.12.2';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -1285,11 +1285,30 @@ function renderTextLabelProps(cell) {
 }
 
 function renderLineProps(cell) {
+  // Unicode box-drawing previews so the picklist shows a sample of each
+  // stroke pattern alongside the name — native <select> can't render
+  // inline SVG, but these chars are stable across macOS / Windows / Linux
+  // system fonts and read as "what the line will look like".
+  //
+  // Layout: name (padded to a fixed width) → gap → line sample. Padding
+  // is in non-breaking spaces ( ) because plain ASCII spaces are
+  // collapsed/shrunk by most option renderers and the lines drift out of
+  // alignment. The 8-char padEnd target is "Dashed" (6) + 2 spaces of
+  // breathing room.
+  // Em-space (U+2003) is a 1em typographic char that browsers don't
+  // collapse in <option> text, unlike ASCII spaces. Strict column
+  // alignment is impossible in a native <select> (the OS owns popup
+  // font/spacing) so we use a consistent visible gap and tune line
+  // samples to roughly equal visual length. Dashed is the reference;
+  // Solid/Breaks were trimmed to match; Dotted uses U+00B7 middle dots
+  // (U+2508 renders 3-dots-per-glyph and looks uneven with spaces).
+  const EM = ' ';
+  const GAP = EM + EM + EM;
   const LINE_STYLES = [
-    { value: 'solid',  label: 'Solid' },
-    { value: 'dashed', label: 'Dashed' },
-    { value: 'dotted', label: 'Dotted' },
-    { value: 'breaks', label: 'Breaks' },
+    { value: 'solid',  label: `Solid${GAP}─────` },
+    { value: 'dashed', label: `Dashed${GAP}╌ ╌ ╌ ╌ ╌` },
+    { value: 'dotted', label: `Dotted${GAP}· · · · · · ·` },
+    { value: 'breaks', label: `Breaks${GAP}── ── ──` },
   ];
 
   function applyLineStyle(style) {
@@ -3100,10 +3119,15 @@ function renderLinkProps(cell) {
         else parent.appendChild(view.el);
       }
     });
+  // Same name → em-space gap → line-sample convention as
+  // renderLineProps, minus 'breaks' (links use only the three standard
+  // dash patterns).
+  const EM = ' ';
+  const GAP = EM + EM + EM;
   addSelect(appearance, 'Line style', cell.prop('lineStyle') || 'none', [
-    { value: 'none', label: 'Solid' },
-    { value: '8 4',  label: 'Dashed' },
-    { value: '2 4',  label: 'Dotted' },
+    { value: 'none', label: `Solid${GAP}─────` },
+    { value: '8 4',  label: `Dashed${GAP}╌ ╌ ╌ ╌ ╌` },
+    { value: '2 4',  label: `Dotted${GAP}· · · · · · ·` },
   ], v => {
     // The line style is stored on a custom `lineStyle` prop — NOT on
     // `line/strokeDasharray` — so the rendered line always stays solid
