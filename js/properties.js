@@ -1,12 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.12.3';
-import { confirmModal, showToast } from './feedback.js?v=1.12.3';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.12.3';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.12.3';
-import * as stencilModule from './stencil.js?v=1.12.3';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.12.3';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.12.4';
+import { confirmModal, showToast } from './feedback.js?v=1.12.4';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.12.4';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.12.4';
+import * as stencilModule from './stencil.js?v=1.12.4';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.12.4';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as TEMPLATE_SVG, extractLinkDomain } from './templates.js?v=1.12.4';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -15,10 +16,10 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.12.3';
-import * as history from './history.js?v=1.12.3';
-import { startImageAddFlow } from './image-component.js?v=1.12.3';
-import { escHtml } from './persistence.js?v=1.12.3';
+} from './clipboard.js?v=1.12.4';
+import * as history from './history.js?v=1.12.4';
+import { startImageAddFlow } from './image-component.js?v=1.12.4';
+import { escHtml } from './persistence.js?v=1.12.4';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -4001,6 +4002,89 @@ function addColor(parent, label, value, onChange, opts = {}) {
   }
 
   f.appendChild(row);
+
+  // Brand palette strip (v1.12.4) — saved swatches below the picker.
+  // Click a swatch to apply, hover for an × remove control, press + to
+  // bank the current color for reuse.  Subscribes to onPaletteChange so
+  // multiple open pickers (e.g., Fill + Border + Label) stay in sync.
+  const paletteRow = document.createElement('div');
+  paletteRow.className = 'sf-prop-palette-strip';
+  f.appendChild(paletteRow);
+
+  const applySwatch = (hex) => {
+    swatch.value = hex;
+    textInput.value = hex;
+    lastValid = hex;
+    batched(hex);
+    refreshResetState();
+  };
+
+  const renderPalette = () => {
+    paletteRow.replaceChildren();
+    const palette = getPalette();
+    for (const hex of palette) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'sf-prop-palette-swatch';
+      item.style.backgroundColor = hex;
+      item.title = hex;
+      item.setAttribute('aria-label', `Apply ${hex}`);
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('sf-prop-palette-swatch__remove')) return;
+        applySwatch(hex);
+      });
+      // × remove button — visible on hover/focus only via CSS.
+      const remove = document.createElement('span');
+      remove.className = 'sf-prop-palette-swatch__remove';
+      remove.textContent = '×';
+      remove.setAttribute('role', 'button');
+      remove.setAttribute('aria-label', `Remove ${hex} from palette`);
+      remove.title = 'Remove from palette';
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeFromPalette(hex);
+      });
+      item.appendChild(remove);
+      paletteRow.appendChild(item);
+    }
+    // Save-current button — disabled when the palette is full AND the
+    // current color is already in the palette, otherwise enabled
+    // (adding a new color promotes-to-front and bumps the oldest off,
+    // which is desirable behaviour we explicitly support).
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'sf-prop-palette-save';
+    saveBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    saveBtn.setAttribute('aria-label', 'Save current colour to palette');
+    saveBtn.title = palette.length >= PALETTE_MAX_SLOTS
+      ? `Palette full (${PALETTE_MAX_SLOTS}) — saving will replace the oldest`
+      : 'Save current colour to palette';
+    saveBtn.addEventListener('click', () => {
+      const ok = addToPalette(lastValid);
+      if (ok) showToast(`Saved ${lastValid.toUpperCase()} to palette`, { duration: 1400 });
+    });
+    paletteRow.appendChild(saveBtn);
+  };
+
+  renderPalette();
+  // Repaint when other open color pickers add/remove. Returned
+  // unsubscribe is called via a one-shot cleanup tied to field removal —
+  // properties panel rebuilds the field tree on selection change, so
+  // when the parent node is removed from the DOM we drop the listener.
+  const unsubscribe = onPaletteChange(() => renderPalette());
+  // Use a MutationObserver on the parent to detect detachment. Cheap —
+  // one observer per color picker, only watching child removal at the
+  // properties panel root.
+  const detachObserver = new MutationObserver(() => {
+    if (!document.contains(paletteRow)) {
+      unsubscribe();
+      detachObserver.disconnect();
+    }
+  });
+  // The properties panel always lives under #properties; observing its
+  // subtree catches every selection-driven rebuild.
+  const propsRoot = document.getElementById('properties');
+  if (propsRoot) detachObserver.observe(propsRoot, { childList: true, subtree: true });
 }
 
 /**

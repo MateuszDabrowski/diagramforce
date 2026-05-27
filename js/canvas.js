@@ -168,6 +168,27 @@ export function setCrossingBumpsEnabled(v) {
   try { localStorage.setItem(CROSSING_BUMPS_LS_KEY, String(!!v)); } catch {}
   refreshCrossingBumps();
 }
+
+// ── Focus dimming toggle (v1.12.4) ──────────────────────────────────
+// When the user selects an element, everything not directly connected
+// to it is dimmed so the focus highlight reads at a glance. That's the
+// behaviour most people want — but in dense diagrams users sometimes
+// just want to inspect / drag a single shape without the rest of the
+// canvas fading. This toggle lets them opt out. Default ON. The Display
+// menu drives it via setFocusDimmingEnabled(); selection.js consults
+// isFocusDimmingEnabled() inside updateLinkDimming and short-circuits
+// when off, also clearing any lingering dim classes.
+const FOCUS_DIMMING_LS_KEY = 'sfdiag::focusDimming';
+export function isFocusDimmingEnabled() {
+  try {
+    const v = localStorage.getItem(FOCUS_DIMMING_LS_KEY);
+    if (v === null) return true;            // never set → default ON
+    return v === 'true';                    // explicit user choice wins
+  } catch { return true; }
+}
+export function setFocusDimmingEnabled(v) {
+  try { localStorage.setItem(FOCUS_DIMMING_LS_KEY, String(!!v)); } catch {}
+}
 export function refreshCrossingBumps() {
   if (typeof scheduleCrossingBumpRecompute === 'function') {
     scheduleCrossingBumpRecompute();
@@ -2520,7 +2541,7 @@ function recomputeCrossingBumps() {
   // SMALLEST z difference (= more visually "adjacent" links) win the
   // grid cell — we collect first and sort by z-distance ascending.
   //
-  // Same-port skip (v1.12.3): two links exiting the same port at one
+  // Same-port skip (v1.12.4): two links exiting the same port at one
   // cell (e.g., multiple lines from Decision's bottom port to different
   // targets) should NEVER bump against each other — they're related
   // routes from a shared anchor, not actual crossings. Without this

@@ -451,6 +451,81 @@
   cursor: not-allowed;
 }
 
+/* ── Brand palette strip (v1.12.4) ─────────────────────
+ * Saved colour swatches sitting under every addColor() picker.
+ * Click a swatch to apply, hover-then-click × to remove, + to bank
+ * the current colour. */
+.sf-prop-palette-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.sf-prop-palette-swatch {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  /* No background — set inline per swatch */
+}
+.sf-prop-palette-swatch:hover,
+.sf-prop-palette-swatch:focus-visible {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 3px var(--color-primary);
+  outline: none;
+}
+.sf-prop-palette-swatch__remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 13px;
+  height: 13px;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 11px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.sf-prop-palette-swatch:hover .sf-prop-palette-swatch__remove,
+.sf-prop-palette-swatch:focus-within .sf-prop-palette-swatch__remove {
+  opacity: 1;
+}
+.sf-prop-palette-swatch__remove:hover {
+  color: var(--brand-red);
+  border-color: var(--brand-red);
+}
+.sf-prop-palette-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+.sf-prop-palette-save:hover {
+  border-style: solid;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 /* ── Icon picker ───────────────────────────────────────── */
 
 .sf-prop-icon-preview {

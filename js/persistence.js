@@ -1,15 +1,15 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.12.3';
-import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.12.3';
-import { diagramHasImage } from './image-component.js?v=1.12.3';
-import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.3';
+import { GIFEncoder, quantize, applyPalette } from '../assets/vendor/gifenc.esm.js?v=1.12.4';
+import { encodeShareV1, decodeShareV1 } from './share-codec.js?v=1.12.4';
+import { diagramHasImage } from './image-component.js?v=1.12.4';
+import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.4';
 
 let graph, paper, canvasModule;
 const NAMED_SAVE_PREFIX = 'sfdiag::save::';
 const SAVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-const APP_VERSION = '1.12.3';
+const APP_VERSION = '1.12.4';
 export { APP_VERSION };
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)

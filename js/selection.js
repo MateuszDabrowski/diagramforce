@@ -1,8 +1,9 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.12.3';
-import * as history from './history.js?v=1.12.3';
+import * as clipboard from './clipboard.js?v=1.12.4';
+import * as history from './history.js?v=1.12.4';
+import { isFocusDimmingEnabled } from './canvas.js?v=1.12.4';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -327,6 +328,72 @@ export function init(_graph, _paper) {
     }
   });
 
+  // Paper-root pointer bracket for history batching (v1.12.4).
+  //
+  // JointJS link tools (SourceArrowhead, TargetArrowhead, Vertices) are
+  // separate view objects that handle their own pointer events — they
+  // DON'T emit `link:pointerdown` / `link:pointerup` on the paper.
+  // Listening at the paper's root SVG catches every interaction
+  // (cell click, body drag, tool drag, blank-area click), so the
+  // arrowhead drag — which previously slipped past the link-level
+  // bracket — is now wrapped in startBatch / endBatch like everything
+  // else. Nested batches are safe (history.startBatch is depth-aware),
+  // so the resize-handle batch in addResizeHandles still works.
+  //
+  // capture: true on pointerdown so we win the race against any inner
+  // stopPropagation — resize handles call evt.stopPropagation in their
+  // own onDown but we've already opened the batch by that point.
+  //
+  // pointerup must be DEFERRED, however. Our capture-phase document
+  // pointerup runs BEFORE JointJS's tool-finalisation handlers (those
+  // listen on bubble phase or directly on the tool element and fire
+  // change:source / change:target synchronously on pointerup as the
+  // link snaps to its final port). Closing the batch immediately would
+  // leave that final endpoint change OUTSIDE the batch — which is
+  // exactly the "captures multiple steps during drag" symptom users
+  // reported. setTimeout(0) lets every sync handler fire first, then
+  // closes the batch with the final change events folded in.
+  //
+  // A new pointerdown arriving before the deferred close clears the
+  // pending timer and closes the prior batch synchronously, so two
+  // back-to-back gestures don't collapse into one undo entry.
+  let _pointerBatchOpen = false;
+  let _pendingEndTimer = null;
+  const closeBatchNow = () => {
+    if (_pendingEndTimer) {
+      clearTimeout(_pendingEndTimer);
+      _pendingEndTimer = null;
+    }
+    if (_pointerBatchOpen) {
+      history.endBatch();
+      _pointerBatchOpen = false;
+    }
+  };
+  const onPaperPointerDown = () => {
+    // Close any prior batch that hasn't been flushed yet — a new
+    // gesture starts a fresh undo entry.
+    closeBatchNow();
+    history.startBatch();
+    _pointerBatchOpen = true;
+  };
+  const onPaperPointerEnd = () => {
+    if (!_pointerBatchOpen || _pendingEndTimer) return;
+    _pendingEndTimer = setTimeout(() => {
+      _pendingEndTimer = null;
+      if (_pointerBatchOpen) {
+        history.endBatch();
+        _pointerBatchOpen = false;
+      }
+    }, 0);
+  };
+  paper.el.addEventListener('pointerdown', onPaperPointerDown, true);
+  // pointerup can land on the DOCUMENT if the pointer was released
+  // outside the paper's bounding box (drag past the canvas edge), so
+  // we listen at the document level for the close-side. pointercancel
+  // covers the rare case where the OS preempts the gesture.
+  document.addEventListener('pointerup', onPaperPointerEnd, true);
+  document.addEventListener('pointercancel', onPaperPointerEnd, true);
+
   setupRubberBand();
   setupMultiDrag();
 }
@@ -394,12 +461,18 @@ export function deleteSelected() {
 }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
+
+/** Public refresh for the dim overlay (v1.12.4). Called by the Display
+ *  menu's Focus Dimming toggle so flipping the option re-applies (or
+ *  clears) dimming against the current selection without needing the
+ *  user to reselect. */
+export function refreshDimming() { updateLinkDimming(); }
 function notifyChange() {
   updateLinkDimming();
   onChangeCallbacks.forEach(cb => cb(getSelectedIds()));
 }
 
-// ── Connection-focus dimming (v1.12.3) ──────────────────────────────
+// ── Connection-focus dimming (v1.12.4) ──────────────────────────────
 // When one or more ELEMENTS are selected, fade everything in the
 // diagram that doesn't touch the selection: links not connected to a
 // selected element, AND elements that have at least one link but aren't
@@ -442,6 +515,21 @@ function suspendDimmingForDrag() {
 
 function updateLinkDimming() {
   if (!graph || !paper) return;
+
+  // Focus Dimming toggle (Display menu) — when off, no element is ever
+  // dimmed regardless of selection. Clear any classes left over from
+  // before the user disabled it and bail. v1.12.4.
+  if (!isFocusDimmingEnabled()) {
+    document.querySelectorAll('.joint-link.sf-link-dimmed').forEach(el => {
+      el.classList.remove('sf-link-dimmed');
+    });
+    document.querySelectorAll('.joint-element.sf-element-dimmed').forEach(el => {
+      el.classList.remove('sf-element-dimmed');
+    });
+    document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
+    return;
+  }
+
   const selectedElementIds = new Set();
   const selectedLinkIds = new Set();
   for (const id of selectedIds) {

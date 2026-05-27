@@ -65,6 +65,27 @@ function commitPendingDrag() {
         redos.push(() => { const c = graph.getCell(id); if (c) c.vertices(nc); });
       }
     }
+    // Link source / target re-wiring during an arrowhead drag. Merge
+    // captures the FIRST source/target seen and the LAST, so multi-step
+    // hover changes collapse to a single undo entry.
+    if (entry.source) {
+      const { oldS, newS } = entry.source;
+      const oldStr = JSON.stringify(oldS), newStr = JSON.stringify(newS);
+      if (oldStr !== newStr) {
+        const oc = JSON.parse(oldStr), nc = JSON.parse(newStr);
+        undos.push(() => { const c = graph.getCell(id); if (c) c.source(oc); });
+        redos.push(() => { const c = graph.getCell(id); if (c) c.source(nc); });
+      }
+    }
+    if (entry.target) {
+      const { oldT, newT } = entry.target;
+      const oldStr = JSON.stringify(oldT), newStr = JSON.stringify(newT);
+      if (oldStr !== newStr) {
+        const oc = JSON.parse(oldStr), nc = JSON.parse(newStr);
+        undos.push(() => { const c = graph.getCell(id); if (c) c.target(oc); });
+        redos.push(() => { const c = graph.getCell(id); if (c) c.target(nc); });
+      }
+    }
   }
   pendingChanges.clear();
 
@@ -234,10 +255,12 @@ export function init(_graph) {
 
   // Link source / target — fired when `link.source({id, port})` or
   // `link.target(...)` is called (port re-wiring, reconnecting a link
-  // to a different cell). Without these handlers the user can re-route
-  // a connector and Cmd+Z silently does nothing. Stored as raw objects
-  // because the source/target value is the full descriptor (point,
-  // {id, port}, or {x, y}). v1.12.1.
+  // to a different cell, OR the user dragging an arrowhead end across
+  // multiple hover targets before releasing). Routed through the same
+  // pendingChanges merge as change:vertices so an arrowhead drag —
+  // which fires change:source / change:target every time the user
+  // hovers a different valid port mid-drag — collapses to ONE undo
+  // entry instead of one per port-hover step. v1.12.4.
   graph.on('change:source', (cell) => {
     if (isUndoRedoing) return;
     if (_suppressPositionTracking) return;  // recordPositionsBatch handles this
@@ -247,13 +270,17 @@ export function init(_graph) {
     const oldStr = JSON.stringify(oldSrc ?? null);
     const newStr = JSON.stringify(newSrc ?? null);
     if (oldStr === newStr) return;
-    const oldCopy = JSON.parse(oldStr);
-    const newCopy = JSON.parse(newStr);
     const id = cell.id;
-    pushCommand({
-      undo: () => { const c = graph.getCell(id); if (c) c.source(oldCopy); },
-      redo: () => { const c = graph.getCell(id); if (c) c.source(newCopy); },
-    });
+    let entry = pendingChanges.get(id);
+    if (!entry) { entry = {}; pendingChanges.set(id, entry); }
+    if (!entry.source) {
+      // First source-change in this drag — pin original.
+      entry.source = { oldS: JSON.parse(oldStr), newS: JSON.parse(newStr) };
+    } else {
+      // Subsequent change in same drag — refresh newS, keep oldS.
+      entry.source.newS = JSON.parse(newStr);
+    }
+    schedulePendingDragCommit();
   });
   graph.on('change:target', (cell) => {
     if (isUndoRedoing) return;
@@ -264,13 +291,15 @@ export function init(_graph) {
     const oldStr = JSON.stringify(oldTgt ?? null);
     const newStr = JSON.stringify(newTgt ?? null);
     if (oldStr === newStr) return;
-    const oldCopy = JSON.parse(oldStr);
-    const newCopy = JSON.parse(newStr);
     const id = cell.id;
-    pushCommand({
-      undo: () => { const c = graph.getCell(id); if (c) c.target(oldCopy); },
-      redo: () => { const c = graph.getCell(id); if (c) c.target(newCopy); },
-    });
+    let entry = pendingChanges.get(id);
+    if (!entry) { entry = {}; pendingChanges.set(id, entry); }
+    if (!entry.target) {
+      entry.target = { oldT: JSON.parse(oldStr), newT: JSON.parse(newStr) };
+    } else {
+      entry.target.newT = JSON.parse(newStr);
+    }
+    schedulePendingDragCommit();
   });
 
   // Custom `lineStyle` prop (Safari-safe dashed/dotted connectors).
@@ -445,32 +474,41 @@ export function recordPositionsBatch(callback) {
 
 let _suppressPositionTracking = false;
 
+/** True when a batch is currently open via startBatch. */
+export function isInBatch() { return batchDepth > 0; }
+
+// Nesting depth — multiple startBatch calls now stack instead of
+// overwriting each other (the previous "always reset currentBatch"
+// behaviour silently dropped the outer batch's contents whenever an
+// inner code path opened its own batch on top). Outermost endBatch
+// commits; inner endBatch just decrements depth.
+let batchDepth = 0;
+
 export function startBatch() {
-  // Land any in-flight drag merge before opening an explicit batch — otherwise
-  // the deferred commit could land inside the batch and disappear on undo.
-  commitPendingDrag();
-  isBatching = true;
-  currentBatch = [];
+  // Only flush + initialise on the OUTERMOST start. Nested starts share
+  // the existing currentBatch so their pushCommand calls land in the
+  // same composite — paper-level pointer brackets + resize-handle
+  // brackets can now coexist without clobbering each other.
+  if (batchDepth === 0) {
+    commitPendingDrag();
+    currentBatch = [];
+    isBatching = true;
+  }
+  batchDepth++;
 }
 
 export function endBatch() {
-  // v1.12.1 fix — synchronously commit any pending drag-merge entries
-  // WHILE WE'RE STILL INSIDE THE BATCH, so position / size / vertex
-  // changes that fired during this batch get folded into the batch's
-  // own command list rather than landing on the undo stack 80 ms later
-  // as a separate orphaned entry.
-  //
-  // Without this, programmatic operations like auto-layout that touch
-  // positions are routed through the drag-merge debounce — and because
-  // the debounce timer outlives endBatch(), the changes don't show up
-  // in the batch the caller carefully wrapped them in. Worst symptom:
-  // horizontal auto-layout's pending merge stays uncommitted; vertical
-  // auto-layout's startBatch then flushes the stale entry but with the
-  // first horizontal's `oldPos` still pinned — so undo from vertical
-  // jumps straight back to the pre-horizontal state, silently
-  // collapsing two batches. `isBatching` is still true here, so
-  // commitPendingDrag → pushCommand routes the merge into
-  // `currentBatch` correctly.
+  // Unmatched endBatch (no open batch) — defensive bail. Don't decrement
+  // below zero or pretend to commit.
+  if (batchDepth === 0) return;
+  batchDepth--;
+  // Inner endBatch — still nested. Don't commit yet; the outermost
+  // call below will flush everything together.
+  if (batchDepth > 0) return;
+
+  // Outermost endBatch — commit pending merges first while
+  // isBatching === true so they route into currentBatch correctly,
+  // then close the batch and push it as one composite command.
   commitPendingDrag();
 
   isBatching = false;

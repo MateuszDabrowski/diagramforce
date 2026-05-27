@@ -1,10 +1,10 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.12.3';
-import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.3';
-import { resizeDataObjectToFit } from './templates.js?v=1.12.3';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas.js?v=1.12.3';
+import { diagramHasImage } from './image-component.js?v=1.12.4';
+import { showToast, showError, confirmModal, trapFocus } from './feedback.js?v=1.12.4';
+import { resizeDataObjectToFit } from './templates.js?v=1.12.4';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.12.4';
 
 let modules = {};
 
@@ -165,6 +165,24 @@ export function init(_modules) {
   btnBumps?.addEventListener('click', () => {
     setCrossingBumpsEnabled(!isCrossingBumpsEnabled());
     refreshBumpsLabel();
+  });
+
+  // Focus Dimming toggle (v1.12.4) — when off, selecting an element no
+  // longer dims unrelated components/connectors. selection.js consults
+  // isFocusDimmingEnabled() inside updateLinkDimming and short-circuits
+  // when disabled; we call refreshDimming() here so flipping the toggle
+  // re-applies (or clears) the overlay against the current selection
+  // without needing the user to reselect. Default ON.
+  const btnFocusDim = document.getElementById('btn-display-focus-dimming');
+  const refreshFocusDimLabel = () => {
+    btnFocusDim?.classList.toggle('is-checked', isFocusDimmingEnabled());
+    _refreshDisplayDot();
+  };
+  refreshFocusDimLabel();
+  btnFocusDim?.addEventListener('click', () => {
+    setFocusDimmingEnabled(!isFocusDimmingEnabled());
+    refreshFocusDimLabel();
+    modules.selection?.refreshDimming?.();
   });
 
   btnKeysOnly.addEventListener('click', () => {
@@ -1106,6 +1124,8 @@ function refreshDisplayDotIndicator() {
     isConnectorGroupingEnabled() === false ||
     // Crossing Bumps default ON (CR-5.2 PoC).
     isCrossingBumpsEnabled() === false ||
+    // Focus Dimming default ON (v1.12.4).
+    isFocusDimmingEnabled() === false ||
     isDisplayFlagOn('showLabels') ||
     isDisplayFlagOn('showFieldLengths') ||
     isDisplayFlagOn('keyFieldsOnly') ||

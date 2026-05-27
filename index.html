@@ -41,15 +41,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.12.3">
-  <link rel="stylesheet" href="css/theme.css?v=1.12.3">
-  <link rel="stylesheet" href="css/layout.css?v=1.12.3">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.12.3">
-  <link rel="stylesheet" href="css/stencil.css?v=1.12.3">
-  <link rel="stylesheet" href="css/properties.css?v=1.12.3">
-  <link rel="stylesheet" href="css/tabs.css?v=1.12.3">
-  <link rel="stylesheet" href="css/canvas.css?v=1.12.3">
-  <link rel="stylesheet" href="css/modals.css?v=1.12.3">
+  <link rel="stylesheet" href="css/variables.css?v=1.12.4">
+  <link rel="stylesheet" href="css/theme.css?v=1.12.4">
+  <link rel="stylesheet" href="css/layout.css?v=1.12.4">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.12.4">
+  <link rel="stylesheet" href="css/stencil.css?v=1.12.4">
+  <link rel="stylesheet" href="css/properties.css?v=1.12.4">
+  <link rel="stylesheet" href="css/tabs.css?v=1.12.4">
+  <link rel="stylesheet" href="css/canvas.css?v=1.12.4">
+  <link rel="stylesheet" href="css/modals.css?v=1.12.4">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -168,6 +168,10 @@
               <button id="btn-display-crossing-bumps" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="EDA-style bump arcs where two connectors cross — makes non-connection explicit">
                 <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Crossing Bumps
+              </button>
+              <button id="btn-display-focus-dimming" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="Dim components and connectors not connected to the current selection">
+                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Focus Dimming
               </button>
               <div id="display-auto-size-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
               <button id="btn-display-api" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
@@ -457,8 +461,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.12.3"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.12.3"></script>
-  <script type="module" src="js/app.js?v=1.12.3"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.12.4"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.12.4"></script>
+  <script type="module" src="js/app.js?v=1.12.4"></script>
 </body>
 </html>
