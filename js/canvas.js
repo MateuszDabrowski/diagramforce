@@ -1,47 +1,47 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.14.0';
-import { registerSfRouter } from './canvas/router.js?v=1.14.0';
+import { cctx } from './canvas/context.js?v=1.14.1';
+import { registerSfRouter } from './canvas/router.js?v=1.14.1';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.14.0';
+export { autoLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.14.1';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, migrateNodes } from './canvas/migration.js?v=1.14.0';
+export { migrateLinks, updateSimpleNodeLayout, migrateNodes } from './canvas/migration.js?v=1.14.1';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.14.0';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.14.0';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.14.1';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.14.1';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.14.0';
-export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.14.0';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.14.1';
+export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.14.1';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported (called in init());
 // startLineStyleOverlays + the mobile pair were public exports, so re-export them
 // to keep canvas.js's export boundary stable (app.js / properties.js import them).
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.14.0';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.14.0';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.14.1';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.14.1';
 export { startLineStyleOverlays };
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.14.0';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.14.1';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.14.0';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.14.1';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.14.0';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.14.1';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.14.0';
+import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.14.1';
 export { canEmbed };
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents } from './canvas/embedding.js?v=1.14.0';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas/embedding.js?v=1.14.1';
 
 // ── Z-order tiers ────────────────────────────────────────────────────
 // Rendering layer — higher z = closer to the viewer.
@@ -369,6 +369,17 @@ export function init() {
 
     snapLinks: { radius: 30 },
     markAvailable: true,
+    // Embedding highlight OFF (v1.14.1) — the dashed drop-ghost (embedding.js
+    // showDropGhost) is now the capture affordance, so suppress JointJS's default
+    // stroke-around-the-parent (the solid bordered halo with the padding gap).
+    // The linking highlighters (default + magnet/element availability) are
+    // restated verbatim so they survive replacing the highlighting object.
+    highlighting: {
+      default: { name: 'stroke', options: { padding: 3 } },
+      magnetAvailability: { name: 'addClass', options: { className: 'available-magnet' } },
+      elementAvailability: { name: 'addClass', options: { className: 'available-cell' } },
+      embedding: false,
+    },
 
     // Embedding: children snap inside container-like parents
     embeddingMode: true,

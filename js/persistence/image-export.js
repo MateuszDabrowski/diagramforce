@@ -5,9 +5,9 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.14.0';
-import { showToast, showError } from '../feedback.js?v=1.14.0';
-import { pctx } from './context.js?v=1.14.0';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.14.1';
+import { showToast, showError } from '../feedback.js?v=1.14.1';
+import { pctx } from './context.js?v=1.14.1';
 
 export function exportWEBP(transparent = false) {
   return exportRaster(transparent, 'webp');

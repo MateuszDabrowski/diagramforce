@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.14.0';
+import { cctx } from './context.js?v=1.14.1';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -91,6 +91,20 @@ export function initCrossingBumps() {
     + 'change:position change:size change:z change:attrs',
     scheduleCrossingBumpRecompute,
   );
+  // Graph swap (tab switch, new diagram, JSON load) runs through graph.fromJSON
+  // → resetCells, which fires a single 'reset' event — NOT the per-cell add /
+  // remove the trigger above listens for. Without handling it the previous
+  // graph's arcs survive the swap: they persist on a new (empty) diagram until
+  // the next add (no render:done pass with zero cells), and flash on an incoming
+  // tab until the debounced recompute catches up. Clear the overlay
+  // SYNCHRONOUSLY here so stale arcs never outlive their graph, then schedule a
+  // recompute to draw the incoming graph's bumps once its routes settle.
+  graph.on('reset', () => {
+    if (_bumpLayer) {
+      while (_bumpLayer.firstChild) _bumpLayer.removeChild(_bumpLayer.firstChild);
+    }
+    scheduleCrossingBumpRecompute();
+  });
   // render:done fires after each JointJS render pass completes — covers
   // route recomputation triggered by router toggles (Distributed
   // Connectors etc.) that don't fire a change:vertices event on the link.

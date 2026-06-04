@@ -17,7 +17,7 @@
 // Reads the live graph/paper via the canvas context (cctx); the observer +
 // sync-id are private module state (nothing else reads them). canvas.js calls
 // startLineStyleOverlays() once in init() AFTER cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.14.0';
+import { cctx } from './context.js?v=1.14.1';
 
 let _lineStyleObserver = null;
 let _lineStyleSyncId = 0;

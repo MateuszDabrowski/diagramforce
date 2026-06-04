@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.14.0';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.14.0';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.14.0';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.14.0';
-import * as stencilModule from './stencil.js?v=1.14.0';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.14.0';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.14.0';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.14.1';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.14.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.14.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, syncMobilePanelHeight, canEmbed } from './canvas.js?v=1.14.1';
+import * as stencilModule from './stencil.js?v=1.14.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.14.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.14.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -16,11 +16,11 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.14.0';
-import * as history from './history.js?v=1.14.0';
-import { startImageAddFlow } from './image-component.js?v=1.14.0';
-import { escHtml } from './util.js?v=1.14.0';
-import { saveSelectionAsTemplate } from './templates.js?v=1.14.0';
+} from './clipboard.js?v=1.14.1';
+import * as history from './history.js?v=1.14.1';
+import { startImageAddFlow } from './image-component.js?v=1.14.1';
+import { escHtml } from './util.js?v=1.14.1';
+import { saveSelectionAsTemplate } from './templates.js?v=1.14.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many

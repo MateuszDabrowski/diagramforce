@@ -1,12 +1,12 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.14.0';
-import { getAllIcons, getCategories } from './icons.js?v=1.14.0';
-import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed } from './canvas.js?v=1.14.0';
-import { startImageAddFlow } from './image-component.js?v=1.14.0';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.14.0';
-import { confirmModal } from './feedback.js?v=1.14.0';
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.14.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.14.1';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.14.1';
+import { startImageAddFlow } from './image-component.js?v=1.14.1';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.14.1';
+import { confirmModal } from './feedback.js?v=1.14.1';
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -339,13 +339,45 @@ function buildComponentItem(template) {
     evt.dataTransfer.setData('application/sf-diagrams', JSON.stringify(template));
     evt.dataTransfer.effectAllowed = 'copy';
     setDragPreview(evt, template);
+    beginDropGhost(template);
   });
+  item.addEventListener('dragend', endDropGhost);
 
   item.addEventListener('dblclick', () => {
     addToCenter(template);
   });
 
   return item;
+}
+
+// ── Drop ghost (v1.14.1) — desktop stencil drag ────────────────────
+// HTML5 dragover can't read dataTransfer VALUES (only types), so probe the
+// template once on dragstart for its size + type, then preview the would-be
+// container with the shared showDropGhost during dragover. Cleared on
+// dragleave / drop / dragend. (Touch drag keeps its own ghost element.)
+let _ghostDragSize = null;
+let _ghostDragType = null;
+function beginDropGhost(template) {
+  _ghostDragSize = null;
+  _ghostDragType = null;
+  if (!template || template.customDrop) return; // image / custom drop — no ghost
+  try {
+    const probe = createElementFromComponent(template, { x: 0, y: 0 });
+    if (probe) { _ghostDragSize = probe.size(); _ghostDragType = probe.get('type'); }
+  } catch { /* probe failed — just skip the ghost */ }
+}
+function endDropGhost() {
+  _ghostDragSize = null;
+  _ghostDragType = null;
+  hideDropGhost();
+}
+function refreshDropGhost(clientX, clientY) {
+  if (!_ghostDragSize || !_ghostDragType) { hideDropGhost(); return; }
+  const pt = paper.clientToLocalPoint(clientX, clientY);
+  const w = _ghostDragSize.width;
+  const h = _ghostDragSize.height;
+  // The drop centres the element on the cursor, so preview the same bbox.
+  showDropGhost({ x: pt.x - w / 2, y: pt.y - h / 2, width: w, height: h }, _ghostDragType, null);
 }
 
 function setupDropZone() {
@@ -373,8 +405,10 @@ function setupDropZone() {
       const t = cell.get('type');
       // Match any type that accepts SOME child — cheap proxy for "container-like".
       // Walking is short (< 10 cells in practice) so the per-frame cost is fine.
-      const acceptsAnyChild = ['sf.Container','sf.Zone','sf.BpmnPool',
-        'sf.BpmnSubprocess','sf.BpmnLoop','sf.GanttTimeline',
+      // v1.14.1: the free-form groupers (Container/Zone/BPMN) now show the dashed
+      // drop-ghost instead, so only solid-highlight the STRUCTURED parents here
+      // (positional embedding, no ghost) — otherwise ghost + solid would double up.
+      const acceptsAnyChild = ['sf.GanttTimeline',
         'sf.SequenceParticipant','sf.SequenceActor','sf.Task'].includes(t)
         && canEmbed(t, 'sf.SimpleNode'); // cheap "does it accept anything?" probe
       if (acceptsAnyChild) { next = paper.findViewByModel(cell); break; }
@@ -391,16 +425,18 @@ function setupDropZone() {
     evt.preventDefault();
     evt.dataTransfer.dropEffect = 'copy';
     refreshDropHighlight(evt.clientX, evt.clientY);
+    refreshDropGhost(evt.clientX, evt.clientY);
   });
   canvasEl.addEventListener('dragleave', (evt) => {
     // Only clear when the cursor actually leaves the canvas — dragleave
     // fires on every child boundary crossing too.
-    if (evt.target === canvasEl) clearDropHighlight();
+    if (evt.target === canvasEl) { clearDropHighlight(); hideDropGhost(); }
   });
 
   canvasEl.addEventListener('drop', (evt) => {
     evt.preventDefault();
     clearDropHighlight();
+    endDropGhost();
 
     // Custom template drop — instantiate with fresh cell IDs at the drop point.
     const templateData = evt.dataTransfer.getData('application/sf-diagrams-template');
@@ -618,34 +654,27 @@ function setDragPreview(evt, template) {
 /** After drop, try to embed the element into a container/zone at its position */
 function tryEmbed(element) {
   const bbox = element.getBBox();
-  const candidates = graph.findModelsInArea(bbox)
+  const childType = element.get('type');
+  // 1) Exact overlap — topmost valid parent. canEmbed is the single source of
+  //    truth for the type rules, keeping this in lockstep with the canvas-drag
+  //    path and covering every parent type (incl. BpmnLoop, which the old inline
+  //    list missed).
+  const overlap = graph.findModelsInArea(bbox)
     .filter(el => el.id !== element.id)
     .sort((a, b) => (b.get('z') || 0) - (a.get('z') || 0));
-  // Find the topmost valid parent (Container or Zone)
-  for (const candidate of candidates) {
-    const parentType = candidate.get('type');
-    const childType = element.get('type');
-    let valid = false;
-    if (parentType === 'sf.Container') {
-      valid = childType !== 'sf.Container' && childType !== 'sf.Zone';
-    } else if (parentType === 'sf.Zone') {
-      valid = childType !== 'sf.Zone';
-    } else if (parentType === 'sf.BpmnPool') {
-      valid = childType !== 'sf.BpmnPool';
-    } else if (parentType === 'sf.BpmnSubprocess') {
-      valid = childType !== 'sf.BpmnPool' && childType !== 'sf.BpmnSubprocess';
-    } else if (parentType === 'sf.GanttTimeline') {
-      valid = childType === 'sf.GanttTask' || childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker' || childType === 'sf.GanttGroup';
-    } else if (parentType === 'sf.SequenceParticipant' || parentType === 'sf.SequenceActor') {
-      valid = childType === 'sf.SequenceActivation';
-    } else if (parentType === 'sf.Task') {
-      // Task right column accepts Person/Team cards as RACI assignees.
-      valid = childType === 'sf.OrgPerson' || childType === 'sf.Container';
-    }
-    if (valid) {
+  for (const candidate of overlap) {
+    if (canEmbed(candidate.get('type'), childType)) {
       candidate.embed(element);
-      break;
+      return;
     }
+  }
+  // 2) No overlap — the capture halo lets a drop just OUTSIDE a container-like
+  //    parent (especially just below it) still embed. Tuck the element inside
+  //    first so the on-drop auto-fit grows the parent cleanly around it.
+  const halo = findHaloParent(bbox, childType, element.id);
+  if (halo) {
+    tuckChildInside(element, halo);
+    halo.embed(element);
   }
 }
 

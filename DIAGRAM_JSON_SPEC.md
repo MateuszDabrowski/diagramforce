@@ -2,14 +2,14 @@
 
 > Reference for LLMs and developers generating importable diagram JSON files for [diagramforce.app](https://diagramforce.app).
 >
-> **Spec snapshot: v1.14.0** — matches the app's current `appVersion`; set `"appVersion": "1.14.0"` in generated files.
+> **Spec snapshot: v1.14.1** — matches the app's current `appVersion`; set `"appVersion": "1.14.1"` in generated files.
 
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.14.0",
+  "appVersion": "1.14.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -26,7 +26,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.14.0"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.14.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
@@ -40,8 +40,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.14.0", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.14.0" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.14.1", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.14.1" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -1497,7 +1497,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.14.0",
+  "appVersion": "1.14.1",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1653,7 +1653,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.14.0",
+  "appVersion": "1.14.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -1773,7 +1773,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.14.0",
+  "appVersion": "1.14.1",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

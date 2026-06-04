@@ -1,9 +1,9 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.14.0';
-import { escHtml, formatRelativeTime } from './util.js?v=1.14.0';
-import { showError, showToast, buildModal } from './feedback.js?v=1.14.0';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.14.1';
+import { escHtml, formatRelativeTime } from './util.js?v=1.14.1';
+import { showError, showToast, buildModal } from './feedback.js?v=1.14.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

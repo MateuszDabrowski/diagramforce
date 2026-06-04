@@ -142,6 +142,19 @@
   stroke-width: 2px !important;
 }
 
+/* Drop ghost (v1.14.1) — dashed preview of a container's would-be bounds when
+   a dragged/dropped element would be captured here (makes the capture halo +
+   on-drop grow visible). Pointer-events:none; non-scaling stroke keeps the dash
+   weight constant across zoom. */
+.sf-drop-ghost__rect {
+  fill: none;
+  stroke: var(--brand-amber);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+}
+
 /* Gap 3 (v1.12.0) — empty-canvas onboarding hint. Sits inside the
    joint-layers group at the viewport centre. Pointer-events:none lets
    pan + zoom pass through. Fades when present so it doesn't visually
