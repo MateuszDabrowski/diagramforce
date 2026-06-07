@@ -1,11 +1,11 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.15.2';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.2';
-import { resizeDataObjectToFit } from './components.js?v=1.15.2';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.2';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.2';
+import { diagramHasImage } from './image-component.js?v=1.15.3';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.3';
+import { resizeDataObjectToFit } from './components.js?v=1.15.3';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.3';
+import { escHtml, formatRelativeTime } from './util.js?v=1.15.3';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -1576,53 +1576,18 @@ function setupHamburgerMenu() {
     hBtn.setAttribute('aria-expanded', 'false');
 
     switch (action) {
+      // Save / Load / Display all surface the real desktop dropdown as a mobile overlay, so
+      // every option is reachable (Save's dropdown lives in the mobile-hidden toolbar group, so
+      // the overlay helper relocates the menu to <body> to escape that hidden ancestor).
       case 'save':
-        showSaveModal();
+        openDropdownAsMobileOverlay(document.getElementById('btn-save')?.closest('.df-toolbar__dropdown'));
         break;
       case 'load':
-        showLoadModal();
+        openDropdownAsMobileOverlay(document.getElementById('btn-load')?.closest('.df-toolbar__dropdown'));
         break;
-      case 'display': {
-        // Open the display dropdown — temporarily show it for mobile
-        const dd = document.getElementById('display-dropdown');
-        if (dd) {
-          const menu = dd.querySelector('.df-toolbar__menu');
-
-          const openDisplay = () => {
-            dd.style.cssText = 'display:block !important; position:fixed; top:48px; left:0; right:0; z-index:400;';
-            if (menu) {
-              menu.style.cssText = 'display:block; position:fixed; top:48px; left:0; right:0; min-width:100%; border-radius:0; box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-            }
-          };
-
-          const closeDisplay = () => {
-            dd.style.cssText = '';
-            if (menu) menu.style.cssText = '';
-            dd.classList.remove('df-toolbar__dropdown--open');
-            document.removeEventListener('pointerdown', onOutside, true);
-          };
-
-          const onOutside = (e) => {
-            if (menu && !menu.contains(e.target)) {
-              closeDisplay();
-            }
-          };
-
-          // Close when a menu item inside is clicked
-          const onMenuItemClick = () => {
-            closeDisplay();
-            menu.removeEventListener('click', onMenuItemClick);
-          };
-          if (menu) menu.addEventListener('click', onMenuItemClick);
-
-          // Use requestAnimationFrame to avoid immediate close from the same event
-          requestAnimationFrame(() => {
-            openDisplay();
-            document.addEventListener('pointerdown', onOutside, true);
-          });
-        }
+      case 'display':
+        openDropdownAsMobileOverlay(document.getElementById('display-dropdown'));
         break;
-      }
       case 'view-toggle':
         // Data Mapping Diagram|Table switch — the desktop segmented control lives in
         // .df-toolbar__left (hidden on mobile), so surface it here.
@@ -1646,11 +1611,44 @@ function setupHamburgerMenu() {
         if (modules.canvas.refreshGrid) modules.canvas.refreshGrid();
         if (modules.canvas.refreshIcons) modules.canvas.refreshIcons();
         break;
+      case 'walkthrough':
+        document.getElementById('btn-help')?.click();
+        break;
       case 'about':
         document.getElementById('btn-about')?.click();
         break;
     }
   });
+}
+
+/**
+ * Surface a toolbar dropdown's menu as a full-width mobile overlay. The menu is moved to
+ * <body> (a placeholder marks its home) so it escapes any mobile-hidden ancestor, styled via
+ * `.df-toolbar__menu--mobile-overlay`, and restored on the next item-click or outside tap. The
+ * menu items keep their original click handlers (they ride along with the relocated element).
+ */
+function openDropdownAsMobileOverlay(dropdownEl) {
+  const menu = dropdownEl?.querySelector('.df-toolbar__menu');
+  if (!menu) return;
+  const home = menu.parentNode;
+  const anchor = document.createComment('df-menu-home');
+  home.insertBefore(anchor, menu);
+  document.body.appendChild(menu);
+  menu.classList.add('df-toolbar__menu--mobile-overlay');
+
+  const close = () => {
+    menu.classList.remove('df-toolbar__menu--mobile-overlay');
+    anchor.parentNode?.insertBefore(menu, anchor);   // restore to the dropdown
+    anchor.remove();
+    document.removeEventListener('pointerdown', onOutside, true);
+    menu.removeEventListener('click', onItem);
+  };
+  const onOutside = (e) => { if (!menu.contains(e.target)) close(); };
+  const onItem = (e) => { if (e.target.closest('.df-toolbar__menu-item')) close(); };
+
+  menu.addEventListener('click', onItem);
+  // Defer the outside-tap listener so the tap that opened this overlay doesn't close it.
+  requestAnimationFrame(() => document.addEventListener('pointerdown', onOutside, true));
 }
 
 function setupToolbarCentering() {

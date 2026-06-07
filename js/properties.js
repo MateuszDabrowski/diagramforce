@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.15.2';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.2';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.2';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.2';
-import * as stencilModule from './stencil.js?v=1.15.2';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.2';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.2';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.15.3';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.3';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.3';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.3';
+import * as stencilModule from './stencil.js?v=1.15.3';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.3';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.3';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -16,13 +16,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.15.2';
-import * as history from './history.js?v=1.15.2';
-import { startImageAddFlow } from './image-component.js?v=1.15.2';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.2';
-import { getActiveTabName } from './tabs.js?v=1.15.2';
-import { saveSelectionAsTemplate } from './templates.js?v=1.15.2';
-import { newFid } from './shapes.js?v=1.15.2';
+} from './clipboard.js?v=1.15.3';
+import * as history from './history.js?v=1.15.3';
+import { startImageAddFlow } from './image-component.js?v=1.15.3';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.3';
+import { getActiveTabName } from './tabs.js?v=1.15.3';
+import { saveSelectionAsTemplate } from './templates.js?v=1.15.3';
+import { newFid } from './shapes.js?v=1.15.3';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -90,6 +90,32 @@ const TYPE_LABELS = {
   'sf.SequenceActivation':  'Activation',
   'sf.SequenceFragment':    'Fragment',
 };
+
+/** The user-facing name of a cell (its label), or '' if unnamed. Single source of the
+ *  label-accessor chain the inspector uses — reused by the a11y narrator. */
+export function cellName(cell) {
+  if (!cell) return '';
+  if (cell.isLink?.()) return cell.labels?.()?.[0]?.attrs?.text?.text || '';
+  return cell.get('_savedLabel') || cell.get('objectName')
+    || cell.attr?.('label/text') || cell.attr?.('headerLabel/text') || '';
+}
+
+/** A concise screen-reader description of a cell: type + name (+ endpoints for connectors).
+ *  e.g. "Object: Contact", "Node: Alpha", "Connector from Alpha to Beta". */
+export function describeCell(cell) {
+  if (!cell) return '';
+  if (cell.isLink?.()) {
+    const label = cellName(cell);
+    const from = cellName(cell.getSourceCell?.());
+    const to = cellName(cell.getTargetCell?.());
+    const ends = (from || to) ? ` from ${from || 'a shape'} to ${to || 'a shape'}` : '';
+    return `Connector${label ? ` ${label}` : ''}${ends}`;
+  }
+  const type = cell.get('type') || '';
+  const typeLabel = cell.get('iconMode') ? 'Icon' : (TYPE_LABELS[type] || type.replace('sf.', '') || 'Element');
+  const name = cellName(cell);
+  return `${typeLabel}${name ? `: ${name}` : ''}`;
+}
 
 // Default sizes used by "Auto Size"
 const DEFAULT_SIZES = {

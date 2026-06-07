@@ -42,15 +42,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.15.2">
-  <link rel="stylesheet" href="css/theme.css?v=1.15.2">
-  <link rel="stylesheet" href="css/layout.css?v=1.15.2">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.15.2">
-  <link rel="stylesheet" href="css/stencil.css?v=1.15.2">
-  <link rel="stylesheet" href="css/properties.css?v=1.15.2">
-  <link rel="stylesheet" href="css/tabs.css?v=1.15.2">
-  <link rel="stylesheet" href="css/canvas.css?v=1.15.2">
-  <link rel="stylesheet" href="css/modals.css?v=1.15.2">
+  <link rel="stylesheet" href="css/variables.css?v=1.15.3">
+  <link rel="stylesheet" href="css/theme.css?v=1.15.3">
+  <link rel="stylesheet" href="css/layout.css?v=1.15.3">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.15.3">
+  <link rel="stylesheet" href="css/stencil.css?v=1.15.3">
+  <link rel="stylesheet" href="css/properties.css?v=1.15.3">
+  <link rel="stylesheet" href="css/tabs.css?v=1.15.3">
+  <link rel="stylesheet" href="css/canvas.css?v=1.15.3">
+  <link rel="stylesheet" href="css/modals.css?v=1.15.3">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -61,6 +61,16 @@
        keyboard users bypass the toolbar + tabs + stencil and land directly on
        the diagram canvas. -->
   <a href="#canvas-container" class="df-skip-link">Skip to diagram canvas</a>
+
+  <!-- Canvas a11y live region (js/a11y.js) — sr-only; announces the current selection so a
+       screen reader speaks what's selected on the (otherwise opaque) SVG canvas. -->
+  <div id="a11y-live" class="df-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Canvas a11y outline (js/a11y.js, Phase C) — sr-only landmark holding a navigable text
+       structure of the WHOLE diagram (shapes by containment + the connections list), so screen
+       reader users can read the diagram via heading/landmark navigation. NOT a live region — it
+       updates silently; SR users reach it on demand. Rebuilt only when its content changes. -->
+  <section id="a11y-outline" class="df-visually-hidden" aria-label="Diagram outline"></section>
 
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
   <div id="slds-icons" style="display:none" aria-hidden="true"></div>
@@ -380,6 +390,10 @@
             </svg>
             Toggle Theme
           </button>
+          <button class="df-toolbar__menu-item" data-action="walkthrough">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/><text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text></svg>
+            Walkthrough
+          </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
             About
@@ -602,8 +616,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.15.2"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.15.2"></script>
-  <script type="module" src="js/app.js?v=1.15.2"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.15.3"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.15.3"></script>
+  <script type="module" src="js/app.js?v=1.15.3"></script>
 </body>
 </html>

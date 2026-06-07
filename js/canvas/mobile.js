@@ -88,6 +88,10 @@ export function initMobileDragHandles() {
       };
 
       const onEnd = () => {
+        // Explicitly release the capture taken on pointerdown. The implicit release on pointerup
+        // is unreliable on iOS WebKit — a lingering capture routes the NEXT tap back to the
+        // handle, so a tap on a nearby control (e.g. the stencil search-clear ×) never lands.
+        try { handle.releasePointerCapture(evt.pointerId); } catch { /* already released */ }
         document.body.style.userSelect = '';
         document.body.style.webkitUserSelect = '';
         const dt = Date.now() - startT;

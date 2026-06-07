@@ -8,7 +8,7 @@
  * version bump documented in CLAUDE.md must update this file too.
  */
 
-const APP_VERSION = '1.15.2';
+const APP_VERSION = '1.15.3';
 const CACHE_NAME = `diagramforce-v${APP_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -31,6 +31,7 @@ const PRECACHE_URLS = [
   // App JS — every statically-imported module the app needs to boot. All are
   // eager ES imports (no dynamic import() anywhere), so all are boot-critical:
   // omitting any one reintroduces the silent offline-crash this list prevents.
+  `./js/a11y.js?v=${APP_VERSION}`,
   `./js/app.js?v=${APP_VERSION}`,
   `./js/brand-palette.js?v=${APP_VERSION}`,
   `./js/canvas.js?v=${APP_VERSION}`,

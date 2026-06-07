@@ -1,24 +1,25 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.15.2';
-import * as icons       from './icons.js?v=1.15.2';
-import { getAllStencilSvgs } from './components.js?v=1.15.2';
-import * as shapes      from './shapes.js?v=1.15.2';
-import * as canvas      from './canvas.js?v=1.15.2';
-import * as stencil     from './stencil.js?v=1.15.2';
-import * as selection   from './selection.js?v=1.15.2';
-import * as history     from './history.js?v=1.15.2';
-import * as clipboard   from './clipboard.js?v=1.15.2';
-import * as templates    from './templates.js?v=1.15.2';
-import * as keyboard    from './keyboard.js?v=1.15.2';
-import * as toolbar     from './toolbar.js?v=1.15.2';
-import * as properties  from './properties.js?v=1.15.2';
-import * as persistence from './persistence.js?v=1.15.2';
-import * as tabs        from './tabs.js?v=1.15.2';
-import * as mermaidImport from './mermaid-import.js?v=1.15.2';
-import * as tableView    from './table-view.js?v=1.15.2';
-import * as walkthrough  from './walkthrough.js?v=1.15.2';
+import * as theme       from './theme.js?v=1.15.3';
+import * as icons       from './icons.js?v=1.15.3';
+import { getAllStencilSvgs } from './components.js?v=1.15.3';
+import * as shapes      from './shapes.js?v=1.15.3';
+import * as canvas      from './canvas.js?v=1.15.3';
+import * as stencil     from './stencil.js?v=1.15.3';
+import * as selection   from './selection.js?v=1.15.3';
+import * as history     from './history.js?v=1.15.3';
+import * as clipboard   from './clipboard.js?v=1.15.3';
+import * as templates    from './templates.js?v=1.15.3';
+import * as keyboard    from './keyboard.js?v=1.15.3';
+import * as toolbar     from './toolbar.js?v=1.15.3';
+import * as properties  from './properties.js?v=1.15.3';
+import * as persistence from './persistence.js?v=1.15.3';
+import * as tabs        from './tabs.js?v=1.15.3';
+import * as mermaidImport from './mermaid-import.js?v=1.15.3';
+import * as tableView    from './table-view.js?v=1.15.3';
+import * as walkthrough  from './walkthrough.js?v=1.15.3';
+import * as a11y         from './a11y.js?v=1.15.3';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -95,6 +96,9 @@ async function main() {
 
   // --- Phase 5: Properties panel ---
   properties.init(graph, paper, selection);
+
+  // --- Phase 5b: Canvas accessibility — narrate selection to assistive tech ---
+  a11y.init({ graph, selection });
 
   // --- Phase 6: Persistence (export/import only, no auto-load) ---
   persistence.init(graph, paper, canvas);

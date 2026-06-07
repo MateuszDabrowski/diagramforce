@@ -11,8 +11,8 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.15.2';
-import { showError, showToast } from './feedback.js?v=1.15.2';
+import { createElementFromComponent } from './components.js?v=1.15.3';
+import { showError, showToast } from './feedback.js?v=1.15.3';
 
 let modules = {};
 

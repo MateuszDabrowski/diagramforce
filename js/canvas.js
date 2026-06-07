@@ -1,47 +1,47 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.15.2';
-import { registerSfRouter } from './canvas/router.js?v=1.15.2';
+import { cctx } from './canvas/context.js?v=1.15.3';
+import { registerSfRouter } from './canvas/router.js?v=1.15.3';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.15.2';
+export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.15.3';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.15.2';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.15.3';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.15.2';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.15.2';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.15.3';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.15.3';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.15.2';
-export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.15.2';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.15.3';
+export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.15.3';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported (called in init());
 // startLineStyleOverlays + the mobile pair were public exports, so re-export them
 // to keep canvas.js's export boundary stable (app.js / properties.js import them).
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.15.2';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.15.2';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.15.3';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.15.3';
 export { startLineStyleOverlays };
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.15.2';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.15.3';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.15.2';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.15.3';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.15.2';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.15.3';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.15.2';
+import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.15.3';
 export { canEmbed };
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.15.2';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.15.3';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping

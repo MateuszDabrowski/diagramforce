@@ -199,6 +199,23 @@
   display: block;
 }
 
+/* Mobile: a toolbar dropdown's menu surfaced as a full-width overlay from the hamburger.
+   JS (openDropdownAsMobileOverlay) relocates the menu to <body> and adds this class, so it
+   renders even though its desktop home sits in a mobile-hidden toolbar group. */
+.df-toolbar__menu--mobile-overlay {
+  display: block !important;
+  position: fixed;
+  top: 48px;
+  left: 0;
+  right: 0;
+  min-width: 100%;
+  max-height: calc(100dvh - 56px);
+  overflow-y: auto;
+  border-radius: 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  z-index: 400;
+}
+
 .df-toolbar__menu-item {
   display: block;
   width: 100%;
@@ -409,7 +426,11 @@
   .df-toolbar__center,
   .df-toolbar__right > #btn-share-url,
   .df-toolbar__right > #btn-about,
-  .df-toolbar__right > #btn-theme {
+  .df-toolbar__right > #btn-theme,
+  /* Help/Walkthrough lives in the hamburger on mobile (above About); hiding it here leaves a
+     clean 2 + 2 toolbar (hamburger + undo | fit + panel). Still in the DOM so the hamburger's
+     Walkthrough item can trigger it; desktop keeps the ? button (no hamburger there). */
+  .df-toolbar__right > #btn-help {
     display: none !important;
   }
 

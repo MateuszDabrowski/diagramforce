@@ -21,8 +21,8 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal } from './feedback.js?v=1.15.2';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature } from './persistence.js?v=1.15.2';
+import { showToast, promptModal } from './feedback.js?v=1.15.3';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature } from './persistence.js?v=1.15.3';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Self-describing format tag for the Save/Load-Templates-as-JSON backup file.

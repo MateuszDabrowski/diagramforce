@@ -1129,7 +1129,9 @@
 .df-tour__list { margin: 4px 0; padding-left: 18px; }
 .df-tour__list li { margin: 2px 0; }
 
-/* Footer: Skip pinned left, step counter absolutely centred, Back+Next grouped right. */
+/* Footer: Skip pinned left, step counter absolutely centred, Back+Next grouped right. On mobile
+   the Back button collapses to a ← icon (rule near the end of this file) so the chunkier
+   touch-target buttons leave room for the centred counter instead of colliding with it. */
 .df-tour__footer {
   position: relative;
   display: flex;
@@ -1145,6 +1147,7 @@
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   pointer-events: none;
+  white-space: nowrap;
 }
 .df-tour__nav { display: flex; align-items: center; gap: var(--spacing-sm); margin-left: auto; }
 
@@ -1167,6 +1170,14 @@
   color: var(--brand-blue);
 }
 .df-tour__back:hover { background: var(--brand-blue); border-color: var(--brand-blue); color: #ffffff; }
+
+/* Mobile: collapse the tour's Back button to a compact ← icon, so the centred step counter has
+   room next to the chunkier touch-target nav buttons instead of colliding with them. The text
+   "Back" stays in the a11y tree — font-size:0 only hides it visually. */
+@media (max-width: 768px) {
+  .df-tour__back { font-size: 0; padding: 6px 12px; }
+  .df-tour__back::before { content: '←'; font-size: var(--font-size-md); line-height: 1; }
+}
 
 /* Inline "?"-in-circle Help glyph used in tour body copy — sized to the surrounding text and
    nudged onto the baseline. Matches the navbar Help button icon. */
