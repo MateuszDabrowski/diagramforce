@@ -1,8 +1,8 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.15.0';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.15.0';
+import { getIconDataUri } from './icons.js?v=1.15.1';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.15.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -125,7 +125,7 @@ export const COMPONENT_CATEGORIES = [
   },
   // ── Salesforce Products ────────────────────────────────────────────
   {
-    id: 'sf-products',
+    id: 'df-products',
     label: 'Salesforce Products',
     components: [
       // Salesforce product icons — stroke-based outlines for clarity at small sizes

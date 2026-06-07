@@ -107,7 +107,7 @@ function handleKeydown(evt) {
   if (mod && key === 'a') {
     if (modules.selection.getCount() === 1) {
       // Single element selected — focus and select label text in properties panel
-      const labelInput = document.querySelector('.sf-properties__body .sf-properties__input');
+      const labelInput = document.querySelector('.df-properties__body .df-properties__input');
       if (labelInput) {
         evt.preventDefault();
         labelInput.focus();
@@ -220,8 +220,8 @@ function handleKeydown(evt) {
 
   // Printable character with element selected → auto-focus label input
   if (!mod && key.length === 1 && modules.selection.getCount() === 1) {
-    const panel = document.querySelector('.sf-properties__body');
-    const labelInput = panel?.querySelector('.sf-properties__input');
+    const panel = document.querySelector('.df-properties__body');
+    const labelInput = panel?.querySelector('.df-properties__input');
     if (labelInput) {
       labelInput.focus();
       // Don't prevent default — let the character be typed into the input

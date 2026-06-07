@@ -1,4 +1,4 @@
-.sf-stencil {
+.df-stencil {
   width: var(--stencil-width);
   min-width: var(--stencil-width);
   background: var(--stencil-bg);
@@ -10,13 +10,13 @@
   flex-shrink: 0;
 }
 
-.sf-stencil--hidden {
+.df-stencil--hidden {
   width: 0;
   min-width: 0;
   border-left: none;
 }
 
-.sf-stencil__header {
+.df-stencil__header {
   padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
@@ -25,7 +25,7 @@
   gap: var(--spacing-sm);
 }
 
-.sf-stencil__close {
+.df-stencil__close {
   flex-shrink: 0;
   min-width: 40px;
   min-height: 40px;
@@ -36,7 +36,7 @@
    can absolute-position itself inside the input's visual edge. The wrapper
    inherits the input's flex sizing; the input still occupies the wrapper's
    full width and the clear button sits over its right edge. */
-.sf-stencil__search-wrap {
+.df-stencil__search-wrap {
   flex: 1;
   min-width: 0;
   position: relative;
@@ -44,9 +44,9 @@
 }
 /* Suppress the WebKit-native search cancel button — we render our own so
    styling stays consistent across browsers (Firefox doesn't show one). */
-.sf-stencil__search::-webkit-search-cancel-button { display: none; }
+.df-stencil__search::-webkit-search-cancel-button { display: none; }
 
-.sf-stencil__search {
+.df-stencil__search {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -62,7 +62,7 @@
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.sf-stencil__search-clear {
+.df-stencil__search-clear {
   position: absolute;
   right: 4px;
   top: 50%;
@@ -82,26 +82,26 @@
   border-radius: 4px;
   transition: color var(--transition-fast), background var(--transition-fast);
 }
-.sf-stencil__search-clear:hover {
+.df-stencil__search-clear:hover {
   color: var(--text-primary);
   background: var(--stencil-item-hover);
 }
-.sf-stencil__search-clear[hidden] { display: none; }
+.df-stencil__search-clear[hidden] { display: none; }
 
-.sf-stencil__search::placeholder {
+.df-stencil__search::placeholder {
   color: var(--text-muted);
 }
 
-.sf-stencil__search:focus {
+.df-stencil__search:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
 }
 
-[data-theme="dark"] .sf-stencil__search:focus {
+[data-theme="dark"] .df-stencil__search:focus {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
 }
 
-.sf-stencil__body {
+.df-stencil__body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -109,24 +109,24 @@
 }
 
 /* Scrollbar styling — matches mateuszdabrowski.pl */
-.sf-stencil__body::-webkit-scrollbar {
+.df-stencil__body::-webkit-scrollbar {
   width: 7px;
 }
 
-.sf-stencil__body::-webkit-scrollbar-track {
+.df-stencil__body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sf-stencil__body::-webkit-scrollbar-thumb {
+.df-stencil__body::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
-.sf-stencil__body::-webkit-scrollbar-thumb:hover {
+.df-stencil__body::-webkit-scrollbar-thumb:hover {
   background: var(--border-color-strong);
 }
 
-.sf-stencil__category-header {
+.df-stencil__category-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -141,11 +141,11 @@
   transition: color var(--transition-fast);
 }
 
-.sf-stencil__category-header:hover {
+.df-stencil__category-header:hover {
   color: var(--text-secondary);
 }
 
-.sf-stencil__category-count {
+.df-stencil__category-count {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-weight: 400;
@@ -154,39 +154,39 @@
   border-radius: 10px;
 }
 
-.sf-stencil__category--collapsed .sf-stencil__items {
+.df-stencil__category--collapsed .df-stencil__items {
   display: none;
 }
 
 /* CR-6.2 (v1.12.0) — collapse/expand chevron on each stencil category header.
    The chevron points DOWN when the category is expanded (its content is
    visible below) and ROTATES -90° to point right when collapsed. */
-.sf-stencil__category-label {
+.df-stencil__category-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.sf-stencil__category-chevron {
+.df-stencil__category-chevron {
   flex-shrink: 0;
   transition: transform var(--transition-fast);
   transform-origin: center;
 }
-.sf-stencil__category--collapsed .sf-stencil__category-chevron {
+.df-stencil__category--collapsed .df-stencil__category-chevron {
   transform: rotate(-90deg);
 }
 
-.sf-stencil__items {
+.df-stencil__items {
   padding: 2px var(--spacing-sm) var(--spacing-sm);
 }
 
-.sf-stencil__items--grid {
+.df-stencil__items--grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 38px);
   gap: 2px;
   padding: 4px var(--spacing-sm) var(--spacing-sm);
 }
 
-.sf-stencil__item {
+.df-stencil__item {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -199,15 +199,15 @@
   transition: background var(--transition-fast);
 }
 
-.sf-stencil__item:hover {
+.df-stencil__item:hover {
   background: var(--stencil-item-hover);
 }
 
-.sf-stencil__item:active {
+.df-stencil__item:active {
   cursor: grabbing;
 }
 
-.sf-stencil__item--icon {
+.df-stencil__item--icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -217,7 +217,7 @@
   border-radius: var(--border-radius-sm);
 }
 
-.sf-stencil__item-icon {
+.df-stencil__item-icon {
   width: 22px;
   height: 22px;
   padding: 1px;
@@ -227,7 +227,7 @@
   box-sizing: border-box;
 }
 
-.sf-stencil__item-icon--placeholder {
+.df-stencil__item-icon--placeholder {
   width: 22px;
   height: 22px;
   background: var(--border-color);
@@ -236,7 +236,7 @@
   padding: 0;
 }
 
-.sf-stencil__item-icon--svg {
+.df-stencil__item-icon--svg {
   color: var(--text-secondary);
   fill: none;
   stroke: var(--text-secondary);
@@ -245,17 +245,17 @@
   stroke-linejoin: round;
 }
 
-.sf-stencil__icon-preview {
+.df-stencil__icon-preview {
   width: 22px;
   height: 22px;
   fill: var(--text-secondary);
 }
 
-.sf-stencil__item--icon:hover .sf-stencil__icon-preview {
+.df-stencil__item--icon:hover .df-stencil__icon-preview {
   fill: var(--text-primary);
 }
 
-.sf-stencil__item-label {
+.df-stencil__item-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -267,14 +267,14 @@
    Tiles in an auto-fill grid: a static SVG thumbnail (rendered from a
    throwaway mini-paper), the template name below, and a hover-revealed
    delete (×) in the top-right corner. */
-.sf-stencil__items--templates {
+.df-stencil__items--templates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: var(--spacing-sm);
   padding: 4px var(--spacing-sm) var(--spacing-sm);
 }
 
-.sf-stencil__item--template {
+.df-stencil__item--template {
   position: relative;
   flex-direction: column;
   align-items: stretch;
@@ -283,7 +283,7 @@
   border: 1px solid var(--border-color);
 }
 
-.sf-template-thumb {
+.df-template-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -296,19 +296,19 @@
   pointer-events: none;
 }
 
-.sf-template-thumb__svg {
+.df-template-thumb__svg {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-.sf-stencil__item--template .sf-stencil__item-label {
+.df-stencil__item--template .df-stencil__item-label {
   flex: none;
   text-align: center;
   font-size: var(--font-size-xs, 11px);
 }
 
-.sf-template-delete {
+.df-template-delete {
   position: absolute;
   top: 3px;
   right: 3px;
@@ -327,12 +327,12 @@
   transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.sf-stencil__item--template:hover .sf-template-delete,
-.sf-template-delete:focus-visible {
+.df-stencil__item--template:hover .df-template-delete,
+.df-template-delete:focus-visible {
   opacity: 1;
 }
 
-.sf-template-delete:hover {
+.df-template-delete:hover {
   color: #fff;
   background: var(--brand-red, #DA4E55);
 }
@@ -341,7 +341,7 @@
 
 /* ── Mobile stencil — bottom panel ──────────────────────────────── */
 @media (max-width: 768px) {
-  .sf-stencil {
+  .df-stencil {
     width: 100%;
     min-width: 100%;
     height: 25vh;
@@ -353,17 +353,17 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .sf-stencil--hidden {
+  .df-stencil--hidden {
     height: 0;
     min-width: 0;
     border-top: none;
   }
 
-  .sf-stencil--hidden .sf-drag-handle {
+  .df-stencil--hidden .df-drag-handle {
     display: none;
   }
 
-  .sf-stencil .sf-drag-handle {
+  .df-stencil .df-drag-handle {
     display: flex;
     position: sticky;
     top: 0;
@@ -372,39 +372,39 @@
   }
 
   /* Touch-friendly stencil items */
-  .sf-stencil__search {
+  .df-stencil__search {
     padding: 10px var(--spacing-md);
     font-size: var(--font-size-md);
   }
 
-  .sf-stencil__item {
+  .df-stencil__item {
     padding: 10px var(--spacing-sm);
     min-height: 44px;
     font-size: var(--font-size-md);
   }
 
-  .sf-stencil__item-icon {
+  .df-stencil__item-icon {
     width: 26px;
     height: 26px;
   }
 
-  .sf-stencil__item-icon--placeholder {
+  .df-stencil__item-icon--placeholder {
     width: 26px;
     height: 26px;
   }
 
-  .sf-stencil__category-header {
+  .df-stencil__category-header {
     padding: 10px var(--spacing-md);
     min-height: 40px;
     font-size: var(--font-size-xs);
   }
 
-  .sf-stencil__items--grid {
+  .df-stencil__items--grid {
     grid-template-columns: repeat(auto-fill, 44px);
     gap: 4px;
   }
 
-  .sf-stencil__item--icon {
+  .df-stencil__item--icon {
     width: 44px;
     height: 44px;
     padding: 8px;

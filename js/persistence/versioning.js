@@ -4,10 +4,10 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver } from '../util.js?v=1.15.0';
-import { escHtml } from '../util.js?v=1.15.0';
-import { buildModal } from '../feedback.js?v=1.15.0';
-import { pctx } from './context.js?v=1.15.0';
+import { compareSemver } from '../util.js?v=1.15.1';
+import { escHtml } from '../util.js?v=1.15.1';
+import { buildModal } from '../feedback.js?v=1.15.1';
+import { pctx } from './context.js?v=1.15.1';
 
 function stableStringify(v) {
   if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
@@ -89,9 +89,9 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
           ${message}
         </p>`,
       footerHtml: `
-        <button class="sf-modal__btn" data-action="cancel">Don't load</button>
-        <button class="sf-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>
-        <button class="sf-modal__btn sf-modal__btn--primary" data-action="load">${loadLabel}</button>`,
+        <button class="df-modal__btn" data-action="cancel">Don't load</button>
+        <button class="df-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>
+        <button class="df-modal__btn df-modal__btn--primary" data-action="load">${loadLabel}</button>`,
       onClose: () => resolve(result), // backdrop / Escape / cancel resolve false
     });
     footer.style.justifyContent = 'flex-end';

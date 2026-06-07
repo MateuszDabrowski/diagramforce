@@ -9,7 +9,7 @@
 //
 // Both stay inside the existing SLDS-flavoured visual language: toasts
 // inherit theme tokens from CSS custom properties; the confirm modal
-// reuses the established `.sf-modal` structure so it looks identical to
+// reuses the established `.df-modal` structure so it looks identical to
 // every other dialog in the app.
 //
 // Zero-framework, vanilla ES module. Idempotent — calling showToast many
@@ -24,7 +24,7 @@ let toastContainerEl = null;
 function ensureToastContainer() {
   if (toastContainerEl && toastContainerEl.isConnected) return toastContainerEl;
   toastContainerEl = document.createElement('div');
-  toastContainerEl.className = 'sf-toast-container';
+  toastContainerEl.className = 'df-toast-container';
   toastContainerEl.setAttribute('role', 'status');
   toastContainerEl.setAttribute('aria-live', 'polite');
   toastContainerEl.setAttribute('aria-atomic', 'true');
@@ -46,7 +46,7 @@ function ensureToastContainer() {
 export function showToast(message, kind = 'info', opts = {}) {
   const container = ensureToastContainer();
   const toast = document.createElement('div');
-  toast.className = `sf-toast sf-toast--${kind}`;
+  toast.className = `df-toast df-toast--${kind}`;
   toast.setAttribute('role', kind === 'error' || kind === 'warning' ? 'alert' : 'status');
 
   // Inline SVG icon per kind — tiny, currentColor-driven so it follows the
@@ -58,24 +58,24 @@ export function showToast(message, kind = 'info', opts = {}) {
     error:   '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   };
   toast.innerHTML = `
-    <span class="sf-toast__icon">${ICONS[kind] || ICONS.info}</span>
-    <span class="sf-toast__message"></span>
+    <span class="df-toast__icon">${ICONS[kind] || ICONS.info}</span>
+    <span class="df-toast__message"></span>
   `;
   // Use textContent for the message so user-supplied strings can't inject markup.
-  const messageEl = toast.querySelector('.sf-toast__message');
+  const messageEl = toast.querySelector('.df-toast__message');
   messageEl.textContent = String(message);
   container.appendChild(toast);
 
   // Trigger the enter animation on the next frame so the initial style
   // transition has a starting point to interpolate from.
-  requestAnimationFrame(() => toast.classList.add('sf-toast--shown'));
+  requestAnimationFrame(() => toast.classList.add('df-toast--shown'));
 
   const duration = opts.duration ?? TOAST_DEFAULT_DURATION;
   let dismissTimer = null;
   const dismiss = () => {
     if (!toast.isConnected) return;
     clearTimeout(dismissTimer);
-    toast.classList.remove('sf-toast--shown');
+    toast.classList.remove('df-toast--shown');
     // Wait for the exit transition before removing from DOM so stacked
     // toasts shift down smoothly.
     setTimeout(() => toast.remove(), 220);
@@ -182,8 +182,8 @@ export function trapFocus(rootEl, opts = {}) {
 // ── Generic modal scaffold ────────────────────────────────────────
 
 /**
- * Build, mount, and wire a standard `.sf-modal` dialog. Centralises the
- * overlay backdrop + `.sf-modal__dialog` + header (title + optional ✕) + body +
+ * Build, mount, and wire a standard `.df-modal` dialog. Centralises the
+ * overlay backdrop + `.df-modal__dialog` + header (title + optional ✕) + body +
  * optional footer, installs the focus trap, restores focus on close, and wires
  * backdrop-click / ✕ / Escape → close. Returns the live nodes so the caller can
  * attach handlers to its own body/footer buttons. Replaces ~15-20 lines of
@@ -195,13 +195,13 @@ export function trapFocus(rootEl, opts = {}) {
  * @param {string} [opts.footerHtml]      Inner HTML of the footer; omit/null for no footer.
  * @param {string} [opts.width]           Dialog width, e.g. '480px'.
  * @param {number|string} [opts.zIndex=3000] Stacking context.
- * @param {string} [opts.className='']    Extra class(es) on the `.sf-modal` root (scoping/cleanup).
- * @param {string} [opts.dialogClass='']  Extra class(es) on `.sf-modal__dialog`.
- * @param {string} [opts.bodyClass='']    Extra class(es) on `.sf-modal__body` (e.g. 'sf-modal__row-list').
+ * @param {string} [opts.className='']    Extra class(es) on the `.df-modal` root (scoping/cleanup).
+ * @param {string} [opts.dialogClass='']  Extra class(es) on `.df-modal__dialog`.
+ * @param {string} [opts.bodyClass='']    Extra class(es) on `.df-modal__body` (e.g. 'df-modal__row-list').
  * @param {string} [opts.bodyStyle='']    Inline style on the body.
- * @param {string} [opts.footerClass='']  Extra class(es) on `.sf-modal__footer` (e.g. 'sf-field-modal__footer').
+ * @param {string} [opts.footerClass='']  Extra class(es) on `.df-modal__footer` (e.g. 'df-field-modal__footer').
  * @param {boolean}[opts.showClose=true]  Render the top-right ✕ dismiss button.
- * @param {string} [opts.closeClass='']   Replaces the ✕ button's default `sf-toolbar__button` styling with the caller's own (the `sf-modal__close` wiring hook is always kept). Use for bespoke close buttons.
+ * @param {string} [opts.closeClass='']   Replaces the ✕ button's default `df-toolbar__button` styling with the caller's own (the `df-modal__close` wiring hook is always kept). Use for bespoke close buttons.
  * @param {string} [opts.closeHtml='']    Custom inner HTML for the ✕ button (defaults to the SLDS close SVG). Use e.g. a plain text '✕'.
  * @param {Function}[opts.onClose]        Called after the modal is removed (cleanup hook).
  * @param {Function}[opts.onEscape]       Escape handler; defaults to close().
@@ -215,31 +215,31 @@ export function buildModal(opts = {}) {
   } = opts;
 
   const prevFocus = document.activeElement;
-  const titleId = `sf-modal-title-${Math.random().toString(36).slice(2, 8)}`;
+  const titleId = `df-modal-title-${Math.random().toString(36).slice(2, 8)}`;
 
   const overlay = document.createElement('div');
-  overlay.className = `sf-modal${className ? ' ' + className : ''}`;
+  overlay.className = `df-modal${className ? ' ' + className : ''}`;
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', titleId);
   overlay.style.zIndex = String(zIndex);
 
-  // `sf-modal__close` is always present (buildModal wires the click); `closeClass`
+  // `df-modal__close` is always present (buildModal wires the click); `closeClass`
   // swaps the default toolbar-button styling, `closeHtml` swaps the ✕ glyph.
-  const closeBtnClass = closeClass ? `sf-modal__close ${closeClass}` : 'sf-toolbar__button sf-modal__close';
-  const closeInner = closeHtml || '<svg class="sf-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>';
+  const closeBtnClass = closeClass ? `df-modal__close ${closeClass}` : 'df-toolbar__button df-modal__close';
+  const closeInner = closeHtml || '<svg class="df-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>';
   const closeBtn = showClose ? `<button class="${closeBtnClass}" aria-label="Close">${closeInner}</button>` : '';
   overlay.innerHTML = `
-    <div class="sf-modal__overlay"></div>
-    <div class="sf-modal__dialog${dialogClass ? ' ' + dialogClass : ''}"${width ? ` style="width:${width}"` : ''}>
-      <div class="sf-modal__header">
-        <h2 id="${titleId}" class="sf-modal__title"></h2>
+    <div class="df-modal__overlay"></div>
+    <div class="df-modal__dialog${dialogClass ? ' ' + dialogClass : ''}"${width ? ` style="width:${width}"` : ''}>
+      <div class="df-modal__header">
+        <h2 id="${titleId}" class="df-modal__title"></h2>
         ${closeBtn}
       </div>
-      <div class="sf-modal__body${bodyClass ? ' ' + bodyClass : ''}"${bodyStyle ? ` style="${bodyStyle}"` : ''}>${bodyHtml}</div>
-      ${footerHtml != null ? `<div class="sf-modal__footer${footerClass ? ' ' + footerClass : ''}">${footerHtml}</div>` : ''}
+      <div class="df-modal__body${bodyClass ? ' ' + bodyClass : ''}"${bodyStyle ? ` style="${bodyStyle}"` : ''}>${bodyHtml}</div>
+      ${footerHtml != null ? `<div class="df-modal__footer${footerClass ? ' ' + footerClass : ''}">${footerHtml}</div>` : ''}
     </div>`;
-  overlay.querySelector('.sf-modal__title').textContent = title; // textContent — no title injection
+  overlay.querySelector('.df-modal__title').textContent = title; // textContent — no title injection
 
   document.body.appendChild(overlay);
 
@@ -253,15 +253,15 @@ export function buildModal(opts = {}) {
     onClose?.();
   };
   releaseTrap = trapFocus(overlay, { onEscape: onEscape || close });
-  overlay.querySelector('.sf-modal__overlay').addEventListener('click', close);
-  overlay.querySelector('.sf-modal__close')?.addEventListener('click', close);
+  overlay.querySelector('.df-modal__overlay').addEventListener('click', close);
+  overlay.querySelector('.df-modal__close')?.addEventListener('click', close);
 
   return {
     overlay,
-    dialog: overlay.querySelector('.sf-modal__dialog'),
-    header: overlay.querySelector('.sf-modal__header'),
-    body: overlay.querySelector('.sf-modal__body'),
-    footer: overlay.querySelector('.sf-modal__footer'),
+    dialog: overlay.querySelector('.df-modal__dialog'),
+    header: overlay.querySelector('.df-modal__header'),
+    body: overlay.querySelector('.df-modal__body'),
+    footer: overlay.querySelector('.df-modal__footer'),
     close,
   };
 }
@@ -284,7 +284,7 @@ export function buildModal(opts = {}) {
  * removed. It had no call sites in the codebase and provided an XSS
  * surface that future contributors could accidentally feed unescaped
  * user content into. Callers needing rich content can compose plain
- * text with newlines, or build their own modal via the same `.sf-modal`
+ * text with newlines, or build their own modal via the same `.df-modal`
  * primitives if a one-off needs HTML formatting.
  */
 export function confirmModal(opts) {
@@ -302,22 +302,22 @@ export function confirmModal(opts) {
     // no ✕ (showClose:false) and resolves via the result/onClose pattern.
     const { body, footer, close } = buildModal({
       title: title || '',
-      className: 'sf-confirm-modal',
+      className: 'df-confirm-modal',
       zIndex: 10002,
       showClose: false,
-      dialogClass: 'sf-confirm-modal__dialog',
-      bodyClass: 'sf-confirm-modal__body',
-      footerClass: 'sf-confirm-modal__footer',
+      dialogClass: 'df-confirm-modal__dialog',
+      bodyClass: 'df-confirm-modal__body',
+      footerClass: 'df-confirm-modal__footer',
       footerHtml: `
-        <button class="sf-modal__btn sf-confirm-modal__cancel"></button>
-        <button class="sf-modal__btn sf-modal__btn--${tone === 'danger' ? 'danger' : 'primary'} sf-confirm-modal__ok"></button>`,
+        <button class="df-modal__btn df-confirm-modal__cancel"></button>
+        <button class="df-modal__btn df-modal__btn--${tone === 'danger' ? 'danger' : 'primary'} df-confirm-modal__ok"></button>`,
       // Escape / backdrop / cancel resolve false; cleanup the Enter handler here.
       onClose: () => { document.removeEventListener('keydown', onEnter, true); resolve(result); },
     });
     // textContent everywhere — no raw-HTML path is available (see S2 note above).
     body.textContent = message;
-    const okBtn = footer.querySelector('.sf-confirm-modal__ok');
-    const cancelBtn = footer.querySelector('.sf-confirm-modal__cancel');
+    const okBtn = footer.querySelector('.df-confirm-modal__ok');
+    const cancelBtn = footer.querySelector('.df-confirm-modal__cancel');
     okBtn.textContent = okLabel;
     cancelBtn.textContent = cancelLabel;
 
@@ -359,7 +359,7 @@ export function showError(message, opts = {}) {
  * Single-line text-input modal — the input-bearing sibling of confirmModal.
  * Used where the app needs one short string from the user (e.g. naming a
  * custom pattern) without falling back to the native, unstyled `prompt()`.
- * Reuses the `.sf-modal` / `.sf-confirm-modal` structure + focus trap so it
+ * Reuses the `.df-modal` / `.df-confirm-modal` structure + focus trap so it
  * looks and behaves like every other dialog.
  *
  * @param {object} opts
@@ -399,37 +399,37 @@ export function promptModal(opts) {
   } = opts || {};
 
   return new Promise((resolve) => {
-    const inputId = `sf-prompt-input-${Math.random().toString(36).slice(2, 8)}`;
+    const inputId = `df-prompt-input-${Math.random().toString(36).slice(2, 8)}`;
     let result = null; // resolve value; set by submit(). null = cancel/escape.
     const { body, footer, close } = buildModal({
       title: title || '',
-      className: 'sf-confirm-modal sf-prompt-modal',
+      className: 'df-confirm-modal df-prompt-modal',
       zIndex: 10002,
       showClose: false,
-      dialogClass: 'sf-confirm-modal__dialog',
-      bodyClass: 'sf-confirm-modal__body',
-      footerClass: 'sf-confirm-modal__footer',
+      dialogClass: 'df-confirm-modal__dialog',
+      bodyClass: 'df-confirm-modal__body',
+      footerClass: 'df-confirm-modal__footer',
       bodyHtml: `
-        <p class="sf-prompt-modal__message"></p>
-        <label class="sf-prompt-modal__label" for="${inputId}"></label>
-        <input id="${inputId}" type="text" class="sf-prompt-modal__input" spellcheck="false" autocomplete="off">`,
+        <p class="df-prompt-modal__message"></p>
+        <label class="df-prompt-modal__label" for="${inputId}"></label>
+        <input id="${inputId}" type="text" class="df-prompt-modal__input" spellcheck="false" autocomplete="off">`,
       footerHtml: `
-        <button class="sf-modal__btn sf-confirm-modal__cancel"></button>
-        <button class="sf-modal__btn sf-modal__btn--primary sf-confirm-modal__ok"></button>`,
+        <button class="df-modal__btn df-confirm-modal__cancel"></button>
+        <button class="df-modal__btn df-modal__btn--primary df-confirm-modal__ok"></button>`,
       onClose: () => resolve(result), // backdrop / Escape / cancel resolve null
     });
-    const msgEl = body.querySelector('.sf-prompt-modal__message');
+    const msgEl = body.querySelector('.df-prompt-modal__message');
     if (message instanceof Node) msgEl.appendChild(message);
     else if (message) msgEl.textContent = message;
     else msgEl.remove();
-    const labelEl = body.querySelector('.sf-prompt-modal__label');
+    const labelEl = body.querySelector('.df-prompt-modal__label');
     if (label) labelEl.textContent = label; else labelEl.remove();
-    const okBtn = footer.querySelector('.sf-confirm-modal__ok');
-    const cancelBtn = footer.querySelector('.sf-confirm-modal__cancel');
+    const okBtn = footer.querySelector('.df-confirm-modal__ok');
+    const cancelBtn = footer.querySelector('.df-confirm-modal__cancel');
     okBtn.textContent = okLabel;
     cancelBtn.textContent = cancelLabel;
 
-    const input = body.querySelector('.sf-prompt-modal__input');
+    const input = body.querySelector('.df-prompt-modal__input');
     input.value = defaultValue;
     input.maxLength = maxLength;
     if (placeholder) input.placeholder = placeholder;

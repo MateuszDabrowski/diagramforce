@@ -1,24 +1,24 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.15.0';
-import * as icons       from './icons.js?v=1.15.0';
-import { getAllStencilSvgs } from './components.js?v=1.15.0';
-import * as shapes      from './shapes.js?v=1.15.0';
-import * as canvas      from './canvas.js?v=1.15.0';
-import * as stencil     from './stencil.js?v=1.15.0';
-import * as selection   from './selection.js?v=1.15.0';
-import * as history     from './history.js?v=1.15.0';
-import * as clipboard   from './clipboard.js?v=1.15.0';
-import * as templates    from './templates.js?v=1.15.0';
-import * as keyboard    from './keyboard.js?v=1.15.0';
-import * as toolbar     from './toolbar.js?v=1.15.0';
-import * as properties  from './properties.js?v=1.15.0';
-import * as persistence from './persistence.js?v=1.15.0';
-import * as tabs        from './tabs.js?v=1.15.0';
-import * as mermaidImport from './mermaid-import.js?v=1.15.0';
-import * as tableView    from './table-view.js?v=1.15.0';
-import * as walkthrough  from './walkthrough.js?v=1.15.0';
+import * as theme       from './theme.js?v=1.15.1';
+import * as icons       from './icons.js?v=1.15.1';
+import { getAllStencilSvgs } from './components.js?v=1.15.1';
+import * as shapes      from './shapes.js?v=1.15.1';
+import * as canvas      from './canvas.js?v=1.15.1';
+import * as stencil     from './stencil.js?v=1.15.1';
+import * as selection   from './selection.js?v=1.15.1';
+import * as history     from './history.js?v=1.15.1';
+import * as clipboard   from './clipboard.js?v=1.15.1';
+import * as templates    from './templates.js?v=1.15.1';
+import * as keyboard    from './keyboard.js?v=1.15.1';
+import * as toolbar     from './toolbar.js?v=1.15.1';
+import * as properties  from './properties.js?v=1.15.1';
+import * as persistence from './persistence.js?v=1.15.1';
+import * as tabs        from './tabs.js?v=1.15.1';
+import * as mermaidImport from './mermaid-import.js?v=1.15.1';
+import * as tableView    from './table-view.js?v=1.15.1';
+import * as walkthrough  from './walkthrough.js?v=1.15.1';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -141,10 +141,10 @@ async function main() {
   // ≥7 days since the last export (or since first content, if never exported).
   setTimeout(() => persistence.maybeShowBackupReminder(), 0);
 
-  // First-visit welcome splash — runs only when `df_first_visit_help_shown` is absent,
-  // AFTER the tabs + canvas paper have completed their initial render above. It defers
-  // its own paint internally and never touches the graph / history.
-  walkthrough.maybeShowWelcomeSplash();
+  // First-visit walkthrough — runs only when `df_first_visit_help_shown` is absent. It waits
+  // for a diagram canvas to exist (the first screen is usually the Create-New-Diagram overlay),
+  // then starts the single guided tour. Defers its own paint and never touches the graph / history.
+  walkthrough.maybeStartFirstRunTour();
 
   // --- Phase 10: beforeunload guard (Gap 21, v1.12.0) ---
   // Prevent silent data loss on ⌘R / browser close / back nav when any

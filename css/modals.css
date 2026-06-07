@@ -1,6 +1,6 @@
 /* Modal overlay and dialog */
 
-.sf-modal {
+.df-modal {
   position: fixed;
   inset: 0;
   z-index: 2000;
@@ -9,11 +9,11 @@
   justify-content: center;
 }
 
-.sf-modal--hidden {
+.df-modal--hidden {
   display: none;
 }
 
-.sf-modal__overlay {
+.df-modal__overlay {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -21,7 +21,7 @@
   backdrop-filter: blur(2px);
 }
 
-.sf-modal__dialog {
+.df-modal__dialog {
   position: relative;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -35,7 +35,7 @@
   overflow: hidden;
 }
 
-.sf-modal__header {
+.df-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -44,14 +44,14 @@
   flex-shrink: 0;
 }
 
-.sf-modal__title {
+.df-modal__title {
   font-size: var(--font-size-md);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
 
-.sf-modal__body {
+.df-modal__body {
   flex: 1;
   overflow-y: auto;
   /* Horizontal inset so body content never touches the dialog edges — matches
@@ -61,30 +61,30 @@
   padding: var(--spacing-sm) var(--spacing-lg);
 }
 
-.sf-modal__body::-webkit-scrollbar {
+.df-modal__body::-webkit-scrollbar {
   width: 7px;
 }
 
-.sf-modal__body::-webkit-scrollbar-thumb {
+.df-modal__body::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
-.sf-modal__empty {
+.df-modal__empty {
   padding: var(--spacing-lg);
   text-align: center;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
 }
 
-.sf-share-modal__warning {
+.df-share-modal__warning {
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-elevated, rgba(127, 127, 127, 0.08));
   border-left: 3px solid var(--color-accent, #F6B355);
   border-radius: 4px;
 }
 
-.sf-modal__advisory {
+.df-modal__advisory {
   margin: 0 0 var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-elevated, rgba(127, 127, 127, 0.08));
@@ -97,7 +97,7 @@
 
 /* Inline "Export to JSON" call-to-action inside an advisory — styled as a text
    link (no button chrome) so it reads as part of the sentence. */
-.sf-modal__advisory-link {
+.df-modal__advisory-link {
   background: none;
   border: none;
   padding: 0;
@@ -107,14 +107,14 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.sf-modal__advisory-link:hover {
+.df-modal__advisory-link:hover {
   text-decoration: none;
 }
 
 /* Success variant — transient import summary at the top of the Load modal.
    Green accent + faint green tint (brand-green #27AE60 @ 10%), readable on
    either theme. Stronger text colour than the neutral advisory. */
-.sf-modal__advisory--success {
+.df-modal__advisory--success {
   border-left-color: var(--brand-green, #27AE60);
   background: rgba(39, 174, 96, 0.10);
   color: var(--text-primary);
@@ -122,20 +122,20 @@
 
 /* Import summary as a dash list — one outcome per line for scannability
    (diagrams saved / diagrams skipped / templates saved / templates skipped). */
-.sf-import-summary__head {
+.df-import-summary__head {
   display: block;
 }
-.sf-import-summary__list {
+.df-import-summary__list {
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
-.sf-import-summary__list li {
+.df-import-summary__list li {
   position: relative;
   padding-left: 14px;
   line-height: 1.5;
 }
-.sf-import-summary__list li::before {
+.df-import-summary__list li::before {
   content: '–';
   position: absolute;
   left: 2px;
@@ -145,7 +145,7 @@
 /* "Select all" as a table-header row at the top of the list (all flat-list
    modals: Save / Export / Load), matching the Close-tabs header. The bulk
    commit + Cancel/Delete live in the footer. */
-.sf-modal__list-header {
+.df-modal__list-header {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -153,23 +153,23 @@
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-elevated, rgba(127, 127, 127, 0.05));
 }
-.sf-modal__list-header .sf-modal__select-all {
+.df-modal__list-header .df-modal__select-all {
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 /* Export modal advisory: backup date (left) + compact "Back up now" (right). */
-.sf-export-modal__advisory {
+.df-export-modal__advisory {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
 }
-.sf-export-modal__advisory-text { flex: 1; min-width: 0; }
+.df-export-modal__advisory-text { flex: 1; min-width: 0; }
 /* "Back up now" — brand-amber OUTLINE (no fill). Darker amber in light mode for
-   WCAG text contrast; fills on hover. The `.sf-modal__btn` compound selector
-   keeps it ahead of the neutral `.sf-modal__btn` base (which is defined later
+   WCAG text contrast; fills on hover. The `.df-modal__btn` compound selector
+   keeps it ahead of the neutral `.df-modal__btn` base (which is defined later
    in the file). */
-.sf-modal__btn.sf-export-modal__backup-now {
+.df-modal__btn.df-export-modal__backup-now {
   flex-shrink: 0;
   white-space: nowrap;
   --_amber: #D4911F;
@@ -177,8 +177,8 @@
   border-color: var(--_amber);
   color: var(--_amber);
 }
-[data-theme="dark"] .sf-modal__btn.sf-export-modal__backup-now { --_amber: var(--brand-amber); }
-.sf-modal__btn.sf-export-modal__backup-now:hover {
+[data-theme="dark"] .df-modal__btn.df-export-modal__backup-now { --_amber: var(--brand-amber); }
+.df-modal__btn.df-export-modal__backup-now:hover {
   background: var(--_amber);
   border-color: var(--_amber);
   color: #1C1E21;
@@ -186,16 +186,16 @@
 /* Success flash — JS toggles `is-backed` for ~2s after a successful backup,
    turning the amber outline into a solid brand-green "✓ Backed up!". The
    compound selector (incl. :hover) out-specifies the amber resting/hover rules. */
-.sf-modal__btn.sf-export-modal__backup-now.is-backed,
-.sf-modal__btn.sf-export-modal__backup-now.is-backed:hover {
+.df-modal__btn.df-export-modal__backup-now.is-backed,
+.df-modal__btn.df-export-modal__backup-now.is-backed:hover {
   background: var(--brand-green);
   border-color: var(--brand-green);
   color: #fff;
 }
 
-/* Legacy save-item aliases — now handled by .sf-modal__row */
+/* Legacy save-item aliases — now handled by .df-modal__row */
 
-.sf-modal__btn {
+.df-modal__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -218,24 +218,24 @@
    nor the amber "Back up now" outline button (which fills amber on its own
    :hover rule above; without this exclusion the neutral grey would win on
    specificity and the button would hover grey instead of brand-orange). */
-.sf-modal__btn:not(.sf-modal__btn--primary):not(.sf-modal__btn--danger):not(.sf-export-modal__backup-now):not(.sf-csv-tools__btn):not(.sf-tour__skip):not(.sf-tour__back):hover {
+.df-modal__btn:not(.df-modal__btn--primary):not(.df-modal__btn--danger):not(.df-export-modal__backup-now):not(.df-csv-tools__btn):not(.df-tour__skip):not(.df-tour__back):hover {
   background: var(--modal-btn-neutral-bg-hover);
 }
 
 /* Positive / primary commit — brand blue fill in BOTH themes (not the
    theme-flipping --color-primary, which is red in dark mode). */
-.sf-modal__btn--primary {
+.df-modal__btn--primary {
   background: var(--brand-blue);
   color: #ffffff;
   border-color: var(--brand-blue);
 }
 
-.sf-modal__btn--primary:hover {
+.df-modal__btn--primary:hover {
   opacity: 0.88;
 }
 
-.sf-modal__btn:disabled,
-.sf-modal__btn[disabled] {
+.df-modal__btn:disabled,
+.df-modal__btn[disabled] {
   opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
@@ -243,33 +243,33 @@
 
 /* Destructive commit (Delete, Discard) — brand-red fill in BOTH themes,
    mirroring the grey-secondary / blue-primary convention. */
-.sf-modal__btn--danger {
+.df-modal__btn--danger {
   background: var(--brand-red);
   color: #ffffff;
   border-color: var(--brand-red);
 }
 
-.sf-modal__btn--danger:hover {
+.df-modal__btn--danger:hover {
   opacity: 0.88;
 }
 
 /* ── Confirm modal (v1.12.0) ────────────────────────
    Custom-styled replacement for window.confirm(). Reuses the existing
-   .sf-modal structure so confirmations look like every other dialog in
+   .df-modal structure so confirmations look like every other dialog in
    the app. Slightly narrower than file/save dialogs since the body is
    typically one or two lines. */
-.sf-confirm-modal__dialog {
+.df-confirm-modal__dialog {
   width: 420px;
   max-width: calc(100vw - 32px);
 }
-.sf-confirm-modal__body {
+.df-confirm-modal__body {
   /* spacing-sm top so the message clears the header divider (was 0 → text hugged the rule) */
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
-.sf-confirm-modal__footer {
+.df-confirm-modal__footer {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
@@ -280,23 +280,23 @@
    Inherits the confirm-modal chrome; adds an optional labelled text field.
    The body is a flex item (own BFC), so the message's top margin reliably
    adds breathing room below the header divider without margin-collapse. */
-.sf-prompt-modal__message {
+.df-prompt-modal__message {
   margin: var(--spacing-sm) 0 var(--spacing-md);
 }
 /* Bolded counts (e.g. "8 components") stand out against the secondary-coloured
    sentence by using the primary text colour + heavier weight. */
-.sf-prompt-modal__message strong {
+.df-prompt-modal__message strong {
   color: var(--text-primary);
   font-weight: 600;
 }
-.sf-prompt-modal__label {
+.df-prompt-modal__label {
   display: block;
   margin-bottom: 4px;
   font-size: var(--font-size-xs, 11px);
   font-weight: 600;
   color: var(--text-muted);
 }
-.sf-prompt-modal__input {
+.df-prompt-modal__input {
   width: 100%;
   box-sizing: border-box;
   font-size: var(--font-size-sm);
@@ -312,10 +312,10 @@
 /* Required field: brand red while empty (placeholder showing), brand blue once
    it holds a value — independent of focus and theme. Non-required prompts keep
    the neutral border when empty. */
-.sf-prompt-modal__input:required:placeholder-shown {
+.df-prompt-modal__input:required:placeholder-shown {
   border-color: var(--brand-red);
 }
-.sf-prompt-modal__input:not(:placeholder-shown) {
+.df-prompt-modal__input:not(:placeholder-shown) {
   border-color: var(--brand-blue);
 }
 /* Focus ring. The global a11y ring (layout.css `input:focus-visible`) is
@@ -326,13 +326,13 @@
    in both themes. Scoped to this input — the global ring elsewhere (incl. the
    properties sidebar) is untouched. rgba values are --brand-blue / --brand-red
    at 30%. */
-.sf-prompt-modal__input:focus,
-.sf-prompt-modal__input:focus-visible {
+.df-prompt-modal__input:focus,
+.df-prompt-modal__input:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(29, 115, 201, 0.30);
 }
-.sf-prompt-modal__input:required:placeholder-shown:focus,
-.sf-prompt-modal__input:required:placeholder-shown:focus-visible {
+.df-prompt-modal__input:required:placeholder-shown:focus,
+.df-prompt-modal__input:required:placeholder-shown:focus-visible {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.30);
 }
 
@@ -341,7 +341,7 @@
    container; each toast slides in from below, auto-dismisses after 2s,
    click-to-dismiss available. Four kinds: success / info / warning /
    error — each with its own accent colour drawn from the brand tokens. */
-.sf-toast-container {
+.df-toast-container {
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
   left: 50%;
@@ -353,7 +353,7 @@
   z-index: 10100;
   pointer-events: none;
 }
-.sf-toast {
+.df-toast {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -373,32 +373,32 @@
   transform: translateY(12px);
   transition: opacity 0.18s ease-out, transform 0.18s ease-out;
 }
-.sf-toast--shown {
+.df-toast--shown {
   opacity: 1;
   transform: translateY(0);
 }
-.sf-toast__icon {
+.df-toast__icon {
   display: inline-flex;
   flex-shrink: 0;
 }
-.sf-toast__message {
+.df-toast__message {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sf-toast--success .sf-toast__icon { color: var(--brand-green); }
-.sf-toast--info    .sf-toast__icon { color: var(--brand-blue); }
-.sf-toast--warning .sf-toast__icon { color: var(--brand-amber); }
-.sf-toast--error   .sf-toast__icon { color: var(--brand-red); }
+.df-toast--success .df-toast__icon { color: var(--brand-green); }
+.df-toast--info    .df-toast__icon { color: var(--brand-blue); }
+.df-toast--warning .df-toast__icon { color: var(--brand-amber); }
+.df-toast--error   .df-toast__icon { color: var(--brand-red); }
 
 /* ── About modal ───────────────────────────────────── */
 
-.sf-about {
+.df-about {
   width: 380px;
   text-align: center;
 }
 
-.sf-about__body {
+.df-about__body {
   padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md) !important;
   display: flex;
   flex-direction: column;
@@ -406,41 +406,41 @@
   gap: var(--spacing-md);
 }
 
-.sf-about__logo img {
+.df-about__logo img {
   border-radius: 12px;
 }
 
-.sf-about__tagline {
+.df-about__tagline {
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
-.sf-about__info {
+.df-about__info {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
-.sf-about__info p {
+.df-about__info p {
   margin: 0 0 var(--spacing-sm);
 }
 
-.sf-about__info p:last-child {
+.df-about__info p:last-child {
   margin-bottom: 0;
 }
 
-.sf-about__info a {
+.df-about__info a {
   color: var(--color-primary);
   text-decoration: none;
 }
 
-.sf-about__info a:hover {
+.df-about__info a:hover {
   text-decoration: underline;
 }
 
-.sf-about__meta {
+.df-about__meta {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -452,18 +452,18 @@
   justify-content: center;
 }
 
-.sf-about__link {
+.df-about__link {
   color: var(--color-primary);
   text-decoration: none;
 }
 
-.sf-about__link:hover {
+.df-about__link:hover {
   text-decoration: underline;
 }
 
 /* ── Shared modal rows (Save & Load) ──────────────── */
 
-.sf-save-modal__dialog {
+.df-save-modal__dialog {
   width: 520px;
 }
 
@@ -473,7 +473,7 @@
 /* Bare row-list (used as an INNER rows container, e.g. the sequence
    auto-layout confirm) keeps zero horizontal padding so its rows align with the
    surrounding body's own inset. */
-.sf-modal__row-list {
+.df-modal__row-list {
   display: flex;
   flex-direction: column;
   padding: var(--spacing-sm) 0;
@@ -482,21 +482,21 @@
 /* Row-list used directly AS the modal body (Save / Export / Load) gets the
    standard horizontal inset. Higher specificity (0,2,0) wins over both the base
    body and the bare row-list above — no !important needed. */
-.sf-modal__body.sf-modal__row-list {
+.df-modal__body.df-modal__row-list {
   padding: var(--spacing-sm) var(--spacing-lg);
 }
 
 /* Bordered container around the Select-all header + rows (Save / Export / Load),
-   mirroring Close-Tabs' .sf-close-tabs__list. overflow:hidden clips the header
+   mirroring Close-Tabs' .df-close-tabs__list. overflow:hidden clips the header
    background and the first/last row corners to the box radius. */
-.sf-modal__list-box {
+.df-modal__list-box {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-sm);
   overflow: hidden;
   background: var(--bg-canvas);
 }
 
-.sf-modal__row {
+.df-modal__row {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -507,19 +507,19 @@
 
 /* Drop the final row's divider so it doesn't stack with the footer's
    border-top into a double line just above the action buttons. */
-.sf-modal__row:last-child {
+.df-modal__row:last-child {
   border-bottom: none;
 }
 
-.sf-modal__row:hover {
+.df-modal__row:hover {
   background: var(--stencil-item-hover);
 }
 
-.sf-modal__row--active {
+.df-modal__row--active {
   background: var(--stencil-item-hover);
 }
 
-.sf-modal__row-check {
+.df-modal__row-check {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -527,14 +527,14 @@
   cursor: pointer;
 }
 
-.sf-modal__row-icon {
+.df-modal__row-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   color: var(--text-muted);
 }
 
-.sf-modal__row-info {
+.df-modal__row-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -542,7 +542,7 @@
   gap: 2px;
 }
 
-.sf-modal__row-label {
+.df-modal__row-label {
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -551,7 +551,7 @@
   text-overflow: ellipsis;
 }
 
-.sf-modal__row-meta {
+.df-modal__row-meta {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   white-space: nowrap;
@@ -559,7 +559,7 @@
 
 /* Save modal's editable name — now FLAT (no card border). A subtle border
    appears on hover (hints it's editable) and on focus (active edit). */
-.sf-modal__row-name {
+.df-modal__row-name {
   flex: 1;
   min-width: 0;
   font-size: var(--font-size-sm);
@@ -574,7 +574,7 @@
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.sf-modal__row-name:hover {
+.df-modal__row-name:hover {
   border-color: var(--border-color);
 }
 /* When the editable Save name sits inside the info column (with the "Modified …"
@@ -582,19 +582,19 @@
    text must sit FLUSH-LEFT so it aligns with the "Modified …" meta below and
    matches the static name in Export / Close-Tabs. Drop the left padding only
    (keep the right so a long name still has breathing room when editing). */
-.sf-save-modal__row-info .sf-modal__row-name {
+.df-save-modal__row-info .df-modal__row-name {
   flex: 0 0 auto;
   width: 100%;
   padding-left: 0;
 }
 
-.sf-modal__row-name:focus {
+.df-modal__row-name:focus {
   border-color: var(--color-primary);
   background: var(--bg-app);
 }
 
 /* Right-accessory type badge (Export rows) — mirrors the Close-tabs badge. */
-.sf-modal__row-badge {
+.df-modal__row-badge {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--text-muted);
@@ -604,7 +604,7 @@
   white-space: nowrap;
 }
 
-.sf-modal__row-actions {
+.df-modal__row-actions {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -613,7 +613,7 @@
 
 /* Footer — shared between Save & Load */
 
-.sf-modal__footer {
+.df-modal__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -622,7 +622,7 @@
   border-top: 1px solid var(--border-color);
 }
 
-.sf-modal__select-all {
+.df-modal__select-all {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -632,21 +632,21 @@
   user-select: none;
 }
 
-.sf-modal__select-all input {
+.df-modal__select-all input {
   width: 16px;
   height: 16px;
   accent-color: var(--color-primary);
   cursor: pointer;
 }
 
-.sf-modal__action-btn:disabled {
+.df-modal__action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* ── Close tab confirmation modal ─────────────────── */
 
-.sf-close-confirm__btn {
+.df-close-confirm__btn {
   padding: 6px 14px;
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-sm);
@@ -661,19 +661,19 @@
               border-color var(--transition-fast);
 }
 
-.sf-close-confirm__btn:hover {
+.df-close-confirm__btn:hover {
   background: var(--modal-btn-neutral-bg-hover);
   color: var(--modal-btn-neutral-fg);
 }
 
 /* Positive commit (Copy Link, Save and Close) — brand blue fill, both themes. */
-.sf-close-confirm__btn--save {
+.df-close-confirm__btn--save {
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
 }
 
-.sf-close-confirm__btn--save:hover {
+.df-close-confirm__btn--save:hover {
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
@@ -683,8 +683,8 @@
 /* Share modal: temporary success state on the Copy Link button. Driven by
    `.is-copied` toggled from persistence.js for ~2s after a successful copy.
    Overrides the hover style above so the green sticks even on hover. */
-.sf-share-modal__copy-btn.is-copied,
-.sf-share-modal__copy-btn.is-copied:hover {
+.df-share-modal__copy-btn.is-copied,
+.df-share-modal__copy-btn.is-copied:hover {
   background: var(--brand-green);
   border-color: var(--brand-green);
   color: #fff;
@@ -693,21 +693,21 @@
 /* Backup-reminder overlay: a backup button turns brand-green "✓ Backed up!"
    on success and STAYS green until the overlay closes (no auto-revert, unlike
    the share button). Beats the blue --save fill + its hover. */
-.sf-backup-modal__btn.is-backed,
-.sf-backup-modal__btn.is-backed:hover {
+.df-backup-modal__btn.is-backed,
+.df-backup-modal__btn.is-backed:hover {
   background: var(--brand-green);
   border-color: var(--brand-green);
   color: #fff;
   opacity: 1;
 }
 
-.sf-close-confirm__btn--discard {
+.df-close-confirm__btn--discard {
   background: transparent;
   border-color: #DA4E55;
   color: #DA4E55;
 }
 
-.sf-close-confirm__btn--discard:hover {
+.df-close-confirm__btn--discard:hover {
   background: #DA4E55;
   border-color: #DA4E55;
   color: #fff;
@@ -715,7 +715,7 @@
 
 /* ── Share modal ─────────────────────────────────── */
 
-.sf-share-modal__url {
+.df-share-modal__url {
   width: 100%;
   font-size: var(--font-size-sm);
   font-family: var(--font-family);
@@ -729,23 +729,23 @@
   transition: border-color var(--transition-fast);
 }
 
-.sf-share-modal__url:focus,
-.sf-share-modal__url:focus-visible {
+.df-share-modal__url:focus,
+.df-share-modal__url:focus-visible {
   border-color: var(--brand-blue);
   outline: none;
 }
 
 /* ── Field Editor Modal (Full Edit Mode) ─────────── */
 
-.sf-field-modal__dialog {
+.df-field-modal__dialog {
   width: 880px;
   max-width: calc(100vw - 32px);
   max-height: 80vh;
 }
 
 /* Display-menu-style checkbox toggle for the Required / Decommissioned columns —
-   a square that reveals a tick when on (mirrors .sf-toolbar__menu-item--toggle). */
-.sf-field-modal__check-toggle {
+   a square that reveals a tick when on (mirrors .df-toolbar__menu-item--toggle). */
+.df-field-modal__check-toggle {
   background: none;
   border: none;
   padding: 0;
@@ -755,19 +755,19 @@
   align-items: center;
   justify-content: center;
 }
-.sf-field-modal__check-toggle .sf-toolbar__checkbox-tick { opacity: 0; }
-.sf-field-modal__check-toggle.is-checked { color: var(--color-primary); }
-.sf-field-modal__check-toggle.is-checked .sf-toolbar__checkbox-tick { opacity: 1; }
+.df-field-modal__check-toggle .df-toolbar__checkbox-tick { opacity: 0; }
+.df-field-modal__check-toggle.is-checked { color: var(--color-primary); }
+.df-field-modal__check-toggle.is-checked .df-toolbar__checkbox-tick { opacity: 1; }
 
 /* Import / Export Fields (CSV) — collapsible panel pinned between the (scrolling)
    field list and the modal footer. */
-.sf-csv-tools {
+.df-csv-tools {
   flex: 0 0 auto;
   border-top: 1px solid var(--border-color);
   margin: 0 var(--spacing-md);
   font-size: var(--font-size-sm);
 }
-.sf-csv-tools__summary {
+.df-csv-tools__summary {
   cursor: pointer;
   padding: var(--spacing-sm) 0;
   font-weight: 600;
@@ -775,16 +775,16 @@
   user-select: none;
   list-style: none;
 }
-.sf-csv-tools__summary::-webkit-details-marker { display: none; }
-.sf-csv-tools__summary::before {
+.df-csv-tools__summary::-webkit-details-marker { display: none; }
+.df-csv-tools__summary::before {
   content: '▸';
   display: inline-block;
   margin-right: 6px;
   transition: transform var(--transition-fast);
 }
-.sf-csv-tools[open] .sf-csv-tools__summary::before { transform: rotate(90deg); }
-.sf-csv-tools__body { padding-bottom: var(--spacing-sm); }
-.sf-csv-tools__row {
+.df-csv-tools[open] .df-csv-tools__summary::before { transform: rotate(90deg); }
+.df-csv-tools__body { padding-bottom: var(--spacing-sm); }
+.df-csv-tools__row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
@@ -792,22 +792,22 @@
 }
 /* The import/export buttons are tinted brand amber so they read as one group, clearly
    distinct from the modal's primary (blue) Done and the dashed Add Field. */
-.sf-csv-tools__btn {
+.df-csv-tools__btn {
   background: #F6B355;
   color: #2b2000;
   border: 1px solid #F6B355;
 }
-.sf-csv-tools__btn:hover { background: #e0a043; border-color: #e0a043; color: #2b2000; }
+.df-csv-tools__btn:hover { background: #e0a043; border-color: #e0a043; color: #2b2000; }
 /* Push the paste-import action to the right so it reads as separate from the three
    export / file-import buttons on the left. */
-.sf-csv-tools__import-paste { margin-left: auto; }
-.sf-csv-tools__hint {
+.df-csv-tools__import-paste { margin-left: auto; }
+.df-csv-tools__hint {
   margin: var(--spacing-sm) 0;
   color: var(--text-muted);
   font-size: var(--font-size-xs);
   line-height: 1.5;
 }
-.sf-csv-tools__textarea {
+.df-csv-tools__textarea {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
@@ -820,16 +820,16 @@
   font-size: var(--font-size-sm);
   line-height: 1.5;
 }
-.sf-csv-tools__textarea:focus { outline: none; border-color: var(--color-primary); }
-.sf-csv-tools__status { display: block; font-size: var(--font-size-xs); color: var(--text-muted); min-height: 1em; }
-.sf-csv-tools__status--err { color: var(--color-danger, #c23934); }
+.df-csv-tools__textarea:focus { outline: none; border-color: var(--color-primary); }
+.df-csv-tools__status { display: block; font-size: var(--font-size-xs); color: var(--text-muted); min-height: 1em; }
+.df-csv-tools__status--err { color: var(--color-danger, #c23934); }
 
-.sf-field-modal__body {
+.df-field-modal__body {
   padding: var(--spacing-sm) var(--spacing-md) !important;
   overflow-y: auto;
 }
 
-.sf-field-modal__close {
+.df-field-modal__close {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -838,12 +838,12 @@
   padding: 4px 8px;
   border-radius: var(--border-radius-sm);
 }
-.sf-field-modal__close:hover {
+.df-field-modal__close:hover {
   background: var(--stencil-item-hover);
   color: var(--text-primary);
 }
 
-.sf-field-modal__row {
+.df-field-modal__row {
   display: grid;
   /* handle · key · api · label · type · length · REQUIRED · DECOMMISSIONED · del */
   grid-template-columns: 22px 32px minmax(110px, 1fr) minmax(110px, 1fr) 104px 54px 78px 130px 24px;
@@ -855,12 +855,12 @@
 }
 /* The REQUIRED / DECOMMISSIONED headers keep on one line and centre over their
    (centred) checkbox toggles. */
-.sf-field-modal__col--req,
-.sf-field-modal__col--decom { text-align: center; white-space: nowrap; }
-.sf-field-modal__row .sf-field-modal__col--req,
-.sf-field-modal__row .sf-field-modal__col--decom { justify-self: center; }
+.df-field-modal__col--req,
+.df-field-modal__col--decom { text-align: center; white-space: nowrap; }
+.df-field-modal__row .df-field-modal__col--req,
+.df-field-modal__row .df-field-modal__col--decom { justify-self: center; }
 
-.sf-field-modal__row--header {
+.df-field-modal__row--header {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -871,46 +871,46 @@
   margin-bottom: 2px;
 }
 
-.sf-field-modal__row--header span {
+.df-field-modal__row--header span {
   text-align: center;
 }
-.sf-field-modal__row--header .sf-field-modal__col--api,
-.sf-field-modal__row--header .sf-field-modal__col--label {
+.df-field-modal__row--header .df-field-modal__col--api,
+.df-field-modal__row--header .df-field-modal__col--label {
   text-align: left;
 }
 
-.sf-field-modal__handle {
+.df-field-modal__handle {
   cursor: grab;
   color: var(--text-muted);
   font-size: 14px;
   text-align: center;
   user-select: none;
 }
-.sf-field-modal__handle:active {
+.df-field-modal__handle:active {
   cursor: grabbing;
 }
 
-.sf-field-modal__row--dragging {
+.df-field-modal__row--dragging {
   opacity: 0.4;
 }
-.sf-field-modal__row--drop-above {
+.df-field-modal__row--drop-above {
   box-shadow: 0 -2px 0 0 var(--brand-amber, #F6B355);
 }
-.sf-field-modal__row--drop-below {
+.df-field-modal__row--drop-below {
   box-shadow: 0 2px 0 0 var(--brand-amber, #F6B355);
 }
 
-.sf-field-modal__row .sf-field-input {
+.df-field-modal__row .df-field-input {
   height: 26px;
   font-size: 12px;
   padding: 0 6px;
 }
 
-.sf-field-modal__row select.sf-field-input {
+.df-field-modal__row select.df-field-input {
   font-size: 11px;
 }
 
-.sf-field-modal__check {
+.df-field-modal__check {
   width: 16px;
   height: 16px;
   accent-color: var(--color-primary);
@@ -918,17 +918,17 @@
   justify-self: center;
 }
 
-.sf-field-modal__col--del {
+.df-field-modal__col--del {
   justify-self: center;
 }
 
-.sf-field-modal__footer {
+.df-field-modal__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.sf-field-modal__footer .sf-properties__btn--add-field {
+.df-field-modal__footer .df-properties__btn--add-field {
   margin-top: 0;
   width: auto;
   padding: 6px 14px;
@@ -936,65 +936,72 @@
 
 /* ── Mobile modal touch targets ──────────────────────────────── */
 @media (max-width: 768px) {
-  .sf-modal__btn,
-  .sf-close-confirm__btn {
+  .df-modal__btn,
+  .df-close-confirm__btn {
     min-height: 44px;
     padding: 10px 16px;
     font-size: var(--font-size-md);
   }
 
-  .sf-modal__row {
+  /* Field-editor modal: its 8-column grid (~712px) can't fit a phone. Rather than
+     crush/clip the columns — or route to the sidebar editor, which only exposes
+     Key/API/Type and would lose Label/Length/Required/Deprecated — keep every column
+     and let the rows scroll horizontally inside the modal body. */
+  .df-field-modal__body { overflow-x: auto; }
+  .df-field-modal__row { min-width: 700px; }
+
+  .df-modal__row {
     padding: var(--spacing-sm);
     min-height: 44px;
   }
 
-  .sf-modal__row-check {
+  .df-modal__row-check {
     width: 22px;
     height: 22px;
   }
 
-  .sf-modal__row-name {
+  .df-modal__row-name {
     min-height: 40px;
     font-size: var(--font-size-md);
     padding: 8px 10px;
   }
 
-  .sf-modal__row-label {
+  .df-modal__row-label {
     font-size: var(--font-size-md);
   }
 
-  .sf-modal__select-all {
+  .df-modal__select-all {
     font-size: var(--font-size-md);
     gap: var(--spacing-sm);
   }
 
-  .sf-modal__select-all input {
+  .df-modal__select-all input {
     width: 22px;
     height: 22px;
   }
 
-  .sf-modal__footer {
+  .df-modal__footer {
     padding: var(--spacing-md) var(--spacing-lg);
   }
 
   /* New diagram modal cards — touch-friendly */
-  .sf-new-modal__card {
+  .df-new-modal__card {
     padding: 16px 12px;
     min-height: 44px;
   }
 
-  .sf-new-modal__grid {
+  .df-new-modal__grid {
     gap: 12px;
   }
 
-  .sf-new-modal__card {
+  .df-new-modal__card {
     grid-column: auto;
     max-width: none;
     justify-self: auto;
   }
 
   /* Display menu items when opened from hamburger */
-  .sf-toolbar__menu-item {
+  .df-toolbar__menu-item {
     min-height: 44px;
     padding: 10px 14px;
     font-size: var(--font-size-md);
@@ -1002,7 +1009,7 @@
 }
 
 /* ── Touch context menu (long-press action sheet) ────────────── */
-.sf-ctx-menu {
+.df-ctx-menu {
   position: fixed;
   z-index: 500;
   background: var(--toolbar-bg, #fff);
@@ -1013,15 +1020,15 @@
   min-width: 160px;
   display: flex;
   flex-direction: column;
-  animation: sf-ctx-menu-in 120ms ease-out;
+  animation: df-ctx-menu-in 120ms ease-out;
 }
 
-@keyframes sf-ctx-menu-in {
+@keyframes df-ctx-menu-in {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
 
-.sf-ctx-menu__item {
+.df-ctx-menu__item {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1036,12 +1043,12 @@
   cursor: pointer;
 }
 
-.sf-ctx-menu__item:hover,
-.sf-ctx-menu__item:active {
+.df-ctx-menu__item:hover,
+.df-ctx-menu__item:active {
   background: var(--hover-bg, rgba(127,127,127,0.1));
 }
 
-.sf-ctx-menu__icon {
+.df-ctx-menu__icon {
   width: 20px;
   display: inline-flex;
   align-items: center;
@@ -1051,7 +1058,7 @@
 }
 
 /* ── Touch-drag ghost for stencil items on touch devices ─────── */
-.sf-touch-drag-ghost {
+.df-touch-drag-ghost {
   position: fixed;
   z-index: 600;
   pointer-events: none;
@@ -1070,11 +1077,11 @@
 }
 
 /* ── About modal license ────────────────────────────── */
-.sf-about__meta--license {
+.df-about__meta--license {
   margin-top: 4px;
 }
 
-.sf-about__license-text {
+.df-about__license-text {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
@@ -1083,10 +1090,10 @@
    A non-library tour overlay: a full-screen click-catcher, a spotlight cutout
    (box-shadow dims everything but the target), and a positioned card. Sits above
    the app (z 5000); never shifts page layout (all fixed-position). */
-.sf-tour { position: fixed; inset: 0; z-index: 5000; pointer-events: none; }
-.sf-tour__catcher { position: fixed; inset: 0; pointer-events: auto; }
-.sf-tour__catcher--dim { background: rgba(0, 0, 0, 0.55); }
-.sf-tour__spotlight {
+.df-tour { position: fixed; inset: 0; z-index: 5000; pointer-events: none; }
+.df-tour__catcher { position: fixed; inset: 0; pointer-events: auto; }
+.df-tour__catcher--dim { background: rgba(0, 0, 0, 0.55); }
+.df-tour__spotlight {
   position: fixed;
   border-radius: var(--border-radius-md, 8px);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
@@ -1094,7 +1101,7 @@
   pointer-events: none;
   transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease;
 }
-.sf-tour__card {
+.df-tour__card {
   position: fixed;
   width: 340px;
   max-width: calc(100vw - 32px);
@@ -1108,22 +1115,22 @@
   pointer-events: auto;
   transition: left .18s ease, top .18s ease;
 }
-.sf-tour__close {
+.df-tour__close {
   position: absolute; top: 8px; right: 8px;
   background: none; border: none; cursor: pointer;
   color: var(--text-muted); font-size: 14px; line-height: 1;
   padding: 4px; border-radius: var(--border-radius-sm);
 }
-.sf-tour__close:hover { color: var(--text-primary); background: var(--stencil-item-hover); }
-.sf-tour__title { margin: 0 24px 8px 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
-.sf-tour__body { font-size: var(--font-size-sm); line-height: 1.55; color: var(--text-secondary); }
-.sf-tour__body a { color: var(--color-primary); }
+.df-tour__close:hover { color: var(--text-primary); background: var(--stencil-item-hover); }
+.df-tour__title { margin: 0 24px 8px 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.df-tour__body { font-size: var(--font-size-sm); line-height: 1.55; color: var(--text-secondary); }
+.df-tour__body a { color: var(--color-primary); }
 /* Compact bullet hints (e.g. the closing keyboard-shortcuts step). */
-.sf-tour__list { margin: 4px 0; padding-left: 18px; }
-.sf-tour__list li { margin: 2px 0; }
+.df-tour__list { margin: 4px 0; padding-left: 18px; }
+.df-tour__list li { margin: 2px 0; }
 
 /* Footer: Skip pinned left, step counter absolutely centred, Back+Next grouped right. */
-.sf-tour__footer {
+.df-tour__footer {
   position: relative;
   display: flex;
   align-items: center;
@@ -1131,7 +1138,7 @@
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
 }
-.sf-tour__count {
+.df-tour__count {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -1139,36 +1146,28 @@
   color: var(--text-muted);
   pointer-events: none;
 }
-.sf-tour__nav { display: flex; align-items: center; gap: var(--spacing-sm); margin-left: auto; }
+.df-tour__nav { display: flex; align-items: center; gap: var(--spacing-sm); margin-left: auto; }
 
 /* Skip — brand-amber OUTLINE (no fill); fills amber on hover. Darker amber in light mode for
    WCAG text contrast (mirrors the export "Back up now" button); brand-amber in dark mode. */
-.sf-tour__skip {
+.df-tour__skip {
   --_skip-amber: #D4911F;
   background: transparent;
   border-color: var(--_skip-amber);
   color: var(--_skip-amber);
 }
-[data-theme="dark"] .sf-tour__skip { --_skip-amber: var(--brand-amber); }
-.sf-tour__skip:hover { background: var(--_skip-amber); border-color: var(--_skip-amber); color: #1C1E21; }
+[data-theme="dark"] .df-tour__skip { --_skip-amber: var(--brand-amber); }
+.df-tour__skip:hover { background: var(--_skip-amber); border-color: var(--_skip-amber); color: #1C1E21; }
 
 /* Back — brand-blue OUTLINE (no fill); fills blue on hover. Mirrors the amber
    "Back up now" outline pattern, swapped to the brand-blue navigation colour. */
-.sf-tour__back {
+.df-tour__back {
   background: transparent;
   border-color: var(--brand-blue);
   color: var(--brand-blue);
 }
-.sf-tour__back:hover { background: var(--brand-blue); border-color: var(--brand-blue); color: #ffffff; }
+.df-tour__back:hover { background: var(--brand-blue); border-color: var(--brand-blue); color: #ffffff; }
 
-/* ── First-visit welcome splash ── */
-.sf-welcome-modal__dialog { width: 440px; max-width: calc(100vw - 32px); }
-.sf-welcome__text { margin: 0; font-size: var(--font-size-md); line-height: 1.6; color: var(--text-secondary); }
-.sf-welcome__ok { min-width: 96px; }
-/* Dismiss button sits on the right of the footer (single-button footers default to the
-   left under the shared space-between rule). */
-.sf-welcome-modal .sf-modal__footer { justify-content: flex-end; }
-
-/* Inline "?"-in-circle Help glyph used in copy (welcome splash + tour bodies) — sized to
-   the surrounding text and nudged onto the baseline. Matches the navbar Help button icon. */
-.sf-help-glyph { width: 1.05em; height: 1.05em; vertical-align: -0.18em; }
+/* Inline "?"-in-circle Help glyph used in tour body copy — sized to the surrounding text and
+   nudged onto the baseline. Matches the navbar Help button icon. */
+.df-help-glyph { width: 1.05em; height: 1.05em; vertical-align: -0.18em; }

@@ -5,11 +5,11 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.0';
-import { diagramHasImage } from '../image-component.js?v=1.15.0';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.0';
-import { escHtml } from '../util.js?v=1.15.0';
-import { pctx } from './context.js?v=1.15.0';
+import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.1';
+import { diagramHasImage } from '../image-component.js?v=1.15.1';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.15.1';
+import { escHtml } from '../util.js?v=1.15.1';
+import { pctx } from './context.js?v=1.15.1';
 
 export function shareAsURL() {
   const { graph, appVersion: APP_VERSION, tabNameCb: getTabNameCallback, diagramTypeCb: getDiagramTypeCallback, mappingModeCb: getMappingModeCallback } = pctx;
@@ -121,28 +121,28 @@ export async function loadFromURL() {
 
 /** Show a non-blocking error toast for share-URL load failures. */
 function showShareLoadError(message, title = "Couldn't load shared diagram") {
-  document.querySelector('.sf-share-error-modal')?.remove();
+  document.querySelector('.df-share-error-modal')?.remove();
   const { footer, close } = buildModal({
     title, // buildModal escapes via textContent
-    className: 'sf-share-error-modal',
+    className: 'df-share-error-modal',
     zIndex: 10001,
     width: '440px',
     showClose: false, // dismiss via OK button / backdrop / Escape
     bodyStyle: 'padding:16px 20px',
     bodyHtml: `<p style="margin:0;color:var(--text-secondary);line-height:1.5">${escHtml(message)}</p>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary" data-action="dismiss">OK</button>',
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary" data-action="dismiss">OK</button>',
   });
   footer.style.justifyContent = 'flex-end';
   footer.querySelector('[data-action="dismiss"]').addEventListener('click', close);
 }
 
 function showShareModal(url, opts = {}) {
-  document.querySelector('.sf-share-modal')?.remove();
+  document.querySelector('.df-share-modal')?.remove();
 
   const isWarning = opts.reason === 'image';
   const bodyHtml = isWarning
     ? `
-        <div class="sf-share-modal__warning">
+        <div class="df-share-modal__warning">
           <p style="margin:0 0 var(--spacing-sm);font-weight:600;color:var(--text-primary)">Diagrams containing images exceed URL size limits.</p>
           <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Please use Save → Export to JSON to share this diagram, or remove every image to re-enable URL sharing.</p>
         </div>`
@@ -150,29 +150,29 @@ function showShareModal(url, opts = {}) {
         <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
           Anyone with this link can open a copy of your diagram:
         </p>
-        <input type="text" class="sf-share-modal__url" readonly aria-readonly="true" aria-label="Shareable diagram URL" spellcheck="false">`;
+        <input type="text" class="df-share-modal__url" readonly aria-readonly="true" aria-label="Shareable diagram URL" spellcheck="false">`;
 
   // Action modal: the top-right ✕ is the dismiss. The warning variant has no
   // action button, so it renders no footer at all (footerHtml:null → no bar).
   const { body, footer, close } = buildModal({
     title: isWarning ? 'Sharing unavailable' : 'Share Diagram',
-    className: 'sf-share-modal',
+    className: 'df-share-modal',
     zIndex: 3000,
     width: '520px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml,
     footerHtml: isWarning
       ? null
-      : '<button class="sf-close-confirm__btn sf-close-confirm__btn--save sf-share-modal__copy-btn" style="margin-left:auto">Copy Link</button>',
+      : '<button class="df-close-confirm__btn df-close-confirm__btn--save df-share-modal__copy-btn" style="margin-left:auto">Copy Link</button>',
   });
   if (footer) footer.style.justifyContent = 'flex-end';
 
   if (isWarning) return;
 
-  const urlInput = body.querySelector('.sf-share-modal__url');
+  const urlInput = body.querySelector('.df-share-modal__url');
   urlInput.value = url;
 
-  const copyBtn = footer.querySelector('.sf-share-modal__copy-btn');
+  const copyBtn = footer.querySelector('.df-share-modal__copy-btn');
   const ORIGINAL_LABEL = copyBtn.textContent;
   let revertTimer = null;
   copyBtn.addEventListener('click', () => {

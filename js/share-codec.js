@@ -47,7 +47,7 @@ const MIN = Object.freeze({
   ref: '_', refX: 'q', refY: 'Q',
   refWidth: '~', refHeight: '|',
   rx: '.', ry: ',',
-  // sf-specific user-visible properties
+  // df-specific user-visible properties
   iconId: 'j', iconColor: 'J',
   userTextColor: 'U', customColors: 'K',
   lineStyle: '?',

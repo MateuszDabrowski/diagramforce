@@ -1,5 +1,5 @@
 /* cursor: default prevents text cursor over canvas; position/background set in layout.css */
-.sf-canvas {
+.df-canvas {
   cursor: default;
 }
 
@@ -25,8 +25,8 @@
    because the object is SELECTED is visual clutter. For DataObjects, reveal ports
    only on object HOVER, never on bare selection (CR). The selected+hover rule wins
    by specificity so hovering a selected object still shows them. */
-.joint-type-sf-dataobject.selected .joint-port { opacity: 0; pointer-events: none; }
-.joint-type-sf-dataobject.selected:hover .joint-port { opacity: 1; pointer-events: all; }
+.joint-type-df-dataobject.selected .joint-port { opacity: 0; pointer-events: none; }
+.joint-type-df-dataobject.selected:hover .joint-port { opacity: 1; pointer-events: all; }
 
 /* sf.Link: the external-link icon hit area is a circle button — highlight on hover
    to signal it's clickable (opens the URL). The rest of the element just selects. */
@@ -97,12 +97,12 @@
  * for vacant/avatar effects in _updateCard) and inline trumps CSS.
  * Without !important the inline value wins and the element refuses to
  * dim, producing the inconsistent "some dim, some don't" behaviour. */
-.joint-link.sf-link-dimmed {
+.joint-link.df-link-dimmed {
   opacity: 0.18 !important;
   transition: opacity 180ms ease-out;
 }
-.joint-link.sf-link-dimmed:hover,
-.joint-link.sf-link-dimmed.selected {
+.joint-link.df-link-dimmed:hover,
+.joint-link.df-link-dimmed.selected {
   opacity: 1 !important;
 }
 
@@ -115,21 +115,21 @@
  * traced flow (via `type === 'sf.DataObject'`, so even disconnected objects
  * fade). Background-only shapes (Zones/Layers, Notes, TextLabels) never get
  * this class in either path. */
-.joint-element.sf-element-dimmed {
+.joint-element.df-element-dimmed {
   opacity: 0.4 !important;
   transition: opacity 180ms ease-out;
 }
-.joint-element.sf-element-dimmed:hover,
-.joint-element.sf-element-dimmed.selected {
+.joint-element.df-element-dimmed:hover,
+.joint-element.df-element-dimmed.selected {
   opacity: 1 !important;
 }
 
 /* Field-level focus (Data Mapping flow tracing) — when a connector/object/field-hover
  * traces a data lineage, the object stays lit but its rows that aren't on the lineage
  * fade. More aggressive than object dimming (0.22) so the traced field-thread pops
- * against its own object's other fields. selection.js toggles `.sf-field-dimmed` on the
+ * against its own object's other fields. selection.js toggles `.df-field-dimmed` on the
  * per-field `.do-field-row` groups. */
-.do-field-row.sf-field-dimmed {
+.do-field-row.df-field-dimmed {
   opacity: 0.22;
   transition: opacity 160ms ease-out;
 }
@@ -145,7 +145,7 @@
 }
 
 /* Rubber-band selection rectangle */
-.sf-selection-rect {
+.df-selection-rect {
   position: absolute;
   border: 1.5px dashed var(--selection-color);
   background: rgba(53, 120, 229, 0.08);
@@ -154,7 +154,7 @@
   border-radius: 3px;
 }
 
-[data-theme="dark"] .sf-selection-rect {
+[data-theme="dark"] .df-selection-rect {
   background: rgba(218, 78, 85, 0.08);
 }
 
@@ -165,12 +165,12 @@
  * you can't connect to — worst on the many-rect DataObject (Data Model / Data Mapping),
  * where it drew "yellow lines" across the whole object. So no body outline on link drag.
  *
- * STENCIL drag-over keeps the body outline — but on its OWN class (`sf-drop-target`,
+ * STENCIL drag-over keeps the body outline — but on its OWN class (`df-drop-target`,
  * set by stencil.js refreshDropHighlight) so it's independent of link-drag. It marks the
  * structured embedding parents (Gantt timeline, sequence participant/actor, RACI Task)
  * where the drop lands positionally (the free-form groupers use the dashed drop-ghost). */
-.joint-paper .sf-drop-target .body,
-.joint-paper .sf-drop-target rect {
+.joint-paper .df-drop-target .body,
+.joint-paper .df-drop-target rect {
   stroke: var(--brand-amber) !important;
   stroke-width: 2px !important;
 }
@@ -179,7 +179,7 @@
    a dragged/dropped element would be captured here (makes the capture halo +
    on-drop grow visible). Pointer-events:none; non-scaling stroke keeps the dash
    weight constant across zoom. */
-.sf-drop-ghost__rect {
+.df-drop-ghost__rect {
   fill: none;
   stroke: var(--brand-amber);
   stroke-width: 2;
@@ -194,7 +194,7 @@
    zoom pass through. View-only: canvas.js toggles `.is-empty` on #canvas-container by
    cell count and tabs.js sets `data-diagram-type` — the graph / history are never touched.
    Blueprints use `currentColor` (→ --text-muted) so they adapt to light / dark. */
-.sf-canvas-empty {
+.df-canvas-empty {
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -207,26 +207,26 @@
   color: var(--text-muted);
   user-select: none;
 }
-#canvas-container.is-empty .sf-canvas-empty { display: flex; }
+#canvas-container.is-empty .df-canvas-empty { display: flex; }
 /* Hide the ghost while the read-only Table view owns the canvas area. */
-#canvas-container:has(.sf-table-view:not([hidden])) .sf-canvas-empty { display: none; }
-.sf-canvas-empty__wf {
+#canvas-container:has(.df-table-view:not([hidden])) .df-canvas-empty { display: none; }
+.df-canvas-empty__wf {
   display: none;
   width: min(44%, 400px);
   height: auto;
   opacity: 0.16;
 }
 /* Reveal only the blueprint matching the active diagram type. */
-#canvas-container.is-empty[data-diagram-type="architecture"] .sf-canvas-empty__wf[data-wf="architecture"],
-#canvas-container.is-empty[data-diagram-type="process"]      .sf-canvas-empty__wf[data-wf="process"],
-#canvas-container.is-empty[data-diagram-type="sequence"]     .sf-canvas-empty__wf[data-wf="sequence"],
-#canvas-container.is-empty[data-diagram-type="datamodel"]    .sf-canvas-empty__wf[data-wf="datamodel"],
-#canvas-container.is-empty[data-diagram-type="datamapping"]  .sf-canvas-empty__wf[data-wf="datamapping"],
-#canvas-container.is-empty[data-diagram-type="gantt"]        .sf-canvas-empty__wf[data-wf="gantt"],
-#canvas-container.is-empty[data-diagram-type="org"]          .sf-canvas-empty__wf[data-wf="org"] {
+#canvas-container.is-empty[data-diagram-type="architecture"] .df-canvas-empty__wf[data-wf="architecture"],
+#canvas-container.is-empty[data-diagram-type="process"]      .df-canvas-empty__wf[data-wf="process"],
+#canvas-container.is-empty[data-diagram-type="sequence"]     .df-canvas-empty__wf[data-wf="sequence"],
+#canvas-container.is-empty[data-diagram-type="datamodel"]    .df-canvas-empty__wf[data-wf="datamodel"],
+#canvas-container.is-empty[data-diagram-type="datamapping"]  .df-canvas-empty__wf[data-wf="datamapping"],
+#canvas-container.is-empty[data-diagram-type="gantt"]        .df-canvas-empty__wf[data-wf="gantt"],
+#canvas-container.is-empty[data-diagram-type="org"]          .df-canvas-empty__wf[data-wf="org"] {
   display: block;
 }
-.sf-canvas-empty__caption {
+.df-canvas-empty__caption {
   margin: 0;
   font-family: var(--font-family);
   font-size: 14px;
@@ -259,12 +259,12 @@ foreignObject[data-md] em { font-style: italic; }
 foreignObject[data-md] del { text-decoration: line-through; }
 
 /* Blinking caret on canvas label */
-.sf-canvas-caret {
-  animation: sf-blink 1s step-end infinite;
+.df-canvas-caret {
+  animation: df-blink 1s step-end infinite;
   pointer-events: none;
 }
 
-@keyframes sf-blink {
+@keyframes df-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
@@ -295,19 +295,19 @@ foreignObject[data-md] del { text-decoration: line-through; }
 }
 
 /* ── Inline text editing overlay ──────────────────────────────── */
-.sf-inline-edit {
+.df-inline-edit {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 50;
 }
 
-.sf-inline-edit__input {
+.df-inline-edit__input {
   pointer-events: all;
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.2);
 }
 
-[data-theme="dark"] .sf-inline-edit__input {
+[data-theme="dark"] .df-inline-edit__input {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.2);
 }
 
@@ -317,14 +317,14 @@ foreignObject[data-md] del { text-decoration: line-through; }
    placing a clone ON TOP of the original line that paints background-
    coloured dashes, effectively "erasing" sections and revealing flowing
    gaps.  The original solid line + markers underneath stays untouched. */
-.sf-flow-overlay {
+.df-flow-overlay {
   stroke: var(--bg-canvas) !important;
   stroke-dasharray: 4 8;
-  animation: sf-flow 0.6s linear infinite;
+  animation: df-flow 0.6s linear infinite;
   pointer-events: none;
 }
 
-@keyframes sf-flow {
+@keyframes df-flow {
   from { stroke-dashoffset: 12; }
   to   { stroke-dashoffset: 0; }
 }
@@ -335,22 +335,22 @@ foreignObject[data-md] del { text-decoration: line-through; }
    stroke-dasharray on the path that carries the markers.  The inline
    stroke-dasharray attribute on the clone is the INVERSE of the user's
    pick (e.g. "8 4" → "4 8") so visible segments equal the first value. */
-.sf-line-style-overlay {
+.df-line-style-overlay {
   stroke: var(--bg-canvas) !important;
   pointer-events: none;
   fill: none;
 }
 
 /* ── Data Mapping table view — read-only Excel/CSV-contract projection ──────── */
-.sf-table-view {
+.df-table-view {
   position: absolute;
   inset: 0;
   background: var(--bg-canvas);
   overflow: hidden;
   z-index: 6;
 }
-.sf-tbl { height: 100%; display: flex; flex-direction: column; }
-.sf-tbl__topbar {
+.df-tbl { height: 100%; display: flex; flex-direction: column; }
+.df-tbl__topbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -362,11 +362,11 @@ foreignObject[data-md] del { text-decoration: line-through; }
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
 }
-.sf-tbl__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
-.sf-tbl__note { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.df-tbl__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+.df-tbl__note { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 /* CSV export — compact icon+label button, pushed to the right edge (and pulling
    the Show/Hide-Unmapped toggle with it). */
-.sf-tbl__csv {
+.df-tbl__csv {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
@@ -383,29 +383,29 @@ foreignObject[data-md] del { text-decoration: line-through; }
   white-space: nowrap;
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
-.sf-tbl__csv:hover { color: var(--text-primary); border-color: var(--border-color-strong); }
-.sf-tbl__csv svg { flex-shrink: 0; }
+.df-tbl__csv:hover { color: var(--text-primary); border-color: var(--border-color-strong); }
+.df-tbl__csv svg { flex-shrink: 0; }
 /* Show/Hide Unmapped — Display-menu toggle styling, but inline (not full-width). */
-.sf-tbl__toggle.sf-toolbar__menu-item {
+.df-tbl__toggle.df-toolbar__menu-item {
   width: auto;
   height: 30px;
   margin: 0;
   white-space: nowrap;
 }
 /* overflow-x:auto for wide technical sheets; -y for tall ones */
-.sf-tbl__scroll { flex: 1 1 auto; overflow: auto; }
-.sf-tbl__table {
+.df-tbl__scroll { flex: 1 1 auto; overflow: auto; }
+.df-tbl__table {
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
   white-space: nowrap;
   /* Fill the available width when columns are narrow; the nowrap cells keep their
      min-content width, so when the 15 columns exceed the viewport the table grows
-     past 100% and .sf-tbl__scroll takes over with a horizontal scrollbar. */
+     past 100% and .df-tbl__scroll takes over with a horizontal scrollbar. */
   width: 100%;
 }
 /* Tier 1 — coloured section blocks */
-.sf-tbl__sec {
+.df-tbl__sec {
   position: sticky;
   top: 0;
   z-index: 3;
@@ -417,11 +417,11 @@ foreignObject[data-md] del { text-decoration: line-through; }
   text-transform: uppercase;
   color: #fff;
 }
-.sf-tbl__sec--src { background: #F6B355; }   /* Data Sources — brand amber */
-.sf-tbl__sec--map { background: #DA4E55; }   /* Data Mapping — brand red */
-.sf-tbl__sec--tgt { background: #1D73C9; }   /* Data Targets — brand blue */
+.df-tbl__sec--src { background: #F6B355; }   /* Data Sources — brand amber */
+.df-tbl__sec--map { background: #DA4E55; }   /* Data Mapping — brand red */
+.df-tbl__sec--tgt { background: #1D73C9; }   /* Data Targets — brand blue */
 /* Tier 2 — column headers (stick just below the section blocks) */
-.sf-tbl__cols th {
+.df-tbl__cols th {
   position: sticky;
   top: 33px;
   z-index: 2;
@@ -435,28 +435,28 @@ foreignObject[data-md] del { text-decoration: line-through; }
   padding: 6px 10px;
   border-bottom: 2px solid var(--border-color-strong);
 }
-.sf-tbl__table td {
+.df-tbl__table td {
   padding: 5px 10px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
 }
-.sf-tbl__table tbody tr:hover td { background: rgba(127, 127, 127, 0.07); }
-.sf-tbl__center { text-align: center; }
-.sf-tbl__placeholder { color: var(--text-muted); font-style: italic; }
+.df-tbl__table tbody tr:hover td { background: rgba(127, 127, 127, 0.07); }
+.df-tbl__center { text-align: center; }
+.df-tbl__placeholder { color: var(--text-muted); font-style: italic; }
 /* Deprecated field — its API Name / Label cells render struck-through + dimmed. */
-.sf-tbl__strike { text-decoration: line-through; color: var(--text-muted); }
+.df-tbl__strike { text-decoration: line-through; color: var(--text-muted); }
 /* Click-to-sort column headers */
-.sf-tbl__th--sortable { cursor: pointer; user-select: none; }
-.sf-tbl__th--sortable:hover { color: var(--text-primary); }
-.sf-tbl__th--sorted { color: var(--text-primary); }
-.sf-tbl__sort-ind { margin-left: 4px; font-size: 9px; opacity: 0.9; }
+.df-tbl__th--sortable { cursor: pointer; user-select: none; }
+.df-tbl__th--sortable:hover { color: var(--text-primary); }
+.df-tbl__th--sorted { color: var(--text-primary); }
+.df-tbl__sort-ind { margin-left: 4px; font-size: 9px; opacity: 0.9; }
 /* Data-type mismatch warning badge (Standard mapping across differing types) */
-.sf-tbl__warn-wrap { display: inline-flex; vertical-align: -2px; margin-left: 6px; cursor: help; }
-.sf-tbl__warn { flex-shrink: 0; }
+.df-tbl__warn-wrap { display: inline-flex; vertical-align: -2px; margin-left: 6px; cursor: help; }
+.df-tbl__warn { flex-shrink: 0; }
 /* divider between the blue (source) & orange (target) sections */
-.sf-tbl__divider { border-left: 2px solid var(--border-color-strong); }
-.sf-tbl__row--unmapped td { color: var(--text-muted); font-style: italic; }
-.sf-tbl__empty {
+.df-tbl__divider { border-left: 2px solid var(--border-color-strong); }
+.df-tbl__row--unmapped td { color: var(--text-muted); font-style: italic; }
+.df-tbl__empty {
   text-align: center;
   color: var(--text-muted);
   padding: 44px 24px;

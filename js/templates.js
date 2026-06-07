@@ -21,8 +21,8 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal } from './feedback.js?v=1.15.0';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature } from './persistence.js?v=1.15.0';
+import { showToast, promptModal } from './feedback.js?v=1.15.1';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature } from './persistence.js?v=1.15.1';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Self-describing format tag for the Save/Load-Templates-as-JSON backup file.
@@ -312,7 +312,7 @@ export function instantiateTemplate(templateId, dropPoint) {
  */
 export function renderTemplateThumbnail(template, size = 76) {
   const wrap = document.createElement('div');
-  wrap.className = 'sf-template-thumb';
+  wrap.className = 'df-template-thumb';
 
   const cells = safeTemplateCells(template);
   if (typeof joint === 'undefined' || cells.length === 0) {
@@ -360,7 +360,7 @@ export function renderTemplateThumbnail(template, size = 76) {
     svgClone.removeAttribute('style');
     svgClone.setAttribute('width', String(size));
     svgClone.setAttribute('height', String(size));
-    svgClone.classList.add('sf-template-thumb__svg');
+    svgClone.classList.add('df-template-thumb__svg');
     wrap.appendChild(svgClone);
   }
   return wrap;

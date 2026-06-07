@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.15.0';
+import { cctx } from './context.js?v=1.15.1';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -76,7 +76,7 @@ export function initCrossingBumps() {
   const layersGroup = cellsLayer?.parentNode;
   if (!layersGroup) return;
   _bumpLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  _bumpLayer.setAttribute('class', 'sf-link-bumps');
+  _bumpLayer.setAttribute('class', 'df-link-bumps');
   _bumpLayer.setAttribute('pointer-events', 'none');
   layersGroup.insertBefore(_bumpLayer, cellsLayer.nextSibling);
 
@@ -145,7 +145,7 @@ export function initCrossingBumps() {
 function refreshCrossingBumpOpacity() {
   if (!_bumpLayer) return;
   const dimmedLinkIds = new Set();
-  document.querySelectorAll('.joint-link.sf-link-dimmed').forEach(el => {
+  document.querySelectorAll('.joint-link.df-link-dimmed').forEach(el => {
     const id = el.getAttribute('model-id');
     if (id) dimmedLinkIds.add(id);
   });

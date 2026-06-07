@@ -7,8 +7,8 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.15.0';
-import { pctx } from './context.js?v=1.15.0';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.15.1';
+import { pctx } from './context.js?v=1.15.1';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -468,22 +468,22 @@ export function maybeShowBackupReminder() {
  *  turns brand-green "✓ Exported!" on success and the overlay auto-closes ~1s
  *  later. */
 function showBackupReminderModal() {
-  if (document.querySelector('.sf-backup-modal')) return; // already open
+  if (document.querySelector('.df-backup-modal')) return; // already open
 
   const { body, footer, close } = buildModal({
     title: 'Backup your diagrams',
-    className: 'sf-backup-modal',
+    className: 'df-backup-modal',
     zIndex: 3000,
     width: '480px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
-    bodyHtml: '<p class="sf-backup-modal__msg" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>',
-    footerHtml: '<button class="sf-close-confirm__btn sf-close-confirm__btn--save sf-backup-modal__btn" style="margin-left:auto">Export</button>',
+    bodyHtml: '<p class="df-backup-modal__msg" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>',
+    footerHtml: '<button class="df-close-confirm__btn df-close-confirm__btn--save df-backup-modal__btn" style="margin-left:auto">Export</button>',
   });
   // textContent (not innerHTML) for the body copy — no interpolation risk.
-  body.querySelector('.sf-backup-modal__msg').textContent =
+  body.querySelector('.df-backup-modal__msg').textContent =
     "You've been using Diagramforce for a while! Since this app has no backend, your templates and diagrams live entirely in this browser. To ensure you never lose your work if your browser clears its cache, export a backup to your computer.";
 
-  const exportBtn = footer.querySelector('.sf-backup-modal__btn');
+  const exportBtn = footer.querySelector('.df-backup-modal__btn');
   exportBtn.addEventListener('click', () => {
     if (exportBtn.classList.contains('is-backed')) return;
     if (!exportEverything()) return; // nothing exported — leave as-is

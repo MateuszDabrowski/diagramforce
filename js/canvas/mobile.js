@@ -9,7 +9,7 @@
 const MOBILE_BP = 768;
 
 // Shared localStorage key for both panels — they share the same height
-const PANEL_HEIGHT_KEY = 'sf-panel-h';
+const PANEL_HEIGHT_KEY = 'df-panel-h';
 
 /** Apply saved panel height to a target element (mobile only). */
 function restorePanelHeight(target) {
@@ -22,7 +22,7 @@ function restorePanelHeight(target) {
 }
 
 export function initMobileDragHandles() {
-  document.querySelectorAll('.sf-drag-handle').forEach(handle => {
+  document.querySelectorAll('.df-drag-handle').forEach(handle => {
     // Skip if already initialized
     if (handle.dataset.dragInit) return;
     handle.dataset.dragInit = '1';
@@ -98,11 +98,11 @@ export function initMobileDragHandles() {
         if (isSwipeDown) {
           target.style.height = '';
           if (target.id === 'properties-panel') {
-            target.classList.add('sf-properties--hidden');
+            target.classList.add('df-properties--hidden');
           } else if (target.id === 'stencil-panel') {
-            target.classList.add('sf-stencil--hidden');
+            target.classList.add('df-stencil--hidden');
             const btn = document.getElementById('btn-toggle-stencil');
-            if (btn) btn.classList.remove('sf-toolbar__button--active');
+            if (btn) btn.classList.remove('df-toolbar__button--active');
           }
         } else {
           const finalH = Math.round(target.getBoundingClientRect().height);

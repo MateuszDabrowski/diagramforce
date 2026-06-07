@@ -1,10 +1,10 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.15.0';
-import * as history from './history.js?v=1.15.0';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.15.0';
-import { fieldFocus } from './canvas/focus-state.js?v=1.15.0';
+import * as clipboard from './clipboard.js?v=1.15.1';
+import * as history from './history.js?v=1.15.1';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.15.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.15.1';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -546,11 +546,11 @@ function notifyChange() {
 // reset of selection state; just the visual dimming overlay. The matching
 // re-evaluation happens on pointerup via updateLinkDimming().
 function suspendDimmingForDrag() {
-  document.querySelectorAll('.joint-link.sf-link-dimmed').forEach(el => {
-    el.classList.remove('sf-link-dimmed');
+  document.querySelectorAll('.joint-link.df-link-dimmed').forEach(el => {
+    el.classList.remove('df-link-dimmed');
   });
-  document.querySelectorAll('.joint-element.sf-element-dimmed').forEach(el => {
-    el.classList.remove('sf-element-dimmed');
+  document.querySelectorAll('.joint-element.df-element-dimmed').forEach(el => {
+    el.classList.remove('df-element-dimmed');
   });
   // Notify the bump-overlay so its tinted opacities clear too.
   document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
@@ -631,18 +631,18 @@ function applyFieldFlowFocus(opts) {
   for (const e of fieldGraph().links) if (fields.has(e.sk) && fields.has(e.tk)) onThread.add(e.id);
   for (const link of graph.getLinks()) {
     const view = paper.findViewByModel(link);
-    if (view?.el) view.el.classList.toggle('sf-link-dimmed', !onThread.has(link.id));
+    if (view?.el) view.el.classList.toggle('df-link-dimmed', !onThread.has(link.id));
   }
   // Object dimming (root-el class, survives row rebuilds) + collect the field-row keys
   // to fade. A whole object dims only when NONE of its fields are on the flow.
   const dimmedKeys = new Set();
   for (const el of graph.getElements()) {
     const view = paper.findViewByModel(el);
-    if (el.get('type') !== 'sf.DataObject') { if (view?.el) view.el.classList.remove('sf-element-dimmed'); continue; }
+    if (el.get('type') !== 'sf.DataObject') { if (view?.el) view.el.classList.remove('df-element-dimmed'); continue; }
     const objId = el.id;
     const objFields = el.get('fields') || [];
     const hasLineageField = objFields.some(f => f && f.fid && fields.has(`${objId}::${f.fid}`));
-    if (view?.el) view.el.classList.toggle('sf-element-dimmed', !hasLineageField);
+    if (view?.el) view.el.classList.toggle('df-element-dimmed', !hasLineageField);
     // The selected object stays fully lit; on every other lineage object the rows that
     // aren't on the flow fade.
     if (hasLineageField && !fullyLit.has(objId)) {
@@ -656,14 +656,14 @@ function applyFieldFlowFocus(opts) {
   paper.svg.querySelectorAll('.do-field-row').forEach(r => {
     const fid = r.getAttribute('data-fid');
     const objId = r.closest('[model-id]')?.getAttribute('model-id');
-    r.classList.toggle('sf-field-dimmed', !!fid && !!objId && dimmedKeys.has(`${objId}::${fid}`));
+    r.classList.toggle('df-field-dimmed', !!fid && !!objId && dimmedKeys.has(`${objId}::${fid}`));
   });
   document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
   return true;
 }
 function clearFieldRowDims() {
   fieldFocus.dimmed = null;
-  document.querySelectorAll('.do-field-row.sf-field-dimmed').forEach(el => el.classList.remove('sf-field-dimmed'));
+  document.querySelectorAll('.do-field-row.df-field-dimmed').forEach(el => el.classList.remove('df-field-dimmed'));
 }
 
 // Mapping-flow focus (Data Mapping): a selected mapping CONNECTOR traces its specific
@@ -696,11 +696,11 @@ function updateLinkDimming() {
   // dimmed regardless of selection. Clear any classes left over from
   // before the user disabled it and bail. v1.12.4.
   if (!isFocusDimmingEnabled()) {
-    document.querySelectorAll('.joint-link.sf-link-dimmed').forEach(el => {
-      el.classList.remove('sf-link-dimmed');
+    document.querySelectorAll('.joint-link.df-link-dimmed').forEach(el => {
+      el.classList.remove('df-link-dimmed');
     });
-    document.querySelectorAll('.joint-element.sf-element-dimmed').forEach(el => {
-      el.classList.remove('sf-element-dimmed');
+    document.querySelectorAll('.joint-element.df-element-dimmed').forEach(el => {
+      el.classList.remove('df-element-dimmed');
     });
     clearFieldRowDims();
     document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
@@ -729,11 +729,11 @@ function updateLinkDimming() {
   if (selectedElementIds.size === 0) {
     // Pure non-mapping link or empty selection — clear every dim class so prior
     // element-focused state doesn't linger.
-    document.querySelectorAll('.joint-link.sf-link-dimmed').forEach(el => {
-      el.classList.remove('sf-link-dimmed');
+    document.querySelectorAll('.joint-link.df-link-dimmed').forEach(el => {
+      el.classList.remove('df-link-dimmed');
     });
-    document.querySelectorAll('.joint-element.sf-element-dimmed').forEach(el => {
-      el.classList.remove('sf-element-dimmed');
+    document.querySelectorAll('.joint-element.df-element-dimmed').forEach(el => {
+      el.classList.remove('df-element-dimmed');
     });
     document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
     return;
@@ -825,7 +825,7 @@ function updateLinkDimming() {
     const isLinkSelected = selectedLinkIds.has(link.id);
     const view = paper.findViewByModel(link);
     if (!view?.el) continue;
-    view.el.classList.toggle('sf-link-dimmed', !connected && !isLinkSelected);
+    view.el.classList.toggle('df-link-dimmed', !connected && !isLinkSelected);
   }
 
   // Apply element dimming — only elements that ALREADY participate in
@@ -836,7 +836,7 @@ function updateLinkDimming() {
     if (!view?.el) continue;
     const hasLinks = elementsWithLinks.has(el.id);
     const isConnected = connectedElementIds.has(el.id);
-    view.el.classList.toggle('sf-element-dimmed', hasLinks && !isConnected);
+    view.el.classList.toggle('df-element-dimmed', hasLinks && !isConnected);
   }
 
   document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));
@@ -1042,7 +1042,7 @@ function setupRubberBand() {
     startY = evt.clientY;
 
     rectEl = document.createElement('div');
-    rectEl.className = 'sf-selection-rect';
+    rectEl.className = 'df-selection-rect';
     Object.assign(rectEl.style, {
       left: (evt.clientX - canvasRect.left) + 'px',
       top: (evt.clientY - canvasRect.top) + 'px',
@@ -1137,12 +1137,12 @@ function showContextMenu(clientX, clientY, model) {
 
   const isLink = model.isLink();
   const menu = document.createElement('div');
-  menu.className = 'sf-ctx-menu';
+  menu.className = 'df-ctx-menu';
 
   const addItem = (label, icon, action) => {
     const b = document.createElement('button');
-    b.className = 'sf-ctx-menu__item';
-    b.innerHTML = `<span class="sf-ctx-menu__icon">${icon}</span><span>${label}</span>`;
+    b.className = 'df-ctx-menu__item';
+    b.innerHTML = `<span class="df-ctx-menu__icon">${icon}</span><span>${label}</span>`;
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       closeContextMenu();

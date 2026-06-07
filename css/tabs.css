@@ -1,6 +1,6 @@
 /* Tab bar — browser-style diagram tabs */
 
-.sf-tabs {
+.df-tabs {
   display: flex;
   align-items: center;
   background: var(--bg-canvas);
@@ -12,7 +12,7 @@
   position: relative;
 }
 
-.sf-tabs__list {
+.df-tabs__list {
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -32,7 +32,7 @@
    behind the `--overflowing` modifier toggled by `refreshTabScrollMask()`
    in tabs.js so the bar looks identical to pre-Gap-13 when nothing is
    clipped. */
-.sf-tabs__list--overflowing {
+.df-tabs__list--overflowing {
   -webkit-mask-image: linear-gradient(to right,
     #000 0,
     #000 calc(100% - 24px),
@@ -46,7 +46,7 @@
    that tabs exist in either direction. Toggled by a small JS listener on
    scroll position (see tabs.js _refreshScrollMask). Falls back to right-
    only fade when the listener hasn't run yet. */
-.sf-tabs__list--scrolled {
+.df-tabs__list--scrolled {
   -webkit-mask-image: linear-gradient(to right,
     transparent 0,
     #000 24px,
@@ -58,7 +58,7 @@
     #000 calc(100% - 24px),
     transparent 100%);
 }
-.sf-tabs__list--scrolled-end {
+.df-tabs__list--scrolled-end {
   /* Right end fully reached — drop the trailing fade. */
   -webkit-mask-image: linear-gradient(to right,
     transparent 0,
@@ -70,12 +70,12 @@
     #000 100%);
 }
 
-.sf-tabs__list::-webkit-scrollbar {
+.df-tabs__list::-webkit-scrollbar {
   height: 0;
 }
 
 /* Individual tab */
-.sf-tab {
+.df-tab {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -98,13 +98,13 @@
   user-select: none;
 }
 
-.sf-tab:hover {
+.df-tab:hover {
   background: var(--toolbar-button-hover);
   color: var(--text-secondary);
 }
 
 /* Active tab — side+top borders, NO bottom border */
-.sf-tab--active {
+.df-tab--active {
   background: var(--bg-canvas);
   color: var(--text-primary);
   border-color: var(--border-color);
@@ -112,8 +112,8 @@
   font-weight: 600;
 }
 
-/* Bottom border line segments positioned by JS on .sf-tabs */
-.sf-tab-line {
+/* Bottom border line segments positioned by JS on .df-tabs */
+.df-tab-line {
   position: absolute;
   bottom: 0;
   height: 1px;
@@ -122,22 +122,22 @@
 }
 
 /* Tab drag-and-drop reorder */
-.sf-tab--dragging {
+.df-tab--dragging {
   opacity: 0.4;
 }
 
-.sf-tab--drag-over {
+.df-tab--drag-over {
   box-shadow: inset 2px 0 0 var(--color-primary);
 }
 
-.sf-tab__label {
+.df-tab__label {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
 
 /* Dot indicator for unsaved changes */
-.sf-tab__dirty {
+.df-tab__dirty {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -146,11 +146,11 @@
   display: none;
 }
 
-.sf-tab--dirty .sf-tab__dirty {
+.df-tab--dirty .df-tab__dirty {
   display: block;
 }
 
-.sf-tab__close {
+.df-tab__close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -167,17 +167,17 @@
   transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 }
 
-.sf-tab:hover .sf-tab__close,
-.sf-tab--active .sf-tab__close {
+.df-tab:hover .df-tab__close,
+.df-tab--active .df-tab__close {
   opacity: 1;
 }
 
-.sf-tab__close:hover {
+.df-tab__close:hover {
   background: var(--toolbar-button-hover);
   color: var(--text-primary);
 }
 
-.sf-tab__close:focus-visible {
+.df-tab__close:focus-visible {
   opacity: 1;
   /* Override the global `button:focus-visible` rule from layout.css. The
      2 px outline at +1 px offset extends past the tab's right padding
@@ -189,7 +189,7 @@
 }
 
 /* Close-multiple-tabs button (left end of tab bar) */
-.sf-tabs__close-multi {
+.df-tabs__close-multi {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,19 +206,19 @@
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-.sf-tabs__close-multi:hover {
+.df-tabs__close-multi:hover {
   background: color-mix(in srgb, var(--brand-red) 12%, transparent);
   color: var(--brand-red);
   border-color: var(--brand-red);
 }
 
 /* ── Close-multiple-tabs modal ──────────────────────────── */
-.sf-close-tabs-modal .sf-modal__dialog {
+.df-close-tabs-modal .df-modal__dialog {
   width: 460px;
   max-width: 90vw;
 }
 
-.sf-close-tabs__list {
+.df-close-tabs__list {
   max-height: 360px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
@@ -226,7 +226,7 @@
   background: var(--bg-canvas);
 }
 
-.sf-close-tabs__row {
+.df-close-tabs__row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -238,15 +238,15 @@
   user-select: none;
 }
 
-.sf-close-tabs__row:last-child {
+.df-close-tabs__row:last-child {
   border-bottom: none;
 }
 
-.sf-close-tabs__row:hover {
+.df-close-tabs__row:hover {
   background: var(--toolbar-button-hover);
 }
 
-.sf-close-tabs__row--header {
+.df-close-tabs__row--header {
   background: var(--bg-surface);
   font-weight: 600;
   color: var(--text-secondary);
@@ -255,11 +255,11 @@
   z-index: 1;
 }
 
-.sf-close-tabs__row--header:hover {
+.df-close-tabs__row--header:hover {
   background: var(--bg-surface);
 }
 
-.sf-close-tabs__checkbox {
+.df-close-tabs__checkbox {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -267,7 +267,7 @@
   cursor: pointer;
 }
 
-.sf-close-tabs__type-icon {
+.df-close-tabs__type-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
@@ -275,30 +275,30 @@
 }
 
 /* Name + "Modified …" stacked, so the row mirrors the Load/Export anatomy. */
-.sf-close-tabs__info {
+.df-close-tabs__info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.sf-close-tabs__name {
+.df-close-tabs__name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 /* Inside the info column the name must not flex-grow vertically. */
-.sf-close-tabs__info .sf-close-tabs__name {
+.df-close-tabs__info .df-close-tabs__name {
   flex: 0 0 auto;
 }
-.sf-close-tabs__meta {
+.df-close-tabs__meta {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
-.sf-close-tabs__dirty {
+.df-close-tabs__dirty {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -307,7 +307,7 @@
   margin-right: 4px;
 }
 
-.sf-close-tabs__badge {
+.df-close-tabs__badge {
   font-size: 11px;
   color: var(--text-muted);
   padding: 2px 6px;
@@ -316,7 +316,7 @@
   flex-shrink: 0;
 }
 
-.sf-close-tabs__btn {
+.df-close-tabs__btn {
   padding: 6px 14px;
   border-radius: var(--border-radius-sm);
   /* Default (secondary): neutral grey fill — Cancel. */
@@ -329,40 +329,40 @@
 }
 
 /* Secondary hover — scoped so it never recolours the primary / save variants. */
-.sf-close-tabs__btn:not(.sf-close-tabs__btn--primary):not(.sf-close-tabs__btn--save):hover:not(:disabled) {
+.df-close-tabs__btn:not(.df-close-tabs__btn--primary):not(.df-close-tabs__btn--save):hover:not(:disabled) {
   background: var(--modal-btn-neutral-bg-hover);
 }
 
-.sf-close-tabs__btn:disabled {
+.df-close-tabs__btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
 /* Positive commit (Save and Close) — brand blue fill, both themes. */
-.sf-close-tabs__btn--save {
+.df-close-tabs__btn--save {
   background: var(--brand-blue);
   color: #FFFFFF;
   border-color: var(--brand-blue);
 }
 
-.sf-close-tabs__btn--save:hover:not(:disabled) {
+.df-close-tabs__btn--save:hover:not(:disabled) {
   opacity: 0.88;
 }
 
 /* Destructive primary (Close Selected / Close Anyway) — brand-red fill in both
    themes, matching the danger convention (closing tabs can discard work). */
-.sf-close-tabs__btn--primary {
+.df-close-tabs__btn--primary {
   background: var(--brand-red);
   color: #FFFFFF;
   border-color: var(--brand-red);
 }
 
-.sf-close-tabs__btn--primary:hover:not(:disabled) {
+.df-close-tabs__btn--primary:hover:not(:disabled) {
   filter: brightness(1.1);
 }
 
 /* New tab button */
-.sf-tabs__new {
+.df-tabs__new {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -382,7 +382,7 @@
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-.sf-tabs__new:hover {
+.df-tabs__new:hover {
   background: rgba(53, 120, 229, 0.12);
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
@@ -392,7 +392,7 @@
 
 /* ── New Diagram Modal ─────────────────────────────────── */
 
-.sf-new-modal {
+.df-new-modal {
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -401,13 +401,13 @@
   justify-content: center;
 }
 
-.sf-new-modal__backdrop {
+.df-new-modal__backdrop {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
 }
 
-.sf-new-modal__dialog {
+.df-new-modal__dialog {
   position: relative;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -418,7 +418,7 @@
   width: 90vw;
 }
 
-.sf-new-modal__title {
+.df-new-modal__title {
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
@@ -426,7 +426,7 @@
   text-align: center;
 }
 
-.sf-new-modal__grid {
+.df-new-modal__grid {
   /* Flex-wrap + centre so the last (short) row is centred under the full rows
      instead of left-aligned. Fixed-basis cards flow to fit the dialog width —
      4 on a wide screen, then 3, 2, 1 as it narrows. */
@@ -438,7 +438,7 @@
 
 /* 3×2 grid: auto-placement fills left-to-right, top-to-bottom */
 
-.sf-new-modal__card {
+.df-new-modal__card {
   flex: 0 1 200px;        /* fixed-ish width so wrapped rows centre cleanly */
   display: flex;
   flex-direction: column;
@@ -454,28 +454,28 @@
   font-family: var(--font-family);
 }
 
-.sf-new-modal__card:hover {
+.df-new-modal__card:hover {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(29, 115, 201, 0.15);
   transform: translateY(-2px);
 }
 
-[data-theme="dark"] .sf-new-modal__card:hover {
+[data-theme="dark"] .df-new-modal__card:hover {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.15);
 }
 
-.sf-new-modal__icon {
+.df-new-modal__icon {
   width: 80px;
   height: 60px;
 }
 
-.sf-new-modal__card-title {
+.df-new-modal__card-title {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.sf-new-modal__card-desc {
+.df-new-modal__card-desc {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
@@ -483,11 +483,11 @@
 
 /* ── Mobile new-diagram modal ──────────────────────────── */
 @media (max-width: 768px) {
-  .sf-new-modal {
+  .df-new-modal {
     align-items: flex-start;
   }
 
-  .sf-new-modal__dialog {
+  .df-new-modal__dialog {
     max-height: 100dvh;
     overflow-y: auto;
     border-radius: 0;
@@ -497,37 +497,37 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .sf-new-modal__title {
+  .df-new-modal__title {
     font-size: 16px;
     margin-bottom: 16px;
   }
 
-  .sf-new-modal__grid {
+  .df-new-modal__grid {
     gap: 10px;
   }
 
-  .sf-new-modal__card {
+  .df-new-modal__card {
     grid-column: auto;
     max-width: none;
     justify-self: auto;
   }
 
-  .sf-new-modal__card {
+  .df-new-modal__card {
     padding: 14px 10px;
     gap: 8px;
   }
 
-  .sf-new-modal__icon {
+  .df-new-modal__icon {
     width: 56px;
     height: 42px;
   }
 
-  .sf-new-modal__card-desc {
+  .df-new-modal__card-desc {
     display: none;
   }
 }
 
-.sf-new-modal__close {
+.df-new-modal__close {
   position: absolute;
   top: 12px;
   right: 12px;
@@ -544,27 +544,27 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.sf-new-modal__close:hover {
+.df-new-modal__close:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 /* ── Mobile tabs ─────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sf-tabs {
+  .df-tabs {
     height: 40px;
     padding: 0 4px;
     gap: 0;
   }
 
-  .sf-tabs__list {
+  .df-tabs__list {
     flex: 1;
     min-width: 0;
     overflow-x: auto;
     scroll-snap-type: x proximity;
   }
 
-  .sf-tab {
+  .df-tab {
     padding: 6px 12px;
     height: 34px;
     gap: 6px;
@@ -575,14 +575,14 @@
     flex-shrink: 0;
   }
 
-  .sf-tab__close {
+  .df-tab__close {
     width: 20px;
     height: 20px;
     opacity: 1; /* always visible on touch */
   }
 
   /* New tab button — always visible, pinned right */
-  .sf-tabs__new {
+  .df-tabs__new {
     height: 32px;
     padding: 4px 10px;
     font-size: var(--font-size-sm);
@@ -592,7 +592,7 @@
 }
 
 /* Diagram type icon in tab */
-.sf-tab__type-icon {
+.df-tab__type-icon {
   width: 12px;
   height: 12px;
   flex-shrink: 0;

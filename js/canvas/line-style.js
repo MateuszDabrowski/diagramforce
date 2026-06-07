@@ -17,7 +17,7 @@
 // Reads the live graph/paper via the canvas context (cctx); the observer +
 // sync-id are private module state (nothing else reads them). canvas.js calls
 // startLineStyleOverlays() once in init() AFTER cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.15.0';
+import { cctx } from './context.js?v=1.15.1';
 
 let _lineStyleObserver = null;
 let _lineStyleSyncId = 0;
@@ -30,13 +30,13 @@ function mutationsAffectRealLinks(mutations) {
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
-      if (cls === 'sf-flow-overlay' || cls === 'sf-line-style-overlay') continue;
+      if (cls === 'df-flow-overlay' || cls === 'df-line-style-overlay') continue;
       return true;
     }
     for (const n of m.removedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
-      if (cls === 'sf-flow-overlay' || cls === 'sf-line-style-overlay') continue;
+      if (cls === 'df-flow-overlay' || cls === 'df-line-style-overlay') continue;
       return true;
     }
   }
@@ -58,7 +58,7 @@ function syncLineStyleOverlays() {
   if (_lineStyleObserver) _lineStyleObserver.disconnect();
   try {
     // Remove stale overlays
-    document.querySelectorAll('.sf-line-style-overlay').forEach(el => el.remove());
+    document.querySelectorAll('.df-line-style-overlay').forEach(el => el.remove());
 
     for (const link of graph.getLinks()) {
       const style = link.prop('lineStyle');
@@ -74,7 +74,7 @@ function syncLineStyleOverlays() {
       clone.removeAttribute('marker-end');
       clone.removeAttribute('marker-mid');
       clone.removeAttribute('joint-selector');
-      clone.setAttribute('class', 'sf-line-style-overlay');
+      clone.setAttribute('class', 'df-line-style-overlay');
 
       // Invert the user's dasharray so the overlay erases the right stripes.
       const parts = String(style).trim().split(/\s+/);

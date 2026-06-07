@@ -1,10 +1,10 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.15.0';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.0';
-import { showError, showToast, buildModal } from './feedback.js?v=1.15.0';
-import { createElementFromComponent } from './components.js?v=1.15.0';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES } from './persistence.js?v=1.15.1';
+import { escHtml, formatRelativeTime } from './util.js?v=1.15.1';
+import { showError, showToast, buildModal } from './feedback.js?v=1.15.1';
+import { createElementFromComponent } from './components.js?v=1.15.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -51,9 +51,9 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     // The `--overflowing` modifier gates the base right-edge fade mask.
     // Without it, the mask would fade the rightmost tab's right border
     // even when nothing is clipped — the regression v1.12.1 fixes.
-    tabListEl.classList.toggle('sf-tabs__list--overflowing', overflows);
-    tabListEl.classList.toggle('sf-tabs__list--scrolled', overflows && scrollLeft > 0);
-    tabListEl.classList.toggle('sf-tabs__list--scrolled-end', overflows && atEnd);
+    tabListEl.classList.toggle('df-tabs__list--overflowing', overflows);
+    tabListEl.classList.toggle('df-tabs__list--scrolled', overflows && scrollLeft > 0);
+    tabListEl.classList.toggle('df-tabs__list--scrolled-end', overflows && atEnd);
   };
   tabListEl.addEventListener('scroll', refreshTabScrollMask, { passive: true });
   new ResizeObserver(refreshTabScrollMask).observe(tabListEl);
@@ -80,7 +80,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   persistenceModule.setActiveMappingModeGetter(() => getActiveMappingMode());
   persistenceModule.setImportHandler((name, type, graphJSON, viewport, mappingMode) => {
     // Dismiss the new-diagram modal if it's open (e.g. first visit via share URL)
-    document.querySelector('.sf-new-modal')?.remove();
+    document.querySelector('.df-new-modal')?.remove();
     // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON imports as
     // a first-class "Data Mapping" diagram (mapping is now its own type).
     let importType = type;
@@ -126,27 +126,27 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
 
 function showNewDiagramModal() {
   // Remove any existing modal
-  document.querySelector('.sf-new-modal')?.remove();
+  document.querySelector('.df-new-modal')?.remove();
 
   const overlay = document.createElement('div');
-  overlay.className = 'sf-new-modal';
+  overlay.className = 'df-new-modal';
   overlay.innerHTML = `
-    <div class="sf-new-modal__backdrop"></div>
-    <div class="sf-new-modal__dialog">
-      <h2 class="sf-new-modal__title">Create New Diagram</h2>
-      <div class="sf-new-modal__grid">
-        <button class="sf-new-modal__card" data-type="architecture">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+    <div class="df-new-modal__backdrop"></div>
+    <div class="df-new-modal__dialog">
+      <h2 class="df-new-modal__title">Create New Diagram</h2>
+      <div class="df-new-modal__grid">
+        <button class="df-new-modal__card" data-type="architecture">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="4" y="4" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
             <rect x="42" y="4" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
             <rect x="23" y="30" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
             <path d="M13 18v6h38V18M32 24v6" stroke="var(--text-muted)" stroke-width="1.5" fill="none"/>
           </svg>
-          <span class="sf-new-modal__card-title">Architecture</span>
-          <span class="sf-new-modal__card-desc">Map system architecture, integrations, and infrastructure landscape.</span>
+          <span class="df-new-modal__card-title">Architecture</span>
+          <span class="df-new-modal__card-desc">Map system architecture, integrations, and infrastructure landscape.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="datamodel">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="datamodel">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <!-- Two objects, vertically offset (the small stagger) like a real schema relationship -->
             <rect x="3" y="5" width="18" height="22" rx="3" fill="none" stroke="var(--color-primary)" stroke-width="1.5"/>
             <rect x="3" y="5" width="18" height="8" rx="3" fill="var(--color-primary)" opacity="0.8"/>
@@ -163,11 +163,11 @@ function showNewDiagramModal() {
               <path d="M40 32 L43 28 M40 32 L43 32 M40 32 L43 36"/>
             </g>
           </svg>
-          <span class="sf-new-modal__card-title">Data Model</span>
-          <span class="sf-new-modal__card-desc">Define objects, fields, and relationships like Schema Builder.</span>
+          <span class="df-new-modal__card-title">Data Model</span>
+          <span class="df-new-modal__card-desc">Define objects, fields, and relationships like Schema Builder.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="datamapping">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="datamapping">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="3" y="9" width="22" height="30" rx="3" fill="none" stroke="var(--color-primary)" stroke-width="1.5"/>
             <rect x="3" y="9" width="22" height="8" rx="3" fill="var(--color-primary)" opacity="0.8"/>
             <rect x="39" y="9" width="22" height="30" rx="3" fill="none" stroke="var(--color-primary)" stroke-width="1.5"/>
@@ -175,11 +175,11 @@ function showNewDiagramModal() {
             <path d="M25 24 L36 24 M32.5 20.5 L36 24 L32.5 27.5" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-linejoin="round"/>
             <path d="M25 32 L36 32 M32.5 28.5 L36 32 L32.5 35.5" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-linejoin="round" opacity="0.55"/>
           </svg>
-          <span class="sf-new-modal__card-title">Data Mapping</span>
-          <span class="sf-new-modal__card-desc">Map end-to-end data journey from source systems through Data Cloud pipelines to Activations.</span>
+          <span class="df-new-modal__card-title">Data Mapping</span>
+          <span class="df-new-modal__card-desc">Map end-to-end data journey from source systems through Data Cloud pipelines to Activations.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="process">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="process">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <circle cx="10" cy="24" r="6" fill="none" stroke="var(--color-primary)" stroke-width="2"/>
             <circle cx="10" cy="24" r="2.5" fill="var(--color-primary)"/>
             <rect x="22" y="17" width="20" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
@@ -187,11 +187,11 @@ function showNewDiagramModal() {
             <line x1="16" y1="24" x2="22" y2="24" stroke="var(--text-muted)" stroke-width="1.5"/>
             <line x1="42" y1="24" x2="48" y2="24" stroke="var(--text-muted)" stroke-width="1.5"/>
           </svg>
-          <span class="sf-new-modal__card-title">Process</span>
-          <span class="sf-new-modal__card-desc">Design business processes, flows, and BPMN workflows.</span>
+          <span class="df-new-modal__card-title">Process</span>
+          <span class="df-new-modal__card-desc">Design business processes, flows, and BPMN workflows.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="sequence">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="sequence">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="4" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.85"/>
             <rect x="25" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.65"/>
             <rect x="46" y="4" width="14" height="7" rx="2" fill="var(--color-primary)" opacity="0.5"/>
@@ -205,11 +205,11 @@ function showNewDiagramModal() {
             <line x1="32" y1="38" x2="11" y2="38" stroke="var(--color-accent)" stroke-width="1" stroke-dasharray="3 2"/>
             <polygon points="11,38 15,36 15,40" fill="var(--color-accent)"/>
           </svg>
-          <span class="sf-new-modal__card-title">Sequence</span>
-          <span class="sf-new-modal__card-desc">Document request/response interactions between systems.</span>
+          <span class="df-new-modal__card-title">Sequence</span>
+          <span class="df-new-modal__card-desc">Document request/response interactions between systems.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="gantt">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="gantt">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="8" y="6" width="24" height="7" rx="2" fill="var(--color-primary)" opacity="0.8"/>
             <rect x="16" y="17" width="28" height="7" rx="2" fill="var(--color-primary)" opacity="0.6"/>
             <rect x="24" y="28" width="18" height="7" rx="2" fill="var(--color-primary)" opacity="0.4"/>
@@ -217,11 +217,11 @@ function showNewDiagramModal() {
             <line x1="42" y1="24" x2="42" y2="28" stroke="var(--text-muted)" stroke-width="1"/>
             <polygon points="30,35 33,28 36,35" fill="var(--color-accent)"/>
           </svg>
-          <span class="sf-new-modal__card-title">Gantt Chart</span>
-          <span class="sf-new-modal__card-desc">Plan project timelines, tasks, milestones, and dependencies.</span>
+          <span class="df-new-modal__card-title">Gantt Chart</span>
+          <span class="df-new-modal__card-desc">Plan project timelines, tasks, milestones, and dependencies.</span>
         </button>
-        <button class="sf-new-modal__card" data-type="org">
-          <svg class="sf-new-modal__icon" viewBox="0 0 64 48">
+        <button class="df-new-modal__card" data-type="org">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="20" y="2" width="24" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
             <rect x="2" y="28" width="24" height="14" rx="3" fill="var(--color-primary)" opacity="0.6"/>
             <rect x="38" y="28" width="24" height="14" rx="3" fill="var(--color-primary)" opacity="0.6"/>
@@ -230,8 +230,8 @@ function showNewDiagramModal() {
             <line x1="14" y1="22" x2="14" y2="28" stroke="var(--text-muted)" stroke-width="1.5"/>
             <line x1="50" y1="22" x2="50" y2="28" stroke="var(--text-muted)" stroke-width="1.5"/>
           </svg>
-          <span class="sf-new-modal__card-title">Org Chart</span>
-          <span class="sf-new-modal__card-desc">Document team hierarchy, roles, and responsibilities.</span>
+          <span class="df-new-modal__card-title">Org Chart</span>
+          <span class="df-new-modal__card-desc">Document team hierarchy, roles, and responsibilities.</span>
         </button>
       </div>
     </div>
@@ -240,7 +240,7 @@ function showNewDiagramModal() {
   document.body.appendChild(overlay);
 
   // Card clicks
-  overlay.querySelectorAll('.sf-new-modal__card').forEach(card => {
+  overlay.querySelectorAll('.df-new-modal__card').forEach(card => {
     card.addEventListener('click', () => {
       const type = card.dataset.type;
       overlay.remove();
@@ -256,14 +256,14 @@ function showNewDiagramModal() {
   if (canDismiss) {
     // Add close button
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'sf-new-modal__close';
+    closeBtn.className = 'df-new-modal__close';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
     closeBtn.addEventListener('click', () => { overlay.remove(); });
-    overlay.querySelector('.sf-new-modal__dialog').appendChild(closeBtn);
+    overlay.querySelector('.df-new-modal__dialog').appendChild(closeBtn);
 
     // Close on backdrop click
-    overlay.querySelector('.sf-new-modal__backdrop').addEventListener('click', () => { overlay.remove(); });
+    overlay.querySelector('.df-new-modal__backdrop').addEventListener('click', () => { overlay.remove(); });
 
     // Close on Escape
     const onKey = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); } };
@@ -412,11 +412,11 @@ function doCloseTab(id) {
 }
 
 function showCloseConfirmModal(tabId, tabName) {
-  document.querySelector('.sf-close-confirm-modal')?.remove();
+  document.querySelector('.df-close-confirm-modal')?.remove();
 
   const { footer, close } = buildModal({
     title: 'Unsaved Changes',
-    className: 'sf-close-confirm-modal',
+    className: 'df-close-confirm-modal',
     zIndex: 3000,
     width: '380px',
     showClose: false, // decision dialog — dismiss via Cancel / backdrop / Escape
@@ -426,14 +426,14 @@ function showCloseConfirmModal(tabId, tabName) {
         <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> has unsaved changes that will be lost.
       </p>`,
     footerHtml: `
-      <button class="sf-close-confirm__btn sf-close-confirm__btn--cancel" style="margin-right:auto">Cancel</button>
-      <button class="sf-close-confirm__btn sf-close-confirm__btn--save">Save and Close</button>
-      <button class="sf-close-confirm__btn sf-close-confirm__btn--discard">Discard</button>`,
+      <button class="df-close-confirm__btn df-close-confirm__btn--cancel" style="margin-right:auto">Cancel</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--save">Save and Close</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--discard">Discard</button>`,
   });
 
-  footer.querySelector('.sf-close-confirm__btn--cancel').addEventListener('click', close);
+  footer.querySelector('.df-close-confirm__btn--cancel').addEventListener('click', close);
 
-  footer.querySelector('.sf-close-confirm__btn--save').addEventListener('click', () => {
+  footer.querySelector('.df-close-confirm__btn--save').addEventListener('click', () => {
     close();
     // Switch to the tab first if not active, then trigger save
     if (tabId !== activeTabId) switchTab(tabId);
@@ -442,7 +442,7 @@ function showCloseConfirmModal(tabId, tabName) {
     persistenceModule.namedSave();
   });
 
-  footer.querySelector('.sf-close-confirm__btn--discard').addEventListener('click', () => {
+  footer.querySelector('.df-close-confirm__btn--discard').addEventListener('click', () => {
     close();
     // Force close without checking dirty again
     const tab = tabs.find(t => t.id === tabId);
@@ -468,53 +468,53 @@ function typeIconSvg(diagramType) {
   } else {
     inner = '<rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/>';
   }
-  return `<svg class="sf-close-tabs__type-icon" viewBox="0 0 16 16" fill="currentColor">${inner}</svg>`;
+  return `<svg class="df-close-tabs__type-icon" viewBox="0 0 16 16" fill="currentColor">${inner}</svg>`;
 }
 
 function showCloseTabsModal() {
   if (tabs.length === 0) return;
 
-  document.querySelector('.sf-close-tabs-modal')?.remove();
+  document.querySelector('.df-close-tabs-modal')?.remove();
 
   const rowsHtml = tabs.map(t => {
     const active = t.id === activeTabId ? ' (active)' : '';
     const typeLabel = DIAGRAM_TYPES[t.diagramType]?.short || 'Architecture';
     const rel = formatRelativeTime(t.lastModifiedAt || t.lastSavedAt);
     return `
-      <label class="sf-close-tabs__row" data-tab-id="${escHtml(t.id)}">
-        <input type="checkbox" class="sf-close-tabs__checkbox" data-tab-id="${escHtml(t.id)}" />
+      <label class="df-close-tabs__row" data-tab-id="${escHtml(t.id)}">
+        <input type="checkbox" class="df-close-tabs__checkbox" data-tab-id="${escHtml(t.id)}" />
         ${typeIconSvg(t.diagramType)}
-        ${t.dirty ? '<span class="sf-close-tabs__dirty" title="Unsaved changes"></span>' : ''}
-        <div class="sf-close-tabs__info">
-          <span class="sf-close-tabs__name">${escHtml(t.name)}${active}</span>
-          ${rel ? `<span class="sf-close-tabs__meta">Modified ${rel}</span>` : ''}
+        ${t.dirty ? '<span class="df-close-tabs__dirty" title="Unsaved changes"></span>' : ''}
+        <div class="df-close-tabs__info">
+          <span class="df-close-tabs__name">${escHtml(t.name)}${active}</span>
+          ${rel ? `<span class="df-close-tabs__meta">Modified ${rel}</span>` : ''}
         </div>
-        <span class="sf-close-tabs__badge">${escHtml(typeLabel)}</span>
+        <span class="df-close-tabs__badge">${escHtml(typeLabel)}</span>
       </label>`;
   }).join('');
 
-  // dialog width (460px/90vw) comes from `.sf-close-tabs-modal .sf-modal__dialog` CSS
+  // dialog width (460px/90vw) comes from `.df-close-tabs-modal .df-modal__dialog` CSS
   const { body, footer, close } = buildModal({
     title: 'Close Multiple Tabs',
-    className: 'sf-close-tabs-modal',
+    className: 'df-close-tabs-modal',
     zIndex: 3000,
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: `
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm)">
         Select the tabs you want to close.
       </p>
-      <div class="sf-close-tabs__list">
-        <label class="sf-close-tabs__row sf-close-tabs__row--header">
-          <input type="checkbox" class="sf-close-tabs__checkbox" data-role="select-all" />
-          <span class="sf-close-tabs__name">Select all</span>
+      <div class="df-close-tabs__list">
+        <label class="df-close-tabs__row df-close-tabs__row--header">
+          <input type="checkbox" class="df-close-tabs__checkbox" data-role="select-all" />
+          <span class="df-close-tabs__name">Select all</span>
         </label>
         ${rowsHtml}
       </div>`,
-    footerHtml: '<button class="sf-close-tabs__btn sf-close-tabs__btn--primary" data-action="close" style="margin-left:auto" disabled>Close Selected</button>',
+    footerHtml: '<button class="df-close-tabs__btn df-close-tabs__btn--primary" data-action="close" style="margin-left:auto" disabled>Close Selected</button>',
   });
 
   const selectAllEl = body.querySelector('[data-role="select-all"]');
-  const rowBoxes = Array.from(body.querySelectorAll('.sf-close-tabs__checkbox[data-tab-id]'));
+  const rowBoxes = Array.from(body.querySelectorAll('.df-close-tabs__checkbox[data-tab-id]'));
   const closeBtn = footer.querySelector('[data-action="close"]');
 
   const updateState = () => {
@@ -541,7 +541,7 @@ function showCloseTabsModal() {
 
   // Clicking the row (outside the native label-to-input propagation edge cases)
   // — rely on default label click behaviour, but make sure checkbox doesn't double-fire.
-  body.querySelectorAll('.sf-close-tabs__row[data-tab-id]').forEach(row => {
+  body.querySelectorAll('.df-close-tabs__row[data-tab-id]').forEach(row => {
     row.addEventListener('click', (e) => {
       // The <label> already forwards clicks to the checkbox; just stop propagation
       // from the checkbox itself so it doesn't trigger twice.
@@ -596,9 +596,9 @@ function showMultiDiscardConfirm(dirtyCount, onDiscard, onSaveAndClose) {
         <strong style="color:var(--text-primary)">${dirtyCount}</strong> of the selected tabs ${dirtyCount === 1 ? 'has' : 'have'} unsaved changes. Save to Browser Storage first, or close without saving?
       </p>`,
     footerHtml: `
-      <button class="sf-close-tabs__btn" data-action="cancel" style="margin-right:auto">Cancel</button>
-      <button class="sf-close-tabs__btn sf-close-tabs__btn--save" data-action="save">Save and Close</button>
-      <button class="sf-close-tabs__btn sf-close-tabs__btn--primary" data-action="confirm">Close Anyway</button>`,
+      <button class="df-close-tabs__btn" data-action="cancel" style="margin-right:auto">Cancel</button>
+      <button class="df-close-tabs__btn df-close-tabs__btn--save" data-action="save">Save and Close</button>
+      <button class="df-close-tabs__btn df-close-tabs__btn--primary" data-action="confirm">Close Anyway</button>`,
   });
   footer.querySelector('[data-action="cancel"]').addEventListener('click', close);
   footer.querySelector('[data-action="save"]').addEventListener('click', () => { close(); onSaveAndClose(); });
@@ -984,12 +984,11 @@ function showSessionVersionWarning(savedVersion, diff) {
     const isMajor = diff === 'major';
     const title = isMajor ? 'Compatibility Warning' : 'Session Restored';
     const githubLink = `<a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener" style="color:var(--color-primary)">GitHub</a>`;
-    const releasesLink = `<a href="https://github.com/MateuszDabrowski/diagramforce/releases" target="_blank" rel="noopener" style="color:var(--color-primary)">some changes</a>`;
+    const releasesLink = `<a href="https://github.com/MateuszDabrowski/diagramforce/releases" target="_blank" rel="noopener" style="color:var(--color-primary)">release notes</a>`;
     const message = isMajor
       ? `There were significant changes introduced since your last session.
          Your open tabs probably won't load correctly.`
-      : `There have been ${releasesLink} since your last session, but it should still work.
-         If anything looks off, try re-adding the affected elements.`;
+      : `Check out the complete list of new features in the ${releasesLink}.`;
     const footerNote = isMajor
       ? `<p style="margin:0;color:var(--text-secondary)">
           Diagrams saved to Browser Storage or exported as JSON are not affected
@@ -997,13 +996,13 @@ function showSessionVersionWarning(savedVersion, diff) {
         </p>`
       : '';
     const backupBtn = isMajor
-      ? `<button class="sf-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>`
+      ? `<button class="df-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>`
       : '';
     const buttons = isMajor
-      ? `<button class="sf-modal__btn" data-action="reset">Don't load</button>
+      ? `<button class="df-modal__btn" data-action="reset">Don't load</button>
          ${backupBtn}
-         <button class="sf-modal__btn sf-modal__btn--primary" data-action="try">Try Anyway</button>`
-      : `<button class="sf-modal__btn sf-modal__btn--primary" data-action="ok">OK</button>`;
+         <button class="df-modal__btn df-modal__btn--primary" data-action="try">Try Anyway</button>`
+      : `<button class="df-modal__btn df-modal__btn--primary" data-action="ok">OK</button>`;
 
     // Major resolves false unless "try" sets true; minor resolves undefined.
     let result = isMajor ? false : undefined;
@@ -1015,8 +1014,9 @@ function showSessionVersionWarning(savedVersion, diff) {
       bodyStyle: 'padding:16px 20px',
       bodyHtml: `
         <p style="margin:0 0 12px">
-          Diagramforce has been updated from <strong>v${escHtml(savedVersion)}</strong>
-          to <strong>v${escHtml(APP_VERSION)}</strong>${isMajor ? ` (${githubLink})` : ''}.
+          ${isMajor
+            ? `Diagramforce has been updated from <strong>v${escHtml(savedVersion)}</strong> to <strong>v${escHtml(APP_VERSION)}</strong> (${githubLink}).`
+            : `Diagramforce has been successfully updated to <strong>v${escHtml(APP_VERSION)}</strong>, and your diagrams have been safely preserved.`}
         </p>
         <p style="margin:0${footerNote ? ' 0 12px' : ''};color:var(--text-secondary)">
           ${message}
@@ -1112,20 +1112,20 @@ function render() {
   // missed if doCloseTab itself throws mid-execution). Deferred one
   // tick so any in-flight state mutation settles before the modal
   // grabs focus.
-  if (tabs.length === 0 && !document.querySelector('.sf-new-modal')) {
+  if (tabs.length === 0 && !document.querySelector('.df-new-modal')) {
     setTimeout(showNewDiagramModal, 0);
   }
 
   for (const tab of tabs) {
     const el = document.createElement('div');
-    el.className = 'sf-tab' +
-      (tab.id === activeTabId ? ' sf-tab--active' : '') +
-      (tab.dirty ? ' sf-tab--dirty' : '');
+    el.className = 'df-tab' +
+      (tab.id === activeTabId ? ' df-tab--active' : '') +
+      (tab.dirty ? ' df-tab--dirty' : '');
     el.dataset.tabId = tab.id;
 
     // Diagram type icon
     const typeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    typeIcon.setAttribute('class', 'sf-tab__type-icon');
+    typeIcon.setAttribute('class', 'df-tab__type-icon');
     typeIcon.setAttribute('width', '12');
     typeIcon.setAttribute('height', '12');
     typeIcon.setAttribute('viewBox', '0 0 16 16');
@@ -1147,7 +1147,7 @@ function render() {
     }
 
     const dot = document.createElement('span');
-    dot.className = 'sf-tab__dirty';
+    dot.className = 'df-tab__dirty';
     // A7 (v1.12.0) — surface the dirty state in text so screen readers
     // and users with colour-vision deficiency aren't reliant on the
     // small muted dot alone (WCAG 1.4.1). aria-hidden on the visual dot
@@ -1155,7 +1155,7 @@ function render() {
     dot.setAttribute('aria-hidden', 'true');
 
     const label = document.createElement('span');
-    label.className = 'sf-tab__label';
+    label.className = 'df-tab__label';
     label.textContent = tab.name;
 
     // Compose the row title so the dirty hint reaches both pointer-hover
@@ -1164,7 +1164,7 @@ function render() {
     el.setAttribute('aria-label', tab.dirty ? `${tab.name} — unsaved changes` : tab.name);
 
     const close = document.createElement('button');
-    close.className = 'sf-tab__close';
+    close.className = 'df-tab__close';
     close.title = 'Close tab';
     close.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>';
     close.addEventListener('click', (evt) => {
@@ -1188,23 +1188,23 @@ function render() {
     el.addEventListener('dragstart', (evt) => {
       evt.dataTransfer.setData('text/plain', tab.id);
       evt.dataTransfer.effectAllowed = 'move';
-      el.classList.add('sf-tab--dragging');
+      el.classList.add('df-tab--dragging');
     });
     el.addEventListener('dragend', () => {
-      el.classList.remove('sf-tab--dragging');
-      tabListEl.querySelectorAll('.sf-tab--drag-over').forEach(t => t.classList.remove('sf-tab--drag-over'));
+      el.classList.remove('df-tab--dragging');
+      tabListEl.querySelectorAll('.df-tab--drag-over').forEach(t => t.classList.remove('df-tab--drag-over'));
     });
     el.addEventListener('dragover', (evt) => {
       evt.preventDefault();
       evt.dataTransfer.dropEffect = 'move';
-      el.classList.add('sf-tab--drag-over');
+      el.classList.add('df-tab--drag-over');
     });
     el.addEventListener('dragleave', () => {
-      el.classList.remove('sf-tab--drag-over');
+      el.classList.remove('df-tab--drag-over');
     });
     el.addEventListener('drop', (evt) => {
       evt.preventDefault();
-      el.classList.remove('sf-tab--drag-over');
+      el.classList.remove('df-tab--drag-over');
       const draggedId = evt.dataTransfer.getData('text/plain');
       if (draggedId === tab.id) return;
       const fromIdx = tabs.findIndex(t => t.id === draggedId);
@@ -1226,17 +1226,17 @@ function render() {
 }
 
 function updateActiveTabIndicator() {
-  const tabBar = document.querySelector('.sf-tabs');
+  const tabBar = document.querySelector('.df-tabs');
   if (!tabBar) return;
 
   // Remove old line segments
-  tabBar.querySelectorAll('.sf-tab-line').forEach(el => el.remove());
+  tabBar.querySelectorAll('.df-tab-line').forEach(el => el.remove());
 
-  const activeEl = tabBar.querySelector('.sf-tab--active');
+  const activeEl = tabBar.querySelector('.df-tab--active');
   if (!activeEl) {
     // No active tab — full-width bottom line
     const line = document.createElement('div');
-    line.className = 'sf-tab-line';
+    line.className = 'df-tab-line';
     line.style.left = '0';
     line.style.right = '0';
     tabBar.appendChild(line);
@@ -1251,14 +1251,14 @@ function updateActiveTabIndicator() {
 
   // Left line: from 0 to tab left edge
   const leftLine = document.createElement('div');
-  leftLine.className = 'sf-tab-line';
+  leftLine.className = 'df-tab-line';
   leftLine.style.left = '0';
   leftLine.style.width = Math.max(0, tabLeft) + 'px';
   tabBar.appendChild(leftLine);
 
   // Right line: from tab right edge to end
   const rightLine = document.createElement('div');
-  rightLine.className = 'sf-tab-line';
+  rightLine.className = 'df-tab-line';
   rightLine.style.left = tabRight + 'px';
   rightLine.style.right = '0';
   tabBar.appendChild(rightLine);
@@ -1267,7 +1267,7 @@ function updateActiveTabIndicator() {
 function startInlineRename(tabEl, labelEl, tab) {
   const input = document.createElement('input');
   input.type = 'text';
-  input.className = 'sf-tab__rename-input';
+  input.className = 'df-tab__rename-input';
   input.value = tab.name;
   input.style.cssText = `
     width: ${Math.max(60, labelEl.offsetWidth + 8)}px;

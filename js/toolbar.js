@@ -1,11 +1,11 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.15.0';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.0';
-import { resizeDataObjectToFit } from './components.js?v=1.15.0';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.0';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.0';
+import { diagramHasImage } from './image-component.js?v=1.15.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.1';
+import { resizeDataObjectToFit } from './components.js?v=1.15.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.1';
+import { escHtml, formatRelativeTime } from './util.js?v=1.15.1';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -18,14 +18,14 @@ export function init(_modules) {
   btn('btn-save-browser').addEventListener('click', () => showSaveModal());
   btn('btn-save-json').addEventListener('click', () => showExportModal());
   btn('btn-save-png').addEventListener('click', () => {
-    if (document.getElementById('paper')?.classList.contains('sf-animate-flow')) {
+    if (document.getElementById('paper')?.classList.contains('df-animate-flow')) {
       modules.persistence.exportGIF(false);
     } else {
       modules.persistence.exportPNG(false);
     }
   });
   btn('btn-save-png-t').addEventListener('click', () => {
-    if (document.getElementById('paper')?.classList.contains('sf-animate-flow')) {
+    if (document.getElementById('paper')?.classList.contains('df-animate-flow')) {
       modules.persistence.exportGIF(true);
     } else {
       modules.persistence.exportPNG(true);
@@ -268,7 +268,7 @@ export function init(_modules) {
   // Sequence Auto Layout — unify port count + align lanes so same-index ports
   // share the same canvas Y, making connectors parallel.
   btn('btn-sequence-auto-layout').addEventListener('click', () => {
-    document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
+    document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
     const plan = modules.canvas.analyzeSequenceLayout();
     if (plan.status === 'empty') {
       showToast('Add at least two actors or participants with lifelines to use Auto Layout.', 'warning', { duration: 3500 });
@@ -334,7 +334,7 @@ export function init(_modules) {
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
       }
     });
-    document.getElementById('display-dropdown')?.classList.remove('sf-toolbar__dropdown--open');
+    document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
   btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
@@ -358,7 +358,7 @@ export function init(_modules) {
   // static-only WEBP export is hidden — see updateExportButtons().
   btn('btn-animate-flow').addEventListener('click', () => {
     const paperEl = document.getElementById('paper');
-    const isOn = paperEl.classList.toggle('sf-animate-flow');
+    const isOn = paperEl.classList.toggle('df-animate-flow');
     document.getElementById('btn-animate-flow')?.classList.toggle('is-checked', isOn);
     updateExportButtons(isOn);
     if (isOn) startFlowAnimation(); else stopFlowAnimation();
@@ -400,7 +400,7 @@ export function init(_modules) {
   // Grid toggle
   btn('btn-grid').addEventListener('click', (evt) => {
     const on = modules.canvas.toggleGrid();
-    evt.currentTarget.classList.toggle('sf-toolbar__button--active', on);
+    evt.currentTarget.classList.toggle('df-toolbar__button--active', on);
   });
 
   // Theme toggle
@@ -443,13 +443,13 @@ export function init(_modules) {
 
   // Close dropdowns on outside click
   document.addEventListener('click', (evt) => {
-    document.querySelectorAll('.sf-toolbar__dropdown--open').forEach(dd => {
-      if (!dd.contains(evt.target)) dd.classList.remove('sf-toolbar__dropdown--open');
+    document.querySelectorAll('.df-toolbar__dropdown--open').forEach(dd => {
+      if (!dd.contains(evt.target)) dd.classList.remove('df-toolbar__dropdown--open');
     });
     // Also close hamburger menu
-    const hWrap = document.querySelector('.sf-toolbar__hamburger-wrap');
+    const hWrap = document.querySelector('.df-toolbar__hamburger-wrap');
     if (hWrap && !hWrap.contains(evt.target)) {
-      hWrap.classList.remove('sf-toolbar__hamburger-wrap--open');
+      hWrap.classList.remove('df-toolbar__hamburger-wrap--open');
       const hBtn = document.getElementById('btn-hamburger');
       if (hBtn) hBtn.setAttribute('aria-expanded', 'false');
     }
@@ -463,30 +463,30 @@ export function init(_modules) {
 
 function setupDropdown(triggerId) {
   const trigger = btn(triggerId);
-  const dropdown = trigger.closest('.sf-toolbar__dropdown');
-  const menu = dropdown.querySelector('.sf-toolbar__menu');
+  const dropdown = trigger.closest('.df-toolbar__dropdown');
+  const menu = dropdown.querySelector('.df-toolbar__menu');
 
   // Helper: list of focusable menu items, filtered live so disabled /
   // hidden entries are skipped during arrow navigation. Re-queried on
   // each call because some renderers rebuild the menu DOM at runtime
   // (e.g. Save when GIF encoding flips the export-disabled state).
-  const focusables = () => Array.from(menu.querySelectorAll('.sf-toolbar__menu-item'))
+  const focusables = () => Array.from(menu.querySelectorAll('.df-toolbar__menu-item'))
     .filter(el => !el.disabled && el.offsetParent !== null);
 
   const openMenu = () => {
-    document.querySelectorAll('.sf-toolbar__dropdown--open').forEach(dd => {
-      if (dd !== dropdown) dd.classList.remove('sf-toolbar__dropdown--open');
+    document.querySelectorAll('.df-toolbar__dropdown--open').forEach(dd => {
+      if (dd !== dropdown) dd.classList.remove('df-toolbar__dropdown--open');
     });
-    dropdown.classList.add('sf-toolbar__dropdown--open');
+    dropdown.classList.add('df-toolbar__dropdown--open');
   };
   const closeMenu = (restoreFocus = true) => {
-    dropdown.classList.remove('sf-toolbar__dropdown--open');
+    dropdown.classList.remove('df-toolbar__dropdown--open');
     if (restoreFocus) trigger.focus();
   };
 
   trigger.addEventListener('click', (evt) => {
     evt.stopPropagation();
-    const isOpen = dropdown.classList.contains('sf-toolbar__dropdown--open');
+    const isOpen = dropdown.classList.contains('df-toolbar__dropdown--open');
     if (isOpen) closeMenu(false);
     else openMenu();
   });
@@ -539,9 +539,9 @@ function setupDropdown(triggerId) {
   });
 
   // Close dropdown when a menu item is clicked
-  dropdown.querySelectorAll('.sf-toolbar__menu-item').forEach(item => {
+  dropdown.querySelectorAll('.df-toolbar__menu-item').forEach(item => {
     item.addEventListener('click', () => {
-      dropdown.classList.remove('sf-toolbar__dropdown--open');
+      dropdown.classList.remove('df-toolbar__dropdown--open');
     });
   });
 }
@@ -564,7 +564,7 @@ function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templat
   if (templates)        items.push(`${noun(templates, 'template')} saved`);
   if (templatesSkipped) items.push(`${noun(templatesSkipped, 'template')} skipped - already in your stencil`);
   const lis = items.map(i => `<li>${i}</li>`).join('');
-  return `<strong class="sf-import-summary__head">${head}</strong><ul class="sf-import-summary__list">${lis}</ul>`;
+  return `<strong class="df-import-summary__head">${head}</strong><ul class="df-import-summary__list">${lis}</ul>`;
 }
 
 // `importStats` (optional) is passed by persistence right after a bundle import
@@ -576,13 +576,13 @@ function showLoadModal(importStats = null) {
   const bodyEl = document.getElementById('load-modal-list');
   bodyEl.innerHTML = '';
   // Clean up any previous footer
-  document.querySelector('.sf-modal__footer--load')?.remove();
+  document.querySelector('.df-modal__footer--load')?.remove();
 
   // Transient import summary — sits at the very top, above the advisory, only
   // when we arrived here straight from an import. Green success variant.
   if (importStats && (importStats.imported || importStats.skipped || importStats.templates || importStats.templatesSkipped)) {
     const summary = document.createElement('div');
-    summary.className = 'sf-modal__advisory sf-modal__advisory--success sf-import-summary';
+    summary.className = 'df-modal__advisory df-modal__advisory--success df-import-summary';
     summary.innerHTML = formatImportSummary(importStats);
     bodyEl.appendChild(summary);
   }
@@ -591,9 +591,9 @@ function showLoadModal(importStats = null) {
   // pressure, on profile reset, or via privacy settings. Saves are kept for
   // 90 days; for permanent storage, users should export to JSON.
   const advisory = document.createElement('p');
-  advisory.className = 'sf-modal__advisory';
-  advisory.innerHTML = 'Browsers may periodically clear this list. For permanent storage, always <button type="button" class="sf-modal__advisory-link">Export to JSON</button>.';
-  advisory.querySelector('.sf-modal__advisory-link').addEventListener('click', () => {
+  advisory.className = 'df-modal__advisory';
+  advisory.innerHTML = 'Browsers may periodically clear this list. For permanent storage, always <button type="button" class="df-modal__advisory-link">Export to JSON</button>.';
+  advisory.querySelector('.df-modal__advisory-link').addEventListener('click', () => {
     hideLoadModal();      // close this overlay first…
     showExportModal();    // …then open Export to JSON
   });
@@ -602,17 +602,17 @@ function showLoadModal(importStats = null) {
   if (!saves || saves.length === 0) {
     // Empty state — NO Select-all / list box / footer, just a clear message.
     const empty = document.createElement('p');
-    empty.className = 'sf-modal__empty';
+    empty.className = 'df-modal__empty';
     empty.textContent = 'No saved diagrams yet. Save a diagram to the browser and it will appear here.';
     bodyEl.appendChild(empty);
   } else {
     // Bordered list box (mirrors Close-Tabs): Select-all header + rows.
     const box = document.createElement('div');
-    box.className = 'sf-modal__list-box';
+    box.className = 'df-modal__list-box';
 
     const header = document.createElement('div');
-    header.className = 'sf-modal__list-header';
-    header.innerHTML = `<label class="sf-modal__select-all"><input type="checkbox" class="sf-modal__check-all"> Select all</label>`;
+    header.className = 'df-modal__list-header';
+    header.innerHTML = `<label class="df-modal__select-all"><input type="checkbox" class="df-modal__check-all"> Select all</label>`;
     box.appendChild(header);
 
     for (const save of saves) {
@@ -621,19 +621,19 @@ function showLoadModal(importStats = null) {
     bodyEl.appendChild(box);
 
     // Footer: Delete Selected (left, danger) + Load Selected (right, primary).
-    const dialog = bodyEl.closest('.sf-modal__dialog');
+    const dialog = bodyEl.closest('.df-modal__dialog');
     const footer = document.createElement('div');
-    footer.className = 'sf-modal__footer sf-modal__footer--load';
+    footer.className = 'df-modal__footer df-modal__footer--load';
     footer.innerHTML = `
-      <button class="sf-modal__btn sf-modal__btn--danger sf-modal__delete-btn" disabled>Delete Selected</button>
-      <button class="sf-modal__btn sf-modal__btn--primary sf-modal__action-btn" disabled>Load Selected</button>
+      <button class="df-modal__btn df-modal__btn--danger df-modal__delete-btn" disabled>Delete Selected</button>
+      <button class="df-modal__btn df-modal__btn--primary df-modal__action-btn" disabled>Load Selected</button>
     `;
     dialog.appendChild(footer);
 
-    const checkAll = header.querySelector('.sf-modal__check-all');
-    const loadBtn = footer.querySelector('.sf-modal__action-btn');
-    const delBtn = footer.querySelector('.sf-modal__delete-btn');
-    const rowChecks = () => [...bodyEl.querySelectorAll('.sf-modal__row-check')];
+    const checkAll = header.querySelector('.df-modal__check-all');
+    const loadBtn = footer.querySelector('.df-modal__action-btn');
+    const delBtn = footer.querySelector('.df-modal__delete-btn');
+    const rowChecks = () => [...bodyEl.querySelectorAll('.df-modal__row-check')];
     const refresh = () => {
       const cs = rowChecks();
       const any = cs.some(c => c.checked);
@@ -644,7 +644,7 @@ function showLoadModal(importStats = null) {
       checkAll.indeterminate = any && !all;
     };
     checkAll.addEventListener('change', () => { rowChecks().forEach(c => { c.checked = checkAll.checked; }); refresh(); });
-    bodyEl.addEventListener('change', (e) => { if (e.target.matches('.sf-modal__row-check')) refresh(); });
+    bodyEl.addEventListener('change', (e) => { if (e.target.matches('.df-modal__row-check')) refresh(); });
 
     loadBtn.addEventListener('click', async () => {
       const sel = rowChecks().filter(c => c.checked);
@@ -670,8 +670,8 @@ function showLoadModal(importStats = null) {
   }
 
   const el = document.getElementById('load-modal');
-  el.classList.remove('sf-modal--hidden');
-  document.body.classList.add('sf-modal-open');
+  el.classList.remove('df-modal--hidden');
+  document.body.classList.add('df-modal-open');
   // Release any prior trap first — showLoadModal re-runs itself after a bulk
   // delete to rebuild the list, and we must not stack focus traps.
   _loadTrapRelease?.();
@@ -680,9 +680,9 @@ function showLoadModal(importStats = null) {
 
 function hideLoadModal() {
   _loadTrapRelease?.(); _loadTrapRelease = null;
-  document.getElementById('load-modal').classList.add('sf-modal--hidden');
-  document.body.classList.remove('sf-modal-open');
-  document.querySelector('.sf-modal__footer--load')?.remove();
+  document.getElementById('load-modal').classList.add('df-modal--hidden');
+  document.body.classList.remove('df-modal-open');
+  document.querySelector('.df-modal__footer--load')?.remove();
 }
 
 /**
@@ -717,7 +717,7 @@ function uniqueSaveName(baseName, dateSuffix, existingNames) {
 
 function showSaveModal() {
   // Remove existing save modal if any
-  document.querySelector('.sf-save-modal')?.remove();
+  document.querySelector('.df-save-modal')?.remove();
 
   const allTabs = modules.tabs.getAllTabs();
   // ISO-style YYYY-MM-DD suffix (e.g. "Draft 2026-05-30") — readable, and
@@ -736,44 +736,44 @@ function showSaveModal() {
     const defaultName = uniqueSaveName(tab.name, dateSuffix, existingSaves);
     const rel = formatRelativeTime(tab.lastModifiedAt || tab.lastSavedAt);
     return `
-      <div class="sf-modal__row${tab.isActive ? ' sf-modal__row--active' : ''}">
-        <input type="checkbox" class="sf-modal__row-check" data-tab-id="${tab.id}" ${tab.isActive ? 'checked' : ''}>
-        <span class="sf-modal__row-icon">${getDiagramTypeIcon(tab.diagramType)}</span>
-        <div class="sf-modal__row-info sf-save-modal__row-info">
-          <input type="text" class="sf-modal__row-name" data-tab-id="${tab.id}" value="${escHtml(defaultName)}" spellcheck="false">
-          ${rel ? `<span class="sf-modal__row-meta">Modified ${rel}</span>` : ''}
+      <div class="df-modal__row${tab.isActive ? ' df-modal__row--active' : ''}">
+        <input type="checkbox" class="df-modal__row-check" data-tab-id="${tab.id}" ${tab.isActive ? 'checked' : ''}>
+        <span class="df-modal__row-icon">${getDiagramTypeIcon(tab.diagramType)}</span>
+        <div class="df-modal__row-info df-save-modal__row-info">
+          <input type="text" class="df-modal__row-name" data-tab-id="${tab.id}" value="${escHtml(defaultName)}" spellcheck="false">
+          ${rel ? `<span class="df-modal__row-meta">Modified ${rel}</span>` : ''}
         </div>
-        <span class="sf-modal__row-badge">${escHtml(saveTypeLabel(tab.diagramType))}</span>
+        <span class="df-modal__row-badge">${escHtml(saveTypeLabel(tab.diagramType))}</span>
       </div>`;
   }).join('');
 
   const { overlay, body: bodyEl, footer, close } = buildModal({
     title: 'Save to Browser',
-    className: 'sf-save-modal',
-    dialogClass: 'sf-save-modal__dialog', // 520px
-    bodyClass: 'sf-modal__row-list',
+    className: 'df-save-modal',
+    dialogClass: 'df-save-modal__dialog', // 520px
+    bodyClass: 'df-modal__row-list',
     bodyHtml: `
-      <p class="sf-modal__advisory">Browsers may periodically clear this list. For permanent storage, always <button type="button" class="sf-modal__advisory-link">Export to JSON</button>.</p>
-      <div class="sf-modal__list-box">
-        <div class="sf-modal__list-header">
-          <label class="sf-modal__select-all"><input type="checkbox" class="sf-modal__check-all"> Select all</label>
+      <p class="df-modal__advisory">Browsers may periodically clear this list. For permanent storage, always <button type="button" class="df-modal__advisory-link">Export to JSON</button>.</p>
+      <div class="df-modal__list-box">
+        <div class="df-modal__list-header">
+          <label class="df-modal__select-all"><input type="checkbox" class="df-modal__check-all"> Select all</label>
         </div>
         ${tabRows}
       </div>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary sf-modal__action-btn" style="margin-left:auto">Save Selected</button>',
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-modal__action-btn" style="margin-left:auto">Save Selected</button>',
   });
 
   // Advisory CTA — close this overlay, then open Export to JSON.
-  bodyEl.querySelector('.sf-modal__advisory-link')?.addEventListener('click', () => {
+  bodyEl.querySelector('.df-modal__advisory-link')?.addEventListener('click', () => {
     close();
     showExportModal();
   });
 
-  wireSelectAll(bodyEl, footer, '.sf-modal__row-check', () => {
+  wireSelectAll(bodyEl, footer, '.df-modal__row-check', () => {
     const selected = [];
-    overlay.querySelectorAll('.sf-modal__row-check:checked').forEach(c => {
+    overlay.querySelectorAll('.df-modal__row-check:checked').forEach(c => {
       const tabId = c.dataset.tabId;
-      const nameInput = overlay.querySelector(`.sf-modal__row-name[data-tab-id="${tabId}"]`);
+      const nameInput = overlay.querySelector(`.df-modal__row-name[data-tab-id="${tabId}"]`);
       selected.push({ tabId, name: nameInput?.value.trim() || tabId });
     });
     if (selected.length === 0) return;
@@ -820,31 +820,31 @@ function showSaveModal() {
 // lane whose port layout will be regenerated so the user can see the impact
 // before committing.
 function showSequenceAutoLayoutConfirm(plan, onConfirm) {
-  document.querySelector('.sf-seq-autolayout-modal')?.remove();
+  document.querySelector('.df-seq-autolayout-modal')?.remove();
 
   const rows = plan.mismatches.map(m => {
     const reason = m.hasCustomRatios
       ? `${m.count} ports, custom spacing`
       : `${m.count} port${m.count === 1 ? '' : 's'}`;
     return `
-      <div class="sf-modal__row">
-        <span class="sf-modal__row-name" style="flex:1">${escHtml(m.label)}</span>
+      <div class="df-modal__row">
+        <span class="df-modal__row-name" style="flex:1">${escHtml(m.label)}</span>
         <span style="color:var(--text-secondary);font-size:12px">${escHtml(reason)} → ${plan.targetCount} evenly-spaced</span>
       </div>`;
   }).join('');
 
   const { footer, close } = buildModal({
     title: 'Auto Layout may shift connectors',
-    className: 'sf-save-modal sf-seq-autolayout-modal',
-    dialogClass: 'sf-save-modal__dialog', // 520px
+    className: 'df-save-modal df-seq-autolayout-modal',
+    dialogClass: 'df-save-modal__dialog', // 520px
     bodyHtml: `
       <p style="margin:0 0 12px 0;color:var(--text-secondary);font-size:13px;line-height:1.5">
         Every lane will be set to <strong>${plan.targetCount} evenly-spaced ports</strong> so connectors between same-index ports become parallel. The lanes below will have their port layout regenerated — existing connectors on those lanes may move vertically.
       </p>
-      <div class="sf-modal__row-list">${rows}</div>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary sf-seq-autolayout-apply" style="margin-left:auto">Apply Auto Layout</button>',
+      <div class="df-modal__row-list">${rows}</div>`,
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-seq-autolayout-apply" style="margin-left:auto">Apply Auto Layout</button>',
   });
-  footer.querySelector('.sf-seq-autolayout-apply').addEventListener('click', () => {
+  footer.querySelector('.df-seq-autolayout-apply').addEventListener('click', () => {
     close();
     onConfirm();
   });
@@ -853,40 +853,40 @@ function showSequenceAutoLayoutConfirm(plan, onConfirm) {
 // --- Mermaid Import Modal ---
 
 function showMermaidImportModal() {
-  document.querySelector('.sf-mermaid-modal')?.remove();
+  document.querySelector('.df-mermaid-modal')?.remove();
 
   const { dialog, body, footer, header, close } = buildModal({
     title: 'Paste Mermaid',
-    className: 'sf-mermaid-modal',
+    className: 'df-mermaid-modal',
     width: '620px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: `
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
         Paste mermaid.js code:
       </p>
-      <textarea class="sf-mermaid-modal__input" spellcheck="false" rows="14"
+      <textarea class="df-mermaid-modal__input" spellcheck="false" rows="14"
         placeholder="flowchart TD&#10;  A[Start] --&gt; B{Decision}&#10;  B --&gt;|Yes| C[Process]&#10;  B --&gt;|No| D[End]"
         style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
-      <p class="sf-mermaid-modal__supported" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
-        <span class="sf-mermaid-modal__supported-label">Supported:</span>
+      <p class="df-mermaid-modal__supported" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <span class="df-mermaid-modal__supported-label">Supported:</span>
         <span data-type="graph"><strong>graph</strong> → Process</span>,
         <span data-type="flowchart"><strong>flowchart</strong> → Process</span>,
         <span data-type="state"><strong>stateDiagram</strong> → Process</span>,
         <span data-type="er"><strong>erDiagram</strong> → Data Model</span>,
         <span data-type="sequence"><strong>sequenceDiagram</strong> → Sequence</span>.
       </p>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary sf-mermaid-modal__import" style="margin-left:auto" disabled>Load</button>',
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-mermaid-modal__import" style="margin-left:auto" disabled>Load</button>',
   });
   dialog.style.maxWidth = '92vw'; // preserve prior inline override
   // Static "Beta" badge after the title text (title itself stays textContent-safe)
-  header.querySelector('.sf-modal__title').insertAdjacentHTML('beforeend',
-    ' <span class="sf-badge sf-badge--beta" style="margin-left:8px;padding:2px 6px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>');
+  header.querySelector('.df-modal__title').insertAdjacentHTML('beforeend',
+    ' <span class="df-badge df-badge--beta" style="margin-left:8px;padding:2px 6px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>');
 
-  const input = body.querySelector('.sf-mermaid-modal__input');
-  const importBtn = footer.querySelector('.sf-mermaid-modal__import');
-  const supportedP = body.querySelector('.sf-mermaid-modal__supported');
-  const supportedLabel = body.querySelector('.sf-mermaid-modal__supported-label');
-  const supportedSpans = body.querySelectorAll('.sf-mermaid-modal__supported [data-type]');
+  const input = body.querySelector('.df-mermaid-modal__input');
+  const importBtn = footer.querySelector('.df-mermaid-modal__import');
+  const supportedP = body.querySelector('.df-mermaid-modal__supported');
+  const supportedLabel = body.querySelector('.df-mermaid-modal__supported-label');
+  const supportedSpans = body.querySelectorAll('.df-mermaid-modal__supported [data-type]');
 
   const resetSpans = () => {
     supportedSpans.forEach(s => {
@@ -956,7 +956,7 @@ function showMermaidImportModal() {
  *  native single-diagram / templates file; 2+ → a `diagramforce-export` bundle.
  *  A Select-All export resets the backup-reminder clock. */
 function showExportModal() {
-  document.querySelector('.sf-export-modal')?.remove();
+  document.querySelector('.df-export-modal')?.remove();
 
   const allTabs = modules.tabs.getAllTabs();
   const namedSaves = modules.persistence.getNamedSaves();
@@ -968,40 +968,40 @@ function showExportModal() {
   const tabRows = allTabs.map(t => {
     const rel = formatRelativeTime(t.lastModifiedAt || t.lastSavedAt);
     return `
-    <div class="sf-modal__row${t.isActive ? ' sf-modal__row--active' : ''}">
-      <input type="checkbox" class="sf-modal__row-check" data-kind="tab" data-id="${escHtml(t.id)}" ${t.isActive ? 'checked' : ''}>
-      <span class="sf-modal__row-icon">${getDiagramTypeIcon(t.diagramType)}</span>
-      <div class="sf-modal__row-info">
-        <span class="sf-modal__row-label">${escHtml(t.name)}</span>
-        <span class="sf-modal__row-meta">${t.isActive ? 'current diagram' : 'open tab'}${rel ? ` · modified ${rel}` : ''}</span>
+    <div class="df-modal__row${t.isActive ? ' df-modal__row--active' : ''}">
+      <input type="checkbox" class="df-modal__row-check" data-kind="tab" data-id="${escHtml(t.id)}" ${t.isActive ? 'checked' : ''}>
+      <span class="df-modal__row-icon">${getDiagramTypeIcon(t.diagramType)}</span>
+      <div class="df-modal__row-info">
+        <span class="df-modal__row-label">${escHtml(t.name)}</span>
+        <span class="df-modal__row-meta">${t.isActive ? 'current diagram' : 'open tab'}${rel ? ` · modified ${rel}` : ''}</span>
       </div>
-      <span class="sf-modal__row-badge">${escHtml(typeLabel(t.diagramType))}</span>
+      <span class="df-modal__row-badge">${escHtml(typeLabel(t.diagramType))}</span>
     </div>`;
   }).join('');
 
   const saveRows = namedSaves.map(s => {
     const rel = formatRelativeTime(s.timestamp);
     return `
-    <div class="sf-modal__row">
-      <input type="checkbox" class="sf-modal__row-check" data-kind="save" data-id="${escHtml(s.key)}">
-      <span class="sf-modal__row-icon">${getDiagramTypeIcon(s.diagramType)}</span>
-      <div class="sf-modal__row-info">
-        <span class="sf-modal__row-label">${escHtml(s.name)}</span>
-        <span class="sf-modal__row-meta">saved in browser${rel ? ` · ${rel}` : ''}</span>
+    <div class="df-modal__row">
+      <input type="checkbox" class="df-modal__row-check" data-kind="save" data-id="${escHtml(s.key)}">
+      <span class="df-modal__row-icon">${getDiagramTypeIcon(s.diagramType)}</span>
+      <div class="df-modal__row-info">
+        <span class="df-modal__row-label">${escHtml(s.name)}</span>
+        <span class="df-modal__row-meta">saved in browser${rel ? ` · ${rel}` : ''}</span>
       </div>
-      <span class="sf-modal__row-badge">${escHtml(typeLabel(s.diagramType))}</span>
+      <span class="df-modal__row-badge">${escHtml(typeLabel(s.diagramType))}</span>
     </div>`;
   }).join('');
 
   const templatesRow = templateCount > 0 ? `
-    <div class="sf-modal__row">
-      <input type="checkbox" class="sf-modal__row-check" data-kind="templates">
-      <span class="sf-modal__row-icon"><svg class="sf-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg></span>
-      <div class="sf-modal__row-info">
-        <span class="sf-modal__row-label">Templates</span>
-        <span class="sf-modal__row-meta">custom template library</span>
+    <div class="df-modal__row">
+      <input type="checkbox" class="df-modal__row-check" data-kind="templates">
+      <span class="df-modal__row-icon"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg></span>
+      <div class="df-modal__row-info">
+        <span class="df-modal__row-label">Templates</span>
+        <span class="df-modal__row-meta">custom template library</span>
       </div>
-      <span class="sf-modal__row-badge">${templateCount}</span>
+      <span class="df-modal__row-badge">${templateCount}</span>
     </div>` : '';
 
   const fmtBackupAdvisory = () => {
@@ -1013,30 +1013,30 @@ function showExportModal() {
 
   const { overlay, body: bodyEl, footer, close } = buildModal({
     title: 'Export to JSON',
-    className: 'sf-export-modal',
-    dialogClass: 'sf-save-modal__dialog', // 520px (shared with Save)
-    bodyClass: 'sf-modal__row-list',
+    className: 'df-export-modal',
+    dialogClass: 'df-save-modal__dialog', // 520px (shared with Save)
+    bodyClass: 'df-modal__row-list',
     bodyHtml: `
-      <div class="sf-modal__advisory sf-export-modal__advisory">
-        <span class="sf-export-modal__advisory-text"></span>
-        <button class="sf-modal__btn sf-export-modal__backup-now">Back up now</button>
+      <div class="df-modal__advisory df-export-modal__advisory">
+        <span class="df-export-modal__advisory-text"></span>
+        <button class="df-modal__btn df-export-modal__backup-now">Back up now</button>
       </div>
-      <div class="sf-modal__list-box">
-        <div class="sf-modal__list-header">
-          <label class="sf-modal__select-all"><input type="checkbox" class="sf-modal__check-all"> Select all</label>
+      <div class="df-modal__list-box">
+        <div class="df-modal__list-header">
+          <label class="df-modal__select-all"><input type="checkbox" class="df-modal__check-all"> Select all</label>
         </div>
         ${tabRows}${saveRows}${templatesRow}
       </div>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary sf-modal__action-btn" style="margin-left:auto" disabled>Export Selected</button>',
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-modal__action-btn" style="margin-left:auto" disabled>Export Selected</button>',
   });
-  const advisoryText = bodyEl.querySelector('.sf-export-modal__advisory-text');
+  const advisoryText = bodyEl.querySelector('.df-export-modal__advisory-text');
   advisoryText.textContent = fmtBackupAdvisory(); // textContent — safe
 
   // "Back up now" — full backup of everything (resets the reminder clock); the
   // advisory date updates in place. The modal stays open. On success the button
   // flashes a brand-green "✓ Backed up!" for a beat, then reverts to the amber
   // outline (same affordance as the share "✓ Copied!" button).
-  const backupNowBtn = bodyEl.querySelector('.sf-export-modal__backup-now');
+  const backupNowBtn = bodyEl.querySelector('.df-export-modal__backup-now');
   let backupRevertTimer = null;
   backupNowBtn.addEventListener('click', () => {
     if (!modules.persistence.exportEverything()) return;
@@ -1050,8 +1050,8 @@ function showExportModal() {
     }, 2000);
   });
 
-  wireSelectAll(bodyEl, footer, '.sf-modal__row-check', () => {
-    const checks = [...overlay.querySelectorAll('.sf-modal__row-check')];
+  wireSelectAll(bodyEl, footer, '.df-modal__row-check', () => {
+    const checks = [...overlay.querySelectorAll('.df-modal__row-check')];
     const checked = checks.filter(c => c.checked);
     if (checked.length === 0) return;
     const tabIds = checked.filter(c => c.dataset.kind === 'tab').map(c => c.dataset.id);
@@ -1070,8 +1070,8 @@ function showExportModal() {
  *  The check-all can live in the list header (top) or the footer; the action
  *  button is in the footer. */
 function wireSelectAll(bodyEl, footerEl, checkSelector, onAction) {
-  const checkAll = bodyEl.querySelector('.sf-modal__check-all') || footerEl.querySelector('.sf-modal__check-all');
-  const actionBtn = footerEl.querySelector('.sf-modal__action-btn');
+  const checkAll = bodyEl.querySelector('.df-modal__check-all') || footerEl.querySelector('.df-modal__check-all');
+  const actionBtn = footerEl.querySelector('.df-modal__action-btn');
 
   function update() {
     const checks = bodyEl.querySelectorAll(checkSelector);
@@ -1114,49 +1114,49 @@ let _loadTrapRelease = null;
 
 function showAboutModal() {
   const el = document.getElementById('about-modal');
-  el.classList.remove('sf-modal--hidden');
-  document.body.classList.add('sf-modal-open');
+  el.classList.remove('df-modal--hidden');
+  document.body.classList.add('df-modal-open');
   _aboutTrapRelease = trapFocus(el, { onEscape: hideAboutModal });
 }
 
 function hideAboutModal() {
   _aboutTrapRelease?.(); _aboutTrapRelease = null;
-  document.getElementById('about-modal').classList.add('sf-modal--hidden');
-  document.body.classList.remove('sf-modal-open');
+  document.getElementById('about-modal').classList.add('df-modal--hidden');
+  document.body.classList.remove('df-modal-open');
 }
 
 function buildLoadItem(save) {
   const item = document.createElement('div');
-  item.className = 'sf-modal__row';
+  item.className = 'df-modal__row';
 
   const check = document.createElement('input');
   check.type = 'checkbox';
-  check.className = 'sf-modal__row-check';
+  check.className = 'df-modal__row-check';
   check.dataset.saveKey = save.key;
 
   const icon = document.createElement('span');
-  icon.className = 'sf-modal__row-icon';
+  icon.className = 'df-modal__row-icon';
   icon.innerHTML = getDiagramTypeIcon(save.diagramType);
 
   const info = document.createElement('div');
-  info.className = 'sf-modal__row-info';
+  info.className = 'df-modal__row-info';
 
   const name = document.createElement('span');
-  name.className = 'sf-modal__row-label';
+  name.className = 'df-modal__row-label';
   name.textContent = save.name;
 
   const meta = document.createElement('span');
-  meta.className = 'sf-modal__row-meta';
+  meta.className = 'df-modal__row-meta';
   meta.textContent = formatSaveMeta(save);
 
   info.appendChild(name);
   info.appendChild(meta);
 
   const actions = document.createElement('div');
-  actions.className = 'sf-modal__row-actions';
+  actions.className = 'df-modal__row-actions';
 
   const loadBtn = document.createElement('button');
-  loadBtn.className = 'sf-modal__btn sf-modal__btn--primary';
+  loadBtn.className = 'df-modal__btn df-modal__btn--primary';
   loadBtn.textContent = 'Load';
   loadBtn.addEventListener('click', () => {
     if (modules.persistence.loadNamedSave(save.key)) {
@@ -1165,7 +1165,7 @@ function buildLoadItem(save) {
   });
 
   const deleteBtn = document.createElement('button');
-  deleteBtn.className = 'sf-modal__btn sf-modal__btn--danger';
+  deleteBtn.className = 'df-modal__btn df-modal__btn--danger';
   deleteBtn.title = 'Delete save';
   deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
     <path d="M6 2h4v1H6V2zm-3 2h10v1H3V4zm1 2h8l-.8 8H4.8L4 6zm2 1v5h1V7H6zm2 0v5h1V7H8z"/>
@@ -1227,10 +1227,13 @@ function setViewMode(mode) {
   } else if (!isTable && wasTable && _stencilWasOpenBeforeTable) {
     modules.stencil?.show?.();
   }
-  diag?.classList.toggle('sf-toolbar__segmented-option--active', !isTable);
+  diag?.classList.toggle('df-toolbar__segmented-option--active', !isTable);
   diag?.setAttribute('aria-checked', String(!isTable));
-  tab?.classList.toggle('sf-toolbar__segmented-option--active', isTable);
+  tab?.classList.toggle('df-toolbar__segmented-option--active', isTable);
   tab?.setAttribute('aria-checked', String(isTable));
+  // Keep the mobile hamburger's toggle label in sync with the current view.
+  const hmbLabel = document.getElementById('hmb-view-toggle-label');
+  if (hmbLabel) hmbLabel.textContent = isTable ? 'View as Diagram' : 'View as Table';
 }
 
 function updateDisplayMenuVisibility() {
@@ -1245,7 +1248,7 @@ function updateDisplayMenuVisibility() {
   const isSequence = type === 'sequence';
 
   // Diagram | Table view switch — shown only for Data Mapping. Use inline display (not
-  // the `hidden` attr): `.sf-toolbar__group { display:flex }` outranks `[hidden]`, so the
+  // the `hidden` attr): `.df-toolbar__group { display:flex }` outranks `[hidden]`, so the
   // attribute alone wouldn't hide it. Reset to the Diagram view on any tab change so the
   // table never lingers showing another tab's data.
   const vsGroup = document.getElementById('view-switch-group');
@@ -1260,6 +1263,14 @@ function updateDisplayMenuVisibility() {
   const mapSep = document.getElementById('map-bridge-sep');
   if (mapGroup) mapGroup.style.display = isDataModel ? '' : 'none';
   if (mapSep) mapSep.style.display = isDataModel ? '' : 'none';
+
+  // Mirror the view-switch + map-bridge availability into the mobile hamburger.
+  // The desktop toolbar groups live in .df-toolbar__left, which is hidden on mobile,
+  // so without these the Table view + Map bridge were unreachable on a phone.
+  const hmbView = document.getElementById('hmb-view-toggle');
+  if (hmbView) hmbView.style.display = isDataMapping ? '' : 'none';
+  const hmbMap = document.getElementById('hmb-map');
+  if (hmbMap) hmbMap.style.display = isDataModel ? '' : 'none';
 
   // Show/hide Gantt-specific options
   const ganttSep = document.getElementById('display-gantt-separator');
@@ -1464,7 +1475,7 @@ function refreshDisplayDotIndicator() {
   // NOTE: the Gantt timeline view-preferences (Week Starts / Weekend Starts / Week Numbers)
   // are deliberately NOT counted here — they're regional/labelling choices that don't hide
   // any content, so they must not light the Display "eye" indicator.
-  btn.classList.toggle('sf-toolbar__button--has-active', nonDefault);
+  btn.classList.toggle('df-toolbar__button--has-active', nonDefault);
   // A6 (v1.12.0) — extend the tooltip when the dot is showing so the
   // amber indicator isn't conveyed by colour alone (WCAG 1.4.1). Strips
   // any prior suffix on every refresh so the base label stays clean.
@@ -1543,12 +1554,12 @@ function applyDisplayFlagToAll(flag, value) {
 
 function setupHamburgerMenu() {
   const hBtn = document.getElementById('btn-hamburger');
-  const hWrap = hBtn?.closest('.sf-toolbar__hamburger-wrap');
+  const hWrap = hBtn?.closest('.df-toolbar__hamburger-wrap');
   if (!hBtn || !hWrap) return;
 
   hBtn.addEventListener('click', (evt) => {
     evt.stopPropagation();
-    const isOpen = hWrap.classList.toggle('sf-toolbar__hamburger-wrap--open');
+    const isOpen = hWrap.classList.toggle('df-toolbar__hamburger-wrap--open');
     hBtn.setAttribute('aria-expanded', String(isOpen));
   });
 
@@ -1561,7 +1572,7 @@ function setupHamburgerMenu() {
     const action = item.dataset.action;
 
     // Close hamburger after action
-    hWrap.classList.remove('sf-toolbar__hamburger-wrap--open');
+    hWrap.classList.remove('df-toolbar__hamburger-wrap--open');
     hBtn.setAttribute('aria-expanded', 'false');
 
     switch (action) {
@@ -1575,7 +1586,7 @@ function setupHamburgerMenu() {
         // Open the display dropdown — temporarily show it for mobile
         const dd = document.getElementById('display-dropdown');
         if (dd) {
-          const menu = dd.querySelector('.sf-toolbar__menu');
+          const menu = dd.querySelector('.df-toolbar__menu');
 
           const openDisplay = () => {
             dd.style.cssText = 'display:block !important; position:fixed; top:48px; left:0; right:0; z-index:400;';
@@ -1587,7 +1598,7 @@ function setupHamburgerMenu() {
           const closeDisplay = () => {
             dd.style.cssText = '';
             if (menu) menu.style.cssText = '';
-            dd.classList.remove('sf-toolbar__dropdown--open');
+            dd.classList.remove('df-toolbar__dropdown--open');
             document.removeEventListener('pointerdown', onOutside, true);
           };
 
@@ -1612,6 +1623,15 @@ function setupHamburgerMenu() {
         }
         break;
       }
+      case 'view-toggle':
+        // Data Mapping Diagram|Table switch — the desktop segmented control lives in
+        // .df-toolbar__left (hidden on mobile), so surface it here.
+        setViewMode(modules.tableView?.isActive?.() ? 'diagram' : 'table');
+        break;
+      case 'map-bridge':
+        // Delegate to the (mobile-hidden) desktop Map button's wired handler.
+        document.getElementById('btn-map-bridge')?.click();
+        break;
       case 'undo':
         modules.history.undo();
         break;
@@ -1635,21 +1655,21 @@ function setupHamburgerMenu() {
 
 function setupToolbarCentering() {
   const toolbar = document.getElementById('toolbar');
-  const left = toolbar.querySelector('.sf-toolbar__left');
-  const center = toolbar.querySelector('.sf-toolbar__center');
-  const right = toolbar.querySelector('.sf-toolbar__right');
+  const left = toolbar.querySelector('.df-toolbar__left');
+  const center = toolbar.querySelector('.df-toolbar__center');
+  const right = toolbar.querySelector('.df-toolbar__right');
   if (!left || !center || !right) return;
 
   function checkOverlap() {
     // Temporarily remove compact to measure absolute-centered position
-    toolbar.classList.remove('sf-toolbar--compact');
+    toolbar.classList.remove('df-toolbar--compact');
     requestAnimationFrame(() => {
       const leftR = left.getBoundingClientRect().right;
       const rightL = right.getBoundingClientRect().left;
       const centerR = center.getBoundingClientRect();
       const pad = 12;
       if (centerR.left - pad < leftR || centerR.right + pad > rightL) {
-        toolbar.classList.add('sf-toolbar--compact');
+        toolbar.classList.add('df-toolbar--compact');
       }
     });
   }
@@ -1693,13 +1713,13 @@ function flowMutationsAffectRealLinks(mutations) {
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
-      if (cls === 'sf-flow-overlay' || cls === 'sf-line-style-overlay') continue;
+      if (cls === 'df-flow-overlay' || cls === 'df-line-style-overlay') continue;
       return true;
     }
     for (const n of m.removedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
-      if (cls === 'sf-flow-overlay' || cls === 'sf-line-style-overlay') continue;
+      if (cls === 'df-flow-overlay' || cls === 'df-line-style-overlay') continue;
       return true;
     }
   }
@@ -1709,7 +1729,7 @@ function flowMutationsAffectRealLinks(mutations) {
 function stopFlowAnimation() {
   _flowActive = false;
   if (_flowObserver) { _flowObserver.disconnect(); _flowObserver = null; }
-  document.querySelectorAll('.sf-flow-overlay').forEach(el => el.remove());
+  document.querySelectorAll('.df-flow-overlay').forEach(el => el.remove());
 }
 
 let _flowSyncId = 0;
@@ -1726,7 +1746,7 @@ function syncFlowOverlays() {
   if (_flowObserver) _flowObserver.disconnect();
 
   // Remove stale overlays
-  document.querySelectorAll('.sf-flow-overlay').forEach(el => el.remove());
+  document.querySelectorAll('.df-flow-overlay').forEach(el => el.remove());
 
   // Clone each link line — strip markers, add animation class
   document.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
@@ -1735,7 +1755,7 @@ function syncFlowOverlays() {
     clone.removeAttribute('marker-end');
     clone.removeAttribute('marker-mid');
     clone.removeAttribute('joint-selector');
-    clone.setAttribute('class', 'sf-flow-overlay');
+    clone.setAttribute('class', 'df-flow-overlay');
     line.parentNode.insertBefore(clone, line.nextSibling);
   });
 
@@ -1765,7 +1785,7 @@ function setMenuItemLabel(btnEl, label) {
 
 function updateExportButtons(animating) {
   // PNG export becomes a GIF while the flow is animating (the btn-save-png click
-  // handlers in init() route to exportGIF when #paper has .sf-animate-flow). Relabel
+  // handlers in init() route to exportGIF when #paper has .df-animate-flow). Relabel
   // via setMenuItemLabel so the image icon survives the swap.
   setMenuItemLabel(document.getElementById('btn-save-png'), animating ? 'Save to GIF' : 'Save to PNG');
   setMenuItemLabel(document.getElementById('btn-save-png-t'), animating ? 'Save to transparent GIF' : 'Save to transparent PNG');

@@ -2,8 +2,8 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.15.0';
-import { fieldFocus } from './canvas/focus-state.js?v=1.15.0';
+import { parseMarkdown } from './markdown.js?v=1.15.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.15.1';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -2130,7 +2130,7 @@ export function register() {
         rowG.setAttribute('class', 'do-field-row');
         if (field.fid) rowG.setAttribute('data-fid', field.fid);
         // Re-assert any active flow-focus dim on this field (survives re-render).
-        if (field.fid && fieldFocus.dimmed?.has(`${model.id}::${field.fid}`)) rowG.classList.add('sf-field-dimmed');
+        if (field.fid && fieldFocus.dimmed?.has(`${model.id}::${field.fid}`)) rowG.classList.add('df-field-dimmed');
         const hit = document.createElementNS(ns, 'rect');
         hit.setAttribute('x', '12');
         hit.setAttribute('y', String(y));
@@ -4286,7 +4286,7 @@ export function register() {
   // in a shared off-screen SVG). Called whenever `fragmentLabel` changes and
   // on load via canvas.js migrateNodes().
   {
-    const MEASURE_SVG_ID = 'sf-text-measure-svg';
+    const MEASURE_SVG_ID = 'df-text-measure-svg';
     const TAB_PAD = 12;   // horizontal padding inside the tab
     const TAB_CUT = 10;   // diagonal cut width at the bottom-right
     const TAB_H   = 20;   // tab height (matches y=20 in path)

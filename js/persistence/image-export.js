@@ -5,9 +5,9 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.15.0';
-import { showToast, showError } from '../feedback.js?v=1.15.0';
-import { pctx } from './context.js?v=1.15.0';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.15.1';
+import { showToast, showError } from '../feedback.js?v=1.15.1';
+import { pctx } from './context.js?v=1.15.1';
 
 export function exportWEBP(transparent = false) {
   return exportRaster(transparent, 'webp');
@@ -92,7 +92,7 @@ function exportRaster(transparent, format) {
       ctx.drawImage(img, 0, 0, exportW, exportH);
 
       canvas.toBlob(blob => {
-        const baseName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
+        const baseName = (getTabNameCallback ? getTabNameCallback() : 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
         if (blob) {
           triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
           showToast(`${fmtLabel} downloaded ✓`, 'success');
@@ -163,7 +163,7 @@ export async function exportGIF(transparent = false) {
     const canvasW = Math.round(exportW * scale);
     const canvasH = Math.round(exportH * scale);
 
-    // Animation parameters — must match css/canvas.css .sf-animate-flow
+    // Animation parameters — must match css/canvas.css .df-animate-flow
     const TOTAL_FRAMES = 12;
     const DASH_TOTAL = 12; // stroke-dasharray: 8 4 → total repeat = 12
     const FRAME_DELAY = 50; // ms per frame (12 frames × 50ms = 600ms = one cycle)
@@ -179,7 +179,7 @@ export async function exportGIF(transparent = false) {
       );
       const viewport = svgClone.querySelector('.joint-viewport');
       if (viewport) viewport.removeAttribute('transform');
-      svgClone.querySelectorAll('pattern, .joint-port, .sf-flow-overlay').forEach(el => el.remove());
+      svgClone.querySelectorAll('pattern, .joint-port, .df-flow-overlay').forEach(el => el.remove());
       const spritesContainer = document.getElementById('slds-icons');
       if (spritesContainer) {
         const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -291,7 +291,7 @@ export async function exportGIF(transparent = false) {
     gif.finish();
     const bytes = gif.bytes();
     const blob = new Blob([bytes], { type: 'image/gif' });
-    const gifName = (getTabNameCallback ? getTabNameCallback() : 'sf-diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'sf-diagram';
+    const gifName = (getTabNameCallback ? getTabNameCallback() : 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
     triggerDownload(URL.createObjectURL(blob), `df_${gifName}_${dateSuffix()}.gif`);
     progressToastDismiss?.();
     showToast('GIF downloaded ✓', 'success');
@@ -558,7 +558,7 @@ function resolveCssVars(svgRoot) {
 /**
  * Bake the runtime "bg-coloured overlay clone" dashing technique into a
  * standalone SVG export. The runtime overlays rely on a CSS rule
- * (`.sf-line-style-overlay { stroke: var(--bg-canvas) !important; }`) which
+ * (`.df-line-style-overlay { stroke: var(--bg-canvas) !important; }`) which
  * doesn't apply in a Blob-URL SVG, so the overlay would either lose its
  * stroke or render in the line's own colour. We resolve the canvas bg
  * colour and set it inline on every overlay clone so the same masking
@@ -578,7 +578,7 @@ function applyLineStyleInline(svgRoot, transparent) {
 
   if (transparent) {
     // True transparent gaps require dasharray on the line itself.
-    svgRoot.querySelectorAll('.sf-line-style-overlay').forEach(el => el.remove());
+    svgRoot.querySelectorAll('.df-line-style-overlay').forEach(el => el.remove());
     for (const link of graph.getLinks()) {
       const style = link.prop('lineStyle');
       if (!style || style === 'none') continue;
@@ -598,7 +598,7 @@ function applyLineStyleInline(svgRoot, transparent) {
   const theme = root.getAttribute('data-theme');
   const cs = getComputedStyle(root);
   const bgCanvas = cs.getPropertyValue('--bg-canvas').trim() || (theme === 'dark' ? '#1A1A1A' : '#FAFAFA');
-  svgRoot.querySelectorAll('.sf-line-style-overlay').forEach(overlay => {
+  svgRoot.querySelectorAll('.df-line-style-overlay').forEach(overlay => {
     overlay.setAttribute('stroke', bgCanvas);
   });
 }

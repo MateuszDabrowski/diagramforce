@@ -6,11 +6,11 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.15.0';
-import { normalizeDateSuffix } from '../util.js?v=1.15.0';
-import { escHtml } from '../util.js?v=1.15.0';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.0';
-import { pctx } from './context.js?v=1.15.0';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.15.1';
+import { normalizeDateSuffix } from '../util.js?v=1.15.1';
+import { escHtml } from '../util.js?v=1.15.1';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.15.1';
+import { pctx } from './context.js?v=1.15.1';
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
 const MAX_CELL_COUNT = 2000;
@@ -287,30 +287,30 @@ async function loadJSONText(jsonText, fallbackName) {
  */
 export function pasteJSON() {
   const { normalizeDiagramType, appVersion: APP_VERSION } = pctx;
-  document.querySelector('.sf-paste-json-modal')?.remove();
+  document.querySelector('.df-paste-json-modal')?.remove();
 
   const { dialog, body, footer, close } = buildModal({
     title: 'Paste JSON',
-    className: 'sf-paste-json-modal',
+    className: 'df-paste-json-modal',
     width: '620px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: `
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
         Paste a Diagramforce JSON:
       </p>
-      <textarea class="sf-paste-json-modal__input" spellcheck="false" rows="14"
+      <textarea class="df-paste-json-modal__input" spellcheck="false" rows="14"
         placeholder='{ "appVersion": "${APP_VERSION}", "diagramType": "architecture", "graph": { "cells": [...] } }'
         style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
-      <p class="sf-paste-json-modal__status" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5;min-height:1.4em">
+      <p class="df-paste-json-modal__status" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5;min-height:1.4em">
         Paste a diagram exported via <strong>Save → Export to JSON</strong> or generated using <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" style="color:var(--color-primary)">Diagram JSON Spec for LLMs</a>.
       </p>`,
-    footerHtml: '<button class="sf-modal__btn sf-modal__btn--primary sf-paste-json-modal__load" style="margin-left:auto" disabled>Load</button>',
+    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-paste-json-modal__load" style="margin-left:auto" disabled>Load</button>',
   });
   dialog.style.maxWidth = '92vw'; // preserve prior inline override (CSS default is calc(100vw - 32px))
 
-  const input = body.querySelector('.sf-paste-json-modal__input');
-  const status = body.querySelector('.sf-paste-json-modal__status');
-  const loadBtn = footer.querySelector('.sf-paste-json-modal__load');
+  const input = body.querySelector('.df-paste-json-modal__input');
+  const status = body.querySelector('.df-paste-json-modal__status');
+  const loadBtn = footer.querySelector('.df-paste-json-modal__load');
   const errColor = 'var(--color-error, #ba0517)';
   const okColor = 'var(--text-secondary)';
 

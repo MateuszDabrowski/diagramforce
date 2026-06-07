@@ -1,6 +1,6 @@
 # Diagramforce
 
-Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams — all in your browser, with no account, no backend, and no data leaving your machine.
+Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, Data Cloud field mappings, process flows, org charts, Gantt charts, and UML sequence diagrams — all in your browser, with no account, no backend, and no data leaving your machine.
 
 **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl)**
 
@@ -9,9 +9,10 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 ### Diagram types
 
 - **Architecture Diagrams** — Map system landscape, integrations, and Salesforce clouds with 1700+ SLDS icons
-- **Data Model Diagrams** — Define objects, fields, and relationships with ER notation (crow's foot, one, zero-or-one, etc.)
+- **Data Model Diagrams** — Define objects, fields, and relationships with ER notation (crow's foot, one, zero-or-one, etc.); tag objects with optional SLDS header icons (contact / account / email / third-party such as Snowflake)
+- **Data Mapping Diagrams (Salesforce Data Cloud / Data 360)** — Map the end-to-end data journey from source systems → Data Lake / Data Model Objects → Activations, with field-level source→target mappings, mapping types (Standard, Formula, Streaming/Batch Transform, Calculated Insight), a synced table view, and CSV field import/export. One click turns an existing Data Model into a Data Mapping diagram
 - **Process Diagrams** — Design business processes with BPMN and flowchart shapes
-- **Organisation Charts** — Document team hierarchy with person cards, departments, and teams
+- **Organisation Charts** — Document team hierarchy with person cards, departments, and teams, plus a RACI toolkit (Task and Task Group shapes for responsibility matrices)
 - **Gantt Charts** — Plan project timelines with tasks, milestones, phases, and dependencies
 - **Sequence Diagrams** — UML sequence diagrams with participants, actors, activation boxes, and alt/loop fragments; reply-style messages default to dashed
 
@@ -24,9 +25,13 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Resize Guides** — Tracking lines extend from resized edges for easy alignment
 - **Alignment & spacing guides** — While dragging, live guides snap edges and centres to nearby shapes, straighten directly-connected links, and show edge-to-edge spacing in px for even distribution
 - **Crossing bumps** — Where two links cross without connecting, EDA-style "jump-over" arcs make the non-connection explicit (toggle in the Display menu)
-- **Auto Layout** — One-click force-directed layout (Display menu) untangles connected components; sequence diagrams get automatic lane alignment
+- **Auto Layout** — One-click force-directed layout (Display menu) untangles connected components; Data Mapping lays out by data layer, and sequence diagrams get automatic lane + port alignment
+- **Field-level lineage** — In a Data Mapping diagram, hover or select a single field to trace its full source→destination path; everything off the lineage dims back
+- **Animate Connectors** — Optional Display toggle (every diagram type) that runs a directional flow along every connector; while it's on, the PNG export becomes an animated GIF
 - **Multi-tab** — Work on multiple diagrams simultaneously with independent undo/redo per tab
-- **Single-step undo for drags** — A continuous drag is one undo command, not one per pixel
+- **Single-step undo for drags** — A continuous drag is one undo command, not one per pixel; structural edits (embeds, conversions, deletes, bulk field imports) each collapse into one undo step too
+- **Guided onboarding** — A first-visit welcome splash and a diagram-type-aware walkthrough, relaunchable anytime from the Help button
+- **Contextual empty-canvas hints** — A ghost wireframe suggests what to drop first for each diagram type
 - **Dark / Light Theme** — Full theme support with Salesforce-aligned brand colours
 
 ### Persistence & sharing
@@ -87,7 +92,8 @@ js/
   canvas/               Canvas sub-modules behind a shared runtime context (cctx): router
                         (sfManhattan), auto-layout, viewport (pan/zoom/grid), migration,
                         crossing-bumps, spacing-guides, selection-viz, embedding,
-                        line-style, external-labels, mobile, context
+                        line-style, external-labels, focus-state (field-level dimming),
+                        mobile, context
   components.js         Stencil definitions per diagram type + element factory
   shapes.js             Custom JointJS shape definitions (sf.* namespace)
   stencil.js            Stencil panel with search + drag-to-canvas drop
@@ -96,6 +102,7 @@ js/
   templates.js          Custom Templates library — capture a selection as a reusable subgraph
   tabs.js               Multi-diagram tabs with per-tab history + viewport + session restore
   toolbar.js            Toolbar wiring, Save/Load/Export/Display modals
+  table-view.js         Data Mapping table view — read-only spreadsheet projection of the mappings
   persistence.js        Facade: APP_VERSION + save/load orchestration; re-exports sub-modules
   persistence/          Persistence sub-modules behind a shared context (pctx): storage
                         (named saves), json-pipeline (load/import/paste), image-export
@@ -104,6 +111,7 @@ js/
   clipboard.js          Copy/paste/duplicate with link-aware cloning
   feedback.js           Toasts, confirm/prompt dialogs, shared modal scaffold
   keyboard.js           Keyboard shortcut manager
+  walkthrough.js        First-visit welcome splash + diagram-type-aware guided tour
   theme.js              Theme toggle (persisted in localStorage)
   icons.js              SLDS icon registry, data URI generation
   image-component.js    sf.Image upload UX and detection
@@ -121,7 +129,7 @@ DIAGRAM_JSON_SPEC.md    LLM-facing JSON specification
 
 ## LLM diagram generation
 
-[`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) documents the complete JSON structure for all diagram types. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, process flow, etc. The output can be imported directly via *Load → Paste JSON* (or *Load → Import JSON* for a file).
+[`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) documents the complete JSON structure for all diagram types — including a dedicated guide for generating Salesforce Data Cloud (Data 360) mappings with valid field types, categories, and DLO/DMO layers. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, Data Cloud field mapping, process flow, etc. The output can be imported directly via *Load → Paste JSON* (or *Load → Import JSON* for a file).
 
 ## Browser support
 

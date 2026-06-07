@@ -3,7 +3,7 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.15.0';
+import { cctx } from './context.js?v=1.15.1';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -790,6 +790,74 @@ export function applySequenceAutoLayout(plan) {
       joint.shapes.sf.rebuildSeqParticipantPorts(l.cell, targetCount);
     } else {
       joint.shapes.sf.rebuildSeqActorPorts(l.cell, targetCount);
+    }
+  }
+
+  // ── X-spacing (v1.15.1) ─────────────────────────────────────────────
+  // Auto Layout is an explicit "tidy" action, so even out the horizontal lifeline
+  // spacing too. Keep the OUTERMOST two lanes fixed — preserves the diagram's overall
+  // span and (importantly) any full-width alt/loop fragment frame, whose edges align
+  // with the outer lanes — and redistribute the INTERIOR lanes at equal centre
+  // intervals. Messages need NO dx compensation (unlike the dy case): a message's
+  // `topLeft` anchor dx is relative to the lane's left edge, so the endpoint rides the
+  // lifeline as the lane moves. position() is non-cascading, so embedded activations
+  // stay put here and are re-centred (below) onto the lane's new lifeline.
+  const centerX = (cell) => cell.position().x + cell.size().width / 2;
+  const ordered = [...lanes].sort((a, b) => centerX(a.cell) - centerX(b.cell));
+
+  // Record each fragment's spanned lanes + its original padding BEFORE the move, so we
+  // can re-wrap it afterwards. (Endpoints stay fixed, so a full-width fragment is a
+  // no-op; only a fragment around interior-only lanes actually shifts.)
+  const fragSpans = graph.getElements()
+    .filter(el => el.get('type') === 'sf.SequenceFragment')
+    .map(f => {
+      const fb = f.getBBox();
+      const inside = ordered.filter(l => { const c = centerX(l.cell); return c >= fb.x && c <= fb.x + fb.width; });
+      const cs = inside.map(l => centerX(l.cell));
+      return {
+        frag: f,
+        lanes: inside,
+        leftPad: cs.length ? fb.x - Math.min(...cs) : 0,           // ≤ 0 (frame extends left of first lifeline)
+        rightPad: cs.length ? (fb.x + fb.width) - Math.max(...cs) : 0, // ≥ 0
+      };
+    });
+
+  if (ordered.length >= 3) {
+    const firstC = centerX(ordered[0].cell);
+    const lastC = centerX(ordered[ordered.length - 1].cell);
+    const step = (lastC - firstC) / (ordered.length - 1);
+    ordered.forEach((l, i) => {
+      const dx = (firstC + i * step) - centerX(l.cell);
+      if (Math.abs(dx) > 0.5) { const p = l.cell.position(); l.cell.position(p.x + dx, p.y); }
+    });
+  }
+
+  // Re-wrap fragments around their (now-moved) spanned lanes, preserving original
+  // padding + y/height. No-op when the spanned lanes didn't move.
+  for (const { frag, lanes: spanned, leftPad, rightPad } of fragSpans) {
+    if (!spanned.length) continue;
+    const cs = spanned.map(l => centerX(l.cell));
+    const left = Math.min(...cs) + leftPad;
+    const newW = Math.max(60, (Math.max(...cs) + rightPad) - left);
+    const fp = frag.position(), fs = frag.size();
+    if (Math.abs(fp.x - left) > 0.5 || Math.abs(fs.width - newW) > 0.5) {
+      frag.position(left, fp.y);
+      frag.resize(newW, fs.height);
+    }
+  }
+
+  // ── Activation re-centre (v1.15.1) ──────────────────────────────────
+  // Pin every embedded SequenceActivation to its lane's lifeline X — fixes authoring
+  // drift (e.g. a bar dropped a few px off-centre) and pulls activations along when
+  // their lane shifted in X above. X-only, so the message-timing Y the dy compensation
+  // preserved stays untouched.
+  for (const l of lanes) {
+    const lifeX = centerX(l.cell);
+    for (const c of graph.getElements()) {
+      if (c.get('parent') !== l.id || c.get('type') !== 'sf.SequenceActivation') continue;
+      const cs = c.size(), cp = c.position();
+      const targetX = lifeX - cs.width / 2;
+      if (Math.abs(cp.x - targetX) > 0.5) c.position(targetX, cp.y);
     }
   }
 }

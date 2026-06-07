@@ -42,338 +42,346 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.15.0">
-  <link rel="stylesheet" href="css/theme.css?v=1.15.0">
-  <link rel="stylesheet" href="css/layout.css?v=1.15.0">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.15.0">
-  <link rel="stylesheet" href="css/stencil.css?v=1.15.0">
-  <link rel="stylesheet" href="css/properties.css?v=1.15.0">
-  <link rel="stylesheet" href="css/tabs.css?v=1.15.0">
-  <link rel="stylesheet" href="css/canvas.css?v=1.15.0">
-  <link rel="stylesheet" href="css/modals.css?v=1.15.0">
+  <link rel="stylesheet" href="css/variables.css?v=1.15.1">
+  <link rel="stylesheet" href="css/theme.css?v=1.15.1">
+  <link rel="stylesheet" href="css/layout.css?v=1.15.1">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.15.1">
+  <link rel="stylesheet" href="css/stencil.css?v=1.15.1">
+  <link rel="stylesheet" href="css/properties.css?v=1.15.1">
+  <link rel="stylesheet" href="css/tabs.css?v=1.15.1">
+  <link rel="stylesheet" href="css/canvas.css?v=1.15.1">
+  <link rel="stylesheet" href="css/modals.css?v=1.15.1">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
        screen readers, so the heading hierarchy starts at h1 before the modal h2s. -->
-  <h1 class="sf-visually-hidden">Diagramforce — Salesforce architecture diagram editor</h1>
+  <h1 class="df-visually-hidden">Diagramforce — Salesforce architecture diagram editor</h1>
 
   <!-- A2 (v1.12.0) — skip-to-main link. Visually hidden until focused; lets
        keyboard users bypass the toolbar + tabs + stencil and land directly on
        the diagram canvas. -->
-  <a href="#canvas-container" class="sf-skip-link">Skip to diagram canvas</a>
+  <a href="#canvas-container" class="df-skip-link">Skip to diagram canvas</a>
 
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
   <div id="slds-icons" style="display:none" aria-hidden="true"></div>
 
   <!-- App Layout -->
-  <div id="app" class="sf-app">
+  <div id="app" class="df-app">
     <!-- Toolbar -->
-    <header id="toolbar" class="sf-toolbar">
+    <header id="toolbar" class="df-toolbar">
       <!-- Left: Logo + File ops -->
-      <div class="sf-toolbar__left">
-        <a href="https://mateuszdabrowski.pl" target="_blank" rel="noopener" class="sf-toolbar__brand">
-          <img src="assets/logo.png" class="sf-toolbar__brand-logo" alt="Diagramforce logo" width="32" height="32">
-          <span class="sf-toolbar__brand-text">Diagramforce</span>
+      <div class="df-toolbar__left">
+        <a href="https://mateuszdabrowski.pl" target="_blank" rel="noopener" class="df-toolbar__brand">
+          <img src="assets/logo.png" class="df-toolbar__brand-logo" alt="Diagramforce logo" width="32" height="32">
+          <span class="df-toolbar__brand-text">Diagramforce</span>
         </a>
-        <div class="sf-toolbar__group">
-          <div class="sf-toolbar__dropdown">
-            <button id="btn-save" class="sf-toolbar__button" title="Save (Ctrl+S)">
-              <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
+        <div class="df-toolbar__group">
+          <div class="df-toolbar__dropdown">
+            <button id="btn-save" class="df-toolbar__button" title="Save (Ctrl+S)">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
               <span>Save</span>
-              <svg class="sf-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <div class="sf-toolbar__menu">
-              <button id="btn-save-browser" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
+            <div class="df-toolbar__menu">
+              <button id="btn-save-browser" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
                 Save to Browser
               </button>
-              <button id="btn-save-json" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
+              <button id="btn-save-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
                 Export to JSON
               </button>
-              <div class="sf-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-save-png" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
+              <div class="df-toolbar__menu-separator" role="separator"></div>
+              <button id="btn-save-png" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
                 Save to PNG
               </button>
-              <button id="btn-save-png-t" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
+              <button id="btn-save-png-t" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
                 Save to transparent PNG
               </button>
-              <button id="btn-save-webp" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
+              <button id="btn-save-webp" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
                 Save to WEBP
               </button>
-              <button id="btn-save-webp-t" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
+              <button id="btn-save-webp-t" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
                 Save to transparent WEBP
               </button>
-              <div class="sf-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-save-share" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
+              <div class="df-toolbar__menu-separator" role="separator"></div>
+              <button id="btn-save-share" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
                 Share as URL
               </button>
             </div>
           </div>
-          <div class="sf-toolbar__dropdown">
-            <button id="btn-load" class="sf-toolbar__button" title="Load (Ctrl+O)">
-              <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
+          <div class="df-toolbar__dropdown">
+            <button id="btn-load" class="df-toolbar__button" title="Load (Ctrl+O)">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
               <span>Load</span>
-              <svg class="sf-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <div class="sf-toolbar__menu">
-              <button id="btn-load-browser" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
+            <div class="df-toolbar__menu">
+              <button id="btn-load-browser" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
                 Load from Browser
               </button>
-              <button id="btn-load-json" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
+              <button id="btn-load-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
                 Import from JSON
               </button>
-              <div class="sf-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-load-paste-json" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
+              <div class="df-toolbar__menu-separator" role="separator"></div>
+              <button id="btn-load-paste-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
                 Paste JSON
               </button>
-              <button id="btn-load-mermaid" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
-                <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
+              <button id="btn-load-mermaid" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
                 Paste Mermaid
                 <span style="margin-left:6px;padding:1px 5px;font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>
               </button>
             </div>
           </div>
         </div>
-        <div class="sf-toolbar__dropdown" id="display-dropdown">
-            <button id="btn-display" class="sf-toolbar__button" title="Display options">
+        <div class="df-toolbar__dropdown" id="display-dropdown">
+            <button id="btn-display" class="df-toolbar__button" title="Display options">
               <!-- Eye icon split into two layers (v1.12.1): the outer almond +
                    iris ring stays `currentColor`; the inner pupil-hole gets a
                    transparent <circle> that lights up amber when the button
                    has the `--has-active` modifier, signalling that one or
                    more Display toggles are at a non-default value. -->
-              <svg class="sf-toolbar__icon sf-toolbar__icon--display" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <svg class="df-toolbar__icon df-toolbar__icon--display" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-                <circle class="sf-display-icon__pupil" cx="8" cy="8" r="1.8" fill="transparent"/>
+                <circle class="df-display-icon__pupil" cx="8" cy="8" r="1.8" fill="transparent"/>
               </svg>
               <span>Display</span>
-              <svg class="sf-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <div class="sf-toolbar__menu">
-              <button id="btn-display-auto-size" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="df-toolbar__menu">
+              <button id="btn-display-auto-size" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Auto-Fit Containers
               </button>
-              <button id="btn-display-connector-grouping" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-connector-grouping" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Distributed Connectors
               </button>
-              <button id="btn-display-crossing-bumps" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="EDA-style bump arcs where two connectors cross — makes non-connection explicit">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-crossing-bumps" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="EDA-style bump arcs where two connectors cross — makes non-connection explicit">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Crossing Bumps
               </button>
-              <button id="btn-display-focus-dimming" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="Dim components and connectors not connected to the current selection">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-focus-dimming" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Dim components and connectors not connected to the current selection">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Focus Dimming
               </button>
-              <button id="btn-display-object-rels" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="Show the header-level ER relationship links (hide to isolate field mappings)">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-object-rels" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Show the header-level ER relationship links (hide to isolate field mappings)">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Object Relationships
               </button>
               <div id="display-auto-size-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
-              <button id="btn-display-api" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-api" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Field Labels
               </button>
-              <button id="btn-display-lengths" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-lengths" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Field Lengths
               </button>
-              <button id="btn-display-keys-only" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-display-keys-only" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span id="keys-only-label">Key Fields Only</span>
               </button>
-              <button id="btn-animate-flow" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="Animate a flowing direction along every connector (the PNG export then becomes an animated GIF)">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-animate-flow" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Animate a flowing direction along every connector (the PNG export then becomes an animated GIF)">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Animate Connectors
               </button>
               <div id="display-dm-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
-              <button id="btn-auto-layout-h" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
+              <button id="btn-auto-layout-h" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="5" width="3" height="6" rx="0.5" fill="currentColor" stroke="none"/><rect x="6.5" y="5" width="3" height="6" rx="0.5" fill="currentColor" stroke="none"/><rect x="12" y="5" width="3" height="6" rx="0.5" fill="currentColor" stroke="none"/><path d="M4 8h2.5M9.5 8h2.5"/></svg>
                 <span id="auto-layout-h-label">Horizontal Auto Layout</span>
               </button>
-              <button id="btn-auto-layout-v" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon">
+              <button id="btn-auto-layout-v" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="1" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="5" y="6.5" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="5" y="12" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><path d="M8 4v2.5M8 9.5v2.5"/></svg>
                 Vertical Auto Layout
               </button>
-              <button id="btn-sequence-bottom-labels" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-sequence-bottom-labels" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Bottom Participant Labels
               </button>
               <div id="display-sequence-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
-              <button id="btn-sequence-auto-layout" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon" title="Align every lane so same-index ports sit at the same canvas Y">
+              <button id="btn-sequence-auto-layout" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Align every lane so same-index ports sit at the same canvas Y">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2v12M8 2v12M13 2v12" stroke-linecap="round"/><circle cx="3" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="13" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="13" cy="9" r="1.2" fill="currentColor" stroke="none"/></svg>
                 Auto Layout
               </button>
 
               <div id="display-gantt-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
-              <button id="btn-gantt-week-start" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon" title="First day of the week (Week timeline grid split) — click to cycle Monday / Sunday / Saturday">
+              <button id="btn-gantt-week-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the week (Week timeline grid split) — click to cycle Monday / Sunday / Saturday">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12M5.5 1.8v2.4M10.5 1.8v2.4" stroke-linecap="round"/></svg>
                 <span id="gantt-week-start-label">Week Starts: Monday</span>
               </button>
-              <button id="btn-gantt-weekend-start" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon" title="First day of the weekend — shades the non-working columns in the Day timeline (Saturday → Sat–Sun, Friday → Fri–Sat)">
+              <button id="btn-gantt-weekend-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the weekend — shades the non-working columns in the Day timeline (Saturday → Sat–Sun, Friday → Fri–Sat)">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12" stroke-linecap="round"/><rect x="9.5" y="7" width="4.5" height="6.5" fill="currentColor" stroke="none" opacity="0.35"/></svg>
                 <span id="gantt-weekend-start-label">Weekend Starts: Saturday</span>
               </button>
-              <button id="btn-gantt-week-number" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle" title="Label week columns with the week number (W23) instead of the week's start date">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-gantt-week-number" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Label week columns with the week number (W23) instead of the week's start date">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Week Numbers
               </button>
-              <button id="btn-gantt-assignee" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-gantt-assignee" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Task Assignees
               </button>
-              <button id="btn-gantt-progress" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle">
-                <svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button id="btn-gantt-progress" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Task Progress (%)
               </button>
             </div>
           </div>
         <!-- Diagram | Table view switch — Data Mapping only (toolbar.js toggles display;
-             inline display:none because `.sf-toolbar__group{display:flex}` outranks [hidden]) -->
-        <div class="sf-toolbar__separator" id="view-switch-sep" style="display:none"></div>
-        <div class="sf-toolbar__group" id="view-switch-group" style="display:none">
-          <div class="sf-toolbar__segmented" role="radiogroup" aria-label="View mode">
-            <button id="btn-view-diagram" type="button" class="sf-toolbar__segmented-option sf-toolbar__segmented-option--active" role="radio" aria-checked="true" title="Diagram view">Diagram</button>
-            <button id="btn-view-table" type="button" class="sf-toolbar__segmented-option" role="radio" aria-checked="false" title="Table view">Table</button>
+             inline display:none because `.df-toolbar__group{display:flex}` outranks [hidden]) -->
+        <div class="df-toolbar__separator" id="view-switch-sep" style="display:none"></div>
+        <div class="df-toolbar__group" id="view-switch-group" style="display:none">
+          <div class="df-toolbar__segmented" role="radiogroup" aria-label="View mode">
+            <button id="btn-view-diagram" type="button" class="df-toolbar__segmented-option df-toolbar__segmented-option--active" role="radio" aria-checked="true" title="Diagram view">Diagram</button>
+            <button id="btn-view-table" type="button" class="df-toolbar__segmented-option" role="radio" aria-checked="false" title="Table view">Table</button>
           </div>
         </div>
         <!-- Map — clone this Data Model into a new Data Mapping diagram. Data Model only;
              sits in the same toolbar slot as the Diagram/Table switch (toolbar.js toggles
              display + wires the click). Inline display:none for the same reason as above. -->
-        <div class="sf-toolbar__separator" id="map-bridge-sep" style="display:none"></div>
-        <div class="sf-toolbar__group" id="map-bridge-group" style="display:none">
-          <button id="btn-map-bridge" type="button" class="sf-toolbar__button" title="Clone this Data Model into a new Data Mapping diagram">
-            <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h5M2 8h4M2 12h5"/><path d="M9.5 8H14M12 6l2 2-2 2"/></svg>
+        <div class="df-toolbar__separator" id="map-bridge-sep" style="display:none"></div>
+        <div class="df-toolbar__group" id="map-bridge-group" style="display:none">
+          <button id="btn-map-bridge" type="button" class="df-toolbar__button" title="Clone this Data Model into a new Data Mapping diagram">
+            <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h5M2 8h4M2 12h5"/><path d="M9.5 8H14M12 6l2 2-2 2"/></svg>
             <span>Map</span>
           </button>
         </div>
-        <div class="sf-toolbar__separator"></div>
-        <div class="sf-toolbar__group">
-          <button id="btn-undo" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#undo"></use></svg>
+        <div class="df-toolbar__separator"></div>
+        <div class="df-toolbar__group">
+          <button id="btn-undo" class="df-toolbar__button df-toolbar__button--icon-only" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#undo"></use></svg>
           </button>
-          <button id="btn-redo" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#redo"></use></svg>
+          <button id="btn-redo" class="df-toolbar__button df-toolbar__button--icon-only" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#redo"></use></svg>
           </button>
         </div>
       </div>
 
       <!-- Center: Grid + Zoom -->
-      <div class="sf-toolbar__center">
-        <div class="sf-toolbar__group">
-          <button id="btn-grid" class="sf-toolbar__button sf-toolbar__button--icon-only sf-toolbar__button--active" title="Toggle grid" aria-label="Toggle grid">
-            <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+      <div class="df-toolbar__center">
+        <div class="df-toolbar__group">
+          <button id="btn-grid" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__button--active" title="Toggle grid" aria-label="Toggle grid">
+            <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
               <path d="M0 1a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V1zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V1zM0 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V7zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM0 13a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1v-2zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z"/>
             </svg>
           </button>
         </div>
-        <div class="sf-toolbar__separator"></div>
-        <div class="sf-toolbar__group">
-          <button id="btn-zoom-out" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Zoom out (-)" aria-label="Zoom out">
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#dash"></use></svg>
+        <div class="df-toolbar__separator"></div>
+        <div class="df-toolbar__group">
+          <button id="btn-zoom-out" class="df-toolbar__button df-toolbar__button--icon-only" title="Zoom out (-)" aria-label="Zoom out">
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#dash"></use></svg>
           </button>
-          <span id="zoom-level" class="sf-toolbar__zoom-level">100%</span>
-          <button id="btn-zoom-in" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Zoom in (+)" aria-label="Zoom in">
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#add"></use></svg>
+          <span id="zoom-level" class="df-toolbar__zoom-level">100%</span>
+          <button id="btn-zoom-in" class="df-toolbar__button df-toolbar__button--icon-only" title="Zoom in (+)" aria-label="Zoom in">
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#add"></use></svg>
           </button>
-          <button id="btn-zoom-fit" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Fit to content (Ctrl+0)" aria-label="Fit to content">
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#expand"></use></svg>
+          <button id="btn-zoom-fit" class="df-toolbar__button df-toolbar__button--icon-only" title="Fit to content (Ctrl+0)" aria-label="Fit to content">
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#expand"></use></svg>
           </button>
         </div>
       </div>
 
       <!-- Right: Alignment + Theme -->
-      <div class="sf-toolbar__right">
-        <button id="btn-share-url" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Share as URL" aria-label="Share as URL">
-          <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
+      <div class="df-toolbar__right">
+        <button id="btn-share-url" class="df-toolbar__button df-toolbar__button--icon-only" title="Share as URL" aria-label="Share as URL">
+          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
         </button>
-        <button id="btn-help" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Help" aria-label="Help — start the walkthrough">
-          <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+        <button id="btn-help" class="df-toolbar__button df-toolbar__button--icon-only" title="Help" aria-label="Help — start the walkthrough">
+          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
             <text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text>
           </svg>
         </button>
-        <button id="btn-about" class="sf-toolbar__button sf-toolbar__button--icon-only" title="About Diagramforce" aria-label="About Diagramforce">
-          <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+        <button id="btn-about" class="df-toolbar__button df-toolbar__button--icon-only" title="About Diagramforce" aria-label="About Diagramforce">
+          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/>
           </svg>
         </button>
-        <button id="btn-theme" class="sf-toolbar__button sf-toolbar__button--icon-only" title="Toggle theme" aria-label="Toggle theme">
-          <svg class="sf-toolbar__icon sf-toolbar__icon--theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="btn-theme" class="df-toolbar__button df-toolbar__button--icon-only" title="Toggle theme" aria-label="Toggle theme">
+          <svg class="df-toolbar__icon df-toolbar__icon--theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <!-- moon (dark mode indicator) -->
-            <path class="sf-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            <path class="df-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
             <!-- sun (light mode indicator) -->
-            <g class="sf-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
+            <g class="df-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
           </svg>
         </button>
-        <button id="btn-toggle-stencil" class="sf-toolbar__button sf-toolbar__button--icon-only sf-toolbar__button--active" title="Toggle stencil panel" aria-label="Toggle stencil panel">
-          <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#side_list"></use></svg>
+        <button id="btn-toggle-stencil" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__button--active" title="Toggle stencil panel" aria-label="Toggle stencil panel">
+          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#side_list"></use></svg>
         </button>
         <!-- Mobile-only fit to content (duplicated from center group) -->
-        <button id="btn-zoom-fit-mobile" class="sf-toolbar__button sf-toolbar__button--icon-only sf-toolbar__mobile-only" title="Fit to content" aria-label="Fit to content">
-          <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#expand"></use></svg>
+        <button id="btn-zoom-fit-mobile" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__mobile-only" title="Fit to content" aria-label="Fit to content">
+          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#expand"></use></svg>
         </button>
       </div>
 
       <!-- Mobile undo (shown only on mobile, left of hamburger) -->
-      <button id="btn-undo-mobile" class="sf-toolbar__button sf-toolbar__button--icon-only sf-toolbar__mobile-only" title="Undo" aria-label="Undo" disabled>
-        <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#undo"></use></svg>
+      <button id="btn-undo-mobile" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__mobile-only" title="Undo" aria-label="Undo" disabled>
+        <svg class="df-toolbar__icon" aria-hidden="true"><use href="#undo"></use></svg>
       </button>
 
       <!-- Mobile hamburger (shown only on mobile) -->
-      <div class="sf-toolbar__hamburger-wrap">
-        <button id="btn-hamburger" class="sf-toolbar__button sf-toolbar__button--icon-only sf-toolbar__hamburger-btn" title="Menu" aria-label="Menu" aria-expanded="false">
-          <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+      <div class="df-toolbar__hamburger-wrap">
+        <button id="btn-hamburger" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__hamburger-btn" title="Menu" aria-label="Menu" aria-expanded="false">
+          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
             <rect x="1" y="2.5" width="14" height="1.8" rx="0.9"/>
             <rect x="1" y="7.1" width="14" height="1.8" rx="0.9"/>
             <rect x="1" y="11.7" width="14" height="1.8" rx="0.9"/>
           </svg>
         </button>
-        <div id="hamburger-menu" class="sf-toolbar__hamburger-menu">
-          <button class="sf-toolbar__menu-item" data-action="save">
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#save"></use></svg>
+        <div id="hamburger-menu" class="df-toolbar__hamburger-menu">
+          <button class="df-toolbar__menu-item" data-action="save">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#save"></use></svg>
             Save
           </button>
-          <button class="sf-toolbar__menu-item" data-action="load">
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#open_folder"></use></svg>
+          <button class="df-toolbar__menu-item" data-action="load">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#open_folder"></use></svg>
             Load
           </button>
-          <button class="sf-toolbar__menu-item" data-action="display">
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+          <button class="df-toolbar__menu-item" data-action="display">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
             Display
           </button>
-          <div class="sf-toolbar__menu-separator" role="separator"></div>
-          <button class="sf-toolbar__menu-item" data-action="undo" disabled>
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#undo"></use></svg>
+          <button id="hmb-view-toggle" class="df-toolbar__menu-item" data-action="view-toggle" style="display:none">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 6h13M6 6v7.5" stroke-linecap="round"/></svg>
+            <span id="hmb-view-toggle-label">View as Table</span>
+          </button>
+          <button id="hmb-map" class="df-toolbar__menu-item" data-action="map-bridge" style="display:none">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="4" width="5" height="8" rx="1"/><rect x="9.5" y="4" width="5" height="8" rx="1"/><path d="M6.5 8h3M8 6.5L9.5 8 8 9.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Map to Data Mapping
+          </button>
+          <div class="df-toolbar__menu-separator" role="separator"></div>
+          <button class="df-toolbar__menu-item" data-action="undo" disabled>
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#undo"></use></svg>
             Undo
           </button>
-          <button class="sf-toolbar__menu-item" data-action="redo" disabled>
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#redo"></use></svg>
+          <button class="df-toolbar__menu-item" data-action="redo" disabled>
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#redo"></use></svg>
             Redo
           </button>
-          <div class="sf-toolbar__menu-separator" role="separator"></div>
-          <button class="sf-toolbar__menu-item" data-action="share">
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#share_link"></use></svg>
+          <div class="df-toolbar__menu-separator" role="separator"></div>
+          <button class="df-toolbar__menu-item" data-action="share">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#share_link"></use></svg>
             Share as URL
           </button>
-          <button class="sf-toolbar__menu-item" data-action="theme">
-            <svg class="sf-toolbar__menu-icon sf-toolbar__icon--theme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path class="sf-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              <g class="sf-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
+          <button class="df-toolbar__menu-item" data-action="theme">
+            <svg class="df-toolbar__menu-icon df-toolbar__icon--theme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path class="df-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              <g class="df-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
             </svg>
             Toggle Theme
           </button>
-          <button class="sf-toolbar__menu-item" data-action="about">
-            <svg class="sf-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
+          <button class="df-toolbar__menu-item" data-action="about">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
             About
           </button>
         </div>
@@ -381,53 +389,53 @@
     </header>
 
     <!-- Tab bar -->
-    <div id="tab-bar" class="sf-tabs">
-      <button id="btn-close-tabs" class="sf-tabs__close-multi" title="Close multiple tabs" aria-label="Close multiple tabs">
+    <div id="tab-bar" class="df-tabs">
+      <button id="btn-close-tabs" class="df-tabs__close-multi" title="Close multiple tabs" aria-label="Close multiple tabs">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
           <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.8 9.5a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9L12 4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6.5 7v5M9.5 7v5" stroke-linecap="round"/>
         </svg>
       </button>
-      <div id="tab-list" class="sf-tabs__list">
+      <div id="tab-list" class="df-tabs__list">
         <!-- Rendered by js/tabs.js -->
       </div>
-      <button id="btn-new-tab" class="sf-tabs__new" title="New diagram">
+      <button id="btn-new-tab" class="df-tabs__new" title="New diagram">
         <svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
         <span>New</span>
       </button>
     </div>
 
     <!-- Main content area -->
-    <div class="sf-main">
+    <div class="df-main">
       <!-- Properties Panel (left sidebar inspector) -->
-      <aside id="properties-panel" class="sf-properties sf-properties--hidden" aria-label="Properties panel">
-        <div class="sf-drag-handle" data-target="properties-panel"></div>
-        <div class="sf-properties__header">
-          <div class="sf-properties__title-wrap">
-            <span id="properties-type" class="sf-properties__type-badge"></span>
-            <span id="properties-title" class="sf-properties__title">Properties</span>
+      <aside id="properties-panel" class="df-properties df-properties--hidden" aria-label="Properties panel">
+        <div class="df-drag-handle" data-target="properties-panel"></div>
+        <div class="df-properties__header">
+          <div class="df-properties__title-wrap">
+            <span id="properties-type" class="df-properties__type-badge"></span>
+            <span id="properties-title" class="df-properties__title">Properties</span>
           </div>
-          <button id="btn-close-properties" class="sf-toolbar__button" title="Close inspector" aria-label="Close inspector">
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
+          <button id="btn-close-properties" class="df-toolbar__button" title="Close inspector" aria-label="Close inspector">
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
           </button>
         </div>
-        <div id="properties-body" class="sf-properties__body">
+        <div id="properties-body" class="df-properties__body">
           <!-- Rendered by js/properties.js -->
         </div>
-        <div id="properties-footer" class="sf-properties__footer">
+        <div id="properties-footer" class="df-properties__footer">
           <!-- Delete/convert buttons rendered by js/properties.js -->
         </div>
       </aside>
 
       <!-- Canvas -->
-      <main id="canvas-container" class="sf-canvas" role="main" aria-label="Diagram canvas — visual editing area. Use the property panel to inspect or edit selected shapes.">
+      <main id="canvas-container" class="df-canvas" role="main" aria-label="Diagram canvas — visual editing area. Use the property panel to inspect or edit selected shapes.">
         <div id="paper"></div>
         <!-- Empty-canvas ghost wireframe — a faint, type-specific best-practice blueprint
              shown only while the active tab has zero cells (canvas.js toggles `is-empty` on
              #canvas-container; CSS reveals the blueprint matching its data-diagram-type).
              Pointer-events:none + view-only — never part of the graph/history. -->
-        <div id="canvas-empty" class="sf-canvas-empty" aria-hidden="true">
-          <svg class="sf-canvas-empty__wf" data-wf="architecture" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <div id="canvas-empty" class="df-canvas-empty" aria-hidden="true">
+          <svg class="df-canvas-empty__wf" data-wf="architecture" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="16" y="38" width="60" height="32" rx="6"/>
             <rect x="16" y="110" width="60" height="32" rx="6"/>
             <rect x="125" y="56" width="80" height="68" rx="9" stroke-dasharray="5 6"/>
@@ -439,7 +447,7 @@
             <path d="M205 90 H246"/>
             <path d="M239 84 l8 6 -8 6"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="process" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="process" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="28" cy="90" r="13"/>
             <rect x="58" y="74" width="54" height="32" rx="5"/>
             <path d="M158 90 l18 -18 18 18 -18 18 z"/>
@@ -452,7 +460,7 @@
             <path d="M270 90 H287"/>
             <path d="M281 85 l6 5 -6 5"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="sequence" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="sequence" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="26" y="20" width="58" height="26" rx="4"/>
             <rect x="131" y="20" width="58" height="26" rx="4"/>
             <rect x="236" y="20" width="58" height="26" rx="4"/>
@@ -463,7 +471,7 @@
             <path d="M160 118 H265"/><path d="M257 112 l8 6 -8 6"/>
             <path d="M160 150 H55" stroke-dasharray="5 5"/><path d="M63 144 l-8 6 8 6"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="datamodel" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="datamodel" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="22" y="20" width="96" height="52" rx="6"/>
             <path d="M22 38 H118"/>
             <rect x="202" y="20" width="96" height="52" rx="6"/>
@@ -483,7 +491,7 @@
             <circle cx="160" cy="103" r="5"/>
             <path d="M152 120 L160 108 L168 120 M160 108 L160 120"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="datamapping" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="datamapping" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="14" y="28" width="116" height="124" rx="8" stroke-dasharray="5 6"/>
             <rect x="28" y="48" width="88" height="30" rx="4"/>
             <rect x="28" y="100" width="88" height="30" rx="4"/>
@@ -495,7 +503,7 @@
             <path d="M196 67 L204 71 L196 75"/>
             <path d="M196 119 L204 123 L196 127"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="gantt" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="gantt" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M16 40 H304"/>
             <path d="M70 36 V44 M130 36 V44 M190 36 V44 M250 36 V44"/>
             <rect x="40" y="62" width="96" height="18" rx="4"/>
@@ -503,7 +511,7 @@
             <rect x="150" y="122" width="104" height="18" rx="4"/>
             <path d="M272 131 l9 -8 9 8 -9 8 z"/>
           </svg>
-          <svg class="sf-canvas-empty__wf" data-wf="org" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="df-canvas-empty__wf" data-wf="org" viewBox="0 0 320 180" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="125" y="24" width="70" height="32" rx="5"/>
             <path d="M160 56 V74"/>
             <path d="M70 74 H250"/>
@@ -512,24 +520,24 @@
             <rect x="130" y="92" width="60" height="30" rx="5"/>
             <rect x="220" y="92" width="60" height="30" rx="5"/>
           </svg>
-          <p class="sf-canvas-empty__caption">Drag a shape from the sidebar to start →</p>
+          <p class="df-canvas-empty__caption">Drag a shape from the sidebar to start →</p>
         </div>
-        <div id="mapping-table-view" class="sf-table-view" hidden aria-label="Field mapping table"></div>
+        <div id="mapping-table-view" class="df-table-view" hidden aria-label="Field mapping table"></div>
       </main>
 
       <!-- Stencil Panel (right sidebar) -->
-      <aside id="stencil-panel" class="sf-stencil" aria-label="Component stencil">
-        <div class="sf-drag-handle" data-target="stencil-panel"></div>
-        <div class="sf-stencil__header">
-          <div class="sf-stencil__search-wrap">
-            <input type="search" id="stencil-search" class="sf-stencil__search" placeholder="Search components..." aria-label="Search components">
-            <button id="btn-stencil-search-clear" type="button" class="sf-stencil__search-clear" aria-label="Clear search" title="Clear search" hidden>×</button>
+      <aside id="stencil-panel" class="df-stencil" aria-label="Component stencil">
+        <div class="df-drag-handle" data-target="stencil-panel"></div>
+        <div class="df-stencil__header">
+          <div class="df-stencil__search-wrap">
+            <input type="search" id="stencil-search" class="df-stencil__search" placeholder="Search components..." aria-label="Search components">
+            <button id="btn-stencil-search-clear" type="button" class="df-stencil__search-clear" aria-label="Clear search" title="Clear search" hidden>×</button>
           </div>
-          <button id="btn-close-stencil" class="sf-toolbar__button sf-stencil__close sf-toolbar__mobile-only" title="Close stencil" aria-label="Close stencil">
-            <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
+          <button id="btn-close-stencil" class="df-toolbar__button df-stencil__close df-toolbar__mobile-only" title="Close stencil" aria-label="Close stencil">
+            <svg class="df-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
           </button>
         </div>
-        <div id="stencil-categories" class="sf-stencil__body">
+        <div id="stencil-categories" class="df-stencil__body">
           <!-- Categories rendered by js/stencil.js -->
         </div>
       </aside>
@@ -537,52 +545,52 @@
   </div>
 
   <!-- Load Diagram Modal -->
-  <div id="load-modal" class="sf-modal sf-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="load-modal-title">
-    <div id="load-modal-overlay" class="sf-modal__overlay"></div>
-    <div class="sf-modal__dialog">
-      <div class="sf-modal__header">
-        <h2 id="load-modal-title" class="sf-modal__title">Load Diagram</h2>
-        <button id="btn-close-load-modal" class="sf-toolbar__button" aria-label="Close">
-          <svg class="sf-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
+  <div id="load-modal" class="df-modal df-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="load-modal-title">
+    <div id="load-modal-overlay" class="df-modal__overlay"></div>
+    <div class="df-modal__dialog">
+      <div class="df-modal__header">
+        <h2 id="load-modal-title" class="df-modal__title">Load Diagram</h2>
+        <button id="btn-close-load-modal" class="df-toolbar__button" aria-label="Close">
+          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
         </button>
       </div>
-      <div id="load-modal-list" class="sf-modal__body">
+      <div id="load-modal-list" class="df-modal__body">
         <!-- Populated by js/toolbar.js showLoadModal() -->
       </div>
     </div>
   </div>
 
   <!-- About modal -->
-  <div id="about-modal" class="sf-modal sf-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
-    <div id="about-modal-overlay" class="sf-modal__overlay"></div>
-    <div class="sf-modal__dialog sf-about">
-      <div class="sf-modal__header">
-        <h2 id="about-modal-title" class="sf-modal__title">About Diagramforce</h2>
-        <button id="btn-close-about" class="sf-toolbar__button" aria-label="Close">
-          <svg class="sf-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+  <div id="about-modal" class="df-modal df-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+    <div id="about-modal-overlay" class="df-modal__overlay"></div>
+    <div class="df-modal__dialog df-about">
+      <div class="df-modal__header">
+        <h2 id="about-modal-title" class="df-modal__title">About Diagramforce</h2>
+        <button id="btn-close-about" class="df-toolbar__button" aria-label="Close">
+          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
         </button>
       </div>
-      <div class="sf-modal__body sf-about__body">
-        <div class="sf-about__logo">
+      <div class="df-modal__body df-about__body">
+        <div class="df-about__logo">
           <img src="assets/logo.png" alt="Diagramforce" width="64" height="64">
         </div>
-        <p class="sf-about__tagline">Visual Salesforce architecture diagramming tool</p>
-        <div class="sf-about__info">
+        <p class="df-about__tagline">Visual Salesforce architecture diagramming tool</p>
+        <div class="df-about__info">
           <p>Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams for Salesforce projects. Runs entirely in your browser — no data is sent to any server.</p>
           <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
-        <div class="sf-about__meta">
-          <span id="about-version" class="sf-about__version"></span>
-          <span class="sf-about__separator">·</span>
-          <a href="https://mateuszdabrowski.pl" target="_blank" rel="noopener" class="sf-about__link">mateuszdabrowski.pl</a>
-          <span class="sf-about__separator">·</span>
-          <a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener" class="sf-about__link">GitHub</a>
-          <span class="sf-about__separator">·</span>
-          <a href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener" class="sf-about__link">Feedback</a>
+        <div class="df-about__meta">
+          <span id="about-version" class="df-about__version"></span>
+          <span class="df-about__separator">·</span>
+          <a href="https://mateuszdabrowski.pl" target="_blank" rel="noopener" class="df-about__link">mateuszdabrowski.pl</a>
+          <span class="df-about__separator">·</span>
+          <a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener" class="df-about__link">GitHub</a>
+          <span class="df-about__separator">·</span>
+          <a href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener" class="df-about__link">Feedback</a>
         </div>
-        <div class="sf-about__meta sf-about__meta--license">
-          <span class="sf-about__license-text">Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" class="sf-about__link">CC BY-NC-SA 4.0</a></span>
+        <div class="df-about__meta df-about__meta--license">
+          <span class="df-about__license-text">Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" class="df-about__link">CC BY-NC-SA 4.0</a></span>
         </div>
       </div>
     </div>
@@ -594,8 +602,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.15.0"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.15.0"></script>
-  <script type="module" src="js/app.js?v=1.15.0"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.15.1"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.15.1"></script>
+  <script type="module" src="js/app.js?v=1.15.1"></script>
 </body>
 </html>

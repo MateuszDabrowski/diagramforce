@@ -12,7 +12,7 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.15.0';
+import { cctx } from './context.js?v=1.15.1';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -393,7 +393,7 @@ function ensureGhostLayer() {
   const layersGroup = cellsLayer?.parentNode;
   if (!layersGroup) return null;
   _ghostLayer = document.createElementNS(GHOST_SVG_NS, 'g');
-  _ghostLayer.setAttribute('class', 'sf-drop-ghost');
+  _ghostLayer.setAttribute('class', 'df-drop-ghost');
   _ghostLayer.setAttribute('pointer-events', 'none');
   layersGroup.insertBefore(_ghostLayer, cellsLayer.nextSibling);
   return _ghostLayer;
@@ -472,7 +472,7 @@ export function showDropGhost(childBBox, childType, excludeId, growBBox) {
   if (!b || !layer) { hideDropGhost(); return null; }
   if (!_ghostRect) {
     _ghostRect = document.createElementNS(GHOST_SVG_NS, 'rect');
-    _ghostRect.setAttribute('class', 'sf-drop-ghost__rect');
+    _ghostRect.setAttribute('class', 'df-drop-ghost__rect');
     _ghostRect.setAttribute('rx', '8');
     layer.appendChild(_ghostRect);
   }

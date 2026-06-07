@@ -1,6 +1,6 @@
 /* Toolbar — matches mateuszdabrowski.pl navbar style */
 
-.sf-toolbar {
+.df-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15,18 +15,18 @@
   position: relative;
 }
 
-.sf-toolbar__left,
-.sf-toolbar__center,
-.sf-toolbar__right {
+.df-toolbar__left,
+.df-toolbar__center,
+.df-toolbar__right {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.sf-toolbar__left,
-.sf-toolbar__right {
+.df-toolbar__left,
+.df-toolbar__right {
   flex-shrink: 0;
 }
-.sf-toolbar__center {
+.df-toolbar__center {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -34,7 +34,7 @@
   pointer-events: auto;
 }
 /* Fallback when toolbar is too narrow (overlap detected via JS) */
-.sf-toolbar--compact .sf-toolbar__center {
+.df-toolbar--compact .df-toolbar__center {
   position: static;
   transform: none;
   flex: 1;
@@ -43,7 +43,7 @@
 }
 
 /* Brand — logo mark + text */
-.sf-toolbar__brand {
+.df-toolbar__brand {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -55,17 +55,17 @@
   cursor: pointer;
 }
 
-.sf-toolbar__brand:hover {
+.df-toolbar__brand:hover {
   color: var(--color-primary);
   text-decoration: none;
 }
 
 /* Ensure child elements don't swallow clicks in Safari */
-.sf-toolbar__brand > * {
+.df-toolbar__brand > * {
   pointer-events: none;
 }
 
-.sf-toolbar__brand-logo {
+.df-toolbar__brand-logo {
   flex-shrink: 0;
   width: 32px;
   height: 32px;
@@ -73,20 +73,20 @@
   object-fit: contain;
 }
 
-.sf-toolbar__brand-text {
+.df-toolbar__brand-text {
   font-size: var(--font-size-lg);
   font-weight: 700;
   letter-spacing: -0.3px;
 }
 
-.sf-toolbar__group {
+.df-toolbar__group {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
 
-.sf-toolbar__separator {
+.df-toolbar__separator {
   width: 1px;
   height: 20px;
   background: var(--border-color);
@@ -95,7 +95,7 @@
 }
 
 /* Navbar buttons — font-weight 500, 4px/12px padding (ifm style) */
-.sf-toolbar__button {
+.df-toolbar__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -116,23 +116,23 @@
   line-height: 1;
 }
 
-.sf-toolbar__button:hover:not(:disabled) {
+.df-toolbar__button:hover:not(:disabled) {
   background: var(--toolbar-button-hover);
   color: var(--text-primary);
 }
 
-.sf-toolbar__button:disabled {
+.df-toolbar__button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.sf-toolbar__button--active {
+.df-toolbar__button--active {
   background: var(--toolbar-button-active);
   color: var(--color-primary);
 }
 
 /* Icon-only buttons (undo, redo, zoom, delete, align…) */
-.sf-toolbar__button--icon-only {
+.df-toolbar__button--icon-only {
   padding: 4px;
   gap: 0;
 }
@@ -150,7 +150,7 @@
   color: var(--color-primary);
 }
 
-.sf-toolbar__icon {
+.df-toolbar__icon {
   width: 16px;
   height: 16px;
   fill: currentColor;
@@ -158,24 +158,24 @@
 }
 
 /* Larger icon for theme toggle */
-#btn-theme .sf-toolbar__icon {
+#btn-theme .df-toolbar__icon {
   width: 18px;
   height: 18px;
 }
 
 /* Dropdown menus */
-.sf-toolbar__dropdown {
+.df-toolbar__dropdown {
   position: relative;
 }
 
-.sf-toolbar__chevron {
+.df-toolbar__chevron {
   width: 8px;
   height: 6px;
   flex-shrink: 0;
   opacity: 0.5;
 }
 
-.sf-toolbar__menu {
+.df-toolbar__menu {
   display: none;
   position: absolute;
   top: 100%;
@@ -188,13 +188,18 @@
   box-shadow: var(--shadow-md);
   z-index: 200;
   padding: 4px 0;
+  /* The Display menu can be long (Data Mapping shows ~11 items) — never let it run
+     off the bottom of a short / landscape viewport with no way to reach the lower
+     items. Cap to the viewport and scroll. (dvh accounts for mobile browser chrome.) */
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto;
 }
 
-.sf-toolbar__dropdown.sf-toolbar__dropdown--open .sf-toolbar__menu {
+.df-toolbar__dropdown.df-toolbar__dropdown--open .df-toolbar__menu {
   display: block;
 }
 
-.sf-toolbar__menu-item {
+.df-toolbar__menu-item {
   display: block;
   width: 100%;
   padding: 6px 14px;
@@ -209,28 +214,28 @@
   white-space: nowrap;
 }
 
-.sf-toolbar__menu-item:hover:not(:disabled) {
+.df-toolbar__menu-item:hover:not(:disabled) {
   background: var(--toolbar-button-hover);
   color: var(--text-primary);
 }
 
-.sf-toolbar__menu-item:disabled {
+.df-toolbar__menu-item:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.sf-toolbar__menu-item--icon {
+.df-toolbar__menu-item--icon {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.sf-toolbar__menu-icon {
+.df-toolbar__menu-icon {
   flex-shrink: 0;
   opacity: 0.7;
 }
 
-.sf-toolbar__button {
+.df-toolbar__button {
   position: relative;
 }
 
@@ -245,10 +250,10 @@
    brand-red in dark mode automatically via the theme cascade — keeps
    the indicator on-brand instead of borrowing the amber accent the
    app uses for selection / highlight elsewhere. */
-.sf-display-icon__pupil {
+.df-display-icon__pupil {
   transition: fill var(--transition-fast);
 }
-.sf-toolbar__button--has-active .sf-display-icon__pupil {
+.df-toolbar__button--has-active .df-display-icon__pupil {
   fill: var(--color-primary);
 }
 
@@ -256,33 +261,33 @@
    empty box and the tick path; the tick is hidden by default and revealed
    via CSS when the parent button has `.is-checked`. JS only toggles the
    class — no innerHTML churn or per-state SVG swap. */
-.sf-toolbar__checkbox {
+.df-toolbar__checkbox {
   flex-shrink: 0;
   opacity: 0.85;
 }
-.sf-toolbar__menu-item--toggle .sf-toolbar__checkbox-tick {
+.df-toolbar__menu-item--toggle .df-toolbar__checkbox-tick {
   display: none;
 }
-.sf-toolbar__menu-item--toggle.is-checked .sf-toolbar__checkbox-tick {
+.df-toolbar__menu-item--toggle.is-checked .df-toolbar__checkbox-tick {
   display: inline;
 }
-.sf-toolbar__menu-item--toggle.is-checked .sf-toolbar__checkbox {
+.df-toolbar__menu-item--toggle.is-checked .df-toolbar__checkbox {
   opacity: 1;
 }
 
 /* Theme toggle icon — moon/sun swap */
-#btn-theme .sf-toolbar__icon--theme {
+#btn-theme .df-toolbar__icon--theme {
   fill: none;
   width: 18px;
   height: 18px;
 }
 
-[data-theme="dark"] .sf-icon-sun { display: none; }
-[data-theme="dark"] .sf-icon-moon { display: inline; }
-[data-theme="light"] .sf-icon-sun { display: inline; }
-[data-theme="light"] .sf-icon-moon { display: none; }
+[data-theme="dark"] .df-icon-sun { display: none; }
+[data-theme="dark"] .df-icon-moon { display: inline; }
+[data-theme="light"] .df-icon-sun { display: inline; }
+[data-theme="light"] .df-icon-moon { display: none; }
 
-.sf-toolbar__zoom-level {
+.df-toolbar__zoom-level {
   font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -293,27 +298,27 @@
   padding: 4px 2px;
 }
 
-.sf-toolbar__menu-separator {
+.df-toolbar__menu-separator {
   border-top: 1px solid var(--border-color);
   margin: 4px 0;
 }
 
 /* Mobile-only elements — hidden on desktop */
-.sf-toolbar__mobile-only {
+.df-toolbar__mobile-only {
   display: none !important;
 }
 
 /* ── Hamburger menu (mobile only) ──────────────────────────────── */
-.sf-toolbar__hamburger-wrap {
+.df-toolbar__hamburger-wrap {
   display: none; /* hidden on desktop */
   position: relative;
 }
 
-.sf-toolbar__hamburger-btn {
+.df-toolbar__hamburger-btn {
   display: flex;
 }
 
-.sf-toolbar__hamburger-menu {
+.df-toolbar__hamburger-menu {
   display: none;
   position: absolute;
   top: 100%;
@@ -328,7 +333,7 @@
   padding: 4px 0;
 }
 
-.sf-toolbar__hamburger-menu .sf-toolbar__menu-item {
+.df-toolbar__hamburger-menu .df-toolbar__menu-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -337,7 +342,7 @@
   font-size: var(--font-size-md);
 }
 
-.sf-toolbar__hamburger-menu .sf-toolbar__menu-icon {
+.df-toolbar__hamburger-menu .df-toolbar__menu-icon {
   fill: currentColor;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -345,13 +350,13 @@
   height: 20px;
 }
 
-.sf-toolbar__hamburger-wrap--open .sf-toolbar__hamburger-menu {
+.df-toolbar__hamburger-wrap--open .df-toolbar__hamburger-menu {
   display: block;
 }
 
 /* ── Mobile toolbar ────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sf-toolbar {
+  .df-toolbar {
     height: 48px;
     padding: 0 4px;
     gap: 0;
@@ -359,83 +364,83 @@
   }
 
   /* Reorder: hamburger (1) | undo (2) | brand centered (3) | right buttons (4) */
-  .sf-toolbar__hamburger-wrap {
+  .df-toolbar__hamburger-wrap {
     display: block;
     flex-shrink: 0;
     order: 1;
   }
 
-  .sf-toolbar__left {
+  .df-toolbar__left {
     order: 3;
     flex: 1;
     min-width: 0;
     justify-content: center;
   }
 
-  .sf-toolbar__center {
+  .df-toolbar__center {
     order: 5; /* hidden, but needed for ordering */
   }
 
-  .sf-toolbar__right {
+  .df-toolbar__right {
     order: 4;
     gap: 0;
     flex-shrink: 0;
   }
 
   /* Brand: centered, only show logo + text */
-  .sf-toolbar__brand {
+  .df-toolbar__brand {
     margin-right: 0;
     gap: 6px;
   }
 
-  .sf-toolbar__brand-logo {
+  .df-toolbar__brand-logo {
     width: 26px;
     height: 26px;
   }
 
-  .sf-toolbar__brand-text {
+  .df-toolbar__brand-text {
     font-size: var(--font-size-md);
   }
 
   /* Hide all main toolbar sections on mobile */
-  .sf-toolbar__left > .sf-toolbar__group,
-  .sf-toolbar__left > .sf-toolbar__dropdown,
-  .sf-toolbar__left > .sf-toolbar__separator,
-  .sf-toolbar__center,
-  .sf-toolbar__right > #btn-share-url,
-  .sf-toolbar__right > #btn-about,
-  .sf-toolbar__right > #btn-theme {
+  .df-toolbar__left > .df-toolbar__group,
+  .df-toolbar__left > .df-toolbar__dropdown,
+  .df-toolbar__left > .df-toolbar__separator,
+  .df-toolbar__center,
+  .df-toolbar__right > #btn-share-url,
+  .df-toolbar__right > #btn-about,
+  .df-toolbar__right > #btn-theme {
     display: none !important;
   }
 
   /* Show mobile-only buttons */
-  .sf-toolbar__mobile-only {
+  .df-toolbar__mobile-only {
     display: inline-flex !important;
   }
 
   /* Touch-friendly targets (44px minimum per Apple HIG) */
-  .sf-toolbar__right .sf-toolbar__button,
-  .sf-toolbar__hamburger-btn {
+  .df-toolbar__right .df-toolbar__button,
+  .df-toolbar__hamburger-btn {
     min-width: 44px;
     min-height: 44px;
     padding: 8px;
   }
 
-  .sf-toolbar__right .sf-toolbar__icon,
-  .sf-toolbar__hamburger-btn .sf-toolbar__icon {
+  .df-toolbar__right .df-toolbar__icon,
+  .df-toolbar__hamburger-btn .df-toolbar__icon {
     width: 20px;
     height: 20px;
   }
 
   /* Hamburger menu drops from left edge */
-  .sf-toolbar__hamburger-menu {
+  .df-toolbar__hamburger-menu {
     left: 0;
     right: auto;
   }
 
   /* Swap fit-to-content before stencil toggle on mobile */
-  .sf-toolbar__right #btn-zoom-fit-mobile { order: 1; }
-  .sf-toolbar__right #btn-toggle-stencil  { order: 2; }
+  .df-toolbar__right #btn-zoom-fit-mobile { order: 1; }
+  .df-toolbar__right #btn-toggle-stencil  { order: 2; }
 
   /* Mobile undo button — right next to hamburger */
   #btn-undo-mobile {
@@ -446,14 +451,14 @@
     padding: 8px;
   }
 
-  #btn-undo-mobile .sf-toolbar__icon {
+  #btn-undo-mobile .df-toolbar__icon {
     width: 20px;
     height: 20px;
   }
 }
 
 /* ── Toolbar segmented control (Diagram | Table view switch) ───────────────── */
-.sf-toolbar__segmented {
+.df-toolbar__segmented {
   display: inline-flex;
   align-items: center;
   background: var(--bg-surface);
@@ -462,7 +467,7 @@
   padding: 2px;
   gap: 2px;
 }
-.sf-toolbar__segmented-option {
+.df-toolbar__segmented-option {
   appearance: none;
   border: none;
   background: transparent;
@@ -475,8 +480,8 @@
   transition: background 120ms ease, color 120ms ease;
   white-space: nowrap;
 }
-.sf-toolbar__segmented-option:hover { color: var(--text-primary); }
-.sf-toolbar__segmented-option--active {
+.df-toolbar__segmented-option:hover { color: var(--text-primary); }
+.df-toolbar__segmented-option--active {
   background: var(--color-primary);
   color: #fff;
 }

@@ -1,6 +1,6 @@
 /* Properties panel — left sidebar element inspector */
 
-.sf-properties {
+.df-properties {
   position: absolute;
   top: 0;
   left: 0;
@@ -16,14 +16,14 @@
   box-shadow: var(--shadow-md);
 }
 
-.sf-properties--hidden {
+.df-properties--hidden {
   transform: translateX(-100%);
   box-shadow: none;
 }
 
 /* ── Header ────────────────────────────────────────────── */
 
-.sf-properties__header {
+.df-properties__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,14 +34,14 @@
   min-height: 44px;
 }
 
-.sf-properties__title-wrap {
+.df-properties__title-wrap {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.sf-properties__type-badge {
+.df-properties__type-badge {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -52,7 +52,7 @@
   white-space: nowrap;
 }
 
-.sf-properties__title {
+.df-properties__title {
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -64,42 +64,42 @@
 /* When the title carries no user-supplied label (which `:empty` catches once
    the renderers stop writing type-name fallbacks), collapse the row so the
    panel doesn't show a redundant duplicate of the type badge above. */
-.sf-properties__title:empty {
+.df-properties__title:empty {
   display: none;
 }
 
 /* ── Scrollable body ───────────────────────────────────── */
 
-.sf-properties__body {
+.df-properties__body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.sf-properties__body::-webkit-scrollbar {
+.df-properties__body::-webkit-scrollbar {
   width: 5px;
 }
 
-.sf-properties__body::-webkit-scrollbar-track {
+.df-properties__body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sf-properties__body::-webkit-scrollbar-thumb {
+.df-properties__body::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
 /* ── Accordion sections ────────────────────────────────── */
 
-.sf-section {
+.df-section {
   border-bottom: 1px solid var(--border-color);
 }
 
-.sf-section:last-child {
+.df-section:last-child {
   border-bottom: none;
 }
 
-.sf-section__header {
+.df-section__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -114,12 +114,12 @@
   transition: color var(--transition-fast), background var(--transition-fast);
 }
 
-.sf-section__header:hover {
+.df-section__header:hover {
   color: var(--text-secondary);
   background: var(--stencil-item-hover);
 }
 
-.sf-section__chevron {
+.df-section__chevron {
   width: 10px;
   height: 10px;
   fill: currentColor;
@@ -127,37 +127,37 @@
   transition: transform var(--transition-fast);
 }
 
-.sf-section--collapsed .sf-section__chevron {
+.df-section--collapsed .df-section__chevron {
   transform: rotate(-90deg);
 }
 
-.sf-section__body {
+.df-section__body {
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
 }
 
-.sf-section--collapsed .sf-section__body {
+.df-section--collapsed .df-section__body {
   display: none;
 }
 
 /* ── Field: label stacked above control ────────────────── */
 
-.sf-prop-field {
+.df-prop-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
 /* Inline pair: two fields side by side (Width / Height) */
-.sf-prop-pair {
+.df-prop-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--spacing-sm);
 }
 
-.sf-properties__label {
+.df-properties__label {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -167,7 +167,7 @@
 
 /* ── Inputs ────────────────────────────────────────────── */
 
-.sf-properties__input {
+.df-properties__input {
   width: 100%;
   padding: 6px var(--spacing-sm);
   border: 1px solid var(--border-color);
@@ -181,12 +181,12 @@
 }
 
 /* Larger spinners for number inputs */
-.sf-properties__input[type="number"] {
+.df-properties__input[type="number"] {
   -moz-appearance: textfield;
 }
 
-.sf-properties__input[type="number"]::-webkit-inner-spin-button,
-.sf-properties__input[type="number"]::-webkit-outer-spin-button {
+.df-properties__input[type="number"]::-webkit-inner-spin-button,
+.df-properties__input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: inner-spin-button;
   opacity: 1;
   height: 24px;
@@ -196,24 +196,24 @@
 /* Native number-input spinners paint in the OS *light* scheme by default, so in
    dark mode the up/down arrows are near-black on the dark input. color-scheme:dark
    re-paints them light. (Applies to every number field — Width/Height too.) */
-[data-theme="dark"] .sf-properties__input[type="number"] {
+[data-theme="dark"] .df-properties__input[type="number"] {
   color-scheme: dark;
 }
 
 /* Rotation control: degrees input + a quick "+90°" button */
-.sf-prop-rotation {
+.df-prop-rotation {
   margin-bottom: var(--spacing-sm);   /* breathing room before the next control */
 }
-.sf-prop-rotation-row {
+.df-prop-rotation-row {
   display: flex;
   gap: 6px;
   align-items: stretch;
 }
-.sf-prop-rotation-row .sf-properties__input {
+.df-prop-rotation-row .df-properties__input {
   flex: 1 1 auto;
   min-width: 0;
 }
-.sf-prop-rotate-90 {
+.df-prop-rotate-90 {
   flex: 0 0 auto;
   padding: 0 10px;
   border: 1px solid var(--border-color);
@@ -226,18 +226,18 @@
   white-space: nowrap;
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
-.sf-prop-rotate-90:hover {
+.df-prop-rotate-90:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.sf-properties__textarea {
+.df-properties__textarea {
   resize: vertical;
   min-height: 48px;
   line-height: 1.5;
 }
 
-.sf-properties__text-input {
+.df-properties__text-input {
   resize: none;
   overflow: hidden;
   line-height: 1.4;
@@ -248,7 +248,7 @@
    value (currently the color hex field for malformed hex codes). The
    class is applied for ~400 ms then removed; the user sees the input
    "shake" visually without a modal/toast interruption. */
-.sf-properties__input--invalid {
+.df-properties__input--invalid {
   border-color: var(--brand-red) !important;
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.18) !important;
   transition: border-color 80ms ease-out, box-shadow 80ms ease-out;
@@ -256,13 +256,13 @@
 
 /* CR-6.1: inline-markdown shortcut hint, shown below text fields on shapes
    that accept formatting (sf.TextLabel content, sf.Note description). */
-.sf-properties__hint {
+.df-properties__hint {
   margin-top: 4px;
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.4;
 }
-.sf-properties__hint code {
+.df-properties__hint code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10.5px;
   padding: 0 3px;
@@ -270,17 +270,17 @@
   background: var(--stencil-item-hover);
 }
 
-.sf-properties__input:focus {
+.df-properties__input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
 }
 
-[data-theme="dark"] .sf-properties__input:focus {
+[data-theme="dark"] .df-properties__input:focus {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
 }
 
-.sf-properties__select {
+.df-properties__select {
   width: 100%;
   padding: 6px var(--spacing-sm);
   border: 1px solid var(--border-color);
@@ -294,19 +294,19 @@
   box-sizing: border-box;
 }
 
-.sf-properties__select:focus {
+.df-properties__select:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
 }
 
-[data-theme="dark"] .sf-properties__select:focus {
+[data-theme="dark"] .df-properties__select:focus {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
 }
 
 /* ── Slide toggle (on/off switch) ─────────────────────── */
 
-.sf-properties__toggle {
+.df-properties__toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -314,7 +314,7 @@
   user-select: none;
 }
 
-.sf-properties__toggle-input {
+.df-properties__toggle-input {
   position: absolute;
   opacity: 0;
   width: 0;
@@ -322,7 +322,7 @@
   margin: 0;
 }
 
-.sf-properties__toggle-track {
+.df-properties__toggle-track {
   position: relative;
   width: 36px;
   height: 20px;
@@ -333,7 +333,7 @@
   flex-shrink: 0;
 }
 
-.sf-properties__toggle-thumb {
+.df-properties__toggle-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -345,19 +345,19 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.sf-properties__toggle-input:checked + .sf-properties__toggle-track {
+.df-properties__toggle-input:checked + .df-properties__toggle-track {
   background: var(--color-primary);
 }
 
-.sf-properties__toggle-input:checked + .sf-properties__toggle-track .sf-properties__toggle-thumb {
+.df-properties__toggle-input:checked + .df-properties__toggle-track .df-properties__toggle-thumb {
   left: 18px;
 }
 
-.sf-properties__toggle-input:focus-visible + .sf-properties__toggle-track {
+.df-properties__toggle-input:focus-visible + .df-properties__toggle-track {
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.25);
 }
 
-[data-theme="dark"] .sf-properties__toggle-input:focus-visible + .sf-properties__toggle-track {
+[data-theme="dark"] .df-properties__toggle-input:focus-visible + .df-properties__toggle-track {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.25);
 }
 
@@ -366,7 +366,7 @@
    label (e.g. "Show" / "Hide"). Renders as a pill-shaped track with two
    buttons; the active button is filled with the primary colour. */
 
-.sf-properties__segmented {
+.df-properties__segmented {
   display: flex;
   width: 100%;
   background: var(--border-color);
@@ -376,7 +376,7 @@
   user-select: none;
 }
 
-.sf-properties__segmented-option {
+.df-properties__segmented-option {
   flex: 1;
   text-align: center;
   background: transparent;
@@ -392,34 +392,34 @@
   line-height: 1.4;
 }
 
-.sf-properties__segmented-option:hover:not(.sf-properties__segmented-option--active) {
+.df-properties__segmented-option:hover:not(.df-properties__segmented-option--active) {
   color: var(--text-primary);
 }
 
-.sf-properties__segmented-option--active {
+.df-properties__segmented-option--active {
   background: var(--color-primary);
   color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-.sf-properties__segmented-option:focus-visible {
+.df-properties__segmented-option:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(53, 120, 229, 0.35);
 }
 
-[data-theme="dark"] .sf-properties__segmented-option:focus-visible {
+[data-theme="dark"] .df-properties__segmented-option:focus-visible {
   box-shadow: 0 0 0 2px rgba(218, 78, 85, 0.35);
 }
 
 /* ── Color field ───────────────────────────────────────── */
 
-.sf-prop-color-row {
+.df-prop-color-row {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
 }
 
-.sf-properties__color {
+.df-properties__color {
   width: 32px;
   height: 32px;
   border: 1px solid var(--border-color);
@@ -430,11 +430,11 @@
   flex-shrink: 0;
 }
 
-.sf-properties__color::-webkit-color-swatch-wrapper {
+.df-properties__color::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 
-.sf-properties__color::-webkit-color-swatch {
+.df-properties__color::-webkit-color-swatch {
   border: none;
   border-radius: 3px;
 }
@@ -442,7 +442,7 @@
 /* Multi-select "mixed" state: selected elements disagree on this colour,
    so the swatch is dimmed + checkerboarded to make it obvious no single
    value applies. The text input shows a "Multiple" placeholder instead. */
-.sf-properties__color--mixed::-webkit-color-swatch {
+.df-properties__color--mixed::-webkit-color-swatch {
   opacity: 0.35;
   background-image:
     linear-gradient(45deg, var(--border-color) 25%, transparent 25%),
@@ -454,7 +454,7 @@
 }
 
 /* Hex text fills remaining width */
-.sf-prop-color-row .sf-properties__input {
+.df-prop-color-row .df-properties__input {
   flex: 1;
   min-width: 0;
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
@@ -464,7 +464,7 @@
 /* Gap 20 (v1.12.0) — reset-to-default ↺ button on color fields that
    declare an opts.defaultValue. Sits on the right of the row; dimmed
    when the current value already equals the default. */
-.sf-prop-color-reset {
+.df-prop-color-reset {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -479,12 +479,12 @@
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
 }
-.sf-prop-color-reset:hover:not(:disabled) {
+.df-prop-color-reset:hover:not(:disabled) {
   background: var(--toolbar-button-hover);
   color: var(--color-primary);
 }
-.sf-prop-color-reset.is-default,
-.sf-prop-color-reset:disabled {
+.df-prop-color-reset.is-default,
+.df-prop-color-reset:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
@@ -493,14 +493,14 @@
  * Saved colour swatches sitting under every addColor() picker.
  * Click a swatch to apply, hover-then-click × to remove, + to bank
  * the current colour. */
-.sf-prop-palette-strip {
+.df-prop-palette-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   margin-top: 6px;
 }
-.sf-prop-palette-swatch {
+.df-prop-palette-swatch {
   position: relative;
   width: 16px;
   height: 16px;
@@ -511,13 +511,13 @@
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   /* No background — set inline per swatch */
 }
-.sf-prop-palette-swatch:hover,
-.sf-prop-palette-swatch:focus-visible {
+.df-prop-palette-swatch:hover,
+.df-prop-palette-swatch:focus-visible {
   transform: scale(1.18);
   box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 3px var(--color-primary);
   outline: none;
 }
-.sf-prop-palette-swatch__remove {
+.df-prop-palette-swatch__remove {
   position: absolute;
   top: -7px;
   right: -7px;
@@ -535,15 +535,15 @@
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
-.sf-prop-palette-swatch:hover .sf-prop-palette-swatch__remove,
-.sf-prop-palette-swatch:focus-within .sf-prop-palette-swatch__remove {
+.df-prop-palette-swatch:hover .df-prop-palette-swatch__remove,
+.df-prop-palette-swatch:focus-within .df-prop-palette-swatch__remove {
   opacity: 1;
 }
-.sf-prop-palette-swatch__remove:hover {
+.df-prop-palette-swatch__remove:hover {
   color: var(--brand-red);
   border-color: var(--brand-red);
 }
-.sf-prop-palette-save {
+.df-prop-palette-save {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -558,7 +558,7 @@
   padding: 0;
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
-.sf-prop-palette-save:hover {
+.df-prop-palette-save:hover {
   border-style: solid;
   border-color: var(--color-primary);
   color: var(--color-primary);
@@ -566,7 +566,7 @@
 
 /* ── Icon picker ───────────────────────────────────────── */
 
-.sf-prop-icon-preview {
+.df-prop-icon-preview {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -577,16 +577,16 @@
   transition: border-color var(--transition-fast);
 }
 
-.sf-prop-icon-preview:focus-within {
+.df-prop-icon-preview:focus-within {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
 }
 
-[data-theme="dark"] .sf-prop-icon-preview:focus-within {
+[data-theme="dark"] .df-prop-icon-preview:focus-within {
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
 }
 
-.sf-prop-icon-swatch {
+.df-prop-icon-swatch {
   width: 24px;
   height: 24px;
   border-radius: 4px;
@@ -596,11 +596,11 @@
   flex-shrink: 0;
 }
 
-.sf-prop-icon-swatch svg {
+.df-prop-icon-swatch svg {
   fill: var(--text-primary);
 }
 
-.sf-prop-icon-search-input {
+.df-prop-icon-search-input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -612,11 +612,11 @@
   outline: none;
 }
 
-.sf-prop-icon-search-input::placeholder {
+.df-prop-icon-search-input::placeholder {
   color: var(--text-muted);
 }
 
-.sf-prop-icon-clear {
+.df-prop-icon-clear {
   width: 20px;
   height: 20px;
   border: none;
@@ -633,14 +633,14 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.sf-prop-icon-clear:hover {
+.df-prop-icon-clear:hover {
   background: rgba(218, 78, 85, 0.15);
   color: #DA4E55;
 }
 
 /* ── Action buttons ────────────────────────────────────── */
 
-.sf-properties__btn {
+.df-properties__btn {
   width: 100%;
   padding: 7px var(--spacing-md);
   border: 1px solid var(--border-color);
@@ -659,18 +659,18 @@
   gap: var(--spacing-sm);
 }
 
-.sf-properties__btn:hover {
+.df-properties__btn:hover {
   background: var(--stencil-item-hover);
   color: var(--text-primary);
   border-color: var(--border-color-strong);
 }
 
-.sf-properties__btn--primary {
+.df-properties__btn--primary {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.sf-properties__btn--primary:hover {
+.df-properties__btn--primary:hover {
   background: var(--color-primary);
   color: #fff;
 }
@@ -683,18 +683,18 @@
    from whatever sits above (typically Width / Height fields) via a
    larger top margin, while the hint sits tight underneath the buttons
    so the trio reads as one unit rather than three loose siblings. */
-.sf-prop-pair--order {
+.df-prop-pair--order {
   margin-top: 14px;
 }
 
-.sf-prop-order-hint {
+.df-prop-order-hint {
   font-size: 10px;
   color: var(--text-muted);
   margin-top: 4px;
   font-style: italic;
 }
 
-.sf-properties__btn--order {
+.df-properties__btn--order {
   font-size: 10px;
   padding: 5px 6px;
   gap: 4px;
@@ -704,14 +704,14 @@
   flex: 1;
 }
 
-.sf-properties__btn--order:hover {
+.df-properties__btn--order:hover {
   color: var(--brand-blue);
   border-color: var(--brand-blue);
   background: transparent;
 }
 
 /* Auto-size button — sits inside the Size section body */
-.sf-properties__btn--auto-size {
+.df-properties__btn--auto-size {
   gap: 6px;
   font-size: var(--font-size-xs);
   padding: 6px var(--spacing-sm);
@@ -719,13 +719,13 @@
   border-color: var(--border-color);
 }
 
-.sf-properties__btn--auto-size:hover {
+.df-properties__btn--auto-size:hover {
   color: var(--brand-blue);
   border-color: var(--brand-blue);
   background: transparent;
 }
 
-.sf-properties__btn--apply-size {
+.df-properties__btn--apply-size {
   width: 100%;
   gap: 6px;
   font-size: var(--font-size-xs);
@@ -737,70 +737,70 @@
   cursor: pointer;
   transition: color var(--transition-fast), border-color var(--transition-fast);
 }
-.sf-properties__btn--apply-size:hover {
+.df-properties__btn--apply-size:hover {
   color: var(--brand-amber);
   border-color: var(--brand-amber);
 }
 
 /* ── Footer action strips (Convert / Clone / Delete) ── */
 /* Shared strip layout — consistent vertical spacing */
-.sf-convert-strip,
-.sf-clone-strip,
-.sf-delete-strip {
+.df-convert-strip,
+.df-clone-strip,
+.df-delete-strip {
   padding: var(--spacing-xs) var(--spacing-md);
 }
 
 /* First strip gets extra top padding, last strip gets extra bottom padding */
-.sf-properties__footer > :first-child {
+.df-properties__footer > :first-child {
   padding-top: var(--spacing-sm);
 }
 
-.sf-properties__footer > :last-child {
+.df-properties__footer > :last-child {
   padding-bottom: var(--spacing-sm);
 }
 
 /* Shared base for all footer action buttons */
-.sf-properties__btn--convert,
-.sf-properties__btn--clone,
-.sf-properties__btn--delete {
+.df-properties__btn--convert,
+.df-properties__btn--clone,
+.df-properties__btn--delete {
   font-size: var(--font-size-xs);
   justify-content: center;
   gap: 6px;
 }
 
 /* Consistent icon size inside footer buttons */
-.sf-properties__btn--convert svg,
-.sf-properties__btn--clone svg,
-.sf-properties__btn--delete svg {
+.df-properties__btn--convert svg,
+.df-properties__btn--clone svg,
+.df-properties__btn--delete svg {
   width: 13px;
   height: 13px;
   flex-shrink: 0;
 }
 
 /* Convert — orange accent (darker in light mode for WCAG contrast) */
-.sf-properties__btn--convert {
+.df-properties__btn--convert {
   --_convert-color: #D4911F;
   border-color: var(--_convert-color);
   color: var(--_convert-color);
 }
 
-[data-theme="dark"] .sf-properties__btn--convert {
+[data-theme="dark"] .df-properties__btn--convert {
   --_convert-color: var(--brand-amber);
 }
 
-.sf-properties__btn--convert:hover {
+.df-properties__btn--convert:hover {
   background: var(--_convert-color);
   border-color: var(--_convert-color);
   color: #fff;
 }
 
 /* Clone — blue accent (always blue, regardless of theme) */
-.sf-properties__btn--clone {
+.df-properties__btn--clone {
   border-color: var(--brand-blue);
   color: var(--brand-blue);
 }
 
-.sf-properties__btn--clone:hover {
+.df-properties__btn--clone:hover {
   background: var(--brand-blue);
   border-color: var(--brand-blue);
   color: #fff;
@@ -810,7 +810,7 @@
    modes are exposed as stacked sub-buttons beneath the primary "Clone"
    action. The strip becomes a vertical flex container so the sub-buttons
    sit directly under the primary button with a small gap. */
-.sf-clone-strip {
+.df-clone-strip {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -819,18 +819,18 @@
 /* Sub-buttons match the primary Clone button's size; only their wrapping
    behavior differs to accommodate the longer "with connected Connectors"
    label inside the narrow panel. */
-.sf-properties__btn--clone-sub {
+.df-properties__btn--clone-sub {
   white-space: normal;
   text-align: center;
 }
 
 /* Delete — red danger */
-.sf-properties__btn--delete {
+.df-properties__btn--delete {
   border-color: #DA4E55;
   color: #DA4E55;
 }
 
-.sf-properties__btn--delete:hover {
+.df-properties__btn--delete:hover {
   background: #DA4E55;
   border-color: #DA4E55;
   color: #fff;
@@ -838,31 +838,31 @@
 
 /* ── Footer (pinned to bottom — delete/convert buttons) ── */
 
-.sf-properties__footer {
+.df-properties__footer {
   flex-shrink: 0;
   border-top: 1px solid var(--border-color);
 }
 
-.sf-properties__footer:empty {
+.df-properties__footer:empty {
   display: none;
 }
 
 /* ── Data Object field editor ─────────────────────────────── */
 
-.sf-field-list {
+.df-field-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.sf-field-row {
+.df-field-row {
   display: grid;
   grid-template-columns: 28px 1fr 1fr 20px;
   gap: 3px;
   align-items: center;
 }
 
-.sf-field-key {
+.df-field-key {
   width: 24px;
   height: 22px;
   border: 1px solid var(--border-color);
@@ -875,11 +875,11 @@
   padding: 0;
   text-align: center;
 }
-.sf-field-key--pk { color: #F6B355; border-color: #F6B355; }
-.sf-field-key--fk { color: #1D73C9; border-color: #1D73C9; }
-.sf-field-key--fqk { color: #DA4E55; border-color: #DA4E55; }   /* Fully Qualified Key — brand red */
+.df-field-key--pk { color: #F6B355; border-color: #F6B355; }
+.df-field-key--fk { color: #1D73C9; border-color: #1D73C9; }
+.df-field-key--fqk { color: #DA4E55; border-color: #DA4E55; }   /* Fully Qualified Key — brand red */
 
-.sf-field-input {
+.df-field-input {
   height: 22px;
   padding: 0 4px;
   border: 1px solid var(--border-color);
@@ -890,25 +890,25 @@
   font-family: system-ui, sans-serif;
   min-width: 0;
 }
-.sf-field-input:focus {
+.df-field-input:focus {
   outline: 1px solid var(--color-primary);
   border-color: var(--color-primary);
 }
 
-.sf-field-input--type {
+.df-field-input--type {
   font-size: 9px;
   -webkit-appearance: none;
   appearance: none;
   padding-right: 2px;
 }
 
-.sf-field-input--length {
+.df-field-input--length {
   font-size: 9px;
   text-align: center;
   width: 100%;
 }
 
-.sf-field-delete {
+.df-field-delete {
   width: 18px;
   height: 18px;
   border: none;
@@ -923,12 +923,12 @@
   align-items: center;
   justify-content: center;
 }
-.sf-field-delete:hover {
+.df-field-delete:hover {
   background: rgba(218, 78, 85, 0.2);
   color: #DA4E55;
 }
 
-.sf-properties__btn--add-field {
+.df-properties__btn--add-field {
   margin-top: 6px;
   width: 100%;
   padding: 4px 8px;
@@ -939,12 +939,12 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
-.sf-properties__btn--add-field:hover {
+.df-properties__btn--add-field:hover {
   border-color: var(--brand-blue);
   color: var(--brand-blue);
 }
 
-.sf-properties__btn--full-edit {
+.df-properties__btn--full-edit {
   margin-top: 4px;
   width: 100%;
   padding: 5px 8px;
@@ -957,13 +957,13 @@
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
-.sf-properties__btn--full-edit:hover {
+.df-properties__btn--full-edit:hover {
   background: var(--brand-amber, #F6B355);
   color: #fff;
 }
 
 /* Field editor header row */
-.sf-field-row--header {
+.df-field-row--header {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -976,11 +976,11 @@
 
 /* ── Marker picker (Source/Target end) ────────────────── */
 
-.sf-marker-picker {
+.df-marker-picker {
   position: relative;
 }
 
-.sf-marker-picker__btn {
+.df-marker-picker__btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -996,16 +996,16 @@
   text-align: left;
 }
 
-.sf-marker-picker__btn:hover {
+.df-marker-picker__btn:hover {
   border-color: var(--border-color-strong);
 }
 
-.sf-marker-picker__btn svg {
+.df-marker-picker__btn svg {
   flex-shrink: 0;
   color: var(--text-secondary);
 }
 
-.sf-marker-picker__list {
+.df-marker-picker__list {
   position: absolute;
   top: 100%;
   left: 0;
@@ -1022,7 +1022,7 @@
   overflow-y: auto;
 }
 
-.sf-marker-picker__item {
+.df-marker-picker__item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1038,27 +1038,27 @@
   white-space: nowrap;
 }
 
-.sf-marker-picker__item:hover {
+.df-marker-picker__item:hover {
   background: var(--toolbar-button-hover);
   color: var(--text-primary);
 }
 
-.sf-marker-picker__item--active {
+.df-marker-picker__item--active {
   color: var(--color-primary);
 }
 
-.sf-marker-picker__item svg {
+.df-marker-picker__item svg {
   flex-shrink: 0;
   color: var(--text-secondary);
 }
 
-.sf-marker-picker__item--active svg {
+.df-marker-picker__item--active svg {
   color: var(--color-primary);
 }
 
 /* ── Mobile properties — bottom sheet ──────────────────────────── */
 @media (max-width: 768px) {
-  .sf-properties {
+  .df-properties {
     position: fixed;
     top: auto;
     left: 0;
@@ -1077,12 +1077,12 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .sf-properties--hidden {
+  .df-properties--hidden {
     transform: translateY(100%);
     box-shadow: none;
   }
 
-  .sf-properties .sf-drag-handle {
+  .df-properties .df-drag-handle {
     display: flex;
     position: sticky;
     top: 0;
@@ -1090,50 +1090,50 @@
     background: var(--properties-bg);
   }
 
-  .sf-properties--hidden .sf-drag-handle {
+  .df-properties--hidden .df-drag-handle {
     display: none;
   }
 
   /* On mobile, let the panel content scroll together (body + footer) */
-  .sf-properties {
+  .df-properties {
     overflow-y: auto;
   }
 
-  .sf-properties__body {
+  .df-properties__body {
     flex: none;
     overflow: visible;
   }
 
-  .sf-properties__footer {
+  .df-properties__footer {
     flex-shrink: 0;
   }
 
   /* Touch-friendly inputs and controls */
-  .sf-properties__input,
-  .sf-properties select {
+  .df-properties__input,
+  .df-properties select {
     min-height: 40px;
     font-size: var(--font-size-md);
     padding: 8px var(--spacing-sm);
   }
 
-  .sf-properties__btn,
-  .sf-properties button {
+  .df-properties__btn,
+  .df-properties button {
     min-height: 40px;
     font-size: var(--font-size-sm);
   }
 
-  .sf-section__header {
+  .df-section__header {
     min-height: 40px;
     padding: 10px var(--spacing-md);
   }
 
-  .sf-properties__label {
+  .df-properties__label {
     font-size: 11px;
   }
 }
 
 /* Multi-select message */
-.sf-properties__multi-msg {
+.df-properties__multi-msg {
   padding: var(--spacing-lg) var(--spacing-md);
   color: var(--text-muted);
   font-size: var(--font-size-sm);
@@ -1142,19 +1142,19 @@
 }
 
 /* Number input with suffix (e.g., "12 weeks") */
-.sf-prop-input-with-suffix {
+.df-prop-input-with-suffix {
   display: flex;
   align-items: center;
   gap: 0;
   position: relative;
 }
 
-.sf-prop-input-with-suffix .sf-properties__input {
+.df-prop-input-with-suffix .df-properties__input {
   flex: 1;
   padding-right: 60px;
 }
 
-.sf-properties__input-suffix {
+.df-properties__input-suffix {
   position: absolute;
   right: 8px;
   pointer-events: none;
@@ -1165,13 +1165,13 @@
 
 /* ── Timeline task editor ───────────────────────────────── */
 
-.sf-timeline-task-list {
+.df-timeline-task-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.sf-timeline-task-row {
+.df-timeline-task-row {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1180,19 +1180,19 @@
   transition: background var(--transition-fast);
 }
 
-.sf-timeline-task-row--task {
+.df-timeline-task-row--task {
   padding-left: 20px;
 }
 
-.sf-timeline-task-row--group {
+.df-timeline-task-row--group {
   font-weight: 600;
 }
 
-.sf-timeline-task-row--drag-over {
+.df-timeline-task-row--drag-over {
   box-shadow: 0 -2px 0 0 var(--color-primary);
 }
 
-.sf-timeline-task-drag {
+.df-timeline-task-drag {
   width: 14px;
   height: 20px;
   border: none;
@@ -1208,20 +1208,20 @@
   transition: opacity var(--transition-fast);
 }
 
-.sf-timeline-task-row:hover .sf-timeline-task-drag {
+.df-timeline-task-row:hover .df-timeline-task-drag {
   opacity: 1;
 }
 
-.sf-timeline-task-drag:active {
+.df-timeline-task-drag:active {
   cursor: grabbing;
 }
 
-.sf-timeline-task-drag svg {
+.df-timeline-task-drag svg {
   width: 10px;
   height: 14px;
 }
 
-.sf-timeline-task-color {
+.df-timeline-task-color {
   width: 18px;
   height: 18px;
   border: none;
@@ -1231,24 +1231,24 @@
   flex-shrink: 0;
 }
 
-.sf-timeline-task-label {
+.df-timeline-task-label {
   flex: 1;
   min-width: 0;
 }
 
-.sf-timeline-task-actions {
+.df-timeline-task-actions {
   display: flex;
   gap: 6px;
   margin-top: 4px;
 }
 
-.sf-timeline-task-actions .sf-properties__btn {
+.df-timeline-task-actions .df-properties__btn {
   flex: 1;
 }
 
 /* ── OrgPerson detail reorder rows ────────────────────── */
 
-.sf-detail-row {
+.df-detail-row {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1257,19 +1257,19 @@
   transition: background 0.15s;
 }
 
-.sf-detail-row:hover {
+.df-detail-row:hover {
   background: var(--toolbar-button-hover);
 }
 
-.sf-detail-row--dragging {
+.df-detail-row--dragging {
   opacity: 0.4;
 }
 
-.sf-detail-row--over {
+.df-detail-row--over {
   border-top: 2px solid var(--color-primary);
 }
 
-.sf-detail-row__handle {
+.df-detail-row__handle {
   cursor: grab;
   color: var(--text-secondary);
   font-size: 12px;
@@ -1280,28 +1280,28 @@
   text-align: center;
 }
 
-.sf-detail-row__handle:active {
+.df-detail-row__handle:active {
   cursor: grabbing;
 }
 
-.sf-detail-row .sf-properties__label {
+.df-detail-row .df-properties__label {
   margin-bottom: 0;
   font-size: var(--font-size-xs);
   flex-shrink: 0;
 }
 
-.sf-detail-row .sf-properties__input {
+.df-detail-row .df-properties__input {
   flex: 1;
   min-width: 0;
 }
 
 /* Extensible details (v1.11+): row has label input + value input + × remove */
-.sf-detail-row__label-input {
+.df-detail-row__label-input {
   flex: 0 0 80px !important;
   min-width: 60px !important;
 }
 
-.sf-detail-row__remove {
+.df-detail-row__remove {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
@@ -1318,14 +1318,14 @@
   justify-content: center;
 }
 
-.sf-detail-row__remove:hover {
+.df-detail-row__remove:hover {
   background: rgba(218, 78, 85, 0.18);
   color: var(--brand-red);
 }
 
 /* ── Chip input (Tags) ─────────────────────────────────── */
 
-.sf-chip-input {
+.df-chip-input {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1338,11 +1338,11 @@
   cursor: text;
 }
 
-.sf-chip-input:focus-within {
+.df-chip-input:focus-within {
   border-color: var(--color-primary);
 }
 
-.sf-chip {
+.df-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1355,7 +1355,7 @@
   user-select: none;
 }
 
-.sf-chip__remove {
+.df-chip__remove {
   width: 14px;
   height: 14px;
   display: inline-flex;
@@ -1371,12 +1371,12 @@
   padding: 0;
 }
 
-.sf-chip__remove:hover {
+.df-chip__remove:hover {
   background: rgba(218, 78, 85, 0.18);
   color: var(--brand-red);
 }
 
-.sf-chip-input__input {
+.df-chip-input__input {
   flex: 1;
   min-width: 80px;
   border: none;
@@ -1389,13 +1389,13 @@
 
 /* ── RACI picker ───────────────────────────────────────── */
 
-.sf-raci-picker {
+.df-raci-picker {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
 
-.sf-raci-picker__btn {
+.df-raci-picker__btn {
   padding: 6px 0;
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-sm);
@@ -1408,16 +1408,16 @@
   text-align: center;
 }
 
-.sf-raci-picker__btn:hover {
+.df-raci-picker__btn:hover {
   border-color: var(--text-secondary);
 }
 
-.sf-raci-picker__btn--active {
+.df-raci-picker__btn--active {
   color: #FFFFFF;
   border-color: transparent;
 }
 
-.sf-raci-picker__btn--active[data-raci="R"] { background: var(--brand-blue); }
-.sf-raci-picker__btn--active[data-raci="A"] { background: var(--brand-red); }
-.sf-raci-picker__btn--active[data-raci="C"] { background: var(--brand-amber); }
-.sf-raci-picker__btn--active[data-raci="I"] { background: #8A9099; }
+.df-raci-picker__btn--active[data-raci="R"] { background: var(--brand-blue); }
+.df-raci-picker__btn--active[data-raci="A"] { background: var(--brand-red); }
+.df-raci-picker__btn--active[data-raci="C"] { background: var(--brand-amber); }
+.df-raci-picker__btn--active[data-raci="I"] { background: #8A9099; }

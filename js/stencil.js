@@ -1,14 +1,14 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.15.0';
-import { getAllIcons, getCategories } from './icons.js?v=1.15.0';
-import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.15.0';
-import { startImageAddFlow } from './image-component.js?v=1.15.0';
-import * as history from './history.js?v=1.15.0';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.15.0';
-import { confirmModal } from './feedback.js?v=1.15.0';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.15.0'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.15.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.15.1';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.15.1';
+import { startImageAddFlow } from './image-component.js?v=1.15.1';
+import * as history from './history.js?v=1.15.1';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.15.1';
+import { confirmModal } from './feedback.js?v=1.15.1';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.15.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -67,19 +67,19 @@ export function init(_graph, _paper) {
 }
 
 export function isHidden() {
-  return panelEl.classList.contains('sf-stencil--hidden');
+  return panelEl.classList.contains('df-stencil--hidden');
 }
 
 export function show() {
-  panelEl.classList.remove('sf-stencil--hidden');
+  panelEl.classList.remove('df-stencil--hidden');
   const btn = document.getElementById('btn-toggle-stencil');
-  if (btn) btn.classList.add('sf-toolbar__button--active');
+  if (btn) btn.classList.add('df-toolbar__button--active');
 }
 
 export function hide() {
-  panelEl.classList.add('sf-stencil--hidden');
+  panelEl.classList.add('df-stencil--hidden');
   const btn = document.getElementById('btn-toggle-stencil');
-  if (btn) btn.classList.remove('sf-toolbar__button--active');
+  if (btn) btn.classList.remove('df-toolbar__button--active');
 }
 
 export function setDiagramType(type) {
@@ -160,16 +160,16 @@ function renderCategories() {
 
 function buildComponentSection(category) {
   const section = document.createElement('div');
-  section.className = 'sf-stencil__category' + (category.collapsed ? ' sf-stencil__category--collapsed' : '');
+  section.className = 'df-stencil__category' + (category.collapsed ? ' df-stencil__category--collapsed' : '');
   section.dataset.categoryId = category.id;
 
   const header = buildCategoryHeader(category.label, category.components.length);
   header.addEventListener('click', () => {
-    section.classList.toggle('sf-stencil__category--collapsed');
+    section.classList.toggle('df-stencil__category--collapsed');
   });
 
   const items = document.createElement('div');
-  items.className = 'sf-stencil__items';
+  items.className = 'df-stencil__items';
 
   for (const template of category.components) {
     items.appendChild(buildComponentItem(template));
@@ -187,16 +187,16 @@ function buildComponentSection(category) {
 // (thumbnail snapshot, drag/drop, hover-× delete via buildTemplateItem) is identical.
 function buildTemplatesSection(label, categoryId, templates, collapsed = false) {
   const section = document.createElement('div');
-  section.className = 'sf-stencil__category' + (collapsed ? ' sf-stencil__category--collapsed' : '');
+  section.className = 'df-stencil__category' + (collapsed ? ' df-stencil__category--collapsed' : '');
   section.dataset.categoryId = categoryId;
 
   const header = buildCategoryHeader(label, templates.length);
   header.addEventListener('click', () => {
-    section.classList.toggle('sf-stencil__category--collapsed');
+    section.classList.toggle('df-stencil__category--collapsed');
   });
 
   const items = document.createElement('div');
-  items.className = 'sf-stencil__items sf-stencil__items--templates';
+  items.className = 'df-stencil__items df-stencil__items--templates';
 
   for (const template of templates) {
     items.appendChild(buildTemplateItem(template));
@@ -209,7 +209,7 @@ function buildTemplatesSection(label, categoryId, templates, collapsed = false) 
 
 function buildTemplateItem(template) {
   const item = document.createElement('div');
-  item.className = 'sf-stencil__item sf-stencil__item--template';
+  item.className = 'df-stencil__item df-stencil__item--template';
   item.draggable = true;
   item.dataset.label = (template.name || '').toLowerCase();
   item.title = template.name || 'Template';
@@ -218,14 +218,14 @@ function buildTemplateItem(template) {
   item.appendChild(renderTemplateThumbnail(template));
 
   const labelSpan = document.createElement('span');
-  labelSpan.className = 'sf-stencil__item-label';
+  labelSpan.className = 'df-stencil__item-label';
   labelSpan.textContent = template.name || 'Template';
   item.appendChild(labelSpan);
 
   // Per-template delete (×) — appears on hover/focus.
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'sf-template-delete';
+  del.className = 'df-template-delete';
   del.title = `Delete "${template.name}"`;
   del.setAttribute('aria-label', `Delete template "${template.name}"`);
   del.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -260,25 +260,25 @@ function buildTemplateItem(template) {
 
 function buildIconSection(cat, icons, displayLabel) {
   const section = document.createElement('div');
-  section.className = 'sf-stencil__category sf-stencil__category--collapsed';
+  section.className = 'df-stencil__category df-stencil__category--collapsed';
   section.dataset.categoryId = `slds-${cat}`;
 
   const header = buildCategoryHeader(displayLabel || `SLDS: ${cat}`, icons.length);
   header.addEventListener('click', () => {
-    section.classList.toggle('sf-stencil__category--collapsed');
+    section.classList.toggle('df-stencil__category--collapsed');
   });
 
   const grid = document.createElement('div');
-  grid.className = 'sf-stencil__items sf-stencil__items--grid';
+  grid.className = 'df-stencil__items df-stencil__items--grid';
 
   for (const icon of icons) {
     const item = document.createElement('div');
-    item.className = 'sf-stencil__item sf-stencil__item--icon';
+    item.className = 'df-stencil__item df-stencil__item--icon';
     item.title = icon.name;
     item.dataset.iconId = icon.id;
     item.draggable = true;
     const safeId = icon.id.replace(/[^a-zA-Z0-9_-]/g, '');
-    item.innerHTML = `<svg class="sf-stencil__icon-preview"><use href="#${safeId}"></use></svg>`;
+    item.innerHTML = `<svg class="df-stencil__icon-preview"><use href="#${safeId}"></use></svg>`;
 
     const iconTpl = {
       type: 'sf.SimpleNode',
@@ -303,19 +303,19 @@ function buildIconSection(cat, icons, displayLabel) {
 
 function buildCategoryHeader(label, count) {
   const header = document.createElement('div');
-  header.className = 'sf-stencil__category-header';
+  header.className = 'df-stencil__category-header';
   // Chevron + label on the left, count on the right. The chevron sits inside
   // a wrapper so CSS can rotate it based on the parent category's collapsed
-  // class (`.sf-stencil__category--collapsed`).
+  // class (`.df-stencil__category--collapsed`).
   const left = document.createElement('span');
-  left.className = 'sf-stencil__category-label';
+  left.className = 'df-stencil__category-label';
   left.innerHTML = `
-    <svg class="sf-stencil__category-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+    <svg class="df-stencil__category-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
       <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <span>${escapeHtml(label)}</span>`;
   const countSpan = document.createElement('span');
-  countSpan.className = 'sf-stencil__category-count';
+  countSpan.className = 'df-stencil__category-count';
   countSpan.textContent = count;
   header.appendChild(left);
   header.appendChild(countSpan);
@@ -335,21 +335,21 @@ function escapeHtml(str) {
 
 function buildComponentItem(template) {
   const item = document.createElement('div');
-  item.className = 'sf-stencil__item';
+  item.className = 'df-stencil__item';
   item.draggable = true;
   item.dataset.label = template.label?.toLowerCase() || '';
 
   // stencilSvg takes priority — allows custom logos even when iconName is set for the dropped element
   const safeIconName = (template.iconName || '').replace(/[^a-zA-Z0-9_-]/g, '');
   const iconHtml = template.stencilSvg
-    ? `<svg class="sf-stencil__item-icon sf-stencil__item-icon--svg" viewBox="0 0 20 20">${template.stencilSvg}</svg>`
+    ? `<svg class="df-stencil__item-icon df-stencil__item-icon--svg" viewBox="0 0 20 20">${template.stencilSvg}</svg>`
     : safeIconName
-    ? `<svg class="sf-stencil__item-icon"><use href="#${safeIconName}"></use></svg>`
-    : `<div class="sf-stencil__item-icon sf-stencil__item-icon--placeholder"></div>`;
+    ? `<svg class="df-stencil__item-icon"><use href="#${safeIconName}"></use></svg>`
+    : `<div class="df-stencil__item-icon df-stencil__item-icon--placeholder"></div>`;
 
   item.innerHTML = iconHtml;
   const labelSpan = document.createElement('span');
-  labelSpan.className = 'sf-stencil__item-label';
+  labelSpan.className = 'df-stencil__item-label';
   labelSpan.textContent = template.label || '';
   item.appendChild(labelSpan);
 
@@ -405,7 +405,7 @@ function setupDropZone() {
 
   // Gap 8 (v1.12.0) — during a stencil dragover, highlight the topmost
   // container-like cell beneath the cursor with the amber drop-target outline.
-  // Uses its OWN class (`sf-drop-target`, styled in canvas.css), NOT the link-drag
+  // Uses its OWN class (`df-drop-target`, styled in canvas.css), NOT the link-drag
   // `.available-cell` — that one is port-only now (its body outline was removed
   // because the body is never a connection target). Resets on dragleave/drop. The
   // dragged template's TYPE isn't available from dragover events (only the MIME type
@@ -413,7 +413,7 @@ function setupDropZone() {
   // COULD host a child via `canEmbed`.
   let _highlightedView = null;
   const clearDropHighlight = () => {
-    if (_highlightedView?.el) _highlightedView.el.classList.remove('sf-drop-target');
+    if (_highlightedView?.el) _highlightedView.el.classList.remove('df-drop-target');
     _highlightedView = null;
   };
   const refreshDropHighlight = (clientX, clientY) => {
@@ -436,7 +436,7 @@ function setupDropZone() {
     if (next === _highlightedView) return;
     clearDropHighlight();
     if (next?.el) {
-      next.el.classList.add('sf-drop-target');
+      next.el.classList.add('df-drop-target');
       _highlightedView = next;
     }
   };
@@ -558,8 +558,8 @@ function getCanvasCenterLocalPoint() {
   // On mobile, fixed-positioned panels overlap the canvas from the bottom
   const isMobile = window.innerWidth <= 768;
   if (isMobile) {
-    const stencilEl = document.querySelector('.sf-stencil:not(.sf-stencil--hidden)');
-    const propsEl = document.querySelector('.sf-properties:not(.sf-properties--hidden)');
+    const stencilEl = document.querySelector('.df-stencil:not(.df-stencil--hidden)');
+    const propsEl = document.querySelector('.df-properties:not(.df-properties--hidden)');
     // Use the highest panel top edge as the effective bottom of visible canvas
     if (stencilEl) {
       const sr = stencilEl.getBoundingClientRect();
@@ -717,14 +717,14 @@ function applyDisplayFlags(element) {
 }
 
 function filterStencil(query) {
-  const sections = bodyEl.querySelectorAll('.sf-stencil__category');
+  const sections = bodyEl.querySelectorAll('.df-stencil__category');
 
   sections.forEach(section => {
-    const items = section.querySelectorAll('.sf-stencil__item');
+    const items = section.querySelectorAll('.df-stencil__item');
     let visibleCount = 0;
 
     items.forEach(item => {
-      const label = (item.querySelector('.sf-stencil__item-label')?.textContent || item.title || '').toLowerCase();
+      const label = (item.querySelector('.df-stencil__item-label')?.textContent || item.title || '').toLowerCase();
       const matches = !query || label.includes(query);
       item.style.display = matches ? '' : 'none';
       if (matches) visibleCount++;
@@ -734,7 +734,7 @@ function filterStencil(query) {
 
     // Auto-expand matching categories
     if (query && visibleCount > 0) {
-      section.classList.remove('sf-stencil__category--collapsed');
+      section.classList.remove('df-stencil__category--collapsed');
     }
   });
 }
@@ -783,7 +783,7 @@ function setupTouchDrag() {
     if (navigator.vibrate) navigator.vibrate(15);
     // Create simple ghost following finger
     ghost = document.createElement('div');
-    ghost.className = 'sf-touch-drag-ghost';
+    ghost.className = 'df-touch-drag-ghost';
     ghost.textContent = activeTemplate?.label || activeLabel || 'Shape';
     ghost.style.left = clientX + 'px';
     ghost.style.top = clientY + 'px';
@@ -830,7 +830,7 @@ function setupTouchDrag() {
 
   panelEl.addEventListener('touchstart', (e) => {
     if (window.innerWidth > 768) return;
-    const item = e.target.closest('.sf-stencil__item');
+    const item = e.target.closest('.df-stencil__item');
     if (!item) return;
     const tpl = getTemplateFor(item);
     const templateId = item._sfTemplateId || null;

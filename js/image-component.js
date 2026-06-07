@@ -1,4 +1,4 @@
-import { showError } from './feedback.js?v=1.15.0';
+import { showError } from './feedback.js?v=1.15.1';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //
@@ -152,17 +152,17 @@ function loadImage(url) {
  * open the file picker (preserving Safari's user-gesture chain).
  */
 function showImageConsentModal(callback) {
-  document.querySelector('.sf-image-consent-modal')?.remove();
+  document.querySelector('.df-image-consent-modal')?.remove();
   const overlay = document.createElement('div');
-  overlay.className = 'sf-modal sf-image-consent-modal';
+  overlay.className = 'df-modal df-image-consent-modal';
   overlay.style.zIndex = '10001';
   overlay.innerHTML = `
-    <div class="sf-modal__overlay"></div>
-    <div class="sf-modal__dialog" style="width:480px">
-      <div class="sf-modal__header">
-        <h2 class="sf-modal__title">Add image to this diagram?</h2>
+    <div class="df-modal__overlay"></div>
+    <div class="df-modal__dialog" style="width:480px">
+      <div class="df-modal__header">
+        <h2 class="df-modal__title">Add image to this diagram?</h2>
       </div>
-      <div class="sf-modal__body" style="padding:16px 20px">
+      <div class="df-modal__body" style="padding:16px 20px">
         <p style="margin:0 0 12px;line-height:1.5">
           Adding image components will <strong>disable URL sharing</strong> for this diagram while images are present.
         </p>
@@ -173,9 +173,9 @@ function showImageConsentModal(callback) {
           When you continue you'll be asked to pick an image file. Supported formats: <strong>PNG, JPG, WEBP, GIF</strong>. Large images are automatically resized.
         </p>
       </div>
-      <div class="sf-modal__footer" style="gap:8px;padding:12px 20px">
-        <button class="sf-modal__btn" data-action="cancel">Cancel</button>
-        <button class="sf-modal__btn sf-modal__btn--primary" data-action="confirm">Pick image</button>
+      <div class="df-modal__footer" style="gap:8px;padding:12px 20px">
+        <button class="df-modal__btn" data-action="cancel">Cancel</button>
+        <button class="df-modal__btn df-modal__btn--primary" data-action="confirm">Pick image</button>
       </div>
     </div>`;
   let finished = false;
@@ -193,6 +193,6 @@ function showImageConsentModal(callback) {
   // synchronously, which calls openImagePicker → input.click() — the file
   // picker thus opens within the same gesture that the user just performed.
   overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => finish(true));
-  overlay.querySelector('.sf-modal__overlay').addEventListener('click', () => finish(false));
+  overlay.querySelector('.df-modal__overlay').addEventListener('click', () => finish(false));
   document.body.appendChild(overlay);
 }

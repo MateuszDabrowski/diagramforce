@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.15.0';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.15.0';
+import { cctx } from './context.js?v=1.15.1';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.15.1';
 
 // ── Tolerances ──────────────────────────────────────────────────────
 const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)
@@ -29,7 +29,7 @@ const SPACING_SNAP_TOL = 4;
 // cleared at pointerup. Stores only the peer elements that share the dragged
 // element's container context, skipping background shapes that carry no rhythm.
 let _spacingDragContext = null;
-let guideLayer = null;       // the <g class="sf-alignment-guides"> overlay
+let guideLayer = null;       // the <g class="df-alignment-guides"> overlay
 
 // Background / group shapes that don't share rhythm with ordinary nodes. When an
 // ORDINARY element is dragged these are skipped as peers (an object shouldn't space
@@ -246,7 +246,7 @@ function getGuideLayer() {
   const { paper } = cctx;
   if (!guideLayer || !guideLayer.parentNode) {
     guideLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    guideLayer.setAttribute('class', 'sf-alignment-guides');
+    guideLayer.setAttribute('class', 'df-alignment-guides');
     // Append inside joint-layers so guides inherit the paper translate/scale transform
     const layers = paper.svg.querySelector('.joint-layers');
     if (layers) {

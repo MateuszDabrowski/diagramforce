@@ -11,8 +11,8 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.0';
-import { getActiveTabName } from './tabs.js?v=1.15.0';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.1';
+import { getActiveTabName } from './tabs.js?v=1.15.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -72,8 +72,8 @@ const SECTION_STARTS = new Set(VIS.map((c, i) => (i > 0 && c.section !== VIS[i -
 // Inline SLDS-style glyphs (no sprite symbols for these — same inline-SVG
 // convention the toolbar buttons use).
 const ICON_DOWNLOAD = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8v8"/><path d="M4.8 6.6 8 9.8l3.2-3.2"/><path d="M2.4 11.4v1.3a1.1 1.1 0 0 0 1.1 1.1h9a1.1 1.1 0 0 0 1.1-1.1v-1.3"/></svg>';
-const ICON_CHECKBOX = '<svg class="sf-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="sf-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const ICON_WARN = '<svg class="sf-tbl__warn" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M7.13 1.85 .9 12.9a1 1 0 0 0 .87 1.5h12.46a1 1 0 0 0 .87-1.5L8.87 1.85a1 1 0 0 0-1.74 0Z" fill="#FE9339"/><rect x="7.15" y="5.4" width="1.7" height="4.5" rx="0.85" fill="#412700"/><circle cx="8" cy="11.7" r="0.95" fill="#412700"/></svg>';
+const ICON_CHECKBOX = '<svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_WARN = '<svg class="df-tbl__warn" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M7.13 1.85 .9 12.9a1 1 0 0 0 .87 1.5h12.46a1 1 0 0 0 .87-1.5L8.87 1.85a1 1 0 0 0-1.74 0Z" fill="#FE9339"/><rect x="7.15" y="5.4" width="1.7" height="4.5" rx="0.85" fill="#412700"/><circle cx="8" cy="11.7" r="0.95" fill="#412700"/></svg>';
 
 export function init(modules) {
   graph = modules.graph;
@@ -303,16 +303,16 @@ export function render() {
   _lastRows = rows;
   const { mappingCount, objectCount, unmappedCount } = built;
 
-  const tier1 = `<tr class="sf-tbl__sections">
-      <th colspan="${SRC_COUNT}" class="sf-tbl__sec sf-tbl__sec--src">Data Sources</th>
-      <th colspan="${MAP_COUNT}" class="sf-tbl__sec sf-tbl__sec--map">Data Mapping</th>
-      <th colspan="${TGT_COUNT}" class="sf-tbl__sec sf-tbl__sec--tgt">Data Targets</th>
+  const tier1 = `<tr class="df-tbl__sections">
+      <th colspan="${SRC_COUNT}" class="df-tbl__sec df-tbl__sec--src">Data Sources</th>
+      <th colspan="${MAP_COUNT}" class="df-tbl__sec df-tbl__sec--map">Data Mapping</th>
+      <th colspan="${TGT_COUNT}" class="df-tbl__sec df-tbl__sec--tgt">Data Targets</th>
     </tr>`;
-  const tier2 = `<tr class="sf-tbl__cols">${VIS.map((c, i) => {
-    const div = SECTION_STARTS.has(i) ? ' sf-tbl__divider' : '';
-    const sortable = c.sortable ? ' sf-tbl__th--sortable' : '';
-    const active = (_sortKey === c.key) ? ' sf-tbl__th--sorted' : '';
-    const arrow = (_sortKey === c.key) ? `<span class="sf-tbl__sort-ind">${_sortDir === 'desc' ? '▼' : '▲'}</span>` : '';
+  const tier2 = `<tr class="df-tbl__cols">${VIS.map((c, i) => {
+    const div = SECTION_STARTS.has(i) ? ' df-tbl__divider' : '';
+    const sortable = c.sortable ? ' df-tbl__th--sortable' : '';
+    const active = (_sortKey === c.key) ? ' df-tbl__th--sorted' : '';
+    const arrow = (_sortKey === c.key) ? `<span class="df-tbl__sort-ind">${_sortDir === 'desc' ? '▼' : '▲'}</span>` : '';
     const attr = c.sortable ? ` data-sort="${c.key}" role="button" tabindex="0"` : '';
     return `<th class="${(div + sortable + active).trim()}"${attr}>${escHtml(c.label)}${arrow}</th>`;
   }).join('')}</tr>`;
@@ -321,7 +321,7 @@ export function render() {
   const cellHtml = (key, val) => {
     const s = String(val ?? '');
     const placeholder = ((key === 'srcDataLayer' || key === 'tgtDataLayer') && s.startsWith('[')) || ((key === 'expressionRule' || key === 'cardinality') && s === '—');
-    return placeholder ? `<span class="sf-tbl__placeholder">${escHtml(s)}</span>` : escHtml(s);
+    return placeholder ? `<span class="df-tbl__placeholder">${escHtml(s)}</span>` : escHtml(s);
   };
   // A deprecated field is shown by striking its identity cells (API Name + Label) on
   // the relevant side. Source side keys: srcApi/srcLabel; target side: tgtApi/tgtLabel.
@@ -329,36 +329,36 @@ export function render() {
     (r._srcDeprecated && (key === 'srcApi' || key === 'srcLabel')) ||
     (r._tgtDeprecated && (key === 'tgtApi' || key === 'tgtLabel'));
   const body = rows.length
-    ? rows.map(r => `<tr${r._mapped ? '' : ' class="sf-tbl__row--unmapped"'}>${VIS.map((c, i) => {
-        const div = SECTION_STARTS.has(i) ? ' sf-tbl__divider' : '';
-        const center = c.center ? ' sf-tbl__center' : '';
-        const strike = isStruck(c.key, r) ? ' sf-tbl__strike' : '';
+    ? rows.map(r => `<tr${r._mapped ? '' : ' class="df-tbl__row--unmapped"'}>${VIS.map((c, i) => {
+        const div = SECTION_STARTS.has(i) ? ' df-tbl__divider' : '';
+        const center = c.center ? ' df-tbl__center' : '';
+        const strike = isStruck(c.key, r) ? ' df-tbl__strike' : '';
         // The type-mismatch warning rides on the Mapping Type cell.
         const warn = (c.key === 'mappingType' && r._warn)
-          ? `<span class="sf-tbl__warn-wrap" title="Source type “${escHtml(r.srcType)}” ≠ target type “${escHtml(r.tgtType)}” on a Standard mapping — a Formula/Calculated transform may be required.">${ICON_WARN}</span>`
+          ? `<span class="df-tbl__warn-wrap" title="Source type “${escHtml(r.srcType)}” ≠ target type “${escHtml(r.tgtType)}” on a Standard mapping — a Formula/Calculated transform may be required.">${ICON_WARN}</span>`
           : '';
         return `<td class="${(div + center + strike).trim()}">${cellHtml(c.key, r[c.key])}${warn}</td>`;
       }).join('')}</tr>`).join('')
-    : `<tr><td colspan="${VIS.length}" class="sf-tbl__empty">No mapping connectors on this diagram yet — draw field-to-field links on the canvas, then return here.</td></tr>`;
+    : `<tr><td colspan="${VIS.length}" class="df-tbl__empty">No mapping connectors on this diagram yet — draw field-to-field links on the canvas, then return here.</td></tr>`;
 
   const note = `${mappingCount} mapping${mappingCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}` + (unmappedCount ? ` · ${unmappedCount} unmapped field${unmappedCount === 1 ? '' : 's'}` : '');
   const toggleLabel = 'Show Unmapped Fields';   // static label; the checkbox tick shows on/off state
 
-  container.innerHTML = `<div class="sf-tbl">
-      <div class="sf-tbl__topbar">
-        <h2 class="sf-tbl__title">Field Mapping</h2>
-        <span class="sf-tbl__note">${escHtml(note)}</span>
-        <button type="button" id="tbl-show-unmapped" class="sf-toolbar__menu-item sf-toolbar__menu-item--icon sf-toolbar__menu-item--toggle sf-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>
-        <button type="button" id="tbl-csv" class="sf-tbl__csv" title="Export the visible mapping rows as a CSV file">${ICON_DOWNLOAD}<span>Export Mapping to CSV</span></button>
+  container.innerHTML = `<div class="df-tbl">
+      <div class="df-tbl__topbar">
+        <h2 class="df-tbl__title">Field Mapping</h2>
+        <span class="df-tbl__note">${escHtml(note)}</span>
+        <button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>
+        <button type="button" id="tbl-csv" class="df-tbl__csv" title="Export the visible mapping rows as a CSV file">${ICON_DOWNLOAD}<span>Export Mapping to CSV</span></button>
       </div>
-      <div class="sf-tbl__scroll">
-        <table class="sf-tbl__table"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>
+      <div class="df-tbl__scroll">
+        <table class="df-tbl__table"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>
       </div>
     </div>`;
 
   container.querySelector('#tbl-show-unmapped')?.addEventListener('click', () => { _showUnmapped = !_showUnmapped; render(); });
   container.querySelector('#tbl-csv')?.addEventListener('click', exportCsv);
-  container.querySelectorAll('.sf-tbl__th--sortable').forEach(th => {
+  container.querySelectorAll('.df-tbl__th--sortable').forEach(th => {
     const key = th.getAttribute('data-sort');
     const go = () => toggleSort(key);
     th.addEventListener('click', go);
