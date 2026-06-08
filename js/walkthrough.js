@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.15.5';
-import { escHtml } from './util.js?v=1.15.5';
+import { trapFocus } from './feedback.js?v=1.15.6';
+import { escHtml } from './util.js?v=1.15.6';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs

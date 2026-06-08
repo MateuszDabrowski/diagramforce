@@ -6,12 +6,12 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.15.5';
-import { normalizeDateSuffix } from '../util.js?v=1.15.5';
-import { escHtml } from '../util.js?v=1.15.5';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.5';
-import { pctx } from './context.js?v=1.15.5';
-import { slimForShare } from '../share-codec.js?v=1.15.5';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.15.6';
+import { normalizeDateSuffix } from '../util.js?v=1.15.6';
+import { escHtml } from '../util.js?v=1.15.6';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.15.6';
+import { pctx } from './context.js?v=1.15.6';
+import { slimForShare } from '../share-codec.js?v=1.15.6';
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
 const MAX_CELL_COUNT = 2000;

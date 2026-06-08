@@ -1,11 +1,11 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.15.5';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.5';
-import { resizeDataObjectToFit } from './components.js?v=1.15.5';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.5';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.5';
+import { diagramHasImage } from './image-component.js?v=1.15.6';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.6';
+import { resizeDataObjectToFit } from './components.js?v=1.15.6';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.6';
+import { escHtml, formatRelativeTime } from './util.js?v=1.15.6';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode

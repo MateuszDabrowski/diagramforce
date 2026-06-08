@@ -1,47 +1,47 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.15.5';
-import { registerSfRouter } from './canvas/router.js?v=1.15.5';
+import { cctx } from './canvas/context.js?v=1.15.6';
+import { registerSfRouter } from './canvas/router.js?v=1.15.6';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.15.5';
+export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.15.6';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.15.5';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.15.6';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.15.5';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.15.5';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.15.6';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.15.6';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.15.5';
-export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.15.5';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.15.6';
+export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.15.6';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported (called in init());
 // startLineStyleOverlays + the mobile pair were public exports, so re-export them
 // to keep canvas.js's export boundary stable (app.js / properties.js import them).
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.15.5';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.15.5';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.15.6';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.15.6';
 export { startLineStyleOverlays };
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.15.5';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.15.6';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.15.5';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.15.6';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.15.5';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.15.6';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.15.5';
+import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.15.6';
 export { canEmbed };
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.15.5';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.15.6';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -684,7 +684,7 @@ export function init() {
   // first successful connection of a fresh link, and only if the user has
   // not already set an explicit dash pattern — so editing an existing link
   // never silently overrides their choice.
-  paper.on('link:connect', (linkView) => {
+  paper.on('link:connect', (linkView, evt, newCellView, newCellMagnet, arrowhead) => {
     const link = linkView.model;
     const src = link.get('source');
     const tgt = link.get('target');
@@ -709,12 +709,27 @@ export function init() {
     // sfManhattan, plain ends) so Data Model links read distinctly from Data Mapping's
     // amber mapping connectors. The panel can re-pick cardinality markers afterwards.
     if (srcCell.get('type') === 'sf.DataObject' && tgtCell.get('type') === 'sf.DataObject') {
-      // Any DataObject↔DataObject link that isn't a mapping is an ER relationship —
-      // grey, orthogonal sfManhattan, plain (none) ends — whether it lands on the
-      // top/bottom ports OR the header-side er-* ports. No forced cardinality default;
-      // the user picks crow's-foot ends in the link panel. (Header-side ports route
-      // orthogonally too now that getPortInfo recognises erLeft/erRight.)
-      if (link.prop('linkKind') !== 'mapping') applyRelationshipLinkStyle(link);
+      if (link.prop('linkKind') !== 'mapping') {
+        // link:connect fires both for a freshly-DRAWN link AND when an existing link's end is
+        // dragged to a new port (re-anchor). Only a brand-new link should (re)apply the default
+        // relationship style — otherwise dragging a One↔Many link to a different port wipes its
+        // crow's-foot markers back to plain ends (reported bug). Re-anchor = the moved end had a
+        // real cell id before this drop; we ALSO bail when the link already carries ER
+        // cardinality, as a belt-and-braces guard so a configured relationship is never reset.
+        const reAnchor = !!link.previous(arrowhead || 'target')?.id;
+        const isErCard = m => !!(m?.d) && m.d !== 'M 0 0 L -12 0';
+        const hasCardinality = isErCard(link.attr('line/sourceMarker')) || isErCard(link.attr('line/targetMarker'));
+        if (!reAnchor && !hasCardinality) {
+          applyRelationshipLinkStyle(link);
+          // A relationship drawn from a header SIDE port (er-left/er-right) defaults to
+          // One ↔ One-or-Many (the common parent→child FK shape) instead of plain ends.
+          if (String(src.port).startsWith('er-') || String(tgt.port).startsWith('er-')) {
+            const stroke = link.attr('line/stroke') || '#888888';
+            link.attr('line/sourceMarker', { type: 'path', d: 'M -12 -8 L -12 8 M -12 0 L 0 0', fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' });          // one
+            link.attr('line/targetMarker', { type: 'path', d: 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8', fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' }); // oneMany
+          }
+        }
+      }
       return;
     }
     const SEQ_TYPES = new Set([

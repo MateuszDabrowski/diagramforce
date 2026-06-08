@@ -1,8 +1,8 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.15.5';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.15.5';
+import { getIconDataUri } from './icons.js?v=1.15.6';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.15.6';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -987,6 +987,7 @@ export const DATAMAPPING_CATEGORIES = [
     label: 'Mapping Layers',
     components: [
       { type: 'sf.Zone', label: 'Source',            stencilSvg: SVG.zone, accentColor: '#1D73C9', layerStage: 'source' },
+      { type: 'sf.Zone', label: 'Data Stream',       stencilSvg: SVG.zone, accentColor: '#1D73C9', layerStage: 'datastream' },
       { type: 'sf.Zone', label: 'Data Lake Object',  stencilSvg: SVG.zone, accentColor: '#F6B355', layerStage: 'dlo' },
       { type: 'sf.Zone', label: 'Data Model Object', stencilSvg: SVG.zone, accentColor: '#DA4E55', layerStage: 'dmo' },
       { type: 'sf.Zone', label: 'Activation',        stencilSvg: SVG.zone, accentColor: '#27AE60', layerStage: 'activation' },

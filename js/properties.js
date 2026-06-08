@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.15.5';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.5';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.5';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.5';
-import * as stencilModule from './stencil.js?v=1.15.5';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.5';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.5';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.15.6';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.6';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.6';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.6';
+import * as stencilModule from './stencil.js?v=1.15.6';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.6';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.6';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -16,13 +16,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.15.5';
-import * as history from './history.js?v=1.15.5';
-import { startImageAddFlow } from './image-component.js?v=1.15.5';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.5';
-import { getActiveTabName } from './tabs.js?v=1.15.5';
-import { saveSelectionAsTemplate } from './templates.js?v=1.15.5';
-import { newFid } from './shapes.js?v=1.15.5';
+} from './clipboard.js?v=1.15.6';
+import * as history from './history.js?v=1.15.6';
+import { startImageAddFlow } from './image-component.js?v=1.15.6';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.6';
+import { getActiveTabName } from './tabs.js?v=1.15.6';
+import { saveSelectionAsTemplate } from './templates.js?v=1.15.6';
+import { newFid } from './shapes.js?v=1.15.6';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -210,6 +210,9 @@ const COLOR_SCHEMA = {
     { label: 'Border',
       get: c => c.attr('body/stroke'),
       set: (c, v) => c.attr('body/stroke', v) },
+    { label: 'Label color',
+      get: c => c.attr('label/fill'),
+      set: (c, v) => c.attr('label/fill', v) },
   ],
   'sf.TaskGroup': [
     { label: 'Fill',
@@ -1695,10 +1698,11 @@ function renderZoneProps(cell) {
     titleEl.textContent = v || '';
   });
 
-  // Appearance — canonical order: Fill → Border
+  // Appearance — canonical order: Fill → Border → Label colour
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Fill',   cell.attr('body/fill'),   v => cell.attr('body/fill', v));
   addColor(appearance, 'Border', cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
+  addColor(appearance, 'Label color', cell.attr('label/fill') || 'var(--text-muted)', v => cell.attr('label/fill', v));
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');

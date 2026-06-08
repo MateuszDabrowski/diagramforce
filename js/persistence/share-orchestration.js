@@ -5,11 +5,11 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.5';
-import { diagramHasImage } from '../image-component.js?v=1.15.5';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.5';
-import { escHtml } from '../util.js?v=1.15.5';
-import { pctx } from './context.js?v=1.15.5';
+import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.6';
+import { diagramHasImage } from '../image-component.js?v=1.15.6';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.15.6';
+import { escHtml } from '../util.js?v=1.15.6';
+import { pctx } from './context.js?v=1.15.6';
 
 export function shareAsURL() {
   const { graph, appVersion: APP_VERSION, tabNameCb: getTabNameCallback, diagramTypeCb: getDiagramTypeCallback, mappingModeCb: getMappingModeCallback } = pctx;

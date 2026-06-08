@@ -2,8 +2,8 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.15.5';
-import { fieldFocus } from './canvas/focus-state.js?v=1.15.5';
+import { parseMarkdown } from './markdown.js?v=1.15.6';
+import { fieldFocus } from './canvas/focus-state.js?v=1.15.6';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -47,6 +47,11 @@ export function setMappingModeGetter(fn) { mappingModeGetter = fn; }
 // the DataObject collapse toggle (a `collapsed` prop change + the follow-on resize) is one undo.
 let dataObjectHistoryBatcher = null;
 export function setDataObjectHistoryBatcher(fn) { dataObjectHistoryBatcher = fn; }
+
+// Reads the Auto-Fit Containers toggle (canvas.isAutoSizingEnabled) — wired from app.js. When on,
+// collapsing/expanding a DataObject re-packs its lane (shifts same-parent siblings below it).
+let autoFitGetter = null;
+export function setAutoFitGetter(fn) { autoFitGetter = fn; }
 
 // Does a field have a live link on either of its ports? Drives "Show Only Mapped"
 // — connected fields stay visible so collapsing the rest never breaks a link.
@@ -2258,7 +2263,28 @@ export function register() {
       thit.addEventListener('mousedown', (evt) => evt.stopPropagation());
       thit.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        const toggle = () => this.model.prop('collapsed', !this.model.get('collapsed'));
+        const m = this.model;
+        const toggle = () => {
+          const beforeH = m.size().height;
+          m.prop('collapsed', !m.get('collapsed'));   // change:collapsed → _autoResize → resize (sync)
+          // Auto-Fit ON: re-pack the lane in BOTH directions — a collapse closes the freed gap,
+          // an expand pushes room open — by shifting same-parent siblings BELOW this object by the
+          // height delta. Runs inside the same undo batch (synchronous after the resize). No global
+          // reshuffle / no viewport re-frame; the parent then re-fits via its change:size trigger.
+          if (autoFitGetter && autoFitGetter()) {
+            const delta = m.size().height - beforeH;
+            const gr = m.graph, parentId = m.get('parent');
+            if (gr && parentId && delta) {
+              const myTop = m.position().y;
+              gr.getElements().forEach(c => {
+                if (c !== m && c.get('parent') === parentId && c.get('type') === 'sf.DataObject'
+                    && c.position().y > myTop) {
+                  c.position(c.position().x, c.position().y + delta);
+                }
+              });
+            }
+          }
+        };
         if (dataObjectHistoryBatcher) dataObjectHistoryBatcher(toggle); else toggle();
       });
       g.appendChild(tg);

@@ -4,14 +4,14 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.15.5** — matches the app's current `appVersion`; set `"appVersion": "1.15.5"` in generated files.
+> **Spec snapshot: v1.15.6** — matches the app's current `appVersion`; set `"appVersion": "1.15.6"` in generated files.
 
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.5",
+  "appVersion": "1.15.6",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -28,7 +28,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.15.5"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.15.6"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
@@ -42,8 +42,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.15.5", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.15.5" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.15.6", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.15.6" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -1709,7 +1709,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.15.5", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.15.6", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1786,7 +1786,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.5",
+  "appVersion": "1.15.6",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1942,7 +1942,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.5",
+  "appVersion": "1.15.6",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2062,7 +2062,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.5",
+  "appVersion": "1.15.6",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

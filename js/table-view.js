@@ -11,8 +11,8 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.5';
-import { getActiveTabName } from './tabs.js?v=1.15.5';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.6';
+import { getActiveTabName } from './tabs.js?v=1.15.6';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -139,17 +139,31 @@ function erEndToken(markerAttr) {
   return '';
 }
 
-// Cardinality token for an object's first ER relationship link (linkKind !== 'mapping',
-// i.e. a header-level object↔object relationship rather than a field mapping): a
-// `source:target` pair read from the link's crow's-foot / bar / circle end markers
-// (e.g. "1:Many"). Em-dash when the object has no ER relationship.
-function cardinalityOf(obj) {
-  if (!obj || !graph) return '—';
-  const erLinks = graph.getConnectedLinks(obj).filter(l => l.prop('linkKind') !== 'mapping');
+// Cardinality token for the ER relationship between a mapping's two endpoint objects
+// (linkKind !== 'mapping' — a header-level object↔object relationship, not the field mapping):
+// a `source:target` pair read from the relationship's crow's-foot / bar / circle end markers
+// (e.g. "1:Many"), oriented as srcObj-end : tgtObj-end. Em-dash when there's no ER relationship.
+function cardinalityOf(srcObj, tgtObj) {
+  if (!tgtObj || !graph) return '—';
+  const erLinks = graph.getConnectedLinks(tgtObj).filter(l => l.prop('linkKind') !== 'mapping');
   if (!erLinks.length) return '—';
-  const l = erLinks[0];
-  const sTok = erEndToken(l.attr('line/sourceMarker'));
-  const tTok = erEndToken(l.attr('line/targetMarker'));
+  // Prefer the ER link that actually spans THIS mapping's two endpoint objects, so a Source→DLO
+  // row reports the Source↔DLO relationship — not the target's first/unrelated ER link. (The old
+  // `erLinks[0]` was order-dependent: a DLO mapped from Source but also related to a DMO would
+  // pick up whichever relationship happened to be first, e.g. show the DLO↔DMO cardinality.)
+  const rel = (srcObj && erLinks.find(l => {
+    const a = l.get('source')?.id, b = l.get('target')?.id;
+    return (a === srcObj.id && b === tgtObj.id) || (a === tgtObj.id && b === srcObj.id);
+  })) || erLinks[0];
+  // Read the marker on each object's ACTUAL end so the token reads srcObj-end : tgtObj-end,
+  // regardless of which direction the relationship link was drawn. Fall back to source/target
+  // as-authored when an object isn't on the link (the erLinks[0] fallback above).
+  const endOf = (obj, fallbackEnd) =>
+    obj && rel.get('source')?.id === obj.id ? rel.attr('line/sourceMarker')
+    : obj && rel.get('target')?.id === obj.id ? rel.attr('line/targetMarker')
+    : rel.attr(`line/${fallbackEnd}`);
+  const sTok = erEndToken(endOf(srcObj, 'sourceMarker'));
+  const tTok = erEndToken(endOf(tgtObj, 'targetMarker'));
   return (sTok || tTok) ? `${sTok || '—'}:${tTok || '—'}` : '—';
 }
 
@@ -245,7 +259,7 @@ function buildData() {
     const tNotNull = tF?.required || tF?.keyType === 'pk' || tF?.keyType === 'fqk';
     rows.push({
       ...srcCells(sObj, sF),
-      cardinality: cardinalityOf(tObj),          // target object's ER relationship (or em-dash)
+      cardinality: cardinalityOf(sObj, tObj),    // the Source↔Target ER relationship (or em-dash)
       mappingType: mType,
       expressionRule: expr || '—',               // dimmed em-dash = clean pass-through
       tgtDataLayer: dataLayerOf(tObj),

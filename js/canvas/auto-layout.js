@@ -3,7 +3,7 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.15.5';
+import { cctx } from './context.js?v=1.15.6';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -560,7 +560,12 @@ export function applyDataMappingLayout() {
   // Classify zones into type-columns. A unit = one zone + its objects (or, for a free
   // object, a zone-less singleton). Column order = TYPE_ORDER, free columns appended.
   const TYPE_ORDER = ['custom', 'source', 'dlo', 'dmo', 'activation'];
-  const typeOf = s => (s === 'source' || s === 'dlo' || s === 'dmo' || s === 'activation') ? s : 'custom';
+  // `datastream` shares the SOURCE band (same blue): it lays out in the leftmost column,
+  // stacked directly below the Source zone(s) — see the source-column sort below.
+  const typeOf = s => {
+    if (s === 'datastream') return 'source';
+    return (s === 'source' || s === 'dlo' || s === 'dmo' || s === 'activation') ? s : 'custom';
+  };
   const unitsByType = new Map();
   const laned = new Set();
   for (const z of zones) {
@@ -625,9 +630,16 @@ export function applyDataMappingLayout() {
     const order = (pass % 2 === 0) ? columns : [...columns].reverse();
     for (const col of order) {
       for (const u of col.units) u.objects.sort((a, b) => bary(a.id) - bary(b.id));
-      col.units.sort((a, b) =>
-        (a.objects.reduce((s, o) => s + bary(o.id), 0) / a.objects.length) -
-        (b.objects.reduce((s, o) => s + bary(o.id), 0) / b.objects.length));
+      const uMean = u => u.objects.reduce((s, o) => s + bary(o.id), 0) / u.objects.length;
+      col.units.sort((a, b) => {
+        // Pin Data Stream zones BELOW Source zones in the shared leftmost band (same blue,
+        // conceptually "below Source") — regardless of barycentre, which would otherwise let a
+        // Data Stream lane float above Source.
+        const sa = a.zone?.get('layerStage') === 'datastream' ? 1 : 0;
+        const sb = b.zone?.get('layerStage') === 'datastream' ? 1 : 0;
+        if (sa !== sb) return sa - sb;
+        return uMean(a) - uMean(b);
+      });
       restack(col);
     }
   }
