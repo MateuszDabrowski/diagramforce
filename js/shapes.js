@@ -2,8 +2,8 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.15.6';
-import { fieldFocus } from './canvas/focus-state.js?v=1.15.6';
+import { parseMarkdown } from './markdown.js?v=1.15.7';
+import { fieldFocus } from './canvas/focus-state.js?v=1.15.7';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -1960,6 +1960,12 @@ export function register() {
       this.listenTo(this.model, 'change:fields change:showLabels change:showFieldLengths change:keyFieldsOnly change:collapsed', () => this._renderFieldRows());
       this.listenTo(this.model, 'change:fields change:keyFieldsOnly change:collapsed', () => this._syncFieldPorts());
       this.listenTo(this.model, 'change:keyFieldsOnly change:collapsed', () => this._autoResize());
+      // Collapse/expand converges (or restores) every field port via _syncFieldPorts, but JointJS
+      // re-renders the port ELEMENTS asynchronously. A connected link that re-routes before that
+      // flush anchors to the stale, expanded port position — so a collapsed object's mapping links
+      // stay drawn as if it were still expanded (most visible on mobile, where the flush lands even
+      // later). Force the ports + connected links to settle explicitly. See _rerouteConnectedLinks.
+      this.listenTo(this.model, 'change:collapsed', () => this._rerouteConnectedLinks());
       this.listenTo(this.model, 'change:category change:fields change:size', () => this._renderBadges());
     },
     update() {
@@ -2115,6 +2121,27 @@ export function register() {
       // index, so a shorter new list keeps the tail of the previous longer one —
       // removed ports would linger. (Same option the sequence-port rebuilds use.)
       model.prop('ports/items', [...nonFieldPorts, ...erPorts, ...desired], { rewrite: true });
+    },
+
+    // Settle a collapse/expand: flush the rendered port elements to the model's positions, then
+    // re-route every connected link against those settled anchors. Without the explicit
+    // _updatePorts() the port elements lag (JointJS renders them asynchronously), so a link
+    // re-routed here would still read the old, expanded port position and never follow the
+    // collapse. Runs synchronously (the common case) and again on the next frame (mobile flushes
+    // ports late). Guarded against teardown — findViewByModel returns null for a removed view.
+    _rerouteConnectedLinks() {
+      const model = this.model;
+      const paper = this.paper;
+      const graph = model.graph;
+      if (!graph || !paper) return;
+      const flush = () => {
+        this._updatePorts?.();
+        for (const link of graph.getConnectedLinks(model)) {
+          paper.findViewByModel(link)?.update?.();
+        }
+      };
+      flush();
+      requestAnimationFrame(flush);
     },
 
     _renderFieldRows() {

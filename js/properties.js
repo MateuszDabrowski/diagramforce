@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.15.6';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.6';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.6';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.6';
-import * as stencilModule from './stencil.js?v=1.15.6';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.6';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.6';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.15.7';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.15.7';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.15.7';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.15.7';
+import * as stencilModule from './stencil.js?v=1.15.7';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.15.7';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.15.7';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -16,13 +16,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.15.6';
-import * as history from './history.js?v=1.15.6';
-import { startImageAddFlow } from './image-component.js?v=1.15.6';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.6';
-import { getActiveTabName } from './tabs.js?v=1.15.6';
-import { saveSelectionAsTemplate } from './templates.js?v=1.15.6';
-import { newFid } from './shapes.js?v=1.15.6';
+} from './clipboard.js?v=1.15.7';
+import * as history from './history.js?v=1.15.7';
+import { startImageAddFlow } from './image-component.js?v=1.15.7';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.7';
+import { getActiveTabName } from './tabs.js?v=1.15.7';
+import { saveSelectionAsTemplate } from './templates.js?v=1.15.7';
+import { newFid } from './shapes.js?v=1.15.7';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -2164,7 +2164,7 @@ function renderFieldEditor(parent, cell) {
     addBtn.className = 'df-properties__btn df-properties__btn--add-field';
     addBtn.textContent = '+ Add Field';
     addBtn.addEventListener('click', () => {
-      const updated = [...cell.get('fields'), { label: '', apiName: '', type: 'Text', keyType: null, length: '' }];
+      const updated = [...cell.get('fields'), { label: '', apiName: '', type: 'Text', keyType: null, length: '', sampleValues: '' }];
       cell.set('fields', updated);
       resizeDataObjectToFit(cell);
       rebuild();
@@ -2234,7 +2234,7 @@ function openFieldEditorModal(cell, onClose) {
     // Header row
     const hdr = document.createElement('div');
     hdr.className = 'df-field-modal__row df-field-modal__row--header';
-    hdr.innerHTML = '<span class="df-field-modal__col--handle"></span><span class="df-field-modal__col--key">Key</span><span class="df-field-modal__col--api">API Name</span><span class="df-field-modal__col--label">Label</span><span class="df-field-modal__col--type">Type</span><span class="df-field-modal__col--len">Length</span><span class="df-field-modal__col--req">REQUIRED</span><span class="df-field-modal__col--decom">DEPRECATED</span><span class="df-field-modal__col--del"></span>';
+    hdr.innerHTML = '<span class="df-field-modal__col--handle"></span><span class="df-field-modal__col--key">Key</span><span class="df-field-modal__col--api">API Name</span><span class="df-field-modal__col--label">Label</span><span class="df-field-modal__col--type">Type</span><span class="df-field-modal__col--len">Length</span><span class="df-field-modal__col--sample">Sample Values</span><span class="df-field-modal__col--req">REQUIRED</span><span class="df-field-modal__col--decom">DEPRECATED</span><span class="df-field-modal__col--del"></span>';
     bodyEl.appendChild(hdr);
 
     currentFields.forEach((field, i) => {
@@ -2322,6 +2322,19 @@ function openFieldEditorModal(cell, onClose) {
         cell.set('fields', updated);
       });
 
+      // Sample values (optional) — representative example values for the field, surfaced in
+      // the Data Mapping table view and CSV exports. Display/export-only: never drawn on the node.
+      const sampleInput = document.createElement('input');
+      sampleInput.type = 'text';
+      sampleInput.className = 'df-field-input df-field-modal__col--sample';
+      sampleInput.value = field.sampleValues || '';
+      sampleInput.placeholder = 'e.g. Acme, Globex';
+      sampleInput.addEventListener('input', () => {
+        const updated = [...cell.get('fields')];
+        updated[i] = { ...updated[i], sampleValues: sampleInput.value };
+        cell.set('fields', updated);
+      });
+
       // Required + Deprecated — Display-menu-style checkbox toggles (a tick that
       // appears when on), not raw browser checkboxes, for app-consistent styling.
       const reqCheck = makeFieldCheckToggle(!!field.required, 'Required', 'df-field-modal__col--req', on => {
@@ -2354,6 +2367,7 @@ function openFieldEditorModal(cell, onClose) {
       row.appendChild(labelInput);
       row.appendChild(typeSelect);
       row.appendChild(lenInput);
+      row.appendChild(sampleInput);
       row.appendChild(reqCheck);
       row.appendChild(decomCheck);
       row.appendChild(delBtn);
@@ -2438,8 +2452,8 @@ function openFieldEditorModal(cell, onClose) {
           <button type="button" class="df-modal__btn df-csv-tools__btn df-csv-tools__import-file">Import Fields from CSV…</button>
           <button type="button" class="df-modal__btn df-csv-tools__btn df-csv-tools__import-paste">Import Fields from Paste</button>
         </div>
-        <textarea class="df-csv-tools__textarea" rows="4" spellcheck="false" placeholder="API Name,Label,Type,Length,Required,Deprecated,Key&#10;Id,Record ID,ID,,Yes,No,PK&#10;AccountId,Account,Lookup,,Yes,No,FK&#10;Email__c,Email,Email,,No,No,"></textarea>
-        <p class="df-csv-tools__hint">Paste rows in the box above, then <strong>Import Fields from Paste</strong>. Columns: <strong>API&nbsp;Name, Label, Type, Length, Required, Deprecated, Key</strong> — a header row is auto-detected; importing <strong>overwrites every field</strong> on this object. Grab the Sample CSV for the full list of valid Type / Key values.</p>
+        <textarea class="df-csv-tools__textarea" rows="4" spellcheck="false" placeholder="API Name,Label,Type,Length,Required,Deprecated,Key,Sample Values&#10;Id,Record ID,ID,,Yes,No,PK,003Ax00000ABCDE&#10;AccountId,Account,Lookup,,Yes,No,FK,001Ax00000XYZab&#10;Email__c,Email,Email,,No,No,,jane@example.com"></textarea>
+        <p class="df-csv-tools__hint">Paste rows in the box above, then <strong>Import Fields from Paste</strong>. Columns: <strong>API&nbsp;Name, Label, Type, Length, Required, Deprecated, Key, Sample&nbsp;Values</strong> — a header row is auto-detected; importing <strong>overwrites every field</strong> on this object. Grab the Sample CSV for the full list of valid Type / Key values.</p>
         <span class="df-csv-tools__status" aria-live="polite"></span>
         <input type="file" accept=".csv,text/csv" class="df-csv-tools__file" hidden>
       </div>`;
@@ -2503,14 +2517,14 @@ function openFieldEditorModal(cell, onClose) {
 
 // Field ↔ CSV columns (the full set the editor exposes), in a fixed order shared by
 // the Sample, Export, and Import paths.
-const FIELD_CSV_COLUMNS = ['API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key'];
+const FIELD_CSV_COLUMNS = ['API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
 const csvCell = v => { const s = String(v ?? '').trim(); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const keyToCsv = k => k === 'pk' ? 'PK' : k === 'fk' ? 'FK' : k === 'fqk' ? 'FQK' : '';
 
 function fieldsToCsv(fields) {
   const rows = (fields || []).map(f => [
     f.apiName || '', f.label || '', f.type || '', f.length || '',
-    f.required ? 'Yes' : 'No', f.deprecated ? 'Yes' : 'No', keyToCsv(f.keyType),
+    f.required ? 'Yes' : 'No', f.deprecated ? 'Yes' : 'No', keyToCsv(f.keyType), f.sampleValues || '',
   ]);
   return '﻿' + [FIELD_CSV_COLUMNS, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
 }
@@ -2520,15 +2534,15 @@ function fieldsToCsv(fields) {
 // Required + a Deprecated example.
 function buildSampleFieldsCsv() {
   const canonical = [
-    ['Id', 'Record ID', 'ID', '', 'Yes', 'No', 'PK'],
-    ['AccountId', 'Account', 'Lookup', '', 'Yes', 'No', 'FK'],
-    ['UnifiedId__c', 'Unified Profile Key', 'Text', '255', 'No', 'No', 'FQK'],
+    ['Id', 'Record ID', 'ID', '', 'Yes', 'No', 'PK', '003Ax00000ABCDE'],
+    ['AccountId', 'Account', 'Lookup', '', 'Yes', 'No', 'FK', '001Ax00000XYZab'],
+    ['UnifiedId__c', 'Unified Profile Key', 'Text', '255', 'No', 'No', 'FQK', 'john.doe@example.com'],
   ];
   const used = new Set(canonical.map(r => r[2]));
   const rest = SF_FIELD_TYPES.filter(t => !used.has(t)).map(t => {
     const api = t.replace(/[^a-z0-9]+/gi, '') + '__c';
     const len = /text|char|area/i.test(t) ? '255' : '';
-    return [api, `${t} Example`, t, len, 'No', 'No', ''];
+    return [api, `${t} Example`, t, len, 'No', 'No', '', ''];
   });
   const all = [...canonical, ...rest];
   if (all.length) all[all.length - 1][5] = 'Yes';   // last row demonstrates Deprecated
@@ -2568,7 +2582,7 @@ function parseBulkFields(text) {
   const firstLower = split(lines[0]).map(s => s.toLowerCase());
   const HEADER_FIRST = ['api name', 'api_name', 'apiname', 'api', 'name', 'field', 'field name', 'field api name'];
   let start = 0;
-  let map = { api: 0, label: 1, type: 2, length: 3, required: 4, decom: 5, key: 6 };   // positional default
+  let map = { api: 0, label: 1, type: 2, length: 3, required: 4, decom: 5, key: 6, sample: 7 };   // positional default
   if (HEADER_FIRST.includes(firstLower[0])) {
     start = 1;
     const find = re => firstLower.findIndex(h => re.test(h));
@@ -2580,6 +2594,7 @@ function parseBulkFields(text) {
       required: find(/req/),
       decom: find(/deprecat|decom/),   // new "Deprecated" header + legacy "Decommissioned"
       key: find(/key|pk|fk|fqk/),
+      sample: find(/sample|example/),
     };
   }
 
@@ -2598,8 +2613,9 @@ function parseBulkFields(text) {
     if (!keyType) { for (let j = 0; j < cols.length; j++) { const k = keyOf(cols[j]); if (k) { keyType = k; break; } } }
     // A PK / FQK is inherently mandatory; otherwise honour the Required column.
     const required = (keyType === 'pk' || keyType === 'fqk') ? true : (map.required >= 0 ? truthy(cols[map.required]) : false);
+    const sampleValues = sanitizeFieldValue((map.sample >= 0 && cols[map.sample]) ? cols[map.sample] : '');
     const fid = newFid(seen); seen.add(fid);   // stable synthetic identity per imported row
-    out.push({ label, apiName: api, type, keyType, length, required, deprecated, fid });
+    out.push({ label, apiName: api, type, keyType, length, required, deprecated, sampleValues, fid });
   }
   return out;
 }

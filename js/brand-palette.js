@@ -11,8 +11,17 @@
 // detection works regardless of how the picker hands the value back.
 
 const LS_KEY = 'sfdiag::brandColors';
+const SEED_FLAG = 'sfdiag::brandColorsSeeded';
 const MAX_SLOTS = 12;
 const HEX_RE = /^#?([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+// Swatches every user gets pre-loaded (v1.15.7): brand red, accent amber, success green,
+// brand blue, plus white (`#FFFFFF`) and the app's near-black (`#1C1E21` — the same value
+// `--text-primary` / `--node-text` / the auto-contrast dark text use, so "black" matches what
+// the app paints elsewhere). Seeded ONCE per browser (SEED_FLAG) and fully removable — once
+// seeded they behave like any user-saved swatch, so deleting one keeps it gone (the flag stops
+// it ever being re-added).
+const DEFAULT_BRAND_COLORS = ['#da4e55', '#f6b355', '#27ae60', '#1d73c9', '#ffffff', '#1c1e21'];
 
 const listeners = new Set();
 
@@ -106,6 +115,33 @@ function notifyListeners() {
   const snap = getPalette();
   for (const cb of listeners) {
     try { cb(snap); } catch { /* listener bug — don't break the others */ }
+  }
+}
+
+/** Seed the palette defaults — appending any default NOT yet offered on this browser (after the
+ *  user's own colours, so a curated palette isn't disturbed), then recording the full default set.
+ *  The flag stores WHICH defaults were offered, not a single boolean: that lets a later release add
+ *  NEW defaults (e.g. white + the app-black in v1.15.7) to users who already seeded the original
+ *  four — while a default the user removed stays removed (it was offered, so never re-added).
+ *  Call once at startup. */
+export function seedDefaultPalette() {
+  try {
+    let seeded = null;
+    try { seeded = JSON.parse(localStorage.getItem(SEED_FLAG) || 'null'); } catch { seeded = null; }
+    // Back-compat: the original flag was the boolean `1` (= "the four brand colours were offered").
+    if (seeded === 1 || seeded === true) seeded = ['#da4e55', '#f6b355', '#27ae60', '#1d73c9'];
+    const offered = new Set((Array.isArray(seeded) ? seeded : []).map(normaliseHex).filter(Boolean));
+
+    const toSeed = DEFAULT_BRAND_COLORS.filter(c => !offered.has(c));   // defaults never offered here
+    if (toSeed.length) {
+      const merged = [...getPalette()];                                 // user colours first
+      for (const c of toSeed) if (!merged.includes(c)) merged.push(c);  // append the unoffered defaults
+      writePalette(merged.slice(0, MAX_SLOTS));                         // cap; user colours win a full palette
+    }
+    // Record every current default as offered — removals now stick, and we never re-add.
+    localStorage.setItem(SEED_FLAG, JSON.stringify([...new Set([...offered, ...DEFAULT_BRAND_COLORS])]));
+  } catch {
+    /* private mode / quota — skip seeding, nothing persists anyway */
   }
 }
 

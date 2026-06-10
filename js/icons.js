@@ -131,6 +131,14 @@ export function normalizeViewBoxes() {
   }
 
   svg.remove();
+
+  // Re-render existing <use> instances so they adopt the freshly-cropped symbol viewBoxes. Some
+  // engines snapshot a referenced <symbol> at first paint and DON'T re-read a later `viewBox`
+  // change — which leaves standard-sprite icons (cropped from a 1000px canvas, so ~30% smaller
+  // before normalization) rendering tiny next to utility icons, most visibly in the Save menu
+  // (`#save` vs the `code_playground`/`quip_sheet` Export icons). Clone+replace is a listener-free
+  // refresh. Runs before the stencil mounts, so only the page chrome's `<use>`s exist here.
+  document.querySelectorAll('use').forEach((u) => u.replaceWith(u.cloneNode(true)));
 }
 
 // Generate a data URI for an SLDS icon to use as JointJS <image> href.

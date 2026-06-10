@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Visual Salesforce architecture diagram editor for data models, process flows, org charts, Gantt charts, and UML sequence diagrams. Free, browser-based, no sign-up required.">
+  <meta name="description" content="Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs. It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams. Everything runs locally in your browser. No sign-up, no server, no data leaves your machine.">
   <meta name="theme-color" content="#1D73C9" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#DA4E55" media="(prefers-color-scheme: dark)">
   <!--
@@ -25,7 +25,7 @@
 
   <!-- Open Graph -->
   <meta property="og:title" content="Diagramforce">
-  <meta property="og:description" content="Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams for Salesforce projects. Runs entirely in your browser - no data is sent to any server.">
+  <meta property="og:description" content="Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs. It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams. Everything runs locally in your browser. No sign-up, no server, no data leaves your machine.">
   <meta property="og:image" content="https://diagramforce.mateuszdabrowski.pl/assets/og-image.png">
   <meta property="og:url" content="https://diagramforce.mateuszdabrowski.pl">
   <meta property="og:type" content="website">
@@ -33,7 +33,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Diagramforce">
-  <meta name="twitter:description" content="Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams for Salesforce projects. Runs entirely in your browser - no data is sent to any server.">
+  <meta name="twitter:description" content="Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs. It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams. Everything runs locally in your browser. No sign-up, no server, no data leaves your machine.">
   <meta name="twitter:image" content="https://diagramforce.mateuszdabrowski.pl/assets/og-image.png">
 
   <link rel="icon" type="image/png" href="assets/favicon.png">
@@ -42,15 +42,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.15.6">
-  <link rel="stylesheet" href="css/theme.css?v=1.15.6">
-  <link rel="stylesheet" href="css/layout.css?v=1.15.6">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.15.6">
-  <link rel="stylesheet" href="css/stencil.css?v=1.15.6">
-  <link rel="stylesheet" href="css/properties.css?v=1.15.6">
-  <link rel="stylesheet" href="css/tabs.css?v=1.15.6">
-  <link rel="stylesheet" href="css/canvas.css?v=1.15.6">
-  <link rel="stylesheet" href="css/modals.css?v=1.15.6">
+  <link rel="stylesheet" href="css/variables.css?v=1.15.7">
+  <link rel="stylesheet" href="css/theme.css?v=1.15.7">
+  <link rel="stylesheet" href="css/layout.css?v=1.15.7">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.15.7">
+  <link rel="stylesheet" href="css/stencil.css?v=1.15.7">
+  <link rel="stylesheet" href="css/properties.css?v=1.15.7">
+  <link rel="stylesheet" href="css/tabs.css?v=1.15.7">
+  <link rel="stylesheet" href="css/canvas.css?v=1.15.7">
+  <link rel="stylesheet" href="css/modals.css?v=1.15.7">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -98,8 +98,12 @@
                 Save to Browser
               </button>
               <button id="btn-save-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#code_playground"></use></svg>
                 Export to JSON
+              </button>
+              <button id="btn-save-csv" class="df-toolbar__menu-item df-toolbar__menu-item--icon" hidden>
+                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#quip_sheet"></use></svg>
+                Export to CSV
               </button>
               <div class="df-toolbar__menu-separator" role="separator"></div>
               <button id="btn-save-png" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
@@ -590,7 +594,9 @@
         </div>
         <p class="df-about__tagline">Visual Salesforce architecture diagramming tool</p>
         <div class="df-about__info">
-          <p>Create architecture diagrams, data models, process flows, org charts, Gantt charts, and UML sequence diagrams for Salesforce projects. Runs entirely in your browser — no data is sent to any server.</p>
+          <p>Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs.</p>
+          <p>It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams.</p>
+          <p>Everything runs locally in your browser. No sign-up, no server, no data leaves your machine.</p>
           <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
@@ -616,8 +622,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.15.6"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.15.6"></script>
-  <script type="module" src="js/app.js?v=1.15.6"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.15.7"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.15.7"></script>
+  <script type="module" src="js/app.js?v=1.15.7"></script>
 </body>
 </html>

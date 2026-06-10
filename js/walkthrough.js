@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.15.6';
-import { escHtml } from './util.js?v=1.15.6';
+import { trapFocus } from './feedback.js?v=1.15.7';
+import { escHtml } from './util.js?v=1.15.7';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -99,7 +99,7 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Time to Build!',
-    body: 'Pro-tip for fast workflows:\n- {{mod}} + A to select all elements, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nFind more [here](https://github.com/MateuszDabrowski/diagramforce/tree/main#keyboard-shortcuts).\n\nTime to build!',
+    body: 'Pro-tip for fast workflows:\n- Share [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) and [reference diagram](https://architect.salesforce.com/diagrams#reference-architecture-gallery) with your context to create first draft with LLM of your choice\n- {{mod}} + A to select all elements, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nFind more [here](https://github.com/MateuszDabrowski/diagramforce/tree/main#keyboard-shortcuts).\n\nTime to build!',
   },
 ];
 

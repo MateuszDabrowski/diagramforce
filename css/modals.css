@@ -84,6 +84,15 @@
   border-radius: 4px;
 }
 
+/* Long-URL advisory shown beneath the share link when it risks truncation. */
+.df-share-modal__longwarn {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-elevated, rgba(127, 127, 127, 0.08));
+  border-left: 3px solid var(--color-accent, #F6B355);
+  border-radius: 4px;
+}
+
 .df-modal__advisory {
   margin: 0 0 var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -738,7 +747,7 @@
 /* ── Field Editor Modal (Full Edit Mode) ─────────── */
 
 .df-field-modal__dialog {
-  width: 880px;
+  width: 940px;
   max-width: calc(100vw - 32px);
   max-height: 80vh;
 }
@@ -845,8 +854,8 @@
 
 .df-field-modal__row {
   display: grid;
-  /* handle · key · api · label · type · length · REQUIRED · DECOMMISSIONED · del */
-  grid-template-columns: 22px 32px minmax(110px, 1fr) minmax(110px, 1fr) 104px 54px 78px 130px 24px;
+  /* handle · key · api · label · type · length · sample · REQUIRED · DEPRECATED · del */
+  grid-template-columns: 22px 32px minmax(110px, 1fr) minmax(110px, 1fr) 104px 54px minmax(120px, 1.2fr) 78px 130px 24px;
   gap: 6px;
   align-items: center;
   padding: 4px 0;
@@ -875,7 +884,8 @@
   text-align: center;
 }
 .df-field-modal__row--header .df-field-modal__col--api,
-.df-field-modal__row--header .df-field-modal__col--label {
+.df-field-modal__row--header .df-field-modal__col--label,
+.df-field-modal__row--header .df-field-modal__col--sample {
   text-align: left;
 }
 
@@ -943,12 +953,12 @@
     font-size: var(--font-size-md);
   }
 
-  /* Field-editor modal: its 8-column grid (~712px) can't fit a phone. Rather than
+  /* Field-editor modal: its multi-column grid (~840px) can't fit a phone. Rather than
      crush/clip the columns — or route to the sidebar editor, which only exposes
-     Key/API/Type and would lose Label/Length/Required/Deprecated — keep every column
-     and let the rows scroll horizontally inside the modal body. */
+     Key/API/Type and would lose Label/Length/Sample/Required/Deprecated — keep every
+     column and let the rows scroll horizontally inside the modal body. */
   .df-field-modal__body { overflow-x: auto; }
-  .df-field-modal__row { min-width: 700px; }
+  .df-field-modal__row { min-width: 840px; }
 
   .df-modal__row {
     padding: var(--spacing-sm);

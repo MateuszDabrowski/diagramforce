@@ -63,15 +63,20 @@ export function initMobileDragHandles() {
 
     restorePanelHeight(target);
 
-    // Use pointer events — works for both mouse and touch
+    // Use pointer events — works for both mouse and touch. We deliberately do NOT call
+    // setPointerCapture: a captured pointer that isn't released cleanly (unreliable on iOS
+    // WebKit) routes the NEXT tap back to the handle, so a tap on a nearby control — most
+    // visibly the stencil's Close (×) button — never lands. Instead we listen on `document`
+    // for the duration of the drag (filtered to this pointerId), which receives the moves
+    // without capture and leaves no lingering capture to swallow the following tap.
     handle.addEventListener('pointerdown', (evt) => {
       // Only act on mobile
       if (window.innerWidth > MOBILE_BP) return;
 
       evt.preventDefault();
       evt.stopPropagation();
-      handle.setPointerCapture(evt.pointerId);
 
+      const pointerId = evt.pointerId;
       const startY = evt.clientY;
       const startT = Date.now();
       const startH = target.getBoundingClientRect().height;
@@ -80,6 +85,7 @@ export function initMobileDragHandles() {
       document.body.style.webkitUserSelect = 'none';
 
       const onMove = (e) => {
+        if (e.pointerId !== pointerId) return;
         lastY = e.clientY;
         const delta = startY - e.clientY;
         const maxH = window.innerHeight * 0.8;
@@ -87,11 +93,8 @@ export function initMobileDragHandles() {
         target.style.height = newH + 'px';
       };
 
-      const onEnd = () => {
-        // Explicitly release the capture taken on pointerdown. The implicit release on pointerup
-        // is unreliable on iOS WebKit — a lingering capture routes the NEXT tap back to the
-        // handle, so a tap on a nearby control (e.g. the stencil search-clear ×) never lands.
-        try { handle.releasePointerCapture(evt.pointerId); } catch { /* already released */ }
+      const onEnd = (e) => {
+        if (e && e.pointerId !== pointerId) return;
         document.body.style.userSelect = '';
         document.body.style.webkitUserSelect = '';
         const dt = Date.now() - startT;
@@ -112,14 +115,14 @@ export function initMobileDragHandles() {
           const finalH = Math.round(target.getBoundingClientRect().height);
           localStorage.setItem(PANEL_HEIGHT_KEY, finalH);
         }
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onEnd);
-        handle.removeEventListener('pointercancel', onEnd);
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onEnd);
+        document.removeEventListener('pointercancel', onEnd);
       };
 
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onEnd);
-      handle.addEventListener('pointercancel', onEnd);
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onEnd);
+      document.addEventListener('pointercancel', onEnd);
     });
   });
 }

@@ -11,8 +11,8 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.6';
-import { getActiveTabName } from './tabs.js?v=1.15.6';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.7';
+import { getActiveTabName } from './tabs.js?v=1.15.7';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -40,6 +40,7 @@ const COLUMNS = [
   { key: 'fk',            label: 'FK',            csv: 'Source FK',             section: 'src' },
   { key: 'fqk',           label: 'FQK',           csv: 'Source FQK',            section: 'src' },
   { key: 'nullable',      label: 'Nullable',      csv: 'Source Nullable',       section: 'src' },
+  { key: 'srcSampleValues', label: 'Sample Values', csv: 'Source Sample Values', section: 'src', sortable: true },
   // Deprecated flags are EXPORT-ONLY (kept out of the on-screen table for readability —
   // a deprecated field is shown instead by striking its API Name / Label). CSV-only.
   { key: 'srcDeprecated', label: 'Deprecated',    csv: 'Source Deprecated',     section: 'src', exportOnly: true },
@@ -58,6 +59,7 @@ const COLUMNS = [
   { key: 'tgtFk',         label: 'FK',            csv: 'Target FK',             section: 'tgt' },
   { key: 'tgtFqk',        label: 'FQK',           csv: 'Target FQK',            section: 'tgt' },
   { key: 'tgtNullable',   label: 'Nullable',      csv: 'Target Nullable',       section: 'tgt' },
+  { key: 'tgtSampleValues', label: 'Sample Values', csv: 'Target Sample Values', section: 'tgt', sortable: true },
   { key: 'tgtDeprecated', label: 'Deprecated',    csv: 'Target Deprecated',     section: 'tgt', exportOnly: true },
 ];
 // Columns shown in the on-screen table (export-only columns are CSV-only). The header
@@ -224,6 +226,7 @@ function srcCells(obj, field) {
     fk: yn(field?.keyType === 'fk'),
     fqk: yn(field?.keyType === 'fqk'),
     nullable: notNull ? 'No' : 'Yes',
+    srcSampleValues: field?.sampleValues || '',
     srcDeprecated: yn(!!field?.deprecated),   // export-only column
     _srcDeprecated: !!field?.deprecated,      // drives the strikethrough on the source field cells
   };
@@ -272,6 +275,7 @@ function buildData() {
       tgtFk: yn(tF?.keyType === 'fk'),
       tgtFqk: yn(tF?.keyType === 'fqk'),
       tgtNullable: tNotNull ? 'No' : 'Yes',
+      tgtSampleValues: tF?.sampleValues || '',
       tgtDeprecated: yn(!!tF?.deprecated),   // export-only column
       _tgtDeprecated: !!tF?.deprecated,      // drives the strikethrough on the target field cells
       _warn: warn,
@@ -287,7 +291,7 @@ function buildData() {
   if (_showUnmapped) {
     for (const o of objects) for (const f of (o.get('fields') || [])) {
       if (!f || !f.fid || participated.has(`${o.id}::${f.fid}`)) continue;
-      rows.push({ ...srcCells(o, f), cardinality: '', mappingType: '', expressionRule: '', tgtDataLayer: '', tgtObject: '', tgtCategory: '', tgtApi: '', tgtLabel: '', tgtType: '', tgtPk: '', tgtFk: '', tgtFqk: '', tgtNullable: '', tgtDeprecated: '', _tgtDeprecated: false, _warn: false, _mapped: false });
+      rows.push({ ...srcCells(o, f), cardinality: '', mappingType: '', expressionRule: '', tgtDataLayer: '', tgtObject: '', tgtCategory: '', tgtApi: '', tgtLabel: '', tgtType: '', tgtPk: '', tgtFk: '', tgtFqk: '', tgtNullable: '', tgtSampleValues: '', tgtDeprecated: '', _tgtDeprecated: false, _warn: false, _mapped: false });
     }
   }
 
@@ -390,18 +394,17 @@ function toggleSort(key) {
   render();
 }
 
-// CSV export of exactly what's on screen (current sort + Show-Unmapped state).
-// A BOM keeps Excel honest about UTF-8; display-only em-dashes are stripped.
-function exportCsv() {
+// CSV export of a row set. A BOM keeps Excel honest about UTF-8; display-only em-dashes
+// are stripped. The export uses the prefixed `csv` label (Source/Target …) since the flat
+// file loses the colour-coded section headers that disambiguate the short on-screen labels.
+function exportRowsCsv(rows) {
   const esc = v => {
     let s = String(v ?? '').trim();
     if (s === '—') s = '';
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  // The export uses the prefixed `csv` label (Source/Target …) since the flat file loses
-  // the colour-coded section headers that disambiguate the short on-screen labels.
   const header = COLUMNS.map(c => esc(c.csv || c.label)).join(',');
-  const lines = _lastRows.map(r => COLUMNS.map(c => esc(r[c.key])).join(','));
+  const lines = (rows || []).map(r => COLUMNS.map(c => esc(r[c.key])).join(','));
   const csv = '﻿' + [header, ...lines].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -412,4 +415,14 @@ function exportCsv() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// In-view export button: exactly what's on screen (current sort + Show-Unmapped state).
+function exportCsv() { exportRowsCsv(_lastRows); }
+
+// Save → Export to CSV entry (Data Mapping): build the lineage rows fresh from the graph so
+// it works whether or not the table view is open, using the default order + Show-Unmapped on.
+export function exportMappingCsv() {
+  if (!graph) return;
+  exportRowsCsv(buildData().rows);
 }

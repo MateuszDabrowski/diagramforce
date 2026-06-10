@@ -18,7 +18,7 @@
 // Reads the live graph/paper + the load guard via the canvas context (cctx);
 // canvas.js calls initExternalLabelAutoplace() once in init() after the cctx
 // hydration block, and keeps cctx.isLoadingJSON synced in setLoadingJSON().
-import { cctx } from './context.js?v=1.15.6';
+import { cctx } from './context.js?v=1.15.7';
 
 const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnEvent',

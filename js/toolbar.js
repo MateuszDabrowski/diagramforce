@@ -1,11 +1,12 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.15.6';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.6';
-import { resizeDataObjectToFit } from './components.js?v=1.15.6';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.6';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.6';
+import { diagramHasImage } from './image-component.js?v=1.15.7';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.7';
+import { resizeDataObjectToFit } from './components.js?v=1.15.7';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.7';
+import { escHtml, formatRelativeTime } from './util.js?v=1.15.7';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.15.7';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -17,6 +18,14 @@ export function init(_modules) {
   setupDropdown('btn-save');
   btn('btn-save-browser').addEventListener('click', () => showSaveModal());
   btn('btn-save-json').addEventListener('click', () => showExportModal());
+  // Export to CSV — only shown for the data diagram types (gated in refreshShareAvailability).
+  // Per-type content: Data Mapping exports the source→target lineage (the Table View's CSV),
+  // Data Model exports the field schema (one row per field across every object).
+  btn('btn-save-csv').addEventListener('click', () => {
+    const type = modules.tabs?.getActiveTabType?.() || '';
+    if (type === 'datamapping') modules.tableView?.exportMappingCsv?.();
+    else if (type === 'datamodel') exportObjectSchemaCsv(modules.graph);
+  });
   btn('btn-save-png').addEventListener('click', () => {
     if (document.getElementById('paper')?.classList.contains('df-animate-flow')) {
       modules.persistence.exportGIF(false);
@@ -78,6 +87,17 @@ export function init(_modules) {
       const disable = isEmpty || gifBusy;
       b.disabled = disable;
       b.title = gifBusy ? GIF_ENCODING_MSG : (isEmpty ? EMPTY_DIAGRAM_MSG : '');
+    }
+    // CSV export — only meaningful for the data diagram types, so it's hidden elsewhere.
+    // When shown it follows the same empty / GIF-busy gating as the other export items.
+    const csvBtn = btn('btn-save-csv');
+    if (csvBtn) {
+      const type = modules.tabs?.getActiveTabType?.() || '';
+      const isDataType = type === 'datamodel' || type === 'datamapping';
+      csvBtn.hidden = !isDataType;
+      const disable = isEmpty || gifBusy;
+      csvBtn.disabled = disable;
+      csvBtn.title = gifBusy ? GIF_ENCODING_MSG : (isEmpty ? EMPTY_DIAGRAM_MSG : '');
     }
   };
   if (modules.graph) {

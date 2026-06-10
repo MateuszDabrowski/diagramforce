@@ -12,8 +12,8 @@
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.15.6';
-import { getBumpLayer } from './crossing-bumps.js?v=1.15.6';
+import { cctx } from './context.js?v=1.15.7';
+import { getBumpLayer } from './crossing-bumps.js?v=1.15.7';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)
@@ -142,19 +142,48 @@ const restoreLinkMarkers = (linkView) => {
     if (origFill == null) el.removeAttribute('fill');
     else el.setAttribute('fill', origFill);
   });
+  // Re-resolve the LIVE line element. JointJS may have re-rendered the link (reroute, crossing-
+  // bump recompute, a position/size change on an endpoint) between tint and restore, which
+  // detaches the `lineEl` we captured at tint time. Restoring only that stale node leaves the
+  // *live* line still pointing at our tinted clone → the "stuck arrowhead colour" bug. Blink
+  // (Chrome/Vivaldi) re-renders more eagerly than WebKit, which is why it surfaced there and not
+  // in Safari. Reset whichever of the two nodes still references our clone.
+  const liveLine = linkView?.el?.querySelector('[joint-selector="line"]') || null;
   markerSwaps.forEach(({ lineEl, attrName, origRef, cloneEl }) => {
-    // Only put origRef back if the line is still pointing at OUR clone.
-    // If the user changed the marker style mid-focus (e.g. swapped the
-    // target end via the property picker while the link was selected),
-    // JointJS re-rendered the line with a fresh `url(#new-marker-id)` —
-    // our origRef is now stale and writing it back would resurrect the
-    // pre-change marker on deselect. The clone is removed unconditionally
-    // because it has no further purpose either way.
-    const currentRef = lineEl.getAttribute(attrName) || '';
-    if (currentRef.includes(cloneEl.id)) {
-      lineEl.setAttribute(attrName, origRef);
+    // Only put origRef back where the line still points at OUR clone. If the user changed the
+    // marker style mid-focus (property picker), JointJS re-rendered the line with a fresh
+    // `url(#new-marker-id)`, so our origRef is stale there — leave it so we don't resurrect the
+    // pre-change marker. The clone is removed unconditionally; it has no further purpose.
+    for (const el of new Set([lineEl, liveLine])) {
+      if (el && (el.getAttribute(attrName) || '').includes(cloneEl.id)) {
+        el.setAttribute(attrName, origRef);
+      }
     }
     cloneEl.parentNode?.removeChild(cloneEl);
+  });
+};
+
+// Belt-and-braces cleanup for any focus-marker clone that escaped restore — e.g. a re-render
+// landed between tint and a mouseleave that never fired. Removes clones no line references; for
+// a clone a live line STILL points at (an actually-stuck tint), it first re-renders that link
+// from its model so the arrowhead reverts to the real marker, then drops the orphan. Runs in the
+// stale-tint sweep, so a stuck marker self-heals on the next canvas interaction.
+const cleanupOrphanFocusMarkers = () => {
+  const paper = cctx.paper;
+  const svg = paper?.svg || paper?.el?.querySelector('svg');
+  const defs = svg?.querySelector('defs');
+  if (!defs) return;
+  const owned = new Set();
+  for (const { markerSwaps } of linkMarkerOriginals.values())
+    for (const s of markerSwaps) owned.add(s.cloneEl.id);
+  defs.querySelectorAll('marker[id^="df-focus-marker-"]').forEach((clone) => {
+    if (owned.has(clone.id)) return;   // still backing an active tint — keep
+    svg.querySelectorAll(`[marker-start="url(#${clone.id})"],[marker-end="url(#${clone.id})"]`)
+      .forEach((lineEl) => {
+        const view = paper.findView?.(lineEl.closest('.joint-link'));
+        view?.update?.();   // re-render from the model → arrowhead reverts to its real marker
+      });
+    clone.remove();
   });
 };
 
@@ -194,8 +223,13 @@ const restoreLinkBumps = (linkView) => {
 // AFTER canvas.init by app.js) gets to add/remove `.selected` first. Without
 // this defer, sweeping during link:pointerdown would see the just-deselected
 // link still marked `.selected` and leave it tinted.
-const sweepStaleMarkerTints = () => queueMicrotask(() => {
+// `keep` (optional) is the link the pointer JUST entered — never strip it. bringLinkToFront's
+// appendChild momentarily clears that link's `:hover`, so without this exclusion the very sweep
+// fired on its own mouseenter would restore the link the user is actively hovering.
+const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
+  const keepId = keep?.model?.id;
   for (const linkView of [...linkMarkerOriginals.keys()]) {
+    if (linkView === keep) continue;
     const el = linkView?.el;
     if (!el) { linkMarkerOriginals.delete(linkView); continue; }
     const stillFocused = el.classList.contains('selected') || el.matches(':hover');
@@ -206,11 +240,14 @@ const sweepStaleMarkerTints = () => queueMicrotask(() => {
   }
   // Sweep stale bump tints alongside markers — same focus semantics.
   for (const linkId of [..._bumpsTinted]) {
+    if (linkId === keepId) continue;
     const view = cctx.paper.findViewByModel(linkId);
     const stillFocused = view?.el?.classList.contains('selected')
                       || view?.el?.matches(':hover');
     if (!stillFocused) restoreLinkBumps(view || { model: { id: linkId } });
   }
+  // Drop any focus-marker clone that slipped through restore (self-heals a stuck arrowhead).
+  cleanupOrphanFocusMarkers();
 });
 
 // ── Registration: bind the hover/focus listeners to the live paper/graph ─
@@ -221,6 +258,12 @@ export function registerSelectionViz(cctx) {
     bringLinkToFront(linkView);
     tintLinkMarkers(linkView);
     tintLinkBumps(linkView);
+    // Moving fast across a dense fan of overlapping connectors DROPS some links' mouseleave (the
+    // pointer jumps off without the browser firing leave), stranding their tinted clone → the
+    // "stuck arrowhead colour" bug. Every enter also sweeps: any tinted link that's no longer
+    // :hover (and not selected) gets restored, so strays never accumulate as the pointer travels.
+    // Keep the just-entered link — its :hover is briefly cleared by the bringLinkToFront reorder.
+    sweepStaleMarkerTints(linkView);
   });
   paper.on('link:mouseleave', (linkView) => {
     // Keep selected links lifted — selection is sustained focus.
@@ -228,6 +271,7 @@ export function registerSelectionViz(cctx) {
     restoreLinkOrder(linkView);
     restoreLinkMarkers(linkView);
     restoreLinkBumps(linkView);
+    sweepStaleMarkerTints();   // also catch strays whose own mouseleave was dropped
   });
   paper.on('link:pointerdown', (linkView) => {
     bringLinkToFront(linkView);

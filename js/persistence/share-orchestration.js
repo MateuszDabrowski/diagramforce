@@ -5,11 +5,11 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.6';
-import { diagramHasImage } from '../image-component.js?v=1.15.6';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.6';
-import { escHtml } from '../util.js?v=1.15.6';
-import { pctx } from './context.js?v=1.15.6';
+import { encodeShareV1, decodeShareV1, encodeShareV2, decodeShareV2, slimForShare } from '../share-codec.js?v=1.15.7';
+import { diagramHasImage } from '../image-component.js?v=1.15.7';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.15.7';
+import { escHtml } from '../util.js?v=1.15.7';
+import { pctx } from './context.js?v=1.15.7';
 
 export function shareAsURL() {
   const { graph, appVersion: APP_VERSION, tabNameCb: getTabNameCallback, diagramTypeCb: getDiagramTypeCallback, mappingModeCb: getMappingModeCallback } = pctx;
@@ -140,6 +140,18 @@ function showShareModal(url, opts = {}) {
   document.querySelector('.df-share-modal')?.remove();
 
   const isWarning = opts.reason === 'image';
+  // A share URL only fails once it's long enough for chat apps / email clients / QR codes to
+  // truncate or reject it — typical diagrams stay far under this. Past the threshold we keep the
+  // link copyable but advise the JSON export as the reliable alternative.
+  const LONG_URL_WARN = 8000;
+  const tooLong = !isWarning && typeof url === 'string' && url.length > LONG_URL_WARN;
+  const longWarnHtml = tooLong
+    ? `
+        <div class="df-share-modal__longwarn" role="alert">
+          <p style="margin:0 0 4px;font-weight:600;color:var(--text-primary)">This link is very long (${url.length.toLocaleString()} characters).</p>
+          <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Some chat apps, email clients, and QR codes truncate or reject long URLs. For a reliable copy, use <strong>Save → Export to JSON</strong> and send the file instead.</p>
+        </div>`
+    : '';
   const bodyHtml = isWarning
     ? `
         <div class="df-share-modal__warning">
@@ -150,7 +162,7 @@ function showShareModal(url, opts = {}) {
         <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
           Anyone with this link can open a copy of your diagram:
         </p>
-        <input type="text" class="df-share-modal__url" readonly aria-readonly="true" aria-label="Shareable diagram URL" spellcheck="false">`;
+        <input type="text" class="df-share-modal__url" readonly aria-readonly="true" aria-label="Shareable diagram URL" spellcheck="false">${longWarnHtml}`;
 
   // Action modal: the top-right ✕ is the dismiss. The warning variant has no
   // action button, so it renders no footer at all (footerHtml:null → no bar).
