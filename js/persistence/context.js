@@ -23,7 +23,8 @@ export const pctx = {
   tabNameCb: null,         // () => string  — active tab / diagram name
   diagramTypeCb: null,     // () => string  — active diagram type
   onImport: null,          // (name, type, graphJSON, viewport) => void
-  getAllTabs: null,        // () => tab[]              (all open tabs)
+  onImportGroup: null,     // (groupMetas, diagrams) => void  (kind:'group' bundle)
+  getAllTabs: null,        // () => tab[]              (all open tabs, incl. groupId)
   getTabGraph: null,       // (tabId) => graphJSON     (a tab's graph)
   showLoadModal: null,     // (importStats) => void    (reveal Load-from-Browser)
   templatesBackupApi: null,// { getTemplates, exportFn, importMerge }

@@ -10,65 +10,95 @@
   gap: 2px;
   overflow: visible;
   position: relative;
+  isolation: isolate;   /* own stacking context so the tab-bar z-index ladder (slide 1 < active 2 < pill 3 < scroll 4) is self-contained */
 }
 
 .df-tabs__list {
   display: flex;
   align-items: stretch;
   gap: 2px;
+  flex: 1;             /* fill the bar so "+ Diagram" / "+ Group" pin to the far right; tabs scroll within */
   min-width: 0;
+  /* No horizontal scroll-anchoring: expanding/ungrouping inserts tabs at the left, and the browser would
+     otherwise shift scrollLeft to the right end to "keep content stable" — hiding the » arrow and jumping
+     the view. We want the scroll to stay put so the newly-revealed tabs show with » indicating more. */
+  overflow-anchor: none;
+  /* No left margin: the trash then has an even ~4px gap on BOTH sides — its right gap (trash
+     margin-right 2px + the bar's 2px flex gap) equals the bar's 4px left padding. */
   overflow-x: auto;
   scrollbar-width: none;
   align-self: stretch;
 }
-/* Gap 13 (v1.12.0) — gradient fade at the right edge so users see when
-   tabs are clipped past the visible area. Mask interpolates from fully
-   opaque on the left to a soft transparent fade in the last 24 px on
-   the right. Webkit needs the prefixed variant.
+/* Tab overflow is signalled by « » scroll buttons (js toggles their `hidden`), NOT a gradient fade —
+   the old mask dimmed the pinned group pills. The buttons also let you scroll by click/touch (a11y),
+   not just gesture. They sit just inside the row edges, above the tabs + pinned pills. */
+.df-tabs__scroll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: var(--bg-canvas);   /* opaque so it sits cleanly over the edge tabs/pills */
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  z-index: 4;   /* above the sticky pills (z 3) so it's never hidden under a pinned pill */
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.df-tabs__scroll:hover { color: var(--text-primary); background: var(--toolbar-button-hover); }
+.df-tabs__scroll[hidden] { display: none; }
 
-   Bug fix (v1.12.1): the original CSS applied this mask unconditionally,
-   which faded the rightmost active tab's right border whenever it sat
-   flush with the container edge — even with zero overflow. Now gated
-   behind the `--overflowing` modifier toggled by `refreshTabScrollMask()`
-   in tabs.js so the bar looks identical to pre-Gap-13 when nothing is
-   clipped. */
-.df-tabs__list--overflowing {
-  -webkit-mask-image: linear-gradient(to right,
-    #000 0,
-    #000 calc(100% - 24px),
-    transparent 100%);
-          mask-image: linear-gradient(to right,
-    #000 0,
-    #000 calc(100% - 24px),
-    transparent 100%);
+/* Non-scrolling "frozen" rails (v1.16.0): opaque proxies of pinned group pills + the active tab. The
+   real chips/tabs scroll natively BEHIND these; the rail's opaque bg means nothing flows through
+   (uniform backing), and because the rail never moves with the scroll there's nothing to jitter. JS
+   (updatePins) sets each rail's left/width and fills its content. */
+.df-tabs__pinrail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;                       /* matches #tab-list's gap so pinned groups sit the same distance apart */
+  background: var(--bg-canvas);   /* opaque backing — scrolling tabs never show through */
+  z-index: 3;                     /* above tabs (0) + active (2), below the scroll buttons (4) */
+  pointer-events: none;           /* the backing doesn't catch clicks; the proxies opt back in */
 }
-/* When the user has scrolled — even one pixel — fade BOTH ends to signal
-   that tabs exist in either direction. Toggled by a small JS listener on
-   scroll position (see tabs.js _refreshScrollMask). Falls back to right-
-   only fade when the listener hasn't run yet. */
-.df-tabs__list--scrolled {
-  -webkit-mask-image: linear-gradient(to right,
-    transparent 0,
-    #000 24px,
-    #000 calc(100% - 24px),
-    transparent 100%);
-          mask-image: linear-gradient(to right,
-    transparent 0,
-    #000 24px,
-    #000 calc(100% - 24px),
-    transparent 100%);
+.df-tabs__pinrail[hidden] { display: none; }
+.df-tabs__pinrail--right { justify-content: flex-end; }
+.df-tabs__pinrail .df-tab-group,
+.df-tabs__pinrail .df-pin-tab { pointer-events: auto; cursor: pointer; }
+/* A pinned group is a mini-tray — same soft accent bar + spacing as a real (unpinned) tray (item 2). It
+   never shrinks in the rail. */
+.df-tab-group-tray--pinned { flex-shrink: 0; }
+/* The LAST pinned group's right edge (items 2/3, JS-toggled per scroll position). NOTE: these are
+   anchored to `.df-tab-group-tray--pinned` to out-specify the base `.df-tab-group-tray` border-radius
+   shorthand (which is defined LATER in this file and would otherwise win on equal specificity).
+   • blend-right — scrolling WITHIN the group: flatten the tray's right corners AND the rightmost child's
+     (the chip, or the active proxy) so the pinned header ends in a FLAT edge that runs straight into the
+     group's scrolled tabs — killing the ")" rounded-pill cap the user flagged.
+   • cap-right — DIFFERENT content follows: keep the rounded cap + a slight gap so it reads as separate. */
+.df-tab-group-tray--pinned.df-tab-group-tray--blend-right,
+.df-tab-group-tray--pinned.df-tab-group-tray--blend-right > :last-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
-.df-tabs__list--scrolled-end {
-  /* Right end fully reached — drop the trailing fade. */
-  -webkit-mask-image: linear-gradient(to right,
-    transparent 0,
-    #000 24px,
-    #000 100%);
-          mask-image: linear-gradient(to right,
-    transparent 0,
-    #000 24px,
-    #000 100%);
+.df-tab-group-tray--pinned.df-tab-group-tray--cap-right { margin-right: 4px; }
+/* The STANDALONE active-tab proxy (ungrouped, or the right rail) mirrors the active tab and reaches the
+   BOTTOM (align-self:flex-end, 32px) so the bottom-bar line gaps under it. A GROUPED active proxy sits in
+   a mini-tray instead, where `.df-tab-group-tray .df-tab--active` already gives it the break-out. */
+.df-pin-tab {
+  margin-top: 0;
+  align-self: flex-end;
+  height: 32px;
+  box-sizing: border-box;
 }
+/* A grouped active proxy defaults its accent to --color-primary (matching a colourless group's pill,
+   which inherits the same default) so it never falls back to the generic grey strip; an explicit group
+   colour is set inline in buildActivePin and overrides this. */
+.df-pin-tab.df-tab--grouped { --group-accent: var(--color-primary); }
 
 .df-tabs__list::-webkit-scrollbar {
   height: 0;
@@ -92,7 +122,7 @@
   cursor: pointer;
   white-space: nowrap;
   max-width: 180px;
-  min-width: 0;
+  min-width: 120px;   /* squish floor: ALL tabs shrink to here, then the row scrolls (mobile overrides) */
   transition: background var(--transition-fast), color var(--transition-fast);
   position: relative;
   user-select: none;
@@ -110,15 +140,24 @@
   border-color: var(--border-color);
   border-bottom: none;
   font-weight: 600;
+  z-index: 2;   /* above the focus-slide (z 1) so the ghost is occluded at the start/end — no blink */
 }
+/* CRITICAL: keep the active tab's hover background OPAQUE. `.df-tab:hover` (specificity 0,2,0) otherwise
+   beats `.df-tab--active` (0,1,0) and paints the TRANSLUCENT --toolbar-button-hover — through which the
+   focus-slide ghost shows, so the slide "goes over" the active tab while the pointer rests on it. An
+   opaque subtle lift keeps the ghost occluded AND gives a faint "focused" cue on re-hover. */
+.df-tab--active:hover { background: color-mix(in srgb, var(--text-primary) 7%, var(--bg-canvas)); }
 
-/* Bottom border line segments positioned by JS on .df-tabs */
+/* Bottom border line segments positioned by JS on .df-tabs. z-4 so the line sits ABOVE the pinned rail
+   (z-3) — it runs UNDER the pinned group pills (which are 28px, clear of the bottom 1px) exactly like
+   under normal tabs, and still gaps under the active element (real tab OR its pinned proxy). */
 .df-tab-line {
   position: absolute;
   bottom: 0;
   height: 1px;
   background: var(--border-color);
   pointer-events: none;
+  z-index: 4;
 }
 
 /* Tab drag-and-drop reorder */
@@ -148,6 +187,307 @@
 
 .df-tab--dirty .df-tab__dirty {
   display: block;
+}
+
+/* ── Tab groups (v1.16.0) ─────────────────────────────────── */
+/* Each group renders as a TRAY: a soft accent "bar" holding the (stronger) header chip and the
+   group's tabs, so the group reads as one connected unit. Inactive grouped tabs are transparent so
+   the bar shows through uninterrupted; only the ACTIVE tab keeps the real outline + a coloured strip. */
+.df-tab-group-tray {
+  --group-accent: var(--color-primary);
+  display: flex;
+  align-items: stretch;        /* inactive tabs + chip fill the pill height */
+  align-self: center;          /* a 28px pill centred in the 36px bar → 4px gap top+bottom, like + Diagram */
+  height: 28px;
+  box-sizing: border-box;
+  overflow: visible;           /* the active tab pokes 4px out the bottom to meet the canvas */
+  padding-right: 3px;          /* a sliver of the soft bar after the last tab (esp. the active one) */
+  border-radius: var(--border-radius-sm);
+  background: color-mix(in srgb, var(--group-accent) 9%, transparent);   /* the soft connected bar */
+  flex-shrink: 1;       /* the tray shrinks too, squishing ITS tabs to their min-width (the chip stays). NO
+                           min-width:0 — auto (min-content = chip + tabs@120px) keeps the tray from collapsing. */
+  transition: box-shadow var(--transition-fast);
+}
+.df-tab-group-tray--drag-over {   /* "drop into this group" — stronger accent ring. INSET so the
+  first group's left edge isn't clipped by the tab list's overflow (an outset ring would be cut). */
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent) 65%, transparent);
+}
+.df-tab-group-tray .df-tab { margin-top: 0; }   /* the pill centres the tabs; no per-tab top margin */
+/* The active grouped tab matches an ungrouped active tab (32px, reaching the bar's bottom line) so it
+   "breaks out" of the 28px pill — exactly like a Chrome tab-group active tab. */
+.df-tab-group-tray .df-tab--active {
+  align-self: flex-start;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.df-tab-group {
+  --group-accent: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  margin-right: 3px;   /* sliver of the soft bar between the pill and the first tab (tabs stay flush) */
+  height: 28px;
+  box-sizing: border-box;
+  border-radius: var(--border-radius-sm);
+  /* OPAQUE (mixed with canvas, not transparent) so the proxy copy in the pinned rail reads solidly
+     over the scrolling tabs. Same visual tone as the old translucent 16% tint. */
+  background: color-mix(in srgb, var(--group-accent) 16%, var(--bg-canvas));   /* stronger than the bar */
+  color: var(--group-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  /* When a group scrolls off the left, an opaque proxy of this chip is shown in the non-scrolling
+     pinned rail (see .df-tabs__pinrail / updatePins) — the real chip just scrolls away natively. */
+  position: relative;
+  z-index: 3;
+  user-select: none;
+  cursor: pointer;   /* click to collapse / expand */
+}
+.df-tab-group--empty { cursor: default; }   /* an empty group can't be collapsed */
+.df-tab-group:not(.df-tab-group--empty):hover { background: color-mix(in srgb, var(--group-accent) 24%, var(--bg-canvas)); }
+.df-tab-group--dragging { opacity: 0.4; }
+.df-tab-group__icon { flex-shrink: 0; fill: currentColor; }   /* theme-aware (sprites have no fill) */
+.df-tab-group__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+/* Right "lead" slot: shows the tab COUNT pill by default and swaps to the ⋯ menu on hover, so the
+   slot is never empty (the menu used to be hover-only, leaving a gap). The count pill sits in-flow
+   (defining the slot width); the ⋯ overlays it (inset:0) and they cross-fade — no layout shift. */
+.df-tab-group__lead {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;   /* keeps the ⋯ a clickable target even when there's no count (empty group) */
+  height: 16px;
+  flex-shrink: 0;
+}
+.df-tab-group__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--group-accent) 30%, transparent);   /* the pill badge */
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+.df-tab-group:hover .df-tab-group__count { opacity: 0; }   /* fades out as the ⋯ fades in */
+.df-tab--grouped:not(.df-tab--active) { background: transparent; }   /* let the tray bar show through */
+.df-tab--grouped:not(.df-tab--active):hover { background: color-mix(in srgb, var(--group-accent, transparent) 14%, transparent); }
+/* The ACTIVE tab keeps its outline + a SOFT top strip that matches the group's bar tone (grouped) or
+   a faint neutral (ungrouped) — a tint, not a bright accent line, so the group reads as one tone. */
+.df-tab--active { box-shadow: inset 0 2.5px 0 color-mix(in srgb, var(--group-accent, var(--text-muted)) 30%, transparent); }
+
+/* After a drag-drop the cursor sits over the freshly-rendered tab, and Chromium leaves a STUCK
+   :hover (clears only on the next pointer interaction) — so a tab dropped into a group wore the
+   group-hover tint while sitting un-hovered. While this guard is on (added on drop, removed on the
+   next pointer move/down) hover styling is neutralised to its resting state. */
+.df-tabs--no-hover .df-tab:not(.df-tab--active):hover { background: transparent; }
+/* A freshly-CLICKED tab "settles" defocused: while the pointer still rests on it from the click, hold
+   the resting (un-lifted, opaque) background — so it reads as not-yet-focused — until the pointer
+   actually moves, which lifts the guard and lets the normal hover cue back in (item 1.2). */
+.df-tabs--no-hover .df-tab--active:hover { background: var(--bg-canvas); }
+.df-tabs--no-hover .df-tab-group:hover .df-tab-group__count { opacity: 1; }
+.df-tabs--no-hover .df-tab-group:hover .df-tab-group__menu { opacity: 0; }
+
+/* Tab-switch cue: a quick fade on the canvas so the content change registers (v1.16.0). */
+@keyframes df-paper-switch { from { opacity: 0.4; } to { opacity: 1; } }
+#paper.df-paper--switching { animation: df-paper-switch 130ms ease-out; }
+@media (prefers-reduced-motion: reduce) { #paper.df-paper--switching { animation: none; } }
+
+/* Tab-focus slide: the active tab's own "selection" — its dark, bordered background — travels along
+   the tab row from the old active tab to the new one, so the focus change reads as the selection
+   moving through the list (v1.16.0). JS positions (left/top/width/height) + removes it. */
+.df-tab-focus-slide {
+  position: absolute;
+  box-sizing: border-box;
+  /* A half-transparent "ghost" of the selection (the tabs it passes show through). Tracks --tab-ghost,
+     which is FLIPPED per theme — dark on the dark theme, light on the light theme — so the trail reads
+     as a soft shadow in dark mode and a soft light trail in light mode. */
+  background: color-mix(in srgb, var(--tab-ghost) 52%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tab-ghost) 74%, transparent);
+  border-bottom: none;
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+  /* transition set inline by JS (distance-scaled duration). */
+  pointer-events: none;
+  /* Layered: ABOVE the inactive in-between tabs (z 0) so the ghost is visible over them, but BELOW the
+     ACTIVE tab (z 2) so it's occluded at the start/end — removing it then never blinks. */
+  z-index: 1;
+}
+
+/* Drag-insertion line — a SINGLE shared vertical bar positioned by JS at the centre of the gap the
+   tab will drop into (incl. the far end). One element, so there's never a left+right pair. */
+.df-tab-insertion {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  margin-left: -1px;   /* centre the 2px bar on its computed x */
+  border-radius: 1px;
+  background: var(--color-primary);
+  pointer-events: none;
+  z-index: 6;
+  display: none;
+}
+
+/* "+ Group" button is the secondary action next to the primary "+ New" — muted, not brand-blue. */
+.df-tabs__new--group {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+.df-tabs__new--group:hover {
+  background: var(--toolbar-button-hover);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+  border-style: dashed;
+}
+
+/* Dark mode (v1.16.0): brand-orange accent for the tab-bar add buttons only. The stencil toggle
+   icon keeps its default brand-red active accent — orange there read as a different control. */
+[data-theme="dark"] .df-tabs__new,
+[data-theme="dark"] .df-tabs__new--group {
+  color: var(--brand-amber);
+  border-color: var(--brand-amber);
+}
+[data-theme="dark"] .df-tabs__new:hover,
+[data-theme="dark"] .df-tabs__new--group:hover {
+  background: color-mix(in srgb, var(--brand-amber) 14%, transparent);
+  color: var(--brand-amber);
+  border-color: var(--brand-amber);
+}
+
+.df-tab-group__menu {
+  position: absolute;   /* overlays the count pill in the lead slot */
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;   /* revealed on chip hover, replacing the count — no layout shift */
+  transition: opacity var(--transition-fast);
+}
+.df-tab-group:hover .df-tab-group__menu,
+.df-tab-group__menu:focus-visible { opacity: 1; }
+
+/* Floating menu / popover shared by the group ⋯ menu, colour + icon pickers, and tab assignment. */
+.df-tab-pop {
+  position: fixed;
+  z-index: 4000;
+  min-width: 168px;
+  max-width: 290px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md, 8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  padding: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+/* Menu items mirror the toolbar dropdown items (.df-toolbar__menu-item): muted text that
+   brightens on hover, 6px×14px rows, weight 500, optional leading icon. */
+.df-tab-pop__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 14px;
+  border: none;
+  background: none;
+  border-radius: var(--border-radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.df-tab-pop__item:hover { background: var(--toolbar-button-hover); color: var(--text-primary); }
+.df-tab-pop__item--danger { color: var(--color-danger, #c23934); }
+.df-tab-pop__item--icon { display: flex; align-items: center; gap: 8px; }
+.df-tab-pop__item--icon .df-toolbar__icon { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
+.df-tab-pop__item.is-checked::after { content: '✓'; float: right; margin-left: 12px; opacity: 0.8; }
+.df-tab-pop__item--icon.is-checked::after { float: none; margin-left: auto; }   /* flex rows: push ✓ to the right */
+/* Full-bleed rows in the dropdown menus, matching the toolbar menu (the pickers keep their inset). */
+.df-tab-pop--menu { padding: 4px 0; min-width: 180px; }
+.df-tab-pop--menu .df-tab-pop__item { border-radius: 0; }
+.df-tab-pop__sep { height: 1px; margin: 4px 6px; background: var(--border-color); }
+.df-tab-pop__header {
+  padding: 4px 10px 2px;
+  font-size: var(--font-size-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+/* Colour picker popover */
+.df-tab-pop__swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 6px; }
+.df-tab-pop__swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  padding: 0;
+}
+.df-tab-pop__swatch.is-active { box-shadow: 0 0 0 2px var(--color-primary); }
+.df-tab-pop__row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.df-tab-pop__color {
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Icon picker popover */
+.df-tab-pop--icons { width: 268px; }
+.df-tab-pop__search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+.df-tab-pop__icons { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 196px; overflow-y: auto; }
+.df-tab-pop__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.df-tab-pop__icon svg { fill: currentColor; }   /* theme-aware previews (sprites carry no fill) */
+.df-tab-pop__icon:hover { background: var(--toolbar-button-hover); color: var(--text-primary); }
+.df-tab-pop__icon.is-active {
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-primary);
 }
 
 .df-tab__close {
@@ -195,7 +535,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-right: 6px;
+  margin-right: 2px;   /* tight gap to the first tab/group (the inset drop-ring needs no clearance) */
   border: 1px solid transparent;
   border-radius: var(--border-radius-sm);
   background: transparent;
@@ -313,6 +653,32 @@
   padding: 2px 6px;
   border: 1px solid var(--border-color);
   border-radius: 10px;
+  flex-shrink: 0;
+}
+
+/* Group badge for the Save / Close-tabs rows — a neutral pill matching the type badge, with the
+   group's accent shown as a leading dot (readable regardless of the group colour). Shared by both
+   modals; `--g` is set inline to the group colour. */
+.df-row-group-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 120px;
+}
+.df-row-group-badge > span { overflow: hidden; text-overflow: ellipsis; }
+.df-row-group-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--g, var(--text-muted));
   flex-shrink: 0;
 }
 

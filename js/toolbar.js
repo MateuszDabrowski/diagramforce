@@ -1,12 +1,12 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.15.7';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.15.7';
-import { resizeDataObjectToFit } from './components.js?v=1.15.7';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.15.7';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.7';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.15.7';
+import { diagramHasImage } from './image-component.js?v=1.16.0';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.16.0';
+import { resizeDataObjectToFit } from './components.js?v=1.16.0';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.16.0';
+import { escHtml, formatRelativeTime } from './util.js?v=1.16.0';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.16.0';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -752,9 +752,11 @@ function showSaveModal() {
   const existingSaves = new Set(modules.persistence.getNamedSaves().map(s => s.name));
 
   const saveTypeLabel = (type) => (modules.tabs.DIAGRAM_TYPES?.[type]?.short) || 'Architecture';
+  const groupById = new Map((modules.tabs.getGroups?.() || []).map(g => [g.id, g]));
   const tabRows = allTabs.map(tab => {
     const defaultName = uniqueSaveName(tab.name, dateSuffix, existingSaves);
     const rel = formatRelativeTime(tab.lastModifiedAt || tab.lastSavedAt);
+    const groupBadge = modules.tabs.groupBadgeHtml?.(tab.groupId ? groupById.get(tab.groupId) : null) || '';
     return `
       <div class="df-modal__row${tab.isActive ? ' df-modal__row--active' : ''}">
         <input type="checkbox" class="df-modal__row-check" data-tab-id="${tab.id}" ${tab.isActive ? 'checked' : ''}>
@@ -763,6 +765,7 @@ function showSaveModal() {
           <input type="text" class="df-modal__row-name" data-tab-id="${tab.id}" value="${escHtml(defaultName)}" spellcheck="false">
           ${rel ? `<span class="df-modal__row-meta">Modified ${rel}</span>` : ''}
         </div>
+        ${groupBadge}
         <span class="df-modal__row-badge">${escHtml(saveTypeLabel(tab.diagramType))}</span>
       </div>`;
   }).join('');

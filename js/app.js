@@ -1,26 +1,26 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.15.7';
-import * as icons       from './icons.js?v=1.15.7';
-import { getAllStencilSvgs } from './components.js?v=1.15.7';
-import * as shapes      from './shapes.js?v=1.15.7';
-import * as canvas      from './canvas.js?v=1.15.7';
-import * as stencil     from './stencil.js?v=1.15.7';
-import * as selection   from './selection.js?v=1.15.7';
-import * as history     from './history.js?v=1.15.7';
-import * as clipboard   from './clipboard.js?v=1.15.7';
-import * as templates    from './templates.js?v=1.15.7';
-import * as keyboard    from './keyboard.js?v=1.15.7';
-import * as toolbar     from './toolbar.js?v=1.15.7';
-import * as properties  from './properties.js?v=1.15.7';
-import * as persistence from './persistence.js?v=1.15.7';
-import * as tabs        from './tabs.js?v=1.15.7';
-import * as mermaidImport from './mermaid-import.js?v=1.15.7';
-import * as tableView    from './table-view.js?v=1.15.7';
-import * as walkthrough  from './walkthrough.js?v=1.15.7';
-import * as a11y         from './a11y.js?v=1.15.7';
-import { seedDefaultPalette } from './brand-palette.js?v=1.15.7';
+import * as theme       from './theme.js?v=1.16.0';
+import * as icons       from './icons.js?v=1.16.0';
+import { getAllStencilSvgs } from './components.js?v=1.16.0';
+import * as shapes      from './shapes.js?v=1.16.0';
+import * as canvas      from './canvas.js?v=1.16.0';
+import * as stencil     from './stencil.js?v=1.16.0';
+import * as selection   from './selection.js?v=1.16.0';
+import * as history     from './history.js?v=1.16.0';
+import * as clipboard   from './clipboard.js?v=1.16.0';
+import * as templates    from './templates.js?v=1.16.0';
+import * as keyboard    from './keyboard.js?v=1.16.0';
+import * as toolbar     from './toolbar.js?v=1.16.0';
+import * as properties  from './properties.js?v=1.16.0';
+import * as persistence from './persistence.js?v=1.16.0';
+import * as tabs        from './tabs.js?v=1.16.0';
+import * as mermaidImport from './mermaid-import.js?v=1.16.0';
+import * as tableView    from './table-view.js?v=1.16.0';
+import * as walkthrough  from './walkthrough.js?v=1.16.0';
+import * as a11y         from './a11y.js?v=1.16.0';
+import { seedDefaultPalette } from './brand-palette.js?v=1.16.0';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -202,10 +202,23 @@ if ('serviceWorker' in navigator) {
       .then(regs => regs.forEach(r => r.unregister()))
       .catch(() => { /* ignore */ });
   } else {
-    // Defer registration until after the load event so it doesn't compete
-    // with the initial paint or app bootstrap.
+    // When a NEW service worker (after a version bump) activates and claims this page, reload ONCE so
+    // the fresh assets actually apply. Without this, the page keeps showing the old cached build until
+    // a manual reload — the recurring "I bumped the version but see no change" trap, since the SW is
+    // cache-first and the already-loaded page stays on the old assets. Skip the first-ever claim (no
+    // prior controller → the page already loaded from the network, nothing stale to replace).
+    const hadController = !!navigator.serviceWorker.controller;
+    let swReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (swReloading || !hadController) return;
+      swReloading = true;
+      window.location.reload();
+    });
+    // Defer registration until after the load event so it doesn't compete with the initial paint or
+    // app bootstrap. `updateViaCache: 'none'` forces the browser to re-fetch sw.js fresh (not serve a
+    // stale HTTP-cached copy), so a new version is detected promptly.
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(err => {
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(err => {
         console.warn('SF Diagrams: Service worker registration failed', err);
       });
     });

@@ -11,6 +11,7 @@
   --text-secondary: #B0B3B8;
   --text-muted: #9CA3AF;
   --text-inverse: #1C1E21;
+  --tab-ghost: #000000;   /* dark trail on the dark bar (the FLIP from the old light-grey) — see variables.css */
 
   --border-color: #3A3B3C;
   --border-color-strong: #4E4F50;

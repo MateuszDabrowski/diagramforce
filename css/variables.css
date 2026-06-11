@@ -28,6 +28,10 @@
   --text-secondary: #606770;
   --text-muted: #65707B;
   --text-inverse: #FFFFFF;
+  /* Tab-switch "ghost" trail base — flipped per theme: light here (light theme), dark in [data-theme=dark]
+     theme.css). Pure black/white (not --text-inverse, whose dark value ≈ the bar bg) so the trail has
+     real contrast against the tabs. */
+  --tab-ghost: #C2C7CF;
 
   /* Borders */
   --border-color: #DADDE1;

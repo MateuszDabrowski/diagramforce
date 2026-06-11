@@ -6,12 +6,12 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.15.7';
-import { normalizeDateSuffix } from '../util.js?v=1.15.7';
-import { escHtml } from '../util.js?v=1.15.7';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.15.7';
-import { pctx } from './context.js?v=1.15.7';
-import { slimForShare } from '../share-codec.js?v=1.15.7';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.16.0';
+import { normalizeDateSuffix } from '../util.js?v=1.16.0';
+import { escHtml } from '../util.js?v=1.16.0';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.16.0';
+import { pctx } from './context.js?v=1.16.0';
+import { slimForShare } from '../share-codec.js?v=1.16.0';
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
 const MAX_CELL_COUNT = 2000;
@@ -254,8 +254,38 @@ async function loadJSONText(jsonText, fallbackName) {
 
   const isBundle = data.schema === 'diagramforce-export' || data.schema === 'diagramforce-diagrams'
     || (Array.isArray(data.diagrams) && !data.graph);
+  // A `kind:'group'` bundle (from "Export group") round-trips a whole working set:
+  // recreate the group(s) and open each diagram as a grouped tab, rather than the
+  // default bundle behaviour (land diagrams in browser saves).
+  const isGroupBundle = isBundle && data.kind === 'group'
+    && Array.isArray(data.groups) && data.groups.length > 0 && pctx.onImportGroup;
   const isTemplatesOnly = !isBundle && (data.schema === 'diagramforce-templates'
     || (Array.isArray(data.templates) && !data.graph && !Array.isArray(data.diagrams)));
+
+  // ── Group bundle: recreate the group + open its diagrams as grouped tabs ──
+  if (isGroupBundle) {
+    const { normalizeDiagramType, onImportGroup } = pctx;
+    const diagrams = [];
+    for (const d of (Array.isArray(data.diagrams) ? data.diagrams : [])) {
+      if (!Array.isArray(d?.graph?.cells)) continue;
+      sanitizeGraphJSON(d.graph);   // drop endpoint-less links etc. (same as every import path)
+      diagrams.push({
+        name: String(d.name || 'Imported').slice(0, 80) || 'Imported',
+        diagramType: normalizeDiagramType(d.diagramType),
+        mappingMode: d.mappingMode || false,
+        graph: d.graph,
+        viewport: d.viewport || null,
+        group: d.group || null,
+        appVersion: d.appVersion || data.appVersion || null,
+      });
+    }
+    if (diagrams.length === 0) { showToast('No diagrams found in that group file.', 'warning'); return true; }
+    const groupMetas = data.groups.map(g => ({ name: String(g.name || 'Group').slice(0, 60), icon: g.icon || null, color: g.color || null }));
+    onImportGroup(groupMetas, diagrams);
+    const gLabel = groupMetas.length === 1 ? `group "${groupMetas[0].name}"` : `${groupMetas.length} groups`;
+    showToast(`Imported ${gLabel} — ${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'} ✓`, 'success');
+    return true;
+  }
 
   // ── Bundle: dedup + rename, restore to browser saves, then SHOW the user ──
   // Diagrams are saved to localStorage (not force-opened as tabs) and the

@@ -1,14 +1,14 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.15.7';
-import { getAllIcons, getCategories } from './icons.js?v=1.15.7';
-import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.15.7';
-import { startImageAddFlow } from './image-component.js?v=1.15.7';
-import * as history from './history.js?v=1.15.7';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.15.7';
-import { confirmModal } from './feedback.js?v=1.15.7';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.15.7'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.16.0';
+import { getAllIcons, getCategories } from './icons.js?v=1.16.0';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.16.0';
+import { startImageAddFlow } from './image-component.js?v=1.16.0';
+import * as history from './history.js?v=1.16.0';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.16.0';
+import { confirmModal } from './feedback.js?v=1.16.0';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.16.0'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -78,6 +78,12 @@ export function show() {
 
 export function hide() {
   panelEl.classList.add('df-stencil--hidden');
+  // Clear any drag-resized inline height (mobile bottom-sheet). Without this, an inline
+  // `height` set by the resize handle OVERRIDES the `.df-stencil--hidden { height: 0 }` rule
+  // (inline beats class), so the panel only loses its top border and stays open — the bug
+  // where X / the toggle icon appeared to do nothing after resizing. Swipe-to-close already
+  // clears it; this brings X + the toolbar toggle in line.
+  panelEl.style.height = '';
   const btn = document.getElementById('btn-toggle-stencil');
   if (btn) btn.classList.remove('df-toolbar__button--active');
 }

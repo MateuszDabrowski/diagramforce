@@ -11,8 +11,8 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.15.7';
-import { getActiveTabName } from './tabs.js?v=1.15.7';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.16.0';
+import { getActiveTabName } from './tabs.js?v=1.16.0';
 
 let graph = null;
 let container = null;      // #mapping-table-view

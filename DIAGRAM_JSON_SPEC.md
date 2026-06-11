@@ -4,14 +4,14 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.15.7** — matches the app's current `appVersion`; set `"appVersion": "1.15.7"` in generated files.
+> **Spec snapshot: v1.16.0** — matches the app's current `appVersion`; set `"appVersion": "1.16.0"` in generated files.
 
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.7",
+  "appVersion": "1.16.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -28,7 +28,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.15.7"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.16.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
@@ -42,8 +42,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.15.7", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.15.7" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.16.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.16.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -64,6 +64,31 @@
 > `diagramforce-templates` file (`{ "schema": "diagramforce-templates",
 > "templates": [...] }`) merges templates only. Each template's `cells` is a
 > JointJS subgraph (elements + links), same cell grammar as `graph.cells`.
+>
+> **Group bundle (v1.16.0).** The chip menu's **Export group** emits the same
+> `diagramforce-export` bundle with two extra keys — top-level `"kind": "group"`
+> and `"groups": [{ "name", "icon", "color" }]` — plus each `diagrams[]` entry
+> gains a `"group": "<group name>"` tag naming its group. Filename
+> `df_group_<name>_<date>.json`. A group export **always uses the bundle shape**,
+> even for a single diagram, so these keys survive (the single-diagram shortcut
+> would strip them). `icon` is an SLDS icon ID or `null`; `color` is a hex string
+> or `null`.
+>
+> ```json
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.16.0", "exportedAt": 1712700000000,
+>   "kind": "group",
+>   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.16.0" } ] }
+> ```
+>
+> A `kind:"group"` bundle imports **differently** from a generic one: it
+> recreates the group(s) and opens each diagram as a **grouped tab** (group names
+> deduped, tab names deduped) — an intentional "bring my whole project back as a
+> working set" — whereas a generic bundle (no `kind`) still lands its diagrams in
+> **browser saves**. A generic Export-Manager / Select-All export passes no
+> `groups`, so the `kind`/`groups`/`group` keys never appear there. A group
+> bundle opened in a **pre-1.16.0** build degrades gracefully: the older importer
+> ignores `kind`/`groups` and the diagrams simply become browser saves.
 
 ## Diagram Types
 
@@ -1712,7 +1737,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.15.7", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.16.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1790,7 +1815,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.7",
+  "appVersion": "1.16.0",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1946,7 +1971,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.7",
+  "appVersion": "1.16.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2066,7 +2091,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.15.7",
+  "appVersion": "1.16.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

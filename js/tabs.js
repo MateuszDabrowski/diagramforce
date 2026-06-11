@@ -1,16 +1,21 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, compactGraphForSave } from './persistence.js?v=1.15.7';
-import { escHtml, formatRelativeTime } from './util.js?v=1.15.7';
-import { showError, showToast, buildModal } from './feedback.js?v=1.15.7';
-import { createElementFromComponent } from './components.js?v=1.15.7';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, compactGraphForSave } from './persistence.js?v=1.16.0';
+import { escHtml, formatRelativeTime } from './util.js?v=1.16.0';
+import { showError, showToast, buildModal } from './feedback.js?v=1.16.0';
+import { createElementFromComponent } from './components.js?v=1.16.0';
+import { getPalette } from './brand-palette.js?v=1.16.0';
+import { getAllIcons } from './icons.js?v=1.16.0';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
 const tabs = [];
+const groups = [];          // [{ id, name, icon|null, color|null, collapsed }] — tab groups (v1.16.0)
 let activeTabId = null;
 let nextId = 1;
+let nextGroupId = 1;
+let _dragKind = null;   // 'tab' | 'group' while a tab-bar drag is in flight (drives drop indicators)
 let pendingCloseAfterSave = null;
 const onChangeCallbacks = [];
 
@@ -25,6 +30,27 @@ export const DIAGRAM_TYPES = {
   org:          { label: 'Org Chart',             short: 'Org Chart' },
 };
 
+/** Inline SVG (viewBox 0 0 16 16, currentColor) for a diagram type's glyph — used both on each tab
+ *  and in the "+ Diagram" right-click type menu, so they stay identical. */
+function diagramTypeIconMarkup(type) {
+  switch (type) {
+    case 'process':     return '<circle cx="3" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="5.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="5.5" y1="8" x2="7" y2="8" stroke="currentColor" stroke-width="1.5"/>';
+    case 'sequence':    return '<rect x="1" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><rect x="10" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><line x1="3.5" y1="4" x2="3.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="12.5" y1="4" x2="12.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="3.5" y1="8" x2="12.5" y2="8" stroke="currentColor" stroke-width="1"/><polygon points="12.5,8 10.5,7 10.5,9" fill="currentColor"/><line x1="12.5" y1="12" x2="3.5" y2="12" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><polygon points="3.5,12 5.5,11 5.5,13" fill="currentColor"/>';
+    case 'datamodel':   return '<rect x="1" y="1" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="1" width="6" height="3" rx="1" fill="currentColor"/><rect x="9" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="7" width="6" height="3" rx="1" fill="currentColor"/><path d="M7 5L9 11" stroke="currentColor" stroke-width="1.2" fill="none"/>';
+    case 'datamapping': return '<rect x="0.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><rect x="10.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="10.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><path d="M5.5 8 L10 8 M8.5 6.5 L10 8 L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 11 L10 11" stroke="currentColor" stroke-width="1" opacity="0.55"/>';
+    case 'gantt':       return '<rect x="1" y="2" width="8" height="3" rx="1" fill="currentColor"/><rect x="4" y="7" width="9" height="3" rx="1" fill="currentColor" opacity="0.7"/><rect x="7" y="12" width="6" height="3" rx="1" fill="currentColor" opacity="0.5"/>';
+    case 'org':         return '<rect x="5" y="1" width="6" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><rect x="9.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><path d="M8 5v2H3.5V10M8 7h4.5V10" stroke="currentColor" stroke-width="1" fill="none"/>';
+    default:            return '<rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/>';
+  }
+}
+
+/** Open a fresh tab of a given diagram type (name auto-derived) — the shared path for the
+ *  new-diagram modal cards and the "+ Diagram" right-click type menu. */
+function createDiagramOfType(type) {
+  const label = DIAGRAM_TYPES[type]?.short || 'Draft';
+  newTab(uniqueTabName(`${label} Draft`), type);
+}
+
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
 export function init(_graph, _paper, _canvas, _selection, _history, _persistence, _stencil) {
@@ -38,30 +64,41 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
 
   tabListEl = document.getElementById('tab-list');
 
-  // Gap 13 (v1.12.0) — gradient mask state on the tab list. CSS-side fade
-  // hints at horizontal overflow; the listener toggles `--scrolled` /
-  // `--scrolled-end` modifiers so the fade only renders where there's
-  // actually clipped content. ResizeObserver covers the case where the
-  // viewport shrinks and tabs that fit before now overflow.
-  const refreshTabScrollMask = () => {
-    if (!tabListEl) return;
-    const { scrollLeft, scrollWidth, clientWidth } = tabListEl;
-    const overflows = scrollWidth > clientWidth + 1;
-    const atEnd = scrollLeft + clientWidth >= scrollWidth - 1;
-    // The `--overflowing` modifier gates the base right-edge fade mask.
-    // Without it, the mask would fade the rightmost tab's right border
-    // even when nothing is clipped — the regression v1.12.1 fixes.
-    tabListEl.classList.toggle('df-tabs__list--overflowing', overflows);
-    tabListEl.classList.toggle('df-tabs__list--scrolled', overflows && scrollLeft > 0);
-    tabListEl.classList.toggle('df-tabs__list--scrolled-end', overflows && atEnd);
-  };
-  tabListEl.addEventListener('scroll', refreshTabScrollMask, { passive: true });
-  new ResizeObserver(refreshTabScrollMask).observe(tabListEl);
+  // Tab-row overflow affordance (v1.16.x). The « / » buttons (see updateScrollButtons) appear only
+  // where there's clipped content; they replaced the old edge fade-mask, which dimmed the pinned group
+  // pills. ResizeObserver re-runs the sizing/pin/button math when the viewport shrinks and tabs that fit
+  // before now overflow. Click/touch the buttons to scroll ~70% of a page (smooth) — a11y, not just gesture.
+  const scrollByPage = (dir) => tabListEl.scrollBy({ left: dir * Math.round(tabListEl.clientWidth * 0.7), behavior: 'smooth' });
+  document.getElementById('btn-scroll-tabs-left')?.addEventListener('click', () => scrollByPage(-1));
+  document.getElementById('btn-scroll-tabs-right')?.addEventListener('click', () => scrollByPage(1));
+  tabListEl.addEventListener('scroll', updateScrollButtons, { passive: true });
+  tabListEl.addEventListener('scroll', updatePins, { passive: true });   // refresh the pinned rail while scrolling
+  new ResizeObserver(() => { sizeTabsUniform(); updateScrollButtons(); measurePins(); }).observe(tabListEl);
   // First-render check after the initial tab render lands.
-  setTimeout(refreshTabScrollMask, 0);
+  setTimeout(() => { sizeTabsUniform(); updateScrollButtons(); measurePins(); }, 0);
+
+  // Dropping a tab on the tab-list's empty area (not on a tab/chip) ungroups it (it sits at the end).
+  tabListEl.addEventListener('dragover', (e) => { if (e.target === tabListEl) e.preventDefault(); });
+  tabListEl.addEventListener('drop', (e) => {
+    if (e.target !== tabListEl) return;   // a tab or chip already handled it
+    e.preventDefault();
+    hideInsertionLine();
+    const data = e.dataTransfer.getData('text/plain');
+    if (data.startsWith('tab:')) { setTabGroup(data.slice(4), null); suppressTabHover(); }
+  });
 
   // + button opens new diagram modal
   document.getElementById('btn-new-tab').addEventListener('click', () => showNewDiagramModal());
+  // Right-click → quick per-type picker (alternative to the full modal).
+  document.getElementById('btn-new-tab').addEventListener('contextmenu', (e) => { e.preventDefault(); openNewDiagramMenu(e.currentTarget); });
+
+  // + Group button creates an empty group and lets the user name it inline.
+  document.getElementById('btn-new-group')?.addEventListener('click', () => {
+    const id = createGroup(uniqueGroupName('Group'));
+    const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${id}"]`);
+    const nameEl = chip?.querySelector('.df-tab-group__name');
+    if (chip && nameEl) startGroupRename(chip, nameEl, getGroup(id));
+  });
 
   // Trash button opens multi-close modal
   document.getElementById('btn-close-tabs')?.addEventListener('click', () => showCloseTabsModal());
@@ -81,26 +118,35 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   persistenceModule.setImportHandler((name, type, graphJSON, viewport, mappingMode) => {
     // Dismiss the new-diagram modal if it's open (e.g. first visit via share URL)
     document.querySelector('.df-new-modal')?.remove();
-    // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON imports as
-    // a first-class "Data Mapping" diagram (mapping is now its own type).
-    let importType = type;
-    if (mappingMode && normalizeDiagramType(type) === 'datamodel') importType = 'datamapping';
-    const id = newTab(uniqueTabName(name), importType);
-    // Carry the legacy flag forward too (harmless — the type already drives mapping).
-    const importedTab = tabs.find(t => t.id === id);
-    if (importedTab) importedTab.mappingMode = !!mappingMode;
-    notifyChange();
-    // The new tab is now active — load the graph into it
-    canvasModule.setLoadingJSON(true);
-    try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
-    // Loading content into a fresh tab IS a content event (markDirty is guarded
-    // by isLoadingJSON, so it won't have stamped) — record it as the modified
-    // time so imported / loaded / shared diagrams show a time like edited ones.
-    const loadedTab = tabs.find(t => t.id === id);
-    if (loadedTab) loadedTab.lastModifiedAt = Date.now();
-    // Fit content to viewport after loading
+    importDiagramAsTab(name, type, graphJSON, viewport, mappingMode);
+    saveTabs();   // persist immediately so the imported data survives a refresh
+  });
+
+  // Group import (v1.16.0) — a `kind:'group'` bundle (from "Export group") restores
+  // the whole working set: re-create the group, then open each diagram as a tab
+  // inside it. Distinct from the generic-bundle path (which lands diagrams in
+  // browser saves) because a group export is an intentional "bring my project back".
+  persistenceModule.setImportGroupHandler((groupMetas, diagrams) => {
+    document.querySelector('.df-new-modal')?.remove();
+    // Re-create each group (deduped name) and map the export-time group name → new id.
+    const nameToId = new Map();
+    for (const gm of groupMetas) {
+      const gid = createGroup(uniqueGroupName(gm.name || 'Group'), { icon: gm.icon || null, color: gm.color || null });
+      nameToId.set(gm.name, gid);
+    }
+    // Single-group bundles tag nothing per-diagram — fall back to the lone group.
+    const soleGroup = groupMetas.length === 1 ? nameToId.get(groupMetas[0].name) : null;
+    let lastId = null;
+    for (const d of diagrams) {
+      const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false });
+      const t = tabs.find(x => x.id === id);
+      if (t) t.groupId = (d.group && nameToId.get(d.group)) || soleGroup || null;
+      lastId = id;
+    }
+    reorderTabsByGroup();
+    if (lastId) activateTab(lastId, true);   // land on the last imported diagram
+    render();
     requestAnimationFrame(() => canvasModule.fitContent());
-    // Persist immediately so the imported data survives a page refresh
     saveTabs();
   });
 
@@ -244,9 +290,7 @@ function showNewDiagramModal() {
     card.addEventListener('click', () => {
       const type = card.dataset.type;
       overlay.remove();
-      const typeLabel = DIAGRAM_TYPES[type]?.short || 'Draft';
-      const baseName = typeLabel + ' Draft';
-      newTab(uniqueTabName(baseName), type);
+      createDiagramOfType(type);
     });
   });
 
@@ -285,14 +329,52 @@ function uniqueTabName(base) {
   }
 }
 
+/** Return a group name that doesn't clash with any existing group. */
+function uniqueGroupName(base) {
+  const existing = new Set(groups.map(g => g.name));
+  if (!existing.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const candidate = `${base} ${n}`;
+    if (!existing.has(candidate)) return candidate;
+  }
+}
+
 export function newTab(name = 'Draft', diagramType = 'architecture') {
   // Save current tab state before switching
   saveCurrentTabState();
 
   const id = generateId();
-  tabs.push({ id, name, diagramType: normalizeDiagramType(diagramType), graphJSON: null, viewport: null, mappingMode: false, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null });
+  tabs.push({ id, name, diagramType: normalizeDiagramType(diagramType), groupId: null, graphJSON: null, viewport: null, mappingMode: false, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null });
   activateTab(id, true);
   render();
+  return id;
+}
+
+/**
+ * Open one imported diagram as a fresh tab and load its graph. Shared by the
+ * single-diagram import handler and the group-import handler (which opens many
+ * in a loop, suppressing the per-diagram fit via `{ fit: false }` and fitting
+ * once at the end). Returns the new tab id. Does NOT call saveTabs — the caller
+ * persists once it's done (one diagram, or the whole group).
+ */
+function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true } = {}) {
+  // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON imports as
+  // a first-class "Data Mapping" diagram (mapping is now its own type).
+  let importType = type;
+  if (mappingMode && normalizeDiagramType(type) === 'datamodel') importType = 'datamapping';
+  const id = newTab(uniqueTabName(name), importType);
+  // Carry the legacy flag forward too (harmless — the type already drives mapping).
+  const importedTab = tabs.find(t => t.id === id);
+  if (importedTab) importedTab.mappingMode = !!mappingMode;
+  notifyChange();
+  // The new tab is now active — load the graph into it.
+  canvasModule.setLoadingJSON(true);
+  try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+  // Loading content into a fresh tab IS a content event (markDirty is guarded by
+  // isLoadingJSON, so it won't have stamped) — record it as the modified time so
+  // imported / loaded / shared diagrams show a time like edited ones.
+  if (importedTab) importedTab.lastModifiedAt = Date.now();
+  if (fit) requestAnimationFrame(() => canvasModule.fitContent());
   return id;
 }
 
@@ -480,6 +562,7 @@ function showCloseTabsModal() {
     const active = t.id === activeTabId ? ' (active)' : '';
     const typeLabel = DIAGRAM_TYPES[t.diagramType]?.short || 'Architecture';
     const rel = formatRelativeTime(t.lastModifiedAt || t.lastSavedAt);
+    const g = t.groupId ? getGroup(t.groupId) : null;
     return `
       <label class="df-close-tabs__row" data-tab-id="${escHtml(t.id)}">
         <input type="checkbox" class="df-close-tabs__checkbox" data-tab-id="${escHtml(t.id)}" />
@@ -489,6 +572,7 @@ function showCloseTabsModal() {
           <span class="df-close-tabs__name">${escHtml(t.name)}${active}</span>
           ${rel ? `<span class="df-close-tabs__meta">Modified ${rel}</span>` : ''}
         </div>
+        ${groupBadgeHtml(g)}
         <span class="df-close-tabs__badge">${escHtml(typeLabel)}</span>
       </label>`;
   }).join('');
@@ -608,8 +692,74 @@ function showMultiDiscardConfirm(dirtyCount, onDiscard, onSaveAndClose) {
 function switchTab(id) {
   if (id === activeTabId) return;
   saveCurrentTabState();
+  // Capture the outgoing active tab's position so we can slide a focus bar from it to the new one.
+  const oldActiveEl = tabListEl.querySelector('.df-tab--active');
+  const oldActiveRect = oldActiveEl ? oldActiveEl.getBoundingClientRect() : null;
+  // If the outgoing tab is the lingering active tab of a COLLAPSED group, it hides now — capture that
+  // group's tray width so we can animate it shrinking (the tab visibly tucks back into the group).
+  let shrinkGroupId = null, shrinkOldW = null;
+  const old = tabs.find(t => t.id === activeTabId);
+  if (old && old.groupId) {
+    const g = getGroup(old.groupId);
+    if (g && g.collapsed) {
+      const tray = tabListEl.querySelector(`.df-tab-group-tray[data-group-id="${g.id}"]`);
+      if (tray) { shrinkGroupId = g.id; shrinkOldW = tray.getBoundingClientRect().width; }
+    }
+  }
   activateTab(id, false);
   render();
+  if (shrinkGroupId != null) animateTrayWidth(shrinkGroupId, shrinkOldW);
+  animateTabFocusSlide(oldActiveRect);
+  flashCanvasSwitch();
+  // The pointer rests on the just-clicked tab; "settle" it defocused (resting opaque bg, no hover lift)
+  // until it actually moves — so the focus-slide reads as travelling BEHIND the now-opaque active tab,
+  // and re-hovering it later restores the normal cue (item 1.2). Reuses the drag-drop hover guard.
+  suppressTabHover();
+}
+
+/** A quick opacity fade on the canvas when switching tabs, so the content change registers. */
+function flashCanvasSwitch() {
+  const el = document.getElementById('paper');
+  if (!el) return;
+  el.classList.remove('df-paper--switching');
+  void el.offsetWidth;   // restart the CSS animation
+  el.classList.add('df-paper--switching');
+}
+
+/** Slide the active tab's "selection" (its dark, bordered background) along the tab row from the OLD
+ *  active tab to the NEW one, so the focus change reads as the selection travelling through the list.
+ *  No-op under prefers-reduced-motion. */
+function animateTabFocusSlide(oldRect) {
+  if (!oldRect || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const bar = tabListEl.parentElement;
+  const newEl = bar?.querySelector('.df-tab--active');
+  if (!bar || !newEl) return;
+  const barRect = bar.getBoundingClientRect();
+  const newRect = newEl.getBoundingClientRect();
+  if (Math.abs(newRect.left - oldRect.left) < 2 && Math.abs(newRect.width - oldRect.width) < 2) return;
+  const slide = document.createElement('div');
+  slide.className = 'df-tab-focus-slide';
+  const place = (r) => {
+    slide.style.left = `${r.left - barRect.left}px`;
+    slide.style.top = `${r.top - barRect.top}px`;
+    slide.style.width = `${r.width}px`;
+    slide.style.height = `${r.height}px`;
+  };
+  place(oldRect);
+  // Scale the duration with the travel distance so a multi-tab jump GLIDES; decelerate curve (no
+  // ease-in) so it starts moving immediately. The grey ghost rides ABOVE the in-between inactive tabs
+  // but BELOW the opaque active tabs (z-index ladder in CSS), so it's visible mid-travel yet occluded
+  // at the destination — removing it then is invisible (no blink), and no opacity fade is needed.
+  const dist = Math.abs(newRect.left - oldRect.left);
+  const dur = Math.round(Math.min(560, 230 + dist * 0.26));
+  const ease = 'cubic-bezier(0, 0, 0.2, 1)';   // Material "decelerate": full speed at start, eases to a stop
+  slide.style.transition = `left ${dur}ms ${ease}, top ${dur}ms ${ease}, width ${dur}ms ${ease}, height ${dur}ms ${ease}`;
+  bar.appendChild(slide);
+  void slide.offsetWidth;   // commit the start rect before transitioning
+  place(newRect);
+  const done = () => slide.remove();
+  slide.addEventListener('transitionend', done);   // ends behind the active tab → removal is invisible
+  setTimeout(done, dur + 100);   // fallback if transitionend doesn't fire
 }
 
 function renameTab(id, name) {
@@ -688,6 +838,7 @@ export function getAllTabs() {
     id: t.id,
     name: t.name,
     diagramType: t.diagramType,
+    groupId: t.groupId || null,   // lets exportSelection tag each diagram with its group
     isActive: t.id === activeTabId,
     dirty: t.dirty,
     lastModifiedAt: t.lastModifiedAt || null,
@@ -747,6 +898,361 @@ export function setActiveMappingMode(on) {
 export function onChange(cb) { onChangeCallbacks.push(cb); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }
 
+// ── Tab groups (v1.16.0) ─────────────────────────────────────────────
+// A group is a named, optionally icon + accent-colour tagged folder of tabs. Each tab carries a
+// `groupId` (null = ungrouped). Groups render as inline chips in the tab bar, each followed by its
+// tabs; ungrouped tabs sit after every group. Visual order = groups[] order, then within each
+// group the tabs[] order, then the ungrouped tabs[] order. reorderTabsByGroup() keeps `tabs` in
+// that visual order so drag-reorder, render, and serialization all agree on one sequence.
+function generateGroupId() { return `group-${nextGroupId++}`; }
+function getGroup(id) { return id ? groups.find(g => g.id === id) || null : null; }
+
+// Rank a tab's group for ordering: its index in groups[], or "last" when ungrouped / orphaned.
+function groupRank(groupId) {
+  const i = groups.findIndex(g => g.id === groupId);
+  return i === -1 ? groups.length : i;
+}
+// Stable-sort tabs into visual order (grouped contiguous in groups[] order, ungrouped last).
+// Array.prototype.sort is stable (ES2019+), so each group's manual tab order is preserved.
+function reorderTabsByGroup() {
+  tabs.sort((a, b) => groupRank(a.groupId) - groupRank(b.groupId));
+}
+
+export function getGroups() {
+  return groups.map(g => ({ id: g.id, name: g.name, icon: g.icon, color: g.color, collapsed: g.collapsed }));
+}
+
+/** HTML for a group badge (name + accent dot) shown on the Save / Close-tabs rows. '' when ungrouped.
+ *  Exported so the Save modal (toolbar.js) renders it identically. `group` is a {name,color} object. */
+export function groupBadgeHtml(group) {
+  if (!group) return '';
+  const color = String(group.color || '').replace(/[^a-zA-Z0-9#(),.%\s-]/g, '');   // safe to inline in style
+  return `<span class="df-row-group-badge"${color ? ` style="--g:${color}"` : ''}><span>${escHtml(group.name)}</span></span>`;
+}
+
+/** Create a new (empty) group and return its id. */
+export function createGroup(name = 'Group', opts = {}) {
+  const id = generateGroupId();
+  // Default to the 'tabset' icon so a group always has one (render also falls back to it).
+  groups.push({ id, name: (name || 'Group').trim() || 'Group', icon: opts.icon || 'tabset', color: opts.color || null, collapsed: false });
+  saveTabs();
+  render();
+  notifyChange();
+  return id;
+}
+
+/** Update a group's metadata (name / icon / color). Pass only the fields to change. */
+function updateGroup(id, patch) {
+  const g = getGroup(id);
+  if (!g) return;
+  if (patch.name != null) g.name = patch.name.trim() || g.name;
+  if ('icon' in patch) g.icon = patch.icon || null;
+  if ('color' in patch) g.color = patch.color || null;
+  saveTabs();
+  render();
+}
+
+function toggleGroupCollapsed(id) {
+  const g = getGroup(id);
+  if (!g) return;
+  // An empty group can't be collapsed — there's nothing to hide.
+  if (!g.collapsed && !tabs.some(t => t.groupId === id)) return;
+  // Measure the tray's current width for a FLIP width animation across the re-render.
+  const oldTray = tabListEl.querySelector(`.df-tab-group-tray[data-group-id="${id}"]`);
+  const oldW = oldTray ? oldTray.getBoundingClientRect().width : null;
+  g.collapsed = !g.collapsed;
+  saveTabs();
+  render();
+  animateTrayWidth(id, oldW);
+}
+
+/** FLIP the tray width old → new so collapse/expand slides instead of snapping. The tabs are
+ *  added/removed by render(); clipping the width change with overflow:hidden makes them appear to
+ *  slide in / out. No-op under prefers-reduced-motion. */
+function animateTrayWidth(id, oldW) {
+  if (oldW == null) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const tray = tabListEl.querySelector(`.df-tab-group-tray[data-group-id="${id}"]`);
+  if (!tray) return;
+  const newW = tray.getBoundingClientRect().width;
+  if (Math.abs(newW - oldW) < 1) return;
+  tray.style.overflow = 'hidden';
+  // CRITICAL: `overflow:hidden` makes this flex item's `min-width:auto` resolve to 0, so while the row
+  // overflows (which it does mid-collapse — the other tabs have already widened) flex-shrink would
+  // collapse the tray to its 3px padding for a frame, making the group VANISH before snapping back
+  // (worst on the leftmost group). Pinning flex-shrink:0 holds the tray at exactly the animated width.
+  tray.style.flexShrink = '0';
+  tray.style.width = oldW + 'px';
+  void tray.offsetWidth;   // force a reflow so the next width change transitions
+  // 260ms on a decelerate curve — the old 180ms `ease` read as a quick "snap"; this glides.
+  tray.style.transition = 'width 260ms cubic-bezier(0.4, 0, 0.2, 1)';
+  tray.style.width = newW + 'px';
+  let done = false;
+  const cleanup = () => {
+    if (done) return;
+    done = true;
+    tray.style.transition = '';
+    tray.style.width = '';
+    tray.style.overflow = '';
+    tray.style.flexShrink = '';
+    tray.removeEventListener('transitionend', cleanup);
+    // The collapse/expand changed the row's content width; re-check overflow (so an EXPAND that newly
+    // overflows surfaces the « » arrows immediately, not only after the first scroll) and the pins.
+    updateScrollButtons();
+    measurePins();
+  };
+  tray.addEventListener('transitionend', cleanup);
+  setTimeout(cleanup, 360);   // fallback if transitionend doesn't fire
+}
+
+/** Assign a tab to a group (or null to ungroup), keeping `tabs` in visual order. */
+function setTabGroup(tabId, groupId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+  tab.groupId = groupId || null;
+  reorderTabsByGroup();
+  saveTabs();
+  render();
+}
+
+/** Reorder groups so `groupId` sits before the group `targetGroupId` (or last when null). */
+function moveGroupBefore(groupId, targetGroupId) {
+  const from = groups.findIndex(g => g.id === groupId);
+  if (from === -1 || groupId === targetGroupId) return;
+  const [moved] = groups.splice(from, 1);
+  let to = targetGroupId ? groups.findIndex(g => g.id === targetGroupId) : groups.length;
+  if (to === -1) to = groups.length;
+  groups.splice(to, 0, moved);
+  reorderTabsByGroup();
+  saveTabs();
+  render();
+}
+
+/** Delete a group; its tabs become ungrouped (the diagrams are kept). */
+function deleteGroupKeepTabs(id) {
+  for (const t of tabs) if (t.groupId === id) t.groupId = null;
+  const i = groups.findIndex(g => g.id === id);
+  if (i !== -1) groups.splice(i, 1);
+  reorderTabsByGroup();
+  saveTabs();
+  render();
+  notifyChange();
+}
+
+/** Delete a group AND close its diagrams (the explicit destructive choice). confirmDeleteGroup is
+ *  the confirmation, so we don't re-prompt per dirty tab here. */
+function deleteGroupWithTabs(id) {
+  const doomed = new Set(tabs.filter(t => t.groupId === id).map(t => t.id));
+  for (let i = tabs.length - 1; i >= 0; i--) if (doomed.has(tabs[i].id)) tabs.splice(i, 1);
+  const gi = groups.findIndex(g => g.id === id);
+  if (gi !== -1) groups.splice(gi, 1);
+  if (doomed.has(activeTabId)) {
+    if (tabs.length === 0) {
+      activeTabId = null;
+      selectionModule.clearSelection();
+      canvasModule.setLoadingJSON(true);
+      try { graph.fromJSON({ cells: [] }); } finally { canvasModule.setLoadingJSON(false); }
+      canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
+      render(); saveTabs(); notifyChange();
+      showNewDiagramModal();
+      return;
+    }
+    activateTab(tabs[0].id, false);   // activateTab persists + notifies
+  }
+  reorderTabsByGroup();
+  render(); saveTabs(); notifyChange();
+}
+
+/** The 3-option delete overlay: Cancel / Delete group (keep diagrams) / Delete group with diagrams. */
+function confirmDeleteGroup(group) {
+  document.querySelector('.df-delete-group-modal')?.remove();
+  const groupTabs = tabs.filter(t => t.groupId === group.id);
+  const n = groupTabs.length;
+  const dirty = groupTabs.filter(t => t.dirty).length;
+  const { footer, close } = buildModal({
+    title: 'Delete group?',
+    className: 'df-delete-group-modal',
+    zIndex: 3000, width: '460px', showClose: false,
+    bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
+    bodyHtml: `
+      <p style="margin:0 0 var(--spacing-sm);color:var(--text-primary);font-size:var(--font-size-sm);line-height:1.5">
+        Delete <strong>${escHtml(group.name)}</strong>${n ? ` and its ${n} diagram${n === 1 ? '' : 's'}` : ''}?
+      </p>
+      <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <strong>Delete group</strong> keeps the diagram${n === 1 ? '' : 's'} (they become ungrouped).
+        <strong>Delete group with diagrams</strong> also closes ${n === 1 ? 'it' : 'them'}${dirty ? ` — <strong style="color:var(--color-danger,#c23934)">${dirty} ha${dirty === 1 ? 's' : 've'} unsaved changes</strong>` : ''}.
+      </p>`,
+    footerHtml: `
+      <button class="df-modal__btn" data-action="cancel" style="margin-right:auto">Cancel</button>
+      <button class="df-modal__btn df-modal__btn--danger-outline" data-action="with">Delete group with diagrams</button>
+      <button class="df-modal__btn df-modal__btn--danger" data-action="keep">Delete group</button>`,
+  });
+  footer.querySelector('[data-action="cancel"]').addEventListener('click', close);
+  footer.querySelector('[data-action="keep"]').addEventListener('click', () => { close(); deleteGroupKeepTabs(group.id); });
+  footer.querySelector('[data-action="with"]').addEventListener('click', () => { close(); deleteGroupWithTabs(group.id); });
+}
+
+// ── Floating menus / popovers (group ⋯ menu, colour + icon pickers, tab assignment) ──
+let _floatClose = null;
+function closeFloating() { if (_floatClose) { _floatClose(); _floatClose = null; } }
+function openFloating(anchorEl, className, build) {
+  closeFloating();
+  const panel = document.createElement('div');
+  panel.className = 'df-tab-pop' + (className ? ' ' + className : '');
+  document.body.appendChild(panel);
+  build(panel, closeFloating);
+  // Anchor below the trigger, flipping/clamping to stay on-screen.
+  const r = anchorEl.getBoundingClientRect();
+  const w = panel.offsetWidth, h = panel.offsetHeight;
+  let left = Math.min(r.left, window.innerWidth - w - 8);
+  let top = r.bottom + 4;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+  panel.style.left = `${Math.max(8, left)}px`;
+  panel.style.top = `${top}px`;
+  const onDoc = (e) => { if (!panel.contains(e.target)) closeFloating(); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeFloating(); } };
+  setTimeout(() => { document.addEventListener('mousedown', onDoc, true); document.addEventListener('keydown', onKey, true); }, 0);
+  _floatClose = () => { document.removeEventListener('mousedown', onDoc, true); document.removeEventListener('keydown', onKey, true); panel.remove(); };
+}
+function menuItem(label, onClick, opts = {}) {
+  const b = document.createElement('button');
+  const hasIcon = opts.icon || opts.iconSvg;
+  b.className = 'df-tab-pop__item' + (hasIcon ? ' df-tab-pop__item--icon' : '') + (opts.danger ? ' df-tab-pop__item--danger' : '') + (opts.checked ? ' is-checked' : '');
+  if (hasIcon) {
+    // Leading icon: an SLDS sprite (`icon`) or raw inline markup (`iconSvg`, e.g. a diagram-type glyph).
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'df-toolbar__icon');
+    svg.setAttribute('aria-hidden', 'true');
+    if (opts.iconSvg) { svg.setAttribute('viewBox', '0 0 16 16'); svg.innerHTML = opts.iconSvg; }
+    else { svg.innerHTML = `<use href="#${String(opts.icon).replace(/[^a-zA-Z0-9_-]/g, '')}"></use>`; }
+    b.appendChild(svg);
+    b.appendChild(document.createTextNode(label));
+  } else {
+    b.textContent = label;
+  }
+  b.addEventListener('click', () => { closeFloating(); onClick(); });
+  return b;
+}
+function menuSep() { const d = document.createElement('div'); d.className = 'df-tab-pop__sep'; return d; }
+
+function openGroupColorPopover(anchorEl, group) {
+  openFloating(anchorEl, 'df-tab-pop--swatches', (panel) => {
+    const grid = document.createElement('div');
+    grid.className = 'df-tab-pop__swatches';
+    const palette = [...new Set([...getPalette(), '#1d73c9', '#da4e55', '#f6b355', '#27ae60', '#ffffff', '#1c1e21'])];
+    for (const hex of palette) {
+      const sw = document.createElement('button');
+      sw.className = 'df-tab-pop__swatch' + ((group.color || '').toLowerCase() === hex.toLowerCase() ? ' is-active' : '');
+      sw.style.backgroundColor = hex; sw.title = hex;
+      sw.addEventListener('click', () => { closeFloating(); updateGroup(group.id, { color: hex }); });
+      grid.appendChild(sw);
+    }
+    panel.appendChild(grid);
+    const row = document.createElement('div'); row.className = 'df-tab-pop__row';
+    const custom = document.createElement('input');
+    custom.type = 'color'; custom.value = group.color || '#1d73c9'; custom.className = 'df-tab-pop__color'; custom.title = 'Custom colour';
+    custom.addEventListener('input', () => updateGroup(group.id, { color: custom.value }));
+    row.appendChild(custom);
+    row.appendChild(menuItem('No colour', () => updateGroup(group.id, { color: null })));
+    panel.appendChild(row);
+  });
+}
+
+function openGroupIconPopover(anchorEl, group) {
+  openFloating(anchorEl, 'df-tab-pop--icons', (panel) => {
+    const search = document.createElement('input');
+    search.type = 'search'; search.placeholder = 'Search icons…'; search.className = 'df-tab-pop__search';
+    const grid = document.createElement('div'); grid.className = 'df-tab-pop__icons';
+    const renderGrid = (q) => {
+      grid.innerHTML = '';
+      const list = (q ? getAllIcons().filter(i => i.name.toLowerCase().includes(q)) : getAllIcons()).slice(0, 60);
+      for (const ic of list) {
+        const b = document.createElement('button');
+        b.className = 'df-tab-pop__icon' + (group.icon === ic.id ? ' is-active' : ''); b.title = ic.name;
+        b.innerHTML = `<svg width="16" height="16"><use href="#${ic.id}"></use></svg>`;
+        b.addEventListener('click', () => { closeFloating(); updateGroup(group.id, { icon: ic.id }); });
+        grid.appendChild(b);
+      }
+    };
+    renderGrid('');
+    search.addEventListener('input', () => renderGrid(search.value.trim().toLowerCase()));
+    panel.appendChild(search);
+    if (group.icon) panel.appendChild(menuItem('Remove icon', () => updateGroup(group.id, { icon: null })));
+    panel.appendChild(grid);
+    setTimeout(() => search.focus(), 0);
+  });
+}
+
+function openGroupMenu(anchorEl, group) {
+  openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    panel.appendChild(menuItem(group.collapsed ? 'Expand group' : 'Collapse group', () => toggleGroupCollapsed(group.id), { icon: group.collapsed ? 'chevronright' : 'chevrondown' }));
+    panel.appendChild(menuItem('Rename group', () => {
+      const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${group.id}"]`);
+      const nameEl = chip?.querySelector('.df-tab-group__name');
+      if (chip && nameEl) startGroupRename(chip, nameEl, group);
+    }, { icon: 'edit' }));
+    panel.appendChild(menuItem('Set group colour', () => openGroupColorPopover(anchorEl, group), { icon: 'color_swatch' }));
+    panel.appendChild(menuItem('Set group icon', () => openGroupIconPopover(anchorEl, group), { icon: 'image' }));
+    panel.appendChild(menuSep());
+    if (tabs.some(t => t.groupId === group.id)) {
+      panel.appendChild(menuItem('Export group to JSON', () => exportGroup(group.id), { icon: 'download' }));
+      panel.appendChild(menuItem('Ungroup all tabs', () => {
+        for (const t of tabs) if (t.groupId === group.id) t.groupId = null;
+        reorderTabsByGroup(); saveTabs(); render();
+      }, { icon: 'unlinked' }));
+    }
+    panel.appendChild(menuItem('Delete group', () => confirmDeleteGroup(group), { danger: true, icon: 'delete' }));
+  });
+}
+
+/**
+ * Export a whole group as a `kind:'group'` bundle — round-trips the group's
+ * name/icon/colour plus every diagram in it. Re-importing the file recreates the
+ * group with its tabs (vs a plain bundle, which lands diagrams in browser saves).
+ * Empty drafts are skipped by exportSelection; a fully-empty group → "nothing to
+ * export" toast there.
+ */
+function exportGroup(groupId) {
+  const g = getGroup(groupId);
+  if (!g) return;
+  saveCurrentTabState();   // flush the active tab's live graph before reading tab graphs
+  const tabIds = tabs.filter(t => t.groupId === groupId).map(t => t.id);
+  if (tabIds.length === 0) return;
+  persistenceModule.exportSelection({ tabIds, groups: [{ id: g.id, name: g.name, icon: g.icon || null, color: g.color || null }] });
+}
+
+// Right-click "+ Diagram" → a quick type picker (icon + name per diagram type), bypassing the full
+// new-diagram modal. Left-click still opens the modal.
+function openNewDiagramMenu(anchorEl) {
+  openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    const header = document.createElement('div'); header.className = 'df-tab-pop__header'; header.textContent = 'New diagram';
+    panel.appendChild(header);
+    // Lead with the Salesforce data-modelling types, then the rest in their declared order.
+    const lead = ['architecture', 'datamodel', 'datamapping'];
+    const order = [...lead, ...Object.keys(DIAGRAM_TYPES).filter(t => !lead.includes(t))];
+    for (const type of order) {
+      panel.appendChild(menuItem(DIAGRAM_TYPES[type].short, () => createDiagramOfType(type), { iconSvg: diagramTypeIconMarkup(type) }));
+    }
+  });
+}
+
+// Right-click a tab → assign it to a group (or ungroup / create a new group).
+function openTabGroupMenu(anchorEl, tab) {
+  openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    const header = document.createElement('div'); header.className = 'df-tab-pop__header'; header.textContent = 'Move to group';
+    panel.appendChild(header);
+    for (const g of groups) panel.appendChild(menuItem(g.name, () => setTabGroup(tab.id, g.id), { checked: tab.groupId === g.id, icon: g.icon || 'tabset' }));
+    panel.appendChild(menuItem('Create new group', () => {
+      const id = createGroup(uniqueGroupName('Group'));
+      setTabGroup(tab.id, id);
+      const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${id}"]`);
+      const nameEl = chip?.querySelector('.df-tab-group__name');
+      if (chip && nameEl) startGroupRename(chip, nameEl, getGroup(id));
+    }, { icon: 'add' }));
+    if (tab.groupId) { panel.appendChild(menuSep()); panel.appendChild(menuItem('Remove from group', () => setTabGroup(tab.id, null), { icon: 'unlinked' })); }
+  });
+}
+
 // ── Internal ─────────────────────────────────────────────────────────
 
 function saveCurrentTabState() {
@@ -801,13 +1307,15 @@ function saveTabs() {
   try {
     // Save lightweight tab metadata (not graph data — that's per-tab autosave)
     const data = tabs.map(t => ({ id: t.id, name: t.name, dirty: t.dirty }));
-    const meta = { activeTabId, nextId, appVersion: APP_VERSION, tabs: data };
+    const meta = { activeTabId, nextId, nextGroupId, appVersion: APP_VERSION, tabs: data,
+      groups: groups.map(g => ({ id: g.id, name: g.name, icon: g.icon || null, color: g.color || null, collapsed: !!g.collapsed })) };
 
     // Also save full graph state for each tab
     const full = tabs.map(t => ({
       id: t.id,
       name: t.name,
       diagramType: t.diagramType || 'architecture',
+      groupId: t.groupId || null,
       mappingMode: t.mappingMode || false,
       dirty: t.dirty,
       lastSavedAt: t.lastSavedAt || null,
@@ -881,6 +1389,20 @@ function checkStoragePressure() {
 /** Populate tabs array and load the active tab from parsed session data. */
 function doRestoreTabData(data) {
   if (data.nextId) nextId = data.nextId;
+  if (data.nextGroupId) nextGroupId = data.nextGroupId;
+
+  // Restore tab groups (v1.16.0). Absent in pre-1.16 sessions → no groups, everything ungrouped.
+  groups.length = 0;
+  if (Array.isArray(data.groups)) {
+    for (const g of data.groups) {
+      if (!g || !g.id) continue;
+      groups.push({ id: g.id, name: g.name || 'Group', icon: g.icon || null, color: g.color || null, collapsed: !!g.collapsed });
+      // Keep the id counter ahead of any restored group (covers sessions written before nextGroupId existed).
+      const n = parseInt(String(g.id).replace(/^group-/, ''), 10);
+      if (Number.isFinite(n) && n >= nextGroupId) nextGroupId = n + 1;
+    }
+  }
+  const groupIds = new Set(groups.map(g => g.id));
 
   if (data.tabs?.length > 0) {
     for (const t of data.tabs) {
@@ -892,6 +1414,7 @@ function doRestoreTabData(data) {
         id: t.id,
         name: t.name || 'Draft',
         diagramType: dt,
+        groupId: groupIds.has(t.groupId) ? t.groupId : null,   // drop references to a deleted group
         graphJSON: t.graphJSON || null,
         viewport: t.viewport || null,
         mappingMode: t.mappingMode || false,
@@ -908,9 +1431,10 @@ function doRestoreTabData(data) {
     activeTabId = data.activeTabId || tabs[0].id;
   } else {
     const id = generateId();
-    tabs.push({ id, name: 'Draft', diagramType: 'architecture', graphJSON: null, viewport: null, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null });
+    tabs.push({ id, name: 'Draft', diagramType: 'architecture', groupId: null, graphJSON: null, viewport: null, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null });
     activeTabId = id;
   }
+  reorderTabsByGroup();   // normalise to visual order (grouped contiguous, ungrouped last)
 
   // Load the active tab's state
   const active = tabs.find(t => t.id === activeTabId);
@@ -1103,6 +1627,40 @@ export function setupAutoSave() {
   });
 }
 
+// ── Drag insertion line (single shared element) ──────────────────────
+// One absolutely-positioned bar in the tab bar, moved by JS to the centre of the gap a dragged
+// tab will drop into. A single element means there's never a left-edge + right-edge pair.
+let _insertionLine = null;
+function showInsertionLine(el, after) {
+  const bar = tabListEl.parentElement;   // .df-tabs (position: relative)
+  if (!bar) return;
+  if (!_insertionLine) { _insertionLine = document.createElement('div'); _insertionLine.className = 'df-tab-insertion'; }
+  if (_insertionLine.parentElement !== bar) bar.appendChild(_insertionLine);
+  const barRect = bar.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  // Centre of the ~2px gap on the chosen side, in bar coordinates (correct even when the list is scrolled).
+  _insertionLine.style.left = ((after ? r.right + 1 : r.left - 1) - barRect.left) + 'px';
+  _insertionLine.style.display = 'block';
+}
+function hideInsertionLine() { if (_insertionLine) _insertionLine.style.display = 'none'; }
+
+// After a drag-drop, render() rebuilds the tabs under a stationary cursor, leaving a stuck :hover
+// (Chromium clears it only on the next pointer interaction) — so a tab just dropped into a group
+// wore the group-hover tint. Guard the bar with `--no-hover` (CSS neutralises hover) and lift it on
+// the first real pointer move/down.
+function suppressTabHover() {
+  const bar = tabListEl.parentElement;
+  if (!bar) return;
+  bar.classList.add('df-tabs--no-hover');
+  const clear = () => {
+    bar.classList.remove('df-tabs--no-hover');
+    document.removeEventListener('pointermove', clear, true);
+    document.removeEventListener('pointerdown', clear, true);
+  };
+  document.addEventListener('pointermove', clear, true);
+  document.addEventListener('pointerdown', clear, true);
+}
+
 // ── Render ───────────────────────────────────────────────────────────
 
 function render() {
@@ -1120,12 +1678,15 @@ function render() {
     setTimeout(showNewDiagramModal, 0);
   }
 
-  for (const tab of tabs) {
+  const renderTab = (tab) => {
     const el = document.createElement('div');
     el.className = 'df-tab' +
       (tab.id === activeTabId ? ' df-tab--active' : '') +
-      (tab.dirty ? ' df-tab--dirty' : '');
+      (tab.dirty ? ' df-tab--dirty' : '') +
+      (tab.groupId ? ' df-tab--grouped' : '');
     el.dataset.tabId = tab.id;
+    // A grouped tab carries its group's accent colour (for the top strip linking it to the chip).
+    if (tab.groupId) { const g = getGroup(tab.groupId); if (g?.color) el.style.setProperty('--group-accent', g.color); }
 
     // Diagram type icon
     const typeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1134,21 +1695,7 @@ function render() {
     typeIcon.setAttribute('height', '12');
     typeIcon.setAttribute('viewBox', '0 0 16 16');
     typeIcon.setAttribute('fill', 'currentColor');
-    if (tab.diagramType === 'process') {
-      typeIcon.innerHTML = '<circle cx="3" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="5.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="5.5" y1="8" x2="7" y2="8" stroke="currentColor" stroke-width="1.5"/>';
-    } else if (tab.diagramType === 'sequence') {
-      typeIcon.innerHTML = '<rect x="1" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><rect x="10" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><line x1="3.5" y1="4" x2="3.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="12.5" y1="4" x2="12.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="3.5" y1="8" x2="12.5" y2="8" stroke="currentColor" stroke-width="1"/><polygon points="12.5,8 10.5,7 10.5,9" fill="currentColor"/><line x1="12.5" y1="12" x2="3.5" y2="12" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><polygon points="3.5,12 5.5,11 5.5,13" fill="currentColor"/>';
-    } else if (tab.diagramType === 'datamodel') {
-      typeIcon.innerHTML = '<rect x="1" y="1" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="1" width="6" height="3" rx="1" fill="currentColor"/><rect x="9" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="7" width="6" height="3" rx="1" fill="currentColor"/><path d="M7 5L9 11" stroke="currentColor" stroke-width="1.2" fill="none"/>';
-    } else if (tab.diagramType === 'datamapping') {
-      typeIcon.innerHTML = '<rect x="0.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><rect x="10.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="10.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><path d="M5.5 8 L10 8 M8.5 6.5 L10 8 L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 11 L10 11" stroke="currentColor" stroke-width="1" opacity="0.55"/>';
-    } else if (tab.diagramType === 'gantt') {
-      typeIcon.innerHTML = '<rect x="1" y="2" width="8" height="3" rx="1" fill="currentColor"/><rect x="4" y="7" width="9" height="3" rx="1" fill="currentColor" opacity="0.7"/><rect x="7" y="12" width="6" height="3" rx="1" fill="currentColor" opacity="0.5"/>';
-    } else if (tab.diagramType === 'org') {
-      typeIcon.innerHTML = '<rect x="5" y="1" width="6" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><rect x="9.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><path d="M8 5v2H3.5V10M8 7h4.5V10" stroke="currentColor" stroke-width="1" fill="none"/>';
-    } else {
-      typeIcon.innerHTML = '<rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/>';
-    }
+    typeIcon.innerHTML = diagramTypeIconMarkup(tab.diagramType);
 
     const dot = document.createElement('span');
     dot.className = 'df-tab__dirty';
@@ -1190,43 +1737,393 @@ function render() {
     // Drag-and-drop reorder
     el.draggable = true;
     el.addEventListener('dragstart', (evt) => {
-      evt.dataTransfer.setData('text/plain', tab.id);
+      evt.dataTransfer.setData('text/plain', 'tab:' + tab.id);
       evt.dataTransfer.effectAllowed = 'move';
+      _dragKind = 'tab';
       el.classList.add('df-tab--dragging');
     });
     el.addEventListener('dragend', () => {
+      _dragKind = null;
       el.classList.remove('df-tab--dragging');
-      tabListEl.querySelectorAll('.df-tab--drag-over').forEach(t => t.classList.remove('df-tab--drag-over'));
+      hideInsertionLine();
+      tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach(t => t.classList.remove('df-tab-group-tray--drag-over'));
     });
     el.addEventListener('dragover', (evt) => {
       evt.preventDefault();
       evt.dataTransfer.dropEffect = 'move';
-      el.classList.add('df-tab--drag-over');
-    });
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('df-tab--drag-over');
+      if (_dragKind !== 'tab') return;   // a group drag shows the tray border, not a tab insertion line
+      // One centred insertion line on the side the tab will drop (left/right half of the hovered tab).
+      const rect = el.getBoundingClientRect();
+      const after = (evt.clientX - rect.left) > rect.width / 2;
+      showInsertionLine(el, after);
     });
     el.addEventListener('drop', (evt) => {
       evt.preventDefault();
-      el.classList.remove('df-tab--drag-over');
-      const draggedId = evt.dataTransfer.getData('text/plain');
+      evt.stopPropagation();   // we handle the precise insertion here; don't let the tray also "join group"
+      const rect = el.getBoundingClientRect();
+      const after = (evt.clientX - rect.left) > rect.width / 2;   // recompute from the drop point (no class needed)
+      hideInsertionLine();
+      const data = evt.dataTransfer.getData('text/plain');
+      if (data.startsWith('group:')) { moveGroupBefore(data.slice(6), tab.groupId); return; }
+      const draggedId = data.replace(/^tab:/, '');
       if (draggedId === tab.id) return;
-      const fromIdx = tabs.findIndex(t => t.id === draggedId);
-      const toIdx = tabs.findIndex(t => t.id === tab.id);
-      if (fromIdx < 0 || toIdx < 0) return;
-      const [moved] = tabs.splice(fromIdx, 1);
-      tabs.splice(toIdx, 0, moved);
+      const dragged = tabs.find(t => t.id === draggedId);
+      if (!dragged) return;
+      dragged.groupId = tab.groupId || null;   // a tab adopts the drop target's group (or ungroups)
+      tabs.splice(tabs.findIndex(t => t.id === draggedId), 1);
+      let toIdx = tabs.findIndex(t => t.id === tab.id);
+      if (after) toIdx += 1;
+      tabs.splice(toIdx, 0, dragged);
+      reorderTabsByGroup();   // keep tabs in visual order
       render();
+      suppressTabHover();     // don't leave the dropped tab wearing a stuck :hover tint
       saveTabs();
     });
 
+    el.addEventListener('contextmenu', (e) => { e.preventDefault(); openTabGroupMenu(el, tab); });
     el.addEventListener('click', () => switchTab(tab.id));
 
-    tabListEl.appendChild(el);
-  }
+    return el;
+  };
 
-  // Position the ::after pseudo-element cover strip under the active tab
-  updateActiveTabIndicator();
+  // A group header chip: collapse caret, optional icon, name, and (when collapsed) a count.
+  const renderGroupChip = (group, count) => {
+    const collapsed = group.collapsed && count > 0;
+    const chip = document.createElement('div');
+    chip.className = 'df-tab-group' + (collapsed ? ' df-tab-group--collapsed' : '') + (count === 0 ? ' df-tab-group--empty' : '');
+    chip.dataset.groupId = group.id;
+    if (group.color) chip.style.setProperty('--group-accent', group.color);
+
+    // Icon — always present; defaults to 'tabset' so a group never renders icon-less.
+    const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ic.setAttribute('class', 'df-tab-group__icon');
+    ic.setAttribute('width', '12'); ic.setAttribute('height', '12');
+    ic.innerHTML = `<use href="#${String(group.icon || 'tabset').replace(/[^a-zA-Z0-9_-]/g, '')}"></use>`;
+    chip.appendChild(ic);
+
+    const name = document.createElement('span');
+    name.className = 'df-tab-group__name';
+    name.textContent = group.name;
+    name.title = group.name;
+    chip.appendChild(name);
+
+    // Right "lead" slot: the tab COUNT pill by default (always, collapsed or not), swapping to the ⋯
+    // menu on hover — so the slot is never empty and the count keeps its badge style.
+    const lead = document.createElement('div');
+    lead.className = 'df-tab-group__lead';
+    if (count > 0) {
+      const countEl = document.createElement('span');
+      countEl.className = 'df-tab-group__count';
+      countEl.textContent = String(count);
+      lead.appendChild(countEl);
+    }
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'df-tab-group__menu';
+    menuBtn.title = 'Group options';
+    menuBtn.setAttribute('aria-label', 'Group options');
+    menuBtn.innerHTML = '<svg width="12" height="4" viewBox="0 0 12 4" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="10" cy="2" r="1.4"/></svg>';
+    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); openGroupMenu(menuBtn, group); });
+    lead.appendChild(menuBtn);
+    chip.appendChild(lead);
+
+    // Click toggles collapse (accordion). An EMPTY group can't be collapsed (nothing to hide).
+    chip.title = count === 0 ? group.name : (collapsed ? 'Expand group' : 'Collapse group');
+    chip.addEventListener('click', () => { if (count > 0) toggleGroupCollapsed(group.id); });
+    chip.addEventListener('contextmenu', (e) => { e.preventDefault(); openGroupMenu(chip, group); });
+
+    // Drag the chip to reorder groups (drops are handled by the surrounding tray).
+    chip.draggable = true;
+    chip.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', 'group:' + group.id);
+      e.dataTransfer.effectAllowed = 'move';
+      _dragKind = 'group';
+      chip.classList.add('df-tab-group--dragging');
+    });
+    chip.addEventListener('dragend', () => {
+      _dragKind = null;
+      chip.classList.remove('df-tab-group--dragging');
+      hideInsertionLine();
+      tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach(c => c.classList.remove('df-tab-group-tray--drag-over'));
+    });
+    return chip;
+  };
+
+  // A group renders as a "tray" (chip + its tabs in tabs[] order) so it reads as one connected
+  // unit with a soft accent bar; ungrouped tabs follow at the end.
+  const wireTrayDrop = (tray, group) => {
+    tray.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (_dragKind === 'tab') tray.classList.add('df-tab-group-tray--drag-over');   // "drop into this group"
+    });
+    tray.addEventListener('dragleave', (e) => { if (!tray.contains(e.relatedTarget)) tray.classList.remove('df-tab-group-tray--drag-over'); });
+    tray.addEventListener('drop', (e) => {
+      e.preventDefault();
+      tray.classList.remove('df-tab-group-tray--drag-over');
+      hideInsertionLine();
+      const data = e.dataTransfer.getData('text/plain');
+      if (data.startsWith('group:')) { const gid = data.slice(6); if (gid !== group.id) moveGroupBefore(gid, group.id); }
+      else if (data.startsWith('tab:')) { setTabGroup(data.slice(4), group.id); suppressTabHover(); }   // a tab joins this group
+    });
+  };
+  for (const group of groups) {
+    const groupTabs = tabs.filter(t => t.groupId === group.id);
+    const collapsed = group.collapsed && groupTabs.length > 0;   // an empty group is never collapsed
+    const tray = document.createElement('div');
+    tray.className = 'df-tab-group-tray' + (collapsed ? ' df-tab-group-tray--collapsed' : '');
+    tray.dataset.groupId = group.id;
+    if (group.color) tray.style.setProperty('--group-accent', group.color);
+    tray.appendChild(renderGroupChip(group, groupTabs.length));
+    if (collapsed) {
+      // Collapsed: keep ONLY the active tab visible (the "lingering active tab") so you don't lose
+      // your place; it hides too the moment you switch away. Expand to see them all again.
+      const active = groupTabs.find(t => t.id === activeTabId);
+      if (active) tray.appendChild(renderTab(active));
+    } else {
+      for (const t of groupTabs) tray.appendChild(renderTab(t));
+    }
+    wireTrayDrop(tray, group);
+    tabListEl.appendChild(tray);
+  }
+  for (const t of tabs) if (!t.groupId) tabListEl.appendChild(renderTab(t));
+
+  // Size tabs uniformly, set the « » buttons, THEN measure pins off the final layout. measurePins →
+  // updatePins builds the rail and (last) calls updateActiveTabIndicator, so the bottom-bar gap lands
+  // under the correct visible active element — no separate call needed here.
+  sizeTabsUniform();
+  updateScrollButtons();
+  measurePins();
+}
+
+// ── Uniform tab widths ───────────────────────────────────────────────
+// Tabs in a group tray and ungrouped tabs live in separate flex contexts, so flex alone sizes them
+// differently. Compute ONE width for every tab from the available row space and apply it, so grouped
+// and ungrouped tabs match. Squishes toward MIN as tabs are added; once there it overflows → scrolls.
+const MIN_TAB_W = 120, MAX_TAB_W = 180;
+function sizeTabsUniform() {
+  if (!tabListEl) return;
+  // Mobile keeps content-width tabs (its own CSS) — clear any desktop sizing.
+  if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+    tabListEl.querySelectorAll('.df-tab').forEach(t => { t.style.width = ''; t.style.flex = ''; });
+    return;
+  }
+  let fixed = 0, tabCount = 0;
+  for (const c of tabListEl.children) {
+    if (c.classList.contains('df-tab-group-tray')) {
+      const chip = c.querySelector('.df-tab-group');
+      if (chip) fixed += chip.offsetWidth + 3;   // chip + its margin-right
+      fixed += 3;                                  // tray padding-right
+      tabCount += c.querySelectorAll('.df-tab').length;
+    } else if (c.classList.contains('df-tab')) {
+      tabCount += 1;
+    }
+  }
+  if (tabCount === 0) return;
+  fixed += 2 * Math.max(0, tabListEl.children.length - 1);   // inter-item gaps (list gap)
+  const w = Math.max(MIN_TAB_W, Math.min(MAX_TAB_W, Math.floor((tabListEl.clientWidth - fixed) / tabCount)));
+  tabListEl.querySelectorAll('.df-tab').forEach(t => { t.style.flex = '0 0 auto'; t.style.width = `${w}px`; });
+}
+
+// ── Pinned rail (group pills + active tab) ───────────────────────────
+// Earlier versions transform-pinned the real chips inside the scroll container, which jittered (the
+// transform lags one frame behind native scroll) and let tabs flow visibly behind the translucent
+// pills. Instead, the real chips/tabs scroll NATIVELY (no transform → no jitter), and a separate,
+// NON-scrolling "rail" overlay at each edge shows opaque PROXIES of whatever's scrolled out of view:
+//   • left rail  — every group whose pill has scrolled off the left, STACKED, + the active tab if it's
+//                  scrolled off the left (so the active diagram never fully hides).
+//   • right rail — the active tab if it's scrolled off the RIGHT edge.
+// The rail's opaque background (var(--bg-canvas)) means scrolling tabs never show through (uniform
+// backing), and because the rail never moves with scroll there's nothing to jitter. `_pinGeom` caches
+// each pinnable element's content-space left+width (re-measured on render/resize); updatePins() runs
+// cheaply on scroll, rebuilding the proxy DOM only when the pinned SET changes.
+let _pinGeom = null;
+let _pinSig = '';
+
+function measurePins() {
+  if (!tabListEl) { _pinGeom = null; return; }
+  const listRect = tabListEl.getBoundingClientRect();
+  const s = tabListEl.scrollLeft;
+  const contentLeft = (r) => Math.round(r.left - listRect.left + s);   // scroll-independent (content space)
+  const contentRight = (r) => Math.round(r.right - listRect.left + s);
+  const groups = [];
+  for (const chip of tabListEl.querySelectorAll('.df-tab-group')) {
+    const r = chip.getBoundingClientRect();
+    const tray = chip.closest('.df-tab-group-tray');
+    // contentRight = the right edge of the group's whole tray (chip + all its tabs): used to tell whether
+    // the group's tabs still extend PAST the pinned rail (so the rail's last pill should blend into them).
+    groups.push({ id: chip.dataset.groupId, base: contentLeft(r), w: Math.round(r.width), contentRight: contentRight((tray || chip).getBoundingClientRect()) });
+  }
+  let active = null;
+  const activeEl = tabListEl.querySelector('.df-tab--active');
+  if (activeEl) {
+    const r = activeEl.getBoundingClientRect();
+    active = { base: contentLeft(r), w: Math.round(r.width), groupId: tabs.find(t => t.id === activeTabId)?.groupId || null };
+  }
+  _pinGeom = { groups, active };
+  _pinSig = '';   // force a rebuild against the new geometry
+  updatePins();
+}
+
+// Scroll the list so a pinned element's natural position is back in view (a little inset from the left).
+function revealInList(targetScroll) {
+  tabListEl?.scrollTo({ left: Math.max(0, Math.round(targetScroll)), behavior: 'smooth' });
+}
+
+function buildGroupPin(g, revealTo) {
+  const group = getGroup(g.id);
+  if (!group) return null;
+  const count = tabs.filter(t => t.groupId === group.id).length;
+  const chip = document.createElement('div');
+  chip.className = 'df-tab-group df-tab-group--pinned';
+  chip.dataset.groupId = group.id;
+  if (group.color) chip.style.setProperty('--group-accent', group.color);
+  const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  ic.setAttribute('class', 'df-tab-group__icon');
+  ic.setAttribute('width', '12'); ic.setAttribute('height', '12');
+  ic.innerHTML = `<use href="#${String(group.icon || 'tabset').replace(/[^a-zA-Z0-9_-]/g, '')}"></use>`;
+  chip.appendChild(ic);
+  const name = document.createElement('span');
+  name.className = 'df-tab-group__name';
+  name.textContent = group.name; name.title = group.name;
+  chip.appendChild(name);
+  if (count > 0) {
+    const lead = document.createElement('div');
+    lead.className = 'df-tab-group__lead';
+    const c = document.createElement('span');
+    c.className = 'df-tab-group__count'; c.textContent = String(count);
+    lead.appendChild(c); chip.appendChild(lead);
+  }
+  chip.title = group.name;
+  chip.addEventListener('click', () => revealInList(revealTo));   // click a pinned header → jump back to its group
+  return chip;
+}
+
+function buildActivePin(a, revealTo) {
+  const tab = tabs.find(t => t.id === activeTabId);
+  if (!tab) return null;
+  const el = document.createElement('div');
+  el.className = 'df-tab df-tab--active df-pin-tab' + (tab.groupId ? ' df-tab--grouped' : '');
+  el.style.width = `${a.w}px`;   // match the real (uniform-shrunk) active tab's width — item 3
+  // Set the group accent so the active-tab strip is the GROUP colour, matching the real grouped active
+  // tab (which inherits it from its tray). A colourless group falls back to --color-primary via the
+  // .df-pin-tab--grouped CSS default — WITHOUT this the proxy lost its accent and went generic grey.
+  if (tab.groupId) { const g = getGroup(tab.groupId); if (g?.color) el.style.setProperty('--group-accent', g.color); }
+  const ti = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  ti.setAttribute('class', 'df-tab__type-icon');
+  ti.setAttribute('width', '12'); ti.setAttribute('height', '12'); ti.setAttribute('viewBox', '0 0 16 16'); ti.setAttribute('fill', 'currentColor');
+  ti.innerHTML = diagramTypeIconMarkup(tab.diagramType);
+  el.appendChild(ti);
+  const label = document.createElement('span');
+  label.className = 'df-tab__label';
+  label.textContent = tab.name;
+  el.appendChild(label);
+  el.title = tab.name;
+  el.addEventListener('click', () => revealInList(revealTo));
+  return el;
+}
+
+// A pinned group renders as a mini-TRAY (soft accent bar) holding the chip — and, when the active tab
+// belongs to this group, the active proxy right after it, touching on the shared bar — so a pinned group
+// looks identical to an unpinned one (item 2). Reuses the real tray/chip/active CSS.
+function buildPinnedTray(g, activeGeom, groupRevealTo, activeRevealTo) {
+  const group = getGroup(g.id);
+  if (!group) return null;
+  const tray = document.createElement('div');
+  tray.className = 'df-tab-group-tray df-tab-group-tray--pinned';
+  tray.dataset.groupId = group.id;
+  if (group.color) tray.style.setProperty('--group-accent', group.color);
+  const chip = buildGroupPin(g, groupRevealTo);
+  if (chip) tray.appendChild(chip);
+  if (activeGeom) { const ae = buildActivePin(activeGeom, activeRevealTo); if (ae) tray.appendChild(ae); }
+  return tray;
+}
+
+function updatePins() {
+  const leftRail = document.getElementById('tab-pinrail-left');
+  const rightRail = document.getElementById('tab-pinrail-right');
+  if (!tabListEl || !leftRail || !rightRail) return;
+  if (!_pinGeom) { leftRail.hidden = true; rightRail.hidden = true; return; }
+  const listRect = tabListEl.getBoundingClientRect();
+  const barRect = tabListEl.parentElement.getBoundingClientRect();
+  const listLeftInBar = listRect.left - barRect.left;
+  const s = tabListEl.scrollLeft;
+  const clientW = tabListEl.clientWidth;
+
+  // Group pills scrolled off the left, stacked. A group pins as soon as its LEFT edge touches the rail's
+  // current right edge (item 1). leftW (the rail's right edge) must reflect the FULL mini-tray: chip +
+  // (when the active tab rides in this group) the interleaved active proxy + tray padding + rail gap —
+  // else the next group slides ~a-tab-width UNDER the rail before pinning.
+  const a = _pinGeom.active;
+  const TRAY_PAD = 6, GAP = 2;   // chip margin-right (3) + tray padding-right (3); rail gap between trays
+  const pinned = [];             // { g, hasActive }
+  let leftW = 0, activeLeft = false;
+  for (const g of _pinGeom.groups) {
+    if (g.base >= s + leftW) continue;   // left edge not yet at the rail (groups after are further right)
+    let trayW = g.w + TRAY_PAD, hasActive = false;
+    if (a && a.groupId === g.id && a.base < s + leftW + g.w + 3) { hasActive = true; activeLeft = true; trayW += a.w; }
+    pinned.push({ g, hasActive });
+    leftW += trayW + GAP;
+  }
+  // Ungrouped active (or active whose group didn't pin): pin to the LEFT once its left edge touches.
+  const activeStandalone = !!a && !activeLeft && (a.groupId === null || !pinned.some(p => p.g.id === a.groupId));
+  if (activeStandalone && a.base <= s + leftW) { activeLeft = true; leftW += a.w + GAP; }
+  let activeRight = false;
+  if (a && !activeLeft && a.base + a.w >= s + clientW) activeRight = true;   // off the right edge
+
+  const sig = pinned.map(p => p.g.id + (p.hasActive ? '*' : '')).join(',') + '|' + (activeLeft && activeStandalone ? 'AS' : '') + '|' + (activeRight ? 'AR' : '');
+  if (sig !== _pinSig) {
+    _pinSig = sig;
+    const append = (rail, el) => { if (el) rail.appendChild(el); };
+    // `cum` tracks the rail content to the LEFT of the item being placed; a proxy's "reveal" scroll
+    // brings the real element just PAST that width (so a click never lands it back behind the rail — C).
+    leftRail.innerHTML = '';
+    let cum = 0;
+    for (const { g, hasActive } of pinned) {
+      const activeReveal = hasActive ? a.base - (cum + g.w + 3) - 8 : 0;
+      append(leftRail, buildPinnedTray(g, hasActive ? a : null, g.base - cum - 8, activeReveal));
+      cum += g.w + TRAY_PAD + (hasActive ? a.w : 0) + GAP;
+    }
+    if (activeStandalone && activeLeft) append(leftRail, buildActivePin(a, a.base - cum - 8));
+    rightRail.innerHTML = '';
+    if (activeRight && a) append(rightRail, buildActivePin(a, a.base + a.w - clientW + 8));
+  }
+  // Position the rails over the list edges (live — the list's left shifts when « shows/hides).
+  leftRail.hidden = leftW === 0;
+  leftRail.style.left = `${Math.round(listLeftInBar)}px`;
+  rightRail.hidden = !activeRight;
+  if (activeRight) rightRail.style.left = `${Math.round(listLeftInBar + listRect.width - a.w)}px`;
+
+  // Items 2/3: the LAST pinned GROUP blends into the scrolled tabs (flat right, no gap) when its OWN
+  // tabs still extend past the rail; otherwise it caps (rounded right + a slight gap). Re-evaluated every
+  // scroll — this flips as you scroll WITHIN vs PAST a group with no change to the pinned set.
+  const lastGroup = (pinned.length && !(activeLeft && activeStandalone)) ? pinned[pinned.length - 1].g : null;
+  leftRail.querySelectorAll('.df-tab-group-tray--pinned').forEach(t => t.classList.remove('df-tab-group-tray--blend-right', 'df-tab-group-tray--cap-right'));
+  if (lastGroup) {
+    const lastTray = leftRail.querySelector(`.df-tab-group-tray--pinned[data-group-id="${lastGroup.id}"]`);
+    if (lastTray) {
+      // Blend when the group's OWN tabs extend past the rail (visible right after the pinned pill); else
+      // cap. Compare the group's content-right edge to the pill's MEASURED right edge (exact, vs the
+      // approximate leftW) so the call doesn't misfire by a tray's padding.
+      const trayRightInList = lastTray.getBoundingClientRect().right - listRect.left;
+      lastTray.classList.add((lastGroup.contentRight - s) > trayRightInList + 2 ? 'df-tab-group-tray--blend-right' : 'df-tab-group-tray--cap-right');
+    }
+  }
+  updateActiveTabIndicator();   // keep the bottom-bar gap under the VISIBLE active element (real or pinned proxy)
+}
+
+// ── Scroll affordance ────────────────────────────────────────────────
+// The « / » buttons replace the old edge fade-mask (which dimmed the pinned pills) and give a
+// click/touch/keyboard scroll target. Each shows ONLY when there's clipped content in its direction
+// (`hidden` → display:none otherwise) — no reserved slot, so an empty row has no dead gutter on the
+// sides. The brief reflow when « first appears is preferred over a permanent left gap.
+function updateScrollButtons() {
+  if (!tabListEl) return;
+  const { scrollLeft, scrollWidth, clientWidth } = tabListEl;
+  const overflows = scrollWidth > clientWidth + 1;
+  const leftBtn = document.getElementById('btn-scroll-tabs-left');
+  const rightBtn = document.getElementById('btn-scroll-tabs-right');
+  if (leftBtn) leftBtn.hidden = !(overflows && scrollLeft > 0);
+  if (rightBtn) rightBtn.hidden = !(overflows && scrollLeft + clientWidth < scrollWidth - 1);
 }
 
 function updateActiveTabIndicator() {
@@ -1236,7 +2133,9 @@ function updateActiveTabIndicator() {
   // Remove old line segments
   tabBar.querySelectorAll('.df-tab-line').forEach(el => el.remove());
 
-  const activeEl = tabBar.querySelector('.df-tab--active');
+  // The gap goes under the VISIBLE active element: its pinned-rail proxy if the active tab is pinned
+  // (the real one is then scrolled off-screen), otherwise the real active tab.
+  const activeEl = tabBar.querySelector('.df-pin-tab') || tabBar.querySelector('.df-tab--active');
   if (!activeEl) {
     // No active tab — full-width bottom line
     const line = document.createElement('div');
@@ -1300,6 +2199,24 @@ function startInlineRename(tabEl, labelEl, tab) {
   });
 
   labelEl.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function startGroupRename(chipEl, nameEl, group) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'df-tab-group__rename-input';
+  input.value = group.name;
+  input.style.cssText = `width:${Math.max(60, nameEl.offsetWidth + 8)}px;font-size:var(--font-size-sm);font-family:var(--font-family);font-weight:600;border:1px solid var(--color-primary);border-radius:3px;background:var(--bg-app);color:var(--text-primary);padding:0 4px;outline:none;height:18px;`;
+  const finish = () => updateGroup(group.id, { name: input.value.trim() || group.name });
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); }
+    if (evt.key === 'Escape') { input.value = group.name; input.blur(); }
+    evt.stopPropagation();
+  });
+  nameEl.replaceWith(input);
   input.focus();
   input.select();
 }

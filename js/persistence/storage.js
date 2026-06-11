@@ -7,9 +7,9 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.15.7';
-import { pctx } from './context.js?v=1.15.7';
-import { compactGraphForSave } from './json-pipeline.js?v=1.15.7';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.16.0';
+import { pctx } from './context.js?v=1.16.0';
+import { compactGraphForSave } from './json-pipeline.js?v=1.16.0';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -339,16 +339,22 @@ export function readNamedSave(key) {
  * `markBackup` (Select-All export, or the reminder overlay) resets the reminder
  * clock. Returns true on a successful download.
  */
-export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates = false } = {}, { markBackup = false } = {}) {
+export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates = false, groups = [] } = {}, { markBackup = false } = {}) {
   const { getAllTabs: getAllTabsCallback, getTabGraph: getTabGraphCallback, getTabDiagramType: getTabDiagramTypeCallback, getTabViewport: getTabViewportCallback, getTabMappingMode: getTabMappingModeCallback, appVersion: APP_VERSION, templatesBackupApi, triggerDownload, dateSuffix } = pctx;
   try {
     const diagrams = [];
     const tabs = getAllTabsCallback ? getAllTabsCallback() : [];
     const tabById = new Map(tabs.map(t => [t.id, t]));
+    // Group export (v1.16.0): caller passes the groups [{id,name,icon,color}] whose
+    // tabs are being exported. Each diagram is tagged with its group NAME so import
+    // can re-group it; the bundle carries the group metadata under `groups`.
+    const groupById = new Map(groups.map(g => [g.id, g]));
+    const isGroupExport = groups.length > 0;
     for (const id of tabIds) {
       const t = tabById.get(id); if (!t) continue;
       const g = getTabGraphCallback ? getTabGraphCallback(id) : null;
       if (!g || !Array.isArray(g.cells) || g.cells.length === 0) continue; // skip empty drafts
+      const grp = t.groupId ? groupById.get(t.groupId) : null;
       diagrams.push({
         name: t.name,
         diagramType: getTabDiagramTypeCallback ? getTabDiagramTypeCallback(id) : 'architecture',
@@ -356,6 +362,7 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
         graph: g,
         viewport: getTabViewportCallback ? getTabViewportCallback(id) : null,
         appVersion: APP_VERSION,   // stamp so the diagram's version round-trips on re-import
+        ...(grp ? { group: grp.name } : {}),
       });
     }
     const tabNames = new Set(diagrams.map(d => d.name));
@@ -374,8 +381,11 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
       return false;
     }
 
+    // A group export always uses the bundle format (even for one diagram) so the
+    // `groups` metadata + per-diagram `group` tag survive — the single-diagram
+    // shortcut would strip them.
     let ok = true;
-    if (diagrams.length === 1 && templates.length === 0) {
+    if (diagrams.length === 1 && templates.length === 0 && !isGroupExport) {
       const d = diagrams[0];
       downloadSingleDiagram(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode);
       showToast(`Exported "${d.name}" ✓`, 'success');
@@ -383,16 +393,29 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
       ok = !!(templatesBackupApi?.exportFn?.());   // templates-only → templates file
     } else {
       const payload = { schema: 'diagramforce-export', version: 1, appVersion: APP_VERSION, exportedAt: Date.now() };
+      // Groups actually represented in the exported diagrams. `kind:'group'` tells
+      // the importer to restore these as grouped tabs (vs the default browser-saves).
+      const usedGroups = groups.filter(g => diagrams.some(d => d.group === g.name));
+      if (usedGroups.length) {
+        payload.kind = 'group';
+        payload.groups = usedGroups.map(g => ({ name: g.name, icon: g.icon || null, color: g.color || null }));
+      }
       if (diagrams.length) payload.diagrams = diagrams;
       if (templates.length) payload.templates = templates;
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      // Full backup (Select-All / reminder overlay) → df_backup_<date>; a partial
-      // multi-select export → df_export_<date>. markBackup distinguishes the two.
-      triggerDownload(URL.createObjectURL(blob), `df_${markBackup ? 'backup' : 'export'}_${dateSuffix()}.json`);
+      // Group export → df_group_<name>_<date>; full backup (Select-All / reminder
+      // overlay) → df_backup_<date>; a partial multi-select export → df_export_<date>.
+      let prefix = `df_${markBackup ? 'backup' : 'export'}`;
+      if (usedGroups.length === 1) {
+        const safe = usedGroups[0].name.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'group';
+        prefix = `df_group_${safe}`;
+      }
+      triggerDownload(URL.createObjectURL(blob), `${prefix}_${dateSuffix()}.json`);
       const parts = [];
       if (diagrams.length) parts.push(`${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'}`);
       if (templates.length) parts.push(`${templates.length} template${templates.length === 1 ? '' : 's'}`);
-      showToast(`Exported ${parts.join(' + ')} ✓`, 'success');
+      if (usedGroups.length === 1) showToast(`Exported group "${usedGroups[0].name}" (${parts.join(' + ')}) ✓`, 'success');
+      else showToast(`Exported ${parts.join(' + ')} ✓`, 'success');
     }
     if (ok && markBackup) markBackedUp();
     return ok;

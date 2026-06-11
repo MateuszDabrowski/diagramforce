@@ -247,6 +247,13 @@
   gap: 8px;
 }
 
+/* `[hidden]` must win over the `display:block`/`flex` above (author rules beat the UA `[hidden]`
+   rule, so without this a hidden item — e.g. Export to CSV gated off non-data diagrams — stays
+   visible). The attribute selector adds the specificity needed to re-hide it. */
+.df-toolbar__menu-item[hidden] {
+  display: none;
+}
+
 .df-toolbar__menu-icon {
   flex-shrink: 0;
   opacity: 0.7;

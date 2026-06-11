@@ -262,6 +262,16 @@
   opacity: 0.88;
 }
 
+/* Red outline (no fill) — a secondary destructive action shown next to a filled --danger primary. */
+.df-modal__btn--danger-outline {
+  background: transparent;
+  color: var(--brand-red);
+  border-color: var(--brand-red);
+}
+.df-modal__btn--danger-outline:hover {
+  background: color-mix(in srgb, var(--brand-red) 12%, transparent);
+}
+
 /* ── Confirm modal (v1.12.0) ────────────────────────
    Custom-styled replacement for window.confirm(). Reuses the existing
    .df-modal structure so confirmations look like every other dialog in

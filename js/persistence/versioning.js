@@ -4,10 +4,10 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver } from '../util.js?v=1.15.7';
-import { escHtml } from '../util.js?v=1.15.7';
-import { buildModal } from '../feedback.js?v=1.15.7';
-import { pctx } from './context.js?v=1.15.7';
+import { compareSemver } from '../util.js?v=1.16.0';
+import { escHtml } from '../util.js?v=1.16.0';
+import { buildModal } from '../feedback.js?v=1.16.0';
+import { pctx } from './context.js?v=1.16.0';
 
 function stableStringify(v) {
   if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';

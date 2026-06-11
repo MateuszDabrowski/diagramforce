@@ -42,15 +42,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.15.7">
-  <link rel="stylesheet" href="css/theme.css?v=1.15.7">
-  <link rel="stylesheet" href="css/layout.css?v=1.15.7">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.15.7">
-  <link rel="stylesheet" href="css/stencil.css?v=1.15.7">
-  <link rel="stylesheet" href="css/properties.css?v=1.15.7">
-  <link rel="stylesheet" href="css/tabs.css?v=1.15.7">
-  <link rel="stylesheet" href="css/canvas.css?v=1.15.7">
-  <link rel="stylesheet" href="css/modals.css?v=1.15.7">
+  <link rel="stylesheet" href="css/variables.css?v=1.16.0">
+  <link rel="stylesheet" href="css/theme.css?v=1.16.0">
+  <link rel="stylesheet" href="css/layout.css?v=1.16.0">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.16.0">
+  <link rel="stylesheet" href="css/stencil.css?v=1.16.0">
+  <link rel="stylesheet" href="css/properties.css?v=1.16.0">
+  <link rel="stylesheet" href="css/tabs.css?v=1.16.0">
+  <link rel="stylesheet" href="css/canvas.css?v=1.16.0">
+  <link rel="stylesheet" href="css/modals.css?v=1.16.0">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -414,12 +414,26 @@
           <path d="M6.5 7v5M9.5 7v5" stroke-linecap="round"/>
         </svg>
       </button>
+      <button id="btn-scroll-tabs-left" class="df-tabs__scroll df-tabs__scroll--left" title="Scroll tabs left" aria-label="Scroll tabs left" hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 8l4 5M12 3 8 8l4 5"/></svg>
+      </button>
       <div id="tab-list" class="df-tabs__list">
         <!-- Rendered by js/tabs.js -->
       </div>
+      <!-- Non-scrolling "frozen" rails: opaque proxies of group pills / the active tab once they scroll
+           out of view. Positioned + filled by js/tabs.js (updatePins). -->
+      <div id="tab-pinrail-left" class="df-tabs__pinrail df-tabs__pinrail--left" aria-hidden="true" hidden></div>
+      <div id="tab-pinrail-right" class="df-tabs__pinrail df-tabs__pinrail--right" aria-hidden="true" hidden></div>
+      <button id="btn-scroll-tabs-right" class="df-tabs__scroll df-tabs__scroll--right" title="Scroll tabs right" aria-label="Scroll tabs right" hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 12 8l-4 5M4 3 8 8l-4 5"/></svg>
+      </button>
       <button id="btn-new-tab" class="df-tabs__new" title="New diagram">
         <svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-        <span>New</span>
+        <span>Diagram</span>
+      </button>
+      <button id="btn-new-group" class="df-tabs__new df-tabs__new--group" title="New tab group">
+        <svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+        <span>Group</span>
       </button>
     </div>
 
@@ -622,8 +636,8 @@
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.15.7"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.15.7"></script>
-  <script type="module" src="js/app.js?v=1.15.7"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.16.0"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.16.0"></script>
+  <script type="module" src="js/app.js?v=1.16.0"></script>
 </body>
 </html>
