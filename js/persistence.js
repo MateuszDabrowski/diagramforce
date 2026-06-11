@@ -1,33 +1,33 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.16.0';
-import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.16.0';
-import { pctx } from './persistence/context.js?v=1.16.0';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.16.1';
+import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.16.1';
+import { pctx } from './persistence/context.js?v=1.16.1';
 
 // ── Facade (Phase 3, Slice 1): image export + share orchestration now live in
 // sub-modules; re-exported here so the public surface is unchanged. ──
-export { exportWEBP, exportPNG, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.16.0';
-export { shareAsURL, loadFromURL } from './persistence/share-orchestration.js?v=1.16.0';
+export { exportWEBP, exportPNG, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.16.1';
+export { shareAsURL, loadFromURL } from './persistence/share-orchestration.js?v=1.16.1';
 // versioning: contentSignature + classifyVersionDiff are public (tests/templates use them);
 // checkVersionWarning is imported for internal use (loadNamedSave/loadJSONText) + pctx wiring.
-import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.16.0';
+import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.16.1';
 export { contentSignature, classifyVersionDiff };
 // json-pipeline: sanitizeGraphJSON is public AND used internally (loadNamedSave);
 // importJSON / pasteJSON are public entry points.
-import { sanitizeGraphJSON, compactGraphForSave, importJSON, pasteJSON } from './persistence/json-pipeline.js?v=1.16.0';
+import { sanitizeGraphJSON, compactGraphForSave, importJSON, pasteJSON } from './persistence/json-pipeline.js?v=1.16.1';
 export { sanitizeGraphJSON, compactGraphForSave, importJSON, pasteJSON };
 // storage: getNamedSaves/readNamedSave/NAMED_SAVE_PREFIX feed pctx (read by
 // json-pipeline); the rest are the public storage surface.
-import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.16.0';
+import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.16.1';
 export {
   namedSave, saveMultipleTabs, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES,
   requestPersistentStorage, getNamedSaves, loadNamedSave, deleteNamedSave, getLastBackupAt,
   exportSelection, exportEverything, maybeShowBackupReminder, markFullBackup,
-} from './persistence/storage.js?v=1.16.0';
+} from './persistence/storage.js?v=1.16.1';
 
 let graph, paper, canvasModule;
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 export { APP_VERSION };
 // Wire the version into pctx at module-eval (it's a constant) so the extracted
 // version helpers work even before init() runs — e.g. unit tests calling

@@ -417,6 +417,7 @@
 }
 .df-tab-pop__item:hover { background: var(--toolbar-button-hover); color: var(--text-primary); }
 .df-tab-pop__item--danger { color: var(--color-danger, #c23934); }
+.df-tab-pop__item--center { text-align: center; }
 .df-tab-pop__item--icon { display: flex; align-items: center; gap: 8px; }
 .df-tab-pop__item--icon .df-toolbar__icon { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
 .df-tab-pop__item.is-checked::after { content: '✓'; float: right; margin-left: 12px; opacity: 0.8; }

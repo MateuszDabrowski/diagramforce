@@ -12,12 +12,13 @@
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.16.0';
-import { getBumpLayer } from './crossing-bumps.js?v=1.16.0';
+import { cctx } from './context.js?v=1.16.1';
+import { getBumpLayer } from './crossing-bumps.js?v=1.16.1';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)
 const linkMarkerOriginals = new Map();    // linkView → { saved, markerSwaps } — Map: the sweep iterates it
+const linkLabelOriginals = new Map();     // linkView → [{ el, orig }] — saved <text> fills for label tint
 const _bumpsTinted = new Set();           // linkId set — which links have tinted bump arcs
 let focusMarkerCloneSeq = 0;              // unique id counter for cloned <marker> defs
 const SELECTION_COLOR_FALLBACK = '#1D73C9';
@@ -101,6 +102,12 @@ const tintLinkMarkers = (linkView) => {
     if (sel === 'wrapper' || sel === 'line') return;
     tintPath(p, color, saved);
   });
+  // (#7) Tint the LINE itself by attribute too. The `.joint-link:hover/.selected [joint-selector=line]`
+  // CSS only fires when the pointer is on the cells-layer line — hovering the link's LABEL (a separate
+  // layer) leaves the line grey. Setting the stroke directly (restored on blur) makes the WHOLE connector
+  // recolour whichever part is hovered. The CSS rule still wins harmlessly on a real line :hover.
+  const lineEl = el.querySelector('[joint-selector="line"]');
+  if (lineEl) tintPath(lineEl, color, saved);
 
   // (B) <marker> defs — the shared-pool rendering path. Clone, tint
   // the clone, swap the line's marker-start / marker-end ref.
@@ -218,6 +225,43 @@ const restoreLinkBumps = (linkView) => {
   });
 };
 
+// ── Label tint: recolour the link's text labels (user label + frequency overlay) ──
+// Labels render in a SEPARATE joint-labels-layer <g> carrying the SAME model-id (labelsLayer:true), so
+// the `.joint-link:hover/.selected [joint-selector=line]` CSS that tints the line never reaches them.
+// Mirror the marker tint: snapshot each label's tintable attribute (<text> `fill`, frequency clock
+// <image> `href`) and overwrite with the --selection-color render while focused, restore on blur.
+const tintLinkLabels = (linkView) => {
+  if (!linkView || linkLabelOriginals.has(linkView)) return;
+  const id = linkView.model?.id;
+  const root = cctx.paper?.el;
+  if (id == null || !root) return;
+  const color = getSelectionColor();
+  const scope = `.joint-link[model-id="${CSS.escape(String(id))}"]`;
+  const saved = [];   // [{ el, attr, orig }] — uniform attr-swap, restored verbatim
+  root.querySelectorAll(`${scope} text`).forEach((t) => {
+    saved.push({ el: t, attr: 'fill', orig: t.getAttribute('fill') });
+    t.setAttribute('fill', color);
+  });
+  // (#8) The frequency clock is a baked data-URI <image>; recolour it by swapping `href` to a
+  // selection-colour render. Setting `href` overrides any original `xlink:href` (SVG2), so restoring
+  // a null orig simply drops our `href` and the untouched original shows through. No-op without the gen.
+  const clockUri = cctx.freqClockUri?.(color);
+  if (clockUri) root.querySelectorAll(`${scope} image`).forEach((img) => {
+    saved.push({ el: img, attr: 'href', orig: img.getAttribute('href') });
+    img.setAttribute('href', clockUri);
+  });
+  if (saved.length) linkLabelOriginals.set(linkView, saved);
+};
+const restoreLinkLabels = (linkView) => {
+  const saved = linkLabelOriginals.get(linkView);
+  if (!saved) return;
+  linkLabelOriginals.delete(linkView);
+  saved.forEach(({ el, attr, orig }) => {
+    if (orig == null) el.removeAttribute(attr);
+    else el.setAttribute(attr, orig);
+  });
+};
+
 // ── Sweep: restore links that lost focus without a link-level event ──
 // Deferred via queueMicrotask so selection.js's pointerdown handler (registered
 // AFTER canvas.init by app.js) gets to add/remove `.selected` first. Without
@@ -246,6 +290,13 @@ const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
                       || view?.el?.matches(':hover');
     if (!stillFocused) restoreLinkBumps(view || { model: { id: linkId } });
   }
+  // …and stale label tints — decoupled from markers (a labelless link is never in this map).
+  for (const linkView of [...linkLabelOriginals.keys()]) {
+    if (linkView === keep) continue;
+    const el = linkView?.el;
+    const stillFocused = el && (el.classList.contains('selected') || el.matches(':hover'));
+    if (!stillFocused) restoreLinkLabels(linkView);
+  }
   // Drop any focus-marker clone that slipped through restore (self-heals a stuck arrowhead).
   cleanupOrphanFocusMarkers();
 });
@@ -258,6 +309,7 @@ export function registerSelectionViz(cctx) {
     bringLinkToFront(linkView);
     tintLinkMarkers(linkView);
     tintLinkBumps(linkView);
+    tintLinkLabels(linkView);
     // Moving fast across a dense fan of overlapping connectors DROPS some links' mouseleave (the
     // pointer jumps off without the browser firing leave), stranding their tinted clone → the
     // "stuck arrowhead colour" bug. Every enter also sweeps: any tinted link that's no longer
@@ -271,12 +323,14 @@ export function registerSelectionViz(cctx) {
     restoreLinkOrder(linkView);
     restoreLinkMarkers(linkView);
     restoreLinkBumps(linkView);
+    restoreLinkLabels(linkView);
     sweepStaleMarkerTints();   // also catch strays whose own mouseleave was dropped
   });
   paper.on('link:pointerdown', (linkView) => {
     bringLinkToFront(linkView);
     tintLinkMarkers(linkView);
     tintLinkBumps(linkView);
+    tintLinkLabels(linkView);
     // Clicking link A deselects link B; sweep restores B's markers/bumps.
     sweepStaleMarkerTints();
   });
@@ -297,6 +351,19 @@ export function registerSelectionViz(cctx) {
       if (!linkMarkerOriginals.has(linkView)) return;
       restoreLinkMarkers(linkView);
       tintLinkMarkers(linkView);
+    });
+  });
+
+  // A focused link whose labels are rebuilt (text edit, frequency change → new <text> DOM) loses the
+  // tint with the old nodes — re-apply it against the fresh labels. Defer so JointJS finishes rendering.
+  graph.on('change:labels', (cell) => {
+    if (!cell.isLink()) return;
+    const linkView = paper.findViewByModel(cell);
+    if (!linkView || !linkLabelOriginals.has(linkView)) return;
+    queueMicrotask(() => {
+      restoreLinkLabels(linkView);   // drop stale (now-detached) text nodes
+      const el = linkView.el;
+      if (el && (el.classList.contains('selected') || el.matches(':hover'))) tintLinkLabels(linkView);
     });
   });
 }

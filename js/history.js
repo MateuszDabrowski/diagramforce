@@ -8,6 +8,12 @@ const MAX_STACK = 100;
 let isUndoRedoing = false;
 let isBatching = false;
 let currentBatch = null;
+// Generic lock — when set, undo()/redo() no-op and canUndo()/canRedo() report
+// false (so the toolbar buttons + keyboard shortcuts disable). The stacks stay
+// intact, so flipping the lock off restores the exact prior availability. Used by
+// the Data Mapping table edit session, where undo/redo mid-edit would mutate the
+// graph out from under the open draft (the table holds an unapplied working copy).
+let locked = false;
 const onChangeCallbacks = [];
 
 // ── Drag-aware merge for continuous position/size/vertex changes ──
@@ -60,7 +66,7 @@ const CONTENT_PROPS = [
   'participantRole', 'lifelinePortCount', 'showBottomLabel', 'showLifeline',
   'fragmentType', 'fragmentLabel', 'condition', 'elseCondition',
   // Architecture link + Link element + bracket annotation + Gantt structure
-  'connectionFrequency', 'url', 'bracketSide', 'tasks',
+  'connectionFrequency', 'fontColor', 'url', 'bracketSide', 'tasks',
 ];
 
 function schedulePendingDragCommit() {
@@ -545,6 +551,7 @@ function pushCommand(cmd) {
 }
 
 export function undo() {
+  if (locked) return;
   // Land any in-flight drag merge first so a fast Cmd+Z right after a drop
   // doesn't undo the wrong action (or no action at all).
   commitPendingDrag();
@@ -565,6 +572,7 @@ export function undo() {
 }
 
 export function redo() {
+  if (locked) return;
   commitPendingDrag();
   if (redoStack.length === 0) return;
   isUndoRedoing = true;
@@ -804,8 +812,13 @@ export function restore(state) {
   notifyChange();
 }
 
-export function canUndo() { return undoStack.length > 0; }
-export function canRedo() { return redoStack.length > 0; }
+export function canUndo() { return !locked && undoStack.length > 0; }
+export function canRedo() { return !locked && redoStack.length > 0; }
+
+// Lock / unlock undo+redo. notifyChange() fires so the toolbar refreshes the
+// button disabled-state immediately (it reads canUndo()/canRedo()).
+export function setLocked(v) { locked = !!v; notifyChange(); }
+export function isLocked() { return locked; }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }

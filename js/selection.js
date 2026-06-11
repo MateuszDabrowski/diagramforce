@@ -1,10 +1,10 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.16.0';
-import * as history from './history.js?v=1.16.0';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.16.0';
-import { fieldFocus } from './canvas/focus-state.js?v=1.16.0';
+import * as clipboard from './clipboard.js?v=1.16.1';
+import * as history from './history.js?v=1.16.1';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.16.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.16.1';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -813,30 +813,64 @@ function updateLinkDimming() {
     }
   }
 
-  // Apply link dimming. On a flow trace a connector lights only when BOTH ends are on the
-  // traced path (so the whole thread's links light, and a branch leaving the path dims);
-  // otherwise (one-hop) when EITHER end is in the selection.
+  // ── Embedding-aware lit propagation, so a container and its contents share one fate ──
+  // DOWN: a container reached via a LINK (the connector points at the container as a unit — e.g. a route
+  // into "Data Cloud") lights its whole subtree. Restricted to link-ENDPOINT containers via
+  // `elementsWithLinks` so an ancestor lit only because a child of it is selected does NOT also light its
+  // siblings. (Selected containers are already covered by the addChildrenRecursive expansion above.)
+  const litDescendants = (id) => {
+    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
+      if (!connectedElementIds.has(childId)) { connectedElementIds.add(childId); litDescendants(childId); }
+    }
+  };
+  for (const id of [...connectedElementIds]) {
+    const cell = graph.getCell(id);
+    if (cell?.get && cell.get('type') === 'sf.Container' && elementsWithLinks.has(id)) litDescendants(id);
+  }
+  // UP: any container holding lit content stays lit, so it doesn't dim out from under a connected child.
+  for (const id of [...connectedElementIds]) {
+    let parentId = graph.getCell(id)?.get('parent');
+    while (parentId && !connectedElementIds.has(parentId)) {
+      connectedElementIds.add(parentId);
+      parentId = graph.getCell(parentId)?.get('parent');
+    }
+  }
+
+  // Apply link dimming. On a flow trace a connector lights only when BOTH ends are on the traced path;
+  // otherwise (one-hop) when EITHER end is in the selection. Build the per-link decision first, then write
+  // it to EVERY DOM node carrying that model-id — JointJS v4 renders the link's LINE in the cells layer
+  // and its LABELS in a separate `joint-labels-layer`, each as its own `[model-id]` group, so updating
+  // only findViewByModel's el would leave the label at full opacity (bright captions on dimmed links).
+  const linkDim = new Map();
   for (const link of graph.getLinks()) {
     const srcId = link.get('source')?.id;
     const tgtId = link.get('target')?.id;
     const connected = flowTrace
       ? (srcId && connectedElementIds.has(srcId) && tgtId && connectedElementIds.has(tgtId))
       : ((srcId && expandedSelection.has(srcId)) || (tgtId && expandedSelection.has(tgtId)));
-    const isLinkSelected = selectedLinkIds.has(link.id);
-    const view = paper.findViewByModel(link);
-    if (!view?.el) continue;
-    view.el.classList.toggle('df-link-dimmed', !connected && !isLinkSelected);
+    linkDim.set(link.id, !connected && !selectedLinkIds.has(link.id));
+  }
+  for (const el of paper.el.querySelectorAll('.joint-link[model-id]')) {
+    const dim = linkDim.get(el.getAttribute('model-id'));
+    if (dim !== undefined) el.classList.toggle('df-link-dimmed', dim);
   }
 
-  // Apply element dimming — only elements that ALREADY participate in
-  // the link graph become candidates, so background-only shapes
-  // (Zones, Notes, TextLabels, decorative nodes) keep full opacity.
+  // Apply element dimming. A dim CANDIDATE is anything that's part of the diagram STRUCTURE — it has a
+  // link, OR it's a Container, OR it's content embedded in a Container — so a whole group fades together.
+  // Pure background (Zones/Layers) and standalone decorative shapes (Notes, TextLabels, link-less loose
+  // nodes) are never candidates, keeping full opacity.
+  const isDimmable = (el) => {
+    const type = el.get('type');
+    if (type === 'sf.Zone') return false;
+    if (type === 'sf.Container') return true;
+    if (elementsWithLinks.has(el.id)) return true;
+    const parent = graph.getCell(el.get('parent'));
+    return !!(parent?.get && parent.get('type') === 'sf.Container');
+  };
   for (const el of graph.getElements()) {
     const view = paper.findViewByModel(el);
     if (!view?.el) continue;
-    const hasLinks = elementsWithLinks.has(el.id);
-    const isConnected = connectedElementIds.has(el.id);
-    view.el.classList.toggle('df-element-dimmed', hasLinks && !isConnected);
+    view.el.classList.toggle('df-element-dimmed', isDimmable(el) && !connectedElementIds.has(el.id));
   }
 
   document.dispatchEvent(new CustomEvent('sf:selection-dim-change'));

@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.16.0';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.16.0';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.16.0';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.16.0';
-import * as stencilModule from './stencil.js?v=1.16.0';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.16.0';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.16.0';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.16.1';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.16.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.16.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.16.1';
+import * as stencilModule from './stencil.js?v=1.16.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.16.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.16.1';
 import {
   duplicate as clipboardDuplicate,
   cloneElementWithConnectors,
@@ -16,13 +16,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.16.0';
-import * as history from './history.js?v=1.16.0';
-import { startImageAddFlow } from './image-component.js?v=1.16.0';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.16.0';
-import { getActiveTabName } from './tabs.js?v=1.16.0';
-import { saveSelectionAsTemplate } from './templates.js?v=1.16.0';
-import { newFid } from './shapes.js?v=1.16.0';
+} from './clipboard.js?v=1.16.1';
+import * as history from './history.js?v=1.16.1';
+import { startImageAddFlow } from './image-component.js?v=1.16.1';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.16.1';
+import { getActiveTabName } from './tabs.js?v=1.16.1';
+import { saveSelectionAsTemplate } from './templates.js?v=1.16.1';
+import { newFid } from './shapes.js?v=1.16.1';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -554,7 +554,7 @@ function startInlineEdit(cellView, evt) {
     commit = (newText) => {
       const labels = cell.labels();
       const fontSize = labels?.[0]?.attrs?.text?.fontSize ?? 13;
-      const lineColor = cell.attr('line/stroke') || '#888888';
+      const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';   // Label color override (v1.16.1)
       // Single labels() call so the change emits exactly one `change:labels`
       // event — keeps undo/redo at one entry per edit.
       cell.labels(newText ? [{
@@ -563,7 +563,7 @@ function startInlineEdit(cellView, evt) {
           { tagName: 'text', selector: 'text' },
         ],
         attrs: {
-          text: { text: newText, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+          text: { text: newText, fill: fillColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
           body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
         },
         position: { distance: 0.5, offset: 0 },
@@ -2004,7 +2004,10 @@ function renderBpmnDataObjectProps(cell) {
 // Core Salesforce CRM field types + Data Cloud primitives (the shared dictionary used by
 // both the sidebar field editor and the Edit Fields modal). 'Boolean' is the Data Cloud
 // primitive alongside the CRM 'Checkbox'; both live in the Boolean compatibility group.
-const SF_FIELD_TYPES = [
+// Salesforce / Data Cloud field data types — the canonical picklist used by the
+// DataObject field editor AND, re-exported, by the Data Mapping table edit mode so
+// both surfaces offer the exact same options (single source of truth).
+export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',
   'Formula', 'ID', 'Lookup', 'Master-Detail', 'Number', 'Percent',
   'Phone', 'Picklist', 'Multi-Picklist', 'Rich Text Area',
@@ -3607,6 +3610,16 @@ function applyLinkExpression(cell, v) {
   cell.prop('expressionRule', v || '');
   syncMappingTypeBadge(cell);
 }
+// Font colour (v1.16.1) — one control for ALL of a connector's text: the user label, the frequency
+// overlay text, AND its clock icon. Stored as the `fontColor` prop; recolours the existing user label in
+// place and re-derives the frequency overlay (syncFrequencyLabel reads `fontColor`).
+function applyLinkFontColor(cell, v) {
+  cell.prop('fontColor', v);
+  const labels = cell.labels() || [];
+  const idx = labels.findIndex(l => !(l?.attrs?.badgeBox) && !(l?.attrs?.freqText));   // the on-line user label
+  if (idx >= 0) cell.label(idx, { attrs: { text: { fill: v } } });
+  syncFrequencyLabel(cell);
+}
 
 function renderLinkProps(cell) {
   // Content — primary text only (Font size moved to Appearance for
@@ -3622,7 +3635,8 @@ function renderLinkProps(cell) {
   const currentLabelSize = userLabel?.attrs?.text?.fontSize ?? 13;
   addText(labelSec, 'Label', currentLabel, v => {
     const fontSize = (cell.labels() || []).find(l => !isBadge(l) && !isFreq(l))?.attrs?.text?.fontSize ?? 13;
-    const lineColor = cell.attr('line/stroke') || '#888888';
+    // Font colour (v1.16.1) overrides the line-stroke default for the label text.
+    const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';
     // Keep the non-user labels (mapping badge + frequency overlay) when the label changes.
     const others = (cell.labels() || []).filter(l => isBadge(l) || isFreq(l));
     const arr = [];
@@ -3632,7 +3646,7 @@ function renderLinkProps(cell) {
         { tagName: 'text', selector: 'text' },
       ],
       attrs: {
-        text: { text: v, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+        text: { text: v, fill: fillColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
         body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
       },
       position: { distance: 0.5, offset: 0 },
@@ -3707,6 +3721,11 @@ function renderLinkProps(cell) {
       history.startBatch();
       try { applyLinkStroke(cell, v); } finally { history.endBatch(); }
     });
+  // Label color (v1.16.1) — recolours the label + frequency text + clock together; defaults to the line
+  // color. Reset (↺) snaps back to the current line stroke. One undo step (label fill + freq rebuild).
+  addColor(appearance, 'Label color', cell.prop('fontColor') || cell.attr('line/stroke') || '#888888',
+    v => { history.startBatch(); try { applyLinkFontColor(cell, v); } finally { history.endBatch(); } },
+    { defaultValue: cell.attr('line/stroke') || '#888888' });
   addSelect(appearance, 'Line style', cell.prop('lineStyle') || 'none', LINK_LINE_STYLE_OPTS,
     v => applyLinkLineStyle(cell, v));
   addNumber(appearance, 'Line width', cell.attr('line/strokeWidth') ?? 2,
@@ -4594,7 +4613,7 @@ function addColor(parent, label, value, onChange, opts = {}) {
     resetBtn.type = 'button';
     resetBtn.className = 'df-prop-color-reset';
     resetBtn.title = `${opts.defaultValue != null ? 'Reset to default' : 'Revert to original'} (${defaultHex})`;
-    resetBtn.setAttribute('aria-label', 'Reset colour to default');
+    resetBtn.setAttribute('aria-label', 'Reset color to default');
     // Counter-clockwise arrow ↺ — matches the visual idiom users already
     // associate with "reset" / "undo" without conflicting with the toolbar
     // undo icon.
@@ -4665,10 +4684,10 @@ function addColor(parent, label, value, onChange, opts = {}) {
     saveBtn.type = 'button';
     saveBtn.className = 'df-prop-palette-save';
     saveBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    saveBtn.setAttribute('aria-label', 'Save current colour to palette');
+    saveBtn.setAttribute('aria-label', 'Save current color to palette');
     saveBtn.title = palette.length >= PALETTE_MAX_SLOTS
       ? `Palette full (${PALETTE_MAX_SLOTS}) — saving will replace the oldest`
-      : 'Save current colour to palette';
+      : 'Save current color to palette';
     saveBtn.addEventListener('click', () => {
       const ok = addToPalette(lastValid);
       if (ok) showToast(`Saved ${lastValid.toUpperCase()} to palette`, { duration: 1400 });

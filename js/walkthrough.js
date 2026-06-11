@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.16.0';
-import { escHtml } from './util.js?v=1.16.0';
+import { trapFocus } from './feedback.js?v=1.16.1';
+import { escHtml } from './util.js?v=1.16.1';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -82,7 +82,7 @@ const BASE_TOUR = [
   {
     target: '#properties-panel', placement: 'right',
     title: 'Manage Properties',
-    body: 'Click any shape or connector to edit it here — labels, colours, data types and keys, connector ends, and type-specific settings. You can also convert between shape types or apply changes across a multi-selection.',
+    body: 'Click any shape or connector to edit it here — labels, colors, data types and keys, connector ends, and type-specific settings. You can also convert between shape types or apply changes across a multi-selection.',
     // Open an example shape's properties panel on enter so the step has something to point at;
     // clear it on leave so it closes again. Selection is UI state — no graph mutation / history.
     // Prefer a real content shape over a background grouper (Zone / Container / Pool / timeline).

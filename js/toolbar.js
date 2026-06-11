@@ -1,12 +1,12 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.16.0';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.16.0';
-import { resizeDataObjectToFit } from './components.js?v=1.16.0';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.16.0';
-import { escHtml, formatRelativeTime } from './util.js?v=1.16.0';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.16.0';
+import { diagramHasImage } from './image-component.js?v=1.16.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.16.1';
+import { resizeDataObjectToFit } from './components.js?v=1.16.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.16.1';
+import { escHtml, formatRelativeTime } from './util.js?v=1.16.1';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.16.1';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -1276,8 +1276,8 @@ function updateDisplayMenuVisibility() {
   // table never lingers showing another tab's data.
   const vsGroup = document.getElementById('view-switch-group');
   const vsSep = document.getElementById('view-switch-sep');
-  if (vsGroup) vsGroup.style.display = isDataMapping ? '' : 'none';
-  if (vsSep) vsSep.style.display = isDataMapping ? '' : 'none';
+  if (vsGroup) vsGroup.style.display = isDataObjectType ? '' : 'none';   // Data Mapping (lineage) + Data Model (schema)
+  if (vsSep) vsSep.style.display = isDataObjectType ? '' : 'none';
   if (modules.tableView?.isActive?.()) setViewMode('diagram');
 
   // Map bridge button — shown only for Data Model (clones it into a new Data Mapping

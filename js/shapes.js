@@ -2,8 +2,8 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.16.0';
-import { fieldFocus } from './canvas/focus-state.js?v=1.16.0';
+import { parseMarkdown } from './markdown.js?v=1.16.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.16.1';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX

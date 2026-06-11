@@ -364,10 +364,11 @@ foreignObject[data-md] del { text-decoration: line-through; }
 }
 .df-tbl__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
 .df-tbl__note { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-/* CSV export — compact icon+label button, pushed to the right edge (and pulling
-   the Show/Hide-Unmapped toggle with it). */
+/* CSV export — compact icon+label button. The right-hand action group is pushed
+   to the edge by `.df-tbl__push` on its FIRST member only (a blanket margin-left:auto
+   on every button would split the free space BETWEEN them and separate the pair). */
+.df-tbl__push { margin-left: auto; }
 .df-tbl__csv {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -420,6 +421,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
 .df-tbl__sec--src { background: #F6B355; }   /* Data Sources — brand amber */
 .df-tbl__sec--map { background: #DA4E55; }   /* Data Mapping — brand red */
 .df-tbl__sec--tgt { background: #1D73C9; }   /* Data Targets — brand blue */
+.df-tbl__sec--mdl { background: #1D73C9; }   /* Data Model (single section) — brand blue */
 /* Tier 2 — column headers (stick just below the section blocks) */
 .df-tbl__cols th {
   position: sticky;
@@ -456,6 +458,77 @@ foreignObject[data-md] del { text-decoration: line-through; }
 /* divider between the blue (source) & orange (target) sections */
 .df-tbl__divider { border-left: 2px solid var(--border-color-strong); }
 .df-tbl__row--unmapped td { color: var(--text-muted); font-style: italic; }
+
+/* ── Inline field-level edit mode (Edit Fields → Save / Cancel) ── */
+/* The Save button reads as the primary action — brand amber (matches the changed-cell tint). */
+.df-tbl__csv--primary {
+  color: #1C1E21;
+  background: var(--brand-amber);
+  border-color: var(--brand-amber);
+  font-weight: 700;
+}
+.df-tbl__csv--primary:hover { color: #1C1E21; filter: brightness(1.06); border-color: var(--brand-amber); }
+/* An editable field cell: the control fills it edge-to-edge (no double padding). */
+.df-tbl__cell--edit { padding: 2px 4px; }
+.df-tbl__input {
+  width: 100%;
+  min-width: 80px;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+}
+/* Type picklist — same chrome as the text input; native arrow, slightly wider min. */
+.df-tbl__select { min-width: 96px; cursor: pointer; }
+.df-tbl__input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent); }
+/* In-cell key (PK/FK/FQK) + Nullable checkbox — the app's checkbox glyph (box + tick, tick revealed
+   when .is-checked) as a bare centered button. Same convention as the Display-menu toggle checkboxes. */
+.df-tbl__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.df-tbl__check:hover { color: var(--text-secondary); }
+.df-tbl__check .df-toolbar__checkbox-tick { display: none; }
+.df-tbl__check.is-checked { color: var(--color-primary); }
+.df-tbl__check.is-checked .df-toolbar__checkbox-tick { display: inline; }
+.df-tbl__check:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+/* A PK / FQK is always mandatory → its Nullable box is locked off. */
+.df-tbl__check--locked { opacity: 0.35; cursor: not-allowed; }
+.df-tbl__check--locked:hover { color: var(--text-muted); }
+/* (#5) A cell whose draft value differs from the session snapshot — brand-amber tint, reset on Save /
+   Cancel. Selector outranks the row :hover background (equal specificity, defined later in the file). */
+.df-tbl__table tbody tr td.df-tbl__cell--changed {
+  background: color-mix(in srgb, var(--brand-amber) 30%, transparent);
+}
+/* Per-row revert column (#4) — a thin leading column; the button shows only on changed rows. */
+.df-tbl__revcol { width: 30px; min-width: 30px; padding: 2px 3px; text-align: center; }
+.df-tbl__revert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: none;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.df-tbl__revert:hover { color: var(--brand-amber); background: color-mix(in srgb, var(--brand-amber) 16%, transparent); }
+.df-tbl__revert:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 1px; }
+/* The revcol is editable-adjacent chrome, not a read-only data cell — don't dim it. */
+.df-tbl--editing .df-tbl__table tbody td:not(.df-tbl__cell--edit):not(.df-tbl__revcol) { color: var(--text-muted); }
+
 .df-tbl__empty {
   text-align: center;
   color: var(--text-muted);

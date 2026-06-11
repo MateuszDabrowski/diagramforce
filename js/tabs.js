@@ -1,12 +1,12 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, compactGraphForSave } from './persistence.js?v=1.16.0';
-import { escHtml, formatRelativeTime } from './util.js?v=1.16.0';
-import { showError, showToast, buildModal } from './feedback.js?v=1.16.0';
-import { createElementFromComponent } from './components.js?v=1.16.0';
-import { getPalette } from './brand-palette.js?v=1.16.0';
-import { getAllIcons } from './icons.js?v=1.16.0';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, compactGraphForSave } from './persistence.js?v=1.16.1';
+import { escHtml, formatRelativeTime } from './util.js?v=1.16.1';
+import { showError, showToast, buildModal } from './feedback.js?v=1.16.1';
+import { createElementFromComponent } from './components.js?v=1.16.1';
+import { getPalette } from './brand-palette.js?v=1.16.1';
+import { getAllIcons } from './icons.js?v=1.16.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -18,6 +18,11 @@ let nextGroupId = 1;
 let _dragKind = null;   // 'tab' | 'group' while a tab-bar drag is in flight (drives drop indicators)
 let pendingCloseAfterSave = null;
 const onChangeCallbacks = [];
+// Optional veto/defer hook for leaving the active tab (set by app.js → table-view).
+// Returns true to allow the switch immediately, or false to block now and re-invoke
+// the supplied continuation once the user resolves (e.g. Save/Discard a table edit).
+let _switchGuard = null;
+export function setSwitchGuard(fn) { _switchGuard = fn; }
 
 // Diagram types
 export const DIAGRAM_TYPES = {
@@ -691,6 +696,10 @@ function showMultiDiscardConfirm(dirtyCount, onDiscard, onSaveAndClose) {
 
 function switchTab(id) {
   if (id === activeTabId) return;
+  // A module may veto/defer the switch — e.g. an open Data Mapping table edit session
+  // prompts to Save/Discard the unapplied edits first. The guard returns false to block
+  // now and re-invokes this continuation once the user resolves (then it returns true).
+  if (_switchGuard && !_switchGuard(() => switchTab(id))) return;
   saveCurrentTabState();
   // Capture the outgoing active tab's position so we can slide a focus bar from it to the new one.
   const oldActiveEl = tabListEl.querySelector('.df-tab--active');
@@ -1117,7 +1126,7 @@ function openFloating(anchorEl, className, build) {
 function menuItem(label, onClick, opts = {}) {
   const b = document.createElement('button');
   const hasIcon = opts.icon || opts.iconSvg;
-  b.className = 'df-tab-pop__item' + (hasIcon ? ' df-tab-pop__item--icon' : '') + (opts.danger ? ' df-tab-pop__item--danger' : '') + (opts.checked ? ' is-checked' : '');
+  b.className = 'df-tab-pop__item' + (hasIcon ? ' df-tab-pop__item--icon' : '') + (opts.danger ? ' df-tab-pop__item--danger' : '') + (opts.checked ? ' is-checked' : '') + (opts.className ? ' ' + opts.className : '');
   if (hasIcon) {
     // Leading icon: an SLDS sprite (`icon`) or raw inline markup (`iconSvg`, e.g. a diagram-type glyph).
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1150,10 +1159,10 @@ function openGroupColorPopover(anchorEl, group) {
     panel.appendChild(grid);
     const row = document.createElement('div'); row.className = 'df-tab-pop__row';
     const custom = document.createElement('input');
-    custom.type = 'color'; custom.value = group.color || '#1d73c9'; custom.className = 'df-tab-pop__color'; custom.title = 'Custom colour';
+    custom.type = 'color'; custom.value = group.color || '#1d73c9'; custom.className = 'df-tab-pop__color'; custom.title = 'Custom color';
     custom.addEventListener('input', () => updateGroup(group.id, { color: custom.value }));
     row.appendChild(custom);
-    row.appendChild(menuItem('No colour', () => updateGroup(group.id, { color: null })));
+    row.appendChild(menuItem('Reset color', () => updateGroup(group.id, { color: null }), { className: 'df-tab-pop__item--center' }));
     panel.appendChild(row);
   });
 }
@@ -1191,7 +1200,7 @@ function openGroupMenu(anchorEl, group) {
       const nameEl = chip?.querySelector('.df-tab-group__name');
       if (chip && nameEl) startGroupRename(chip, nameEl, group);
     }, { icon: 'edit' }));
-    panel.appendChild(menuItem('Set group colour', () => openGroupColorPopover(anchorEl, group), { icon: 'color_swatch' }));
+    panel.appendChild(menuItem('Set group color', () => openGroupColorPopover(anchorEl, group), { icon: 'color_swatch' }));
     panel.appendChild(menuItem('Set group icon', () => openGroupIconPopover(anchorEl, group), { icon: 'image' }));
     panel.appendChild(menuSep());
     if (tabs.some(t => t.groupId === group.id)) {
@@ -1811,12 +1820,11 @@ function render() {
     // menu on hover — so the slot is never empty and the count keeps its badge style.
     const lead = document.createElement('div');
     lead.className = 'df-tab-group__lead';
-    if (count > 0) {
-      const countEl = document.createElement('span');
-      countEl.className = 'df-tab-group__count';
-      countEl.textContent = String(count);
-      lead.appendChild(countEl);
-    }
+    // Always show the count pill — an empty group reads as "0" rather than going badge-less.
+    const countEl = document.createElement('span');
+    countEl.className = 'df-tab-group__count';
+    countEl.textContent = String(count);
+    lead.appendChild(countEl);
     const menuBtn = document.createElement('button');
     menuBtn.className = 'df-tab-group__menu';
     menuBtn.title = 'Group options';

@@ -1,47 +1,47 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.16.0';
-import { registerSfRouter } from './canvas/router.js?v=1.16.0';
+import { cctx } from './canvas/context.js?v=1.16.1';
+import { registerSfRouter } from './canvas/router.js?v=1.16.1';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.16.0';
+export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.16.1';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.16.0';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, migrateNodes } from './canvas/migration.js?v=1.16.1';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.16.0';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.16.0';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.16.1';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.16.1';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.16.0';
-export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.16.0';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.16.1';
+export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.16.1';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported (called in init());
 // startLineStyleOverlays + the mobile pair were public exports, so re-export them
 // to keep canvas.js's export boundary stable (app.js / properties.js import them).
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.16.0';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.16.0';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.16.1';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.16.1';
 export { startLineStyleOverlays };
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.16.0';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.16.1';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.16.0';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.16.1';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.16.0';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.16.1';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.16.0';
+import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.16.1';
 export { canEmbed };
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.16.0';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.16.1';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -199,7 +199,12 @@ export function syncMappingTypeBadge(link) {
 // canvases, so it needs no per-theme regeneration (unlike a baked theme token).
 const FREQ_LABEL_COLOR = '#888888';
 const isFrequencyLabel = l => !!(l && l.attrs && l.attrs.freqText);
-function frequencyLabelSpec(text) {
+// The frequency overlay SHARES the user label's `position` (so the two move as one draggable block,
+// v1.16.1) and bakes its vertical separation into the markup instead — `freqText.y` draws the icon+text
+// combo ~22px BELOW the shared anchor (screen-down, since labels aren't rotated), keeping it clear of the
+// on-line user label regardless of segment orientation. `position` is the user label's current position
+// (defaults to the midpoint when there's no user label / it was never dragged).
+function frequencyLabelSpec(text, position, color = FREQ_LABEL_COLOR, fontSize = 11) {
   return {
     markup: [
       { tagName: 'rect', selector: 'freqBg' },
@@ -218,26 +223,24 @@ function frequencyLabelSpec(text) {
       },
       // Text is middle-anchored and nudged right by half the icon footprint (8px), and the
       // icon is pinned to the text's LEFT edge via `ref` — so the icon+text combo is exactly
-      // CENTERED on the link midpoint for any text length. Rendered at 24px for crispness,
-      // shown at 12px. Empty href (icon fn not wired yet) degrades to text-only.
+      // CENTERED on the link anchor for any text length. `y: 22` drops it below the user label.
+      // Rendered at 24px for crispness, shown at 12px. Empty href degrades to text-only.
       // pointer-events:none so the label never blocks the link's own drag/select hit area.
       freqText: {
-        text, fill: FREQ_LABEL_COLOR, fontSize: 11, fontWeight: 500,
+        text, fill: color, fontSize, fontWeight: 500,
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        textAnchor: 'middle', textVerticalAnchor: 'middle', x: 8, y: 0,
+        textAnchor: 'middle', textVerticalAnchor: 'middle', x: 8, y: 22,
         'pointer-events': 'none',
       },
       clockIcon: {
-        href: _iconDataUriFn ? _iconDataUriFn('clock', FREQ_LABEL_COLOR, 24) : '',
+        href: _iconDataUriFn ? _iconDataUriFn('clock', color, 24) : '',
         width: 12, height: 12, ref: 'freqText', refX: 0, x: -16, refY: 0.5, y: -6,
         'pointer-events': 'none',
       },
     },
-    // ABSOLUTE downward offset (an {x,y}, NOT a perpendicular number) so the label sits a
-    // fixed distance BELOW the connector regardless of segment orientation — it never flips
-    // sides or collides with the on-line user label. 26px leaves a short visible run of line
-    // between the user label and the frequency overlay (both mask the line behind them).
-    position: { distance: 0.5, offset: { x: 0, y: 26 } },
+    // Clone the user label's position so the overlay tracks it (moves together as one block). A deep
+    // clone keeps the two label objects from sharing a mutable reference.
+    position: position ? JSON.parse(JSON.stringify(position)) : { distance: 0.5, offset: 0 },
   };
 }
 // Ensure a link's labels reflect its `connectionFrequency`: keep every non-frequency
@@ -245,9 +248,17 @@ function frequencyLabelSpec(text) {
 // the prop is non-empty (remove it when blank). Idempotent — safe on every change/load.
 export function syncFrequencyLabel(link) {
   const freq = (link.prop('connectionFrequency') || '').trim();
-  const kept = (link.labels() || []).filter(l => !isFrequencyLabel(l));
-  const arr = freq ? [...kept, frequencyLabelSpec(freq)] : kept;
-  if (JSON.stringify(link.labels() || []) === JSON.stringify(arr)) return;
+  const labels = link.labels() || [];
+  const kept = labels.filter(l => !isFrequencyLabel(l));
+  // Glue the overlay to the USER label's position (the on-line text label, not the F/ST/BT/CI type badge)
+  // so dragging the label drags the frequency with it. No user label → ride the midpoint.
+  const userLabel = kept.find(l => !isMappingTypeBadge(l));
+  // Connector font colour (v1.16.1) drives the freq text + clock; falls back to the neutral grey.
+  const color = link.prop('fontColor') || FREQ_LABEL_COLOR;
+  // Frequency text reads ~2px smaller than the user label (tracks Font size changes); floored at 8.
+  const freqSize = Math.max(8, (userLabel?.attrs?.text?.fontSize ?? 13) - 2);
+  const arr = freq ? [...kept, frequencyLabelSpec(freq, userLabel?.position, color, freqSize)] : kept;
+  if (JSON.stringify(labels) === JSON.stringify(arr)) return;
   link.labels(arr);
 }
 
@@ -794,6 +805,9 @@ export function init() {
   cctx.refreshAllIconHrefs = refreshAllIconHrefs;
   cctx.syncMappingTypeBadge = syncMappingTypeBadge;   // migration.js re-tokenizes mapping links on load
   cctx.syncFrequencyLabel = syncFrequencyLabel;       // migration.js rebuilds the frequency overlay on load
+  // selection-viz.js recolours the frequency clock <image> on focus by swapping its href to a
+  // tinted render (reads the icon generator lazily, so it's fine that setIconDataUriFn runs later).
+  cctx.freqClockUri = (color) => (_iconDataUriFn ? _iconDataUriFn('clock', color, 24) : '');
 
   // Slice 6: attach the viewport input handlers (pan / zoom / grid) and expose
   // cctx.getZoom + cctx.fitContent. Must run AFTER cctx.graph/paper are set
@@ -855,6 +869,17 @@ export function init() {
   graph.on('remove', (cell) => { if (cell.isLink?.()) scheduleReroute(); });
   graph.on('change:source change:target change:attrs change:lineStyle', (cell) => {
     if (cell.isLink?.()) scheduleReroute();
+  });
+
+  // Frequency overlay tracks the user label: dragging the on-line label (labelMove) fires change:labels,
+  // so re-glue the overlay underneath it (v1.16.1). Guarded by `connectionFrequency` (only architecture
+  // links with a frequency) + a reentrancy flag so syncFrequencyLabel's own labels() write can't re-fire
+  // this into a loop (the JSON-equality short-circuit also terminates it).
+  let _syncingFreq = false;
+  graph.on('change:labels', (cell) => {
+    if (_syncingFreq || !cell.isLink?.() || !cell.prop('connectionFrequency')) return;
+    _syncingFreq = true;
+    try { syncFrequencyLabel(cell); } finally { _syncingFreq = false; }
   });
 
   // A mapping link connecting/disconnecting changes its DataObjects' mapped-field count
