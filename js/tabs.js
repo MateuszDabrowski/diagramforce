@@ -1,22 +1,74 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, compactGraphForSave } from './persistence.js?v=1.16.1';
-import { escHtml, formatRelativeTime } from './util.js?v=1.16.1';
-import { showError, showToast, buildModal } from './feedback.js?v=1.16.1';
-import { createElementFromComponent } from './components.js?v=1.16.1';
-import { getPalette } from './brand-palette.js?v=1.16.1';
-import { getAllIcons } from './icons.js?v=1.16.1';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.0.199';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.0.199';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.0.199';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.0.199';
+import { createElementFromComponent, SVG } from './components.js?v=1.17.0.199';
+import { getPalette } from './brand-palette.js?v=1.17.0.199';
+import { getAllIcons } from './icons.js?v=1.17.0.199';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
+
+// R7 — a tiny fingerprint of a tab's collaboration state (what the share glyph keys off): the number of
+// shared-out copies plus whether it has an editable / view-only upstream source. Cheap to recompute, so
+// persistTabDrive can re-render the tab bar ONLY when this flips, never on a routine Drive save.
+const tabShareSignature = (t) =>
+  `${(t.driveCopies || []).filter(Boolean).length}|${t.driveSharedSource ? (t.driveSharedSource.canEdit === true ? 'e' : 'v') : ''}|${t.driveSharedInEdit ? 'die' : ''}|${t.driveDriveId ? 'sd' : ''}|${t.driveOutgoingGrants || 0}`;
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/**
+ * The tab-bar collaboration glyph for a tab, or null when this tab's edits do NOT reach other people (local /
+ * view-only shared source). TWO distinct glyphs by DIRECTION: an OUTGOING external-link icon when YOU shared it
+ * OUT (a master fanned to editable / Shared-Drive copies), vs the chain `#share_link` when it is a file shared
+ * TO you that you can edit (incoming). The tooltip lives in a `<title>` CHILD (an SVG ignores a `title` attribute)
+ * placed FIRST per the SVG/a11y convention.
+ */
+function buildShareGlyph(tab) {
+  const role = tabShareRole({ copies: tab.driveCopies, sharedSource: tab.driveSharedSource, onSharedDrive: !!tab.driveDriveId, outgoingGrants: tab.driveOutgoingGrants || 0, ownFileId: tab.driveFileId, sharedInEdit: !!tab.driveSharedInEdit });
+  const kind = shareGlyphKind(role);   // 'out' (your save wins) | 'in' (their save wins) | 'both' (collab) | null (local)
+  if (!kind) return null;
+  // 3-way directional glyph (by authority): out = #share_mobile, in = #share_link (chain), both = #socialshare. All
+  // amber + 12px box (normalized to the tab's diagram-type icon); the ICON conveys the direction, not the colour.
+  // (#share_mobile reads at the same visual weight as the others at 12px - the plain #share's exit arrow read off.)
+  const ICON = { out: '#share_mobile', in: '#share_link', both: '#socialshare' };
+  const glyph = document.createElementNS(SVG_NS, 'svg');
+  glyph.setAttribute('class', `df-tab__shared df-tab__shared--${kind}`);
+  glyph.setAttribute('width', '12');
+  glyph.setAttribute('height', '12');
+  glyph.setAttribute('aria-hidden', 'true');   // decorative; the share status is also in the tab's aria-label
+  glyph.innerHTML = `<use href="${ICON[kind]}"></use>`;
+  const src = tab.driveSharedSource;
+  const sharedBy = src && src.sharedBy ? ` Shared by ${src.sharedBy}.` : '';
+  const n = role === 'shared-out' ? (tab.driveCopies || []).filter(c => c && c.kind !== 'mydrive-backup').length : 0;
+  const tip = kind === 'out'
+    ? `You shared this diagram out to ${n} editable Google Drive cop${n === 1 ? 'y' : 'ies'}. Your edits push out to them; you keep the master, so your save wins (you resolve any conflict).`
+    : kind === 'in'
+      ? `A view-only file shared to you.${sharedBy} Your edits stay in your own copy - use Refresh to pull the owner's latest. Their save wins.`
+      : role === 'shared-drive-master'
+        ? `This diagram lives on a team Shared Drive - everyone with access edits the same file. Edits flow both ways: you overwrite and can be overwritten.`
+        : `An editable file shared to you (Collaborate).${sharedBy} Your edits save back to the owner and theirs come to you - edits flow both ways.`;
+  const titleEl = document.createElementNS(SVG_NS, 'title');
+  titleEl.textContent = tip;
+  glyph.insertBefore(titleEl, glyph.firstChild);   // title FIRST child (SVG/a11y convention; review fix)
+  return glyph;
+}
+
 const tabs = [];
 const groups = [];          // [{ id, name, icon|null, color|null, collapsed }] — tab groups (v1.16.0)
+// Synthetic "Ungrouped" tab-bar group (v1.17.0): when ≥1 real group exists, the groupless tabs render inside a
+// collapsible gray "Ungrouped" tray so the user can fold them away to focus on a group. It is NOT a real group
+// (never in `groups[]`), so its only state is this collapse flag (persisted in the session blob).
+const UNGROUPED_ID = '__ungrouped__';
+let ungroupedCollapsed = false;
 let activeTabId = null;
 let nextId = 1;
 let nextGroupId = 1;
 let _dragKind = null;   // 'tab' | 'group' while a tab-bar drag is in flight (drives drop indicators)
-let pendingCloseAfterSave = null;
+let _dragGroupId = null;      // id of the group chip being dragged (so its own tray skips the drop line)
+let _groupDropBefore;        // group id the dragged group will land BEFORE on drop (null = end; undefined = none)
 const onChangeCallbacks = [];
 // Optional veto/defer hook for leaving the active tab (set by app.js → table-view).
 // Returns true to allow the switch immediately, or false to block now and re-invoke
@@ -51,9 +103,11 @@ function diagramTypeIconMarkup(type) {
 
 /** Open a fresh tab of a given diagram type (name auto-derived) — the shared path for the
  *  new-diagram modal cards and the "+ Diagram" right-click type menu. */
-function createDiagramOfType(type) {
+function createDiagramOfType(type, groupId = null) {
   const label = DIAGRAM_TYPES[type]?.short || 'Draft';
-  newTab(uniqueTabName(`${label} Draft`), type);
+  const id = newTab(uniqueTabName(`${label} Draft`), type);
+  if (groupId && getGroup(groupId)) setTabGroup(id, groupId);   // create directly inside a group
+  return id;
 }
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
@@ -105,6 +159,9 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     if (chip && nameEl) startGroupRename(chip, nameEl, getGroup(id));
   });
 
+  // Mobile "+" → Diagram / Group picker (the labelled buttons are CSS-hidden on narrow viewports).
+  document.getElementById('btn-new-mobile')?.addEventListener('click', (e) => openNewMobileMenu(e.currentTarget));
+
   // Trash button opens multi-close modal
   document.getElementById('btn-close-tabs')?.addEventListener('click', () => showCloseTabsModal());
 
@@ -112,19 +169,60 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   persistenceModule.setNewDiagramHandler(() => showNewDiagramModal());
   persistenceModule.onNamedSave((name) => renameActiveTab(name));
   persistenceModule.onSaveComplete((type) => markSaved(type));
+  persistenceModule.onDriveTabSaved?.((id) => markTabDriveSaved(id));
   persistenceModule.setDiagramTypeGetter(() => getActiveTabType());
   persistenceModule.setTabNameGetter(() => getActiveTabName());
+  persistenceModule.setActiveTabIdGetter(() => getActiveTabId());
+  persistenceModule.setGroupsGetter?.(() => getGroups());   // so a full backup carries group metadata (item 4)
+  // Mirror Drive sync state into the tab + persist now, so a synced tab survives a reload.
+  persistenceModule.setPersistTabDrive((id, meta) => {
+    const t = tabs.find(x => x.id === id);
+    if (!t) return;
+    const prevShareSig = tabShareSignature(t);   // R7 — to know if the tab's collaboration glyph must change
+    t.driveFileId = meta.driveFileId;
+    t.driveSync = meta.driveSync;
+    t.driveLastSavedAt = meta.driveLastSavedAt;
+    t.driveImported = meta.driveImported;
+    t.driveFolderId = meta.driveFolderId;
+    t.driveDriveId = meta.driveDriveId;
+    t.driveHeadRevisionId = meta.driveHeadRevisionId;
+    t.driveLastHash = meta.driveLastHash;
+    t.driveCopies = meta.driveCopies;
+    t.driveSharedSource = meta.driveSharedSource;   // upstream shared file (Shared File model)
+    t.driveSharedInEdit = meta.driveSharedInEdit || null;   // Phase B: fileId IS a directly-edited shared file (drives the glyph + chip)
+    t.driveOutgoingGrants = meta.driveOutgoingGrants || 0;   // direct view/edit invites on the master → "shared out" glyph
+    saveTabs();
+    // Only re-render the tab bar when the share state actually flipped (a new copy shared, a source
+    // gained edit rights), NOT on every routine Drive save — so the glyph appears live without flicker.
+    if (tabShareSignature(t) !== prevShareSig) render();
+  });
   persistenceModule.setAllTabsGetter(() => getAllTabs());
   persistenceModule.setTabGraphGetter((id) => getTabGraphJSON(id));
   persistenceModule.setTabViewportGetter((id) => getTabViewport(id));
   persistenceModule.setTabDiagramTypeGetter((id) => getTabDiagramType(id));
   persistenceModule.setTabMappingModeGetter((id) => getTabMappingMode(id));
   persistenceModule.setActiveMappingModeGetter(() => getActiveMappingMode());
-  persistenceModule.setImportHandler((name, type, graphJSON, viewport, mappingMode) => {
+  persistenceModule.setImportHandler((name, type, graphJSON, viewport, mappingMode, driveMeta = null, group = null) => {
     // Dismiss the new-diagram modal if it's open (e.g. first visit via share URL)
     document.querySelector('.df-new-modal')?.remove();
-    importDiagramAsTab(name, type, graphJSON, viewport, mappingMode);
+    // driveMeta (item 1.3): a loaded browser archive that was also in My Drive re-links to its master + shares.
+    // group (#7): a single diagram saved from a tab group recreate-or-rejoins it.
+    importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { driveMeta, group });
     saveTabs();   // persist immediately so the imported data survives a refresh
+  });
+
+  // Refresh-in-place: load the pulled latest INTO the active tab (no new tab) - only called when the tab is CLEAN
+  // (no local edits), so there is nothing of the user's to preserve. Keeps the tab's name/type/Drive link; just
+  // swaps the content + re-baselines (dirty off). Avoids the "every Refresh spawns a duplicate tab" clutter.
+  persistenceModule.setReplaceActiveHandler((name, type, graphJSON, viewport, mappingMode) => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+    canvasModule.setLoadingJSON(true);
+    try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+    tab.dirty = false; tab.lastModifiedAt = Date.now();   // freshly pulled = back in sync with the source
+    render();
+    requestAnimationFrame(() => canvasModule.fitContent());
+    saveTabs();
   });
 
   // Group import (v1.16.0) — a `kind:'group'` bundle (from "Export group") restores
@@ -175,7 +273,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   tabListEl.addEventListener('scroll', () => updateActiveTabIndicator());
 }
 
-function showNewDiagramModal() {
+function showNewDiagramModal(targetGroupId = null) {
   // Remove any existing modal
   document.querySelector('.df-new-modal')?.remove();
 
@@ -184,7 +282,13 @@ function showNewDiagramModal() {
   overlay.innerHTML = `
     <div class="df-new-modal__backdrop"></div>
     <div class="df-new-modal__dialog">
-      <h2 class="df-new-modal__title">Create New Diagram</h2>
+      <h2 class="df-new-modal__title">New Diagram</h2>
+      <div class="df-new-modal__tabs" role="tablist">
+        <button class="df-new-modal__tab is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
+        <button class="df-new-modal__tab" data-tab="open" role="tab" aria-selected="false">Load</button>
+      </div>
+      <div class="df-new-modal__panels">
+      <div class="df-new-modal__panel" data-tab="create">
       <div class="df-new-modal__grid">
         <button class="df-new-modal__card" data-type="architecture">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
@@ -285,17 +389,89 @@ function showNewDiagramModal() {
           <span class="df-new-modal__card-desc">Document team hierarchy, roles, and responsibilities.</span>
         </button>
       </div>
+      </div>
+      <div class="df-new-modal__panel" data-tab="open" hidden>
+      <div class="df-new-modal__grid df-new-modal__grid--open">
+        <button class="df-new-modal__card" data-action="load">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
+            <!-- Window body extended ~+10px at the bottom (height 30 → 37) so the browser glyph is less squat. -->
+            <rect x="6" y="9" width="52" height="37" rx="4" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <path d="M6 20 H58" stroke="var(--color-primary)" stroke-width="2"/>
+            <circle cx="13" cy="14.5" r="1.7" fill="var(--color-primary)"/>
+            <circle cx="19" cy="14.5" r="1.7" fill="var(--color-primary)"/>
+            <circle cx="25" cy="14.5" r="1.7" fill="var(--color-primary)"/>
+            <rect x="32" y="12" width="20" height="5" rx="2.5" fill="var(--color-primary)" opacity="0.5"/>
+          </svg>
+          <span class="df-new-modal__card-title">Browser Storage</span>
+          <span class="df-new-modal__card-desc">Open a diagram you saved in this browser.</span>
+        </button>
+        <button class="df-new-modal__card" data-action="import-json">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
+            <path d="M18 4h20l10 10v30a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <path d="M38 4v10h10" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <text x="32" y="38" text-anchor="middle" font-size="11" font-family="var(--font-family)" fill="var(--color-primary)" opacity="0.9">{ }</text>
+          </svg>
+          <span class="df-new-modal__card-title">JSON or DGF File</span>
+          <span class="df-new-modal__card-desc">Open a Diagramforce .dgf or .json file from your computer.</span>
+        </button>
+        <button class="df-new-modal__card df-new-modal__card--paste" data-action="paste">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
+            <rect x="15" y="6" width="34" height="40" rx="4" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <rect x="24" y="3" width="16" height="8" rx="2.5" fill="var(--color-primary)" opacity="0.85"/>
+            <line x1="22" y1="22" x2="42" y2="22" stroke="var(--text-muted)" stroke-width="2"/>
+            <line x1="22" y1="30" x2="42" y2="30" stroke="var(--text-muted)" stroke-width="2"/>
+            <line x1="22" y1="38" x2="34" y2="38" stroke="var(--text-muted)" stroke-width="2"/>
+          </svg>
+          <span class="df-new-modal__card-title">Paste</span>
+          <span class="df-new-modal__card-desc">Paste Diagramforce JSON or Mermaid code - the format is detected automatically.</span>
+        </button>
+      </div>
+      </div>
+      </div>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  // Card clicks
+  // Cross-device restore: when Drive is available on this origin, append a card that opens
+  // "Your Drive diagrams" so a fresh device can pull the user's masters (signs in on click if needed).
+  if (persistenceModule.isDriveConfigured?.()) {
+    const card = document.createElement('button');
+    card.className = 'df-new-modal__card df-new-modal__card--drive';
+    card.dataset.action = 'drive';
+    card.innerHTML = `
+      <svg class="df-new-modal__icon" viewBox="0 0 48 48" aria-hidden="true"><use href="#icon-gdrive"></use></svg>
+      <span class="df-new-modal__card-title">Google Drive</span>
+      <span class="df-new-modal__card-desc">Open a diagram you saved to your Google Drive, on any device.</span>`;
+    // Insert as the 2nd card (right after Browser Storage): row 1 = Browser / Drive / File, row 2 = File + Paste.
+    const openGrid = overlay.querySelector('.df-new-modal__grid--open');
+    openGrid?.insertBefore(card, openGrid.children[1] || null);
+  }
+
+  // Tab switcher: "Create" (diagram types) vs "Open" (existing diagrams from Browser / Drive / File / Paste).
+  const showPanel = (which) => {
+    overlay.querySelectorAll('.df-new-modal__tab').forEach((t) => {
+      const on = t.dataset.tab === which;
+      t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    overlay.querySelectorAll('.df-new-modal__panel').forEach((p) => { p.hidden = p.dataset.tab !== which; });
+  };
+  overlay.querySelectorAll('.df-new-modal__tab').forEach((t) => t.addEventListener('click', () => showPanel(t.dataset.tab)));
+
+  // Card clicks — a "Create" card makes that diagram type (in the target group, if any); an "Open" card
+  // routes to the matching opener (all of which open the result as a new tab).
+  const OPEN_ACTIONS = {
+    paste: () => persistenceModule.openPasteImport?.(),
+    'import-json': () => persistenceModule.importJSON(),
+    load: () => persistenceModule.openLoadModal?.(),
+    drive: () => persistenceModule.openDriveLibrary?.(),
+  };
   overlay.querySelectorAll('.df-new-modal__card').forEach(card => {
     card.addEventListener('click', () => {
-      const type = card.dataset.type;
       overlay.remove();
-      createDiagramOfType(type);
+      const action = card.dataset.action;
+      if (action && OPEN_ACTIONS[action]) { OPEN_ACTIONS[action](); return; }
+      createDiagramOfType(card.dataset.type, targetGroupId);
     });
   });
 
@@ -344,12 +520,23 @@ function uniqueGroupName(base) {
   }
 }
 
+// #7: a single diagram loaded from a tab GROUP should land back in that group. REJOIN an existing group of the same
+// name (so two diagrams from the same group reunite, not split into duplicate groups); else create it from the saved
+// meta. Returns the group id, or null for no/blank meta. (The multi-diagram bundle path always CREATES; this one
+// rejoins, which matters when you reopen grouped diagrams one at a time.)
+function recreateOrRejoinGroup(meta) {
+  if (!meta || !meta.name) return null;
+  const existing = groups.find(g => g.name === meta.name);
+  if (existing) return existing.id;
+  return createGroup(meta.name, { icon: meta.icon || null, color: meta.color || null });
+}
+
 export function newTab(name = 'Draft', diagramType = 'architecture') {
   // Save current tab state before switching
   saveCurrentTabState();
 
   const id = generateId();
-  tabs.push({ id, name, diagramType: normalizeDiagramType(diagramType), groupId: null, graphJSON: null, viewport: null, mappingMode: false, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null });
+  tabs.push({ id, name, diagramType: normalizeDiagramType(diagramType), groupId: null, graphJSON: null, viewport: null, mappingMode: false, dirty: false, lastSavedAt: null, lastSaveType: null, lastModifiedAt: null, browserSaveName: null });
   activateTab(id, true);
   render();
   return id;
@@ -362,7 +549,7 @@ export function newTab(name = 'Draft', diagramType = 'architecture') {
  * once at the end). Returns the new tab id. Does NOT call saveTabs — the caller
  * persists once it's done (one diagram, or the whole group).
  */
-function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true } = {}) {
+function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true, driveMeta = null, group = null } = {}) {
   // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON imports as
   // a first-class "Data Mapping" diagram (mapping is now its own type).
   let importType = type;
@@ -379,7 +566,25 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   // isLoadingJSON, so it won't have stamped) — record it as the modified time so
   // imported / loaded / shared diagrams show a time like edited ones.
   if (importedTab) importedTab.lastModifiedAt = Date.now();
+  // Item 1.3: re-link a loaded archive to its Drive master + restore the shares it fanned out to. Runs after the
+  // tab exists so adopt mirrors the meta onto the new tab object (chips + session); reconcile verifies on connect.
+  if (driveMeta && (driveMeta.driveFileId || driveMeta.driveSharedSource)) {
+    persistenceModule.adoptDriveMetaIntoTab?.(id, driveMeta);
+  }
+  // #7: a single diagram saved/exported from a tab GROUP carries its group meta - recreate-or-REJOIN that group
+  // (by name) and drop this tab into it, so loading one diagram restores its group (not only multi-diagram bundles).
+  // Done AFTER the load + render() to repaint the tab into its group (reorderTabsByGroup only sorts; it doesn't draw).
+  if (importedTab && group && group.name) {
+    importedTab.groupId = recreateOrRejoinGroup(group);
+    reorderTabsByGroup();
+    render();
+  }
   if (fit) requestAnimationFrame(() => canvasModule.fitContent());
+  // A freshly OPENED non-empty diagram persists to My Drive right away (when connected), not only after an edit.
+  // Deferred a frame so a Drive-OPEN caller (importDriveFileById) has set s.fileId first - then saveTabNow dedupes
+  // (already in Drive); a plain import (paste / JSON / refresh-latest, no fileId) CREATEs its master; an un-forked
+  // view share is skipped inside saveTabNow (Mode C). No-op when not connected (the browser session already holds it).
+  requestAnimationFrame(() => persistenceModule.saveTabNow?.(id));
   return id;
 }
 
@@ -459,8 +664,10 @@ export function closeTab(id) {
   const tab = tabs.find(t => t.id === id);
   if (!tab) return;
 
-  // If the tab has unsaved changes, ask for confirmation
-  if (tab.dirty) {
+  // Unsaved changes: when signed in to Drive we just SAVE on close (doCloseTab flushes to Drive below) - no data
+  // loss, so no prompt, per the "closing always saves" directive. Only when NOT signed in (browser-only, real loss
+  // risk) do we still ask Save / Close Anyway.
+  if (tab.dirty && !persistenceModule.isSignedIn?.()) {
     showCloseConfirmModal(id, tab.name);
     return;
   }
@@ -468,9 +675,24 @@ export function closeTab(id) {
   doCloseTab(id);
 }
 
-function doCloseTab(id) {
+function doCloseTab(id, { archive = true } = {}) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx === -1) return;
+
+  // #6: a closing tab persists to My Drive too (when connected) - a work boundary must not lose work. Fire-and-
+  // forget: saveTabNow captures the tab's data synchronously (before the splice below) and writes in the background;
+  // skipped for delete-closes (archive:false → the diagram is being removed, not saved) and for un-forked view shares
+  // (Mode C, handled inside saveTabNow).
+  if (archive) persistenceModule.saveTabNow?.(id);
+
+  // Auto-archive a non-empty closing tab to a browser save so it can be reopened from Browser Storage later.
+  // Skipped for delete-closes (archive:false). Best-effort — never blocks the close, EXCEPT when the archive
+  // fails for a diagram with no Drive copy: that would be permanent silent loss of its only copy, so we stop
+  // and let the user decide (export / free space / close anyway) instead of dropping it.
+  if (archive) {
+    const res = archiveTabToBrowser(id);
+    if (res && res.lostBrowserOnly) { promptStorageFullOnClose(id); return; }
+  }
 
   // Last tab — remove it and show unclosable new-diagram modal
   if (tabs.length === 1) {
@@ -498,168 +720,392 @@ function doCloseTab(id) {
   saveTabs();
 }
 
+// A collision-safe browser-archive name: "Name YYYY-MM-DD", then "Name 2 YYYY-MM-DD" … so two different
+// diagrams never overwrite each other's archive (the no-clobber rule from the Save Manager review).
+function uniqueArchiveName(base, existing) {
+  const d = new Date();
+  const suffix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let stem = (base || 'Diagram').replace(new RegExp(`( \\d+)? ${suffix}$`), '');   // don't compound the date
+  let candidate = `${stem} ${suffix}`;
+  if (!existing.has(candidate)) return candidate;
+  for (let n = 2; ; n++) { candidate = `${stem} ${n} ${suffix}`; if (!existing.has(candidate)) return candidate; }
+}
+
+// Write a closing tab's diagram to a browser named-save so it can be reopened later. Reuses the tab's existing
+// archive (update in place) ONLY when no OTHER open tab claims the same name — otherwise two tabs sharing a
+// browserSaveName would overwrite each other (e.g. after loading the same save into two tabs, or a same-name
+// batch save); the loser falls through to a fresh dated name. Tags the archive with `driveFileId` when the
+// diagram is also in Drive (redundant → safe for quota-pressure eviction). On a quota error, sheds redundant
+// archives and retries once. The whole body is guarded (some Private-Mode contexts throw even on read), so a
+// failure degrades instead of aborting the close. Returns { ok, lostBrowserOnly }: lostBrowserOnly is true when
+// the write ultimately failed for a diagram with NO Drive copy — its only copy is at risk, so the caller warns.
+function archiveTabToBrowser(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab) return { ok: true };
+  let name, write;
+  try {
+    const graphJSON = getTabGraphJSON(id);
+    if (countDiagramShapes(graphJSON?.cells) === 0) return { ok: true };   // nothing worth keeping
+    const saves = persistenceModule.getNamedSaves?.() || [];
+    const existing = new Set(saves.map(s => s.name));
+    // Reuse this tab's own archive in place (no-clobber), else dedup by Drive identity so re-loading the SAME Drive
+    // diagram (a shared file arrives with no browserSaveName) REPLACES its archive instead of piling up dated
+    // duplicates (#4). Both reuse paths skip a name another OPEN tab already claims. See archiveDedupName.
+    const driveKey = (tab.driveSharedSource && tab.driveSharedSource.fileId) || tab.driveFileId || null;
+    const otherOpenSaveNames = tabs.filter(t => t.id !== id).map(t => t.browserSaveName);
+    const dd = archiveDedupName({ browserSaveName: tab.browserSaveName, driveKey, saves, otherOpenSaveNames });
+    name = dd.reuse || uniqueArchiveName(tab.name, existing);
+    const grp = tab.groupId ? getGroup(tab.groupId) : null;
+    const data = {
+      name, timestamp: Date.now(), version: 1, appVersion: APP_VERSION,
+      diagramType: tab.diagramType, graph: compactGraphForSave(graphJSON), viewport: getTabViewport(id),
+      group: grp ? { name: grp.name, icon: grp.icon || null, color: grp.color || null } : null,   // #7: reopen back into its group
+      driveFileId: tab.driveFileId || null,   // present → redundant (reloadable from Drive) → eviction-eligible
+      driveSharedSource: tab.driveSharedSource || null,   // so a CLOSED shared file still reads as shared (item 5)
+      driveSharedInEdit: tab.driveSharedInEdit || null,   // Phase B: a CLOSED directly-edited shared file still reads as shared
+      // Item 1.3: also stash the rest of the Drive linkage so LOADING this archive re-marks it "In My Drive" and
+      // restores the shares it fanned out to (loadNamedSave → adoptDriveMetaIntoTab). Mirrors the session set.
+      driveCopies: (tab.driveCopies && tab.driveCopies.length) ? tab.driveCopies : null,
+      driveHeadRevisionId: tab.driveHeadRevisionId || null,
+      driveLastHash: tab.driveLastHash || null,
+      driveLastSavedAt: tab.driveLastSavedAt || null,
+      driveImported: tab.driveImported || false,
+      driveFolderId: tab.driveFolderId || null,
+      driveDriveId: tab.driveDriveId || null,
+      driveOutgoingGrants: tab.driveOutgoingGrants || 0,   // direct view/edit invites on the master → "shared out" glyph
+    };
+    write = () => localStorage.setItem('sfdiag::save::' + name, JSON.stringify(data));
+    write();
+  } catch (err) {
+    if (persistenceModule.isQuotaError?.(err) && write) {
+      persistenceModule.evictRedundantArchives?.(0);   // shed redundant Drive-backed copies, then retry once
+      try { write(); tab.browserSaveName = name; return { ok: true }; }
+      catch (e2) { return failArchive(tab, e2); }
+    }
+    return failArchive(tab, err);
+  }
+  tab.browserSaveName = name;
+  return { ok: true };
+}
+
+// Archive write failed. A Drive-backed diagram is reloadable, so we just warn quietly and let the close proceed.
+// A browser-ONLY diagram has no other copy → signal the caller so it can stop the close and ask the user.
+function failArchive(tab, err) {
+  console.warn('Diagramforce: could not archive closed tab:', err);
+  // A clean Drive-backed tab is reloadable from Drive, so a failed browser archive is harmless. But a DIRTY tab's
+  // unsaved delta is NOT guaranteed on Drive (the close's fire-and-forget saveTabNow can fail silently, and the
+  // existing Drive copy is the PRIOR revision) - so if its only durable backstop (the browser archive) also fails,
+  // warn rather than drop it silently. (Browser-only diagrams always warn.)
+  return { ok: false, lostBrowserOnly: !tab.driveFileId || !!tab.dirty };
+}
+
+// The closing tab's only copy could not be saved (browser storage full / unavailable). Don't drop it silently:
+// ask whether to close anyway (losing it) or keep it open so the user can export to JSON / free space first.
+async function promptStorageFullOnClose(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab) return;
+  const proceed = await confirmModal({
+    title: 'Browser storage full',
+    message: `"${tab.name}" could not be saved to Browser Storage${tab.driveFileId ? ", and its Google Drive sync isn't confirmed" : ''}. Export your diagrams to JSON to be safe, or close anyway and risk losing unsaved changes.`,
+    okLabel: 'Close anyway', cancelLabel: 'Keep open', tone: 'danger',
+  });
+  if (!proceed) return;
+  tab.dirty = false;
+  doCloseTab(id, { archive: false });   // user accepted the loss → force-close without re-attempting the archive
+}
+
+// Remove a browser archive by name (the "browser" half of a go-together delete). Also clears the mapping off
+// any still-open tab so its Save Manager chip doesn't dangle.
+function deleteBrowserArchive(name) {
+  if (!name) return;
+  persistenceModule.deleteNamedSave?.('sfdiag::save::' + name);
+  forgetBrowserSaveName(name);
+}
+
 function showCloseConfirmModal(tabId, tabName) {
   document.querySelector('.df-close-confirm-modal')?.remove();
+  const tab = tabs.find(t => t.id === tabId);
+  const hasDrive = !!tab?.driveFileId;
+  const hasArchive = !!tab?.browserSaveName;
+  const hasSavedCopy = hasDrive || hasArchive;
+  // Where the durable copy lives — used both in the body copy and the Delete tooltip so the user knows exactly
+  // what "Delete diagram" removes.
+  const savedWhere = hasDrive && hasArchive ? 'Google Drive and Browser Storage'
+    : hasDrive ? 'Google Drive' : 'Browser Storage';
+
+  // Two distinct "don't keep the edits" outcomes once a saved copy exists (C6 fuller):
+  //   • Discard changes — close, drop the unsaved edits, but KEEP the saved copy untouched.
+  //   • Delete diagram  — remove the saved copy (Drive trash + browser archive) as well, then close.
+  // For an unsaved-only diagram there's nothing saved to keep or delete, so it collapses to a single Discard.
+  const bodyHtml = hasSavedCopy
+    ? `<p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> has unsaved changes.</p>
+       <p style="margin:8px 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <strong style="color:var(--text-primary)">Discard</strong> drops these changes and keeps the last saved version in
+        <strong style="color:var(--text-primary)">${savedWhere}</strong>.<br>
+        <strong style="color:var(--text-primary)">Delete</strong> removes that saved copy too.</p>`
+    : `<p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> has unsaved changes that will be lost.</p>`;
+
+  // Button order (saved-copy case): Cancel (far left) · Delete diagram · Discard and Close · Save and Close.
+  // Discard sits between the destructive Delete and the safe Save so the escalation reads left→right.
+  const footerHtml = hasSavedCopy
+    ? `<button class="df-close-confirm__btn df-close-confirm__btn--cancel" style="margin-right:auto">Cancel</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--delete" title="Drop the changes AND remove the saved copy from ${savedWhere}, then close">Delete</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--discard" title="Drop the unsaved changes but keep the last saved version">Discard</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--save">Save</button>`
+    : `<button class="df-close-confirm__btn df-close-confirm__btn--cancel" style="margin-right:auto">Cancel</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--discard" title="Drop the unsaved changes and close">Discard</button>
+      <button class="df-close-confirm__btn df-close-confirm__btn--save">Save</button>`;
 
   const { footer, close } = buildModal({
     title: 'Unsaved Changes',
     className: 'df-close-confirm-modal',
     zIndex: 3000,
-    width: '380px',
+    // Wider when the 4th (Delete diagram) button is present so the row never cramps; the footer also wraps /
+    // stacks on phones (css/modals.css).
+    width: hasSavedCopy ? '560px' : '400px',
     showClose: false, // decision dialog — dismiss via Cancel / backdrop / Escape
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
-    bodyHtml: `
-      <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
-        <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> has unsaved changes that will be lost.
-      </p>`,
-    footerHtml: `
-      <button class="df-close-confirm__btn df-close-confirm__btn--cancel" style="margin-right:auto">Cancel</button>
-      <button class="df-close-confirm__btn df-close-confirm__btn--save">Save and Close</button>
-      <button class="df-close-confirm__btn df-close-confirm__btn--discard">Discard</button>`,
+    bodyHtml,
+    footerHtml,
   });
 
   footer.querySelector('.df-close-confirm__btn--cancel').addEventListener('click', close);
 
-  footer.querySelector('.df-close-confirm__btn--save').addEventListener('click', () => {
-    close();
-    // Switch to the tab first if not active, then trigger save
-    if (tabId !== activeTabId) switchTab(tabId);
-    // Set flag so markSaved() will close the tab after save completes
-    pendingCloseAfterSave = tabId;
-    persistenceModule.namedSave();
-  });
-
+  // Discard changes — drop the in-memory edits and close, KEEPING the saved copy (Drive file + browser archive
+  // untouched). archive:false so the edited state is NOT written over the existing archive. For an unsaved-only
+  // diagram this simply drops the work (there was no saved copy).
   footer.querySelector('.df-close-confirm__btn--discard').addEventListener('click', () => {
     close();
-    // Force close without checking dirty again
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab) tab.dirty = false;
+    const t = tabs.find(x => x.id === tabId);
+    if (t) t.dirty = false;   // already confirmed → skip the dirty re-check on close
+    doCloseTab(tabId, { archive: false });
+  });
+
+  // Delete diagram — remove the saved copy (Drive trash + browser archive go-together), then close. Only present
+  // when a saved copy exists (the dialog itself is the confirm; Drive deletes go to the recoverable Drive trash).
+  footer.querySelector('.df-close-confirm__btn--delete')?.addEventListener('click', async () => {
+    close();
+    const t = tabs.find(x => x.id === tabId);
+    if (t?.driveFileId) await persistenceModule.deleteDiagramFromDrive?.(t.driveFileId);
+    if (t) {
+      if (t.browserSaveName) deleteBrowserArchive(t.browserSaveName);
+      t.dirty = false;
+    }
+    doCloseTab(tabId, { archive: false });
+  });
+
+  footer.querySelector('.df-close-confirm__btn--save').addEventListener('click', () => {
+    close();
+    const t = tabs.find(x => x.id === tabId);
+    if (t) t.dirty = false;   // user chose to keep it → not a discard
+    // Save = keep the work: doCloseTab auto-archives it to Browser Storage (the item-8 model), then closes.
     doCloseTab(tabId);
   });
 }
 
-function typeIconSvg(diagramType) {
-  let inner;
-  if (diagramType === 'process') {
-    inner = '<circle cx="3" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="5.5" width="5" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="5.5" y1="8" x2="7" y2="8" stroke="currentColor" stroke-width="1.5"/>';
-  } else if (diagramType === 'sequence') {
-    inner = '<rect x="1" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><rect x="10" y="1" width="5" height="3" rx="0.5" fill="currentColor"/><line x1="3.5" y1="4" x2="3.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="12.5" y1="4" x2="12.5" y2="15" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><line x1="3.5" y1="8" x2="12.5" y2="8" stroke="currentColor" stroke-width="1"/><polygon points="12.5,8 10.5,7 10.5,9" fill="currentColor"/><line x1="12.5" y1="12" x2="3.5" y2="12" stroke="currentColor" stroke-width="0.8" stroke-dasharray="1.5 1"/><polygon points="3.5,12 5.5,11 5.5,13" fill="currentColor"/>';
-  } else if (diagramType === 'datamodel') {
-    inner = '<rect x="1" y="1" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="1" width="6" height="3" rx="1" fill="currentColor"/><rect x="9" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="7" width="6" height="3" rx="1" fill="currentColor"/><path d="M7 5L9 11" stroke="currentColor" stroke-width="1.2" fill="none"/>';
-  } else if (diagramType === 'datamapping') {
-    inner = '<rect x="0.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><rect x="10.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="10.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><path d="M5.5 8 L10 8 M8.5 6.5 L10 8 L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 11 L10 11" stroke="currentColor" stroke-width="1" opacity="0.55"/>';
-  } else if (diagramType === 'gantt') {
-    inner = '<rect x="1" y="2" width="8" height="3" rx="1" fill="currentColor"/><rect x="4" y="7" width="9" height="3" rx="1" fill="currentColor" opacity="0.7"/><rect x="7" y="12" width="6" height="3" rx="1" fill="currentColor" opacity="0.5"/>';
-  } else if (diagramType === 'org') {
-    inner = '<rect x="5" y="1" width="6" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><rect x="9.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><path d="M8 5v2H3.5V10M8 7h4.5V10" stroke="currentColor" stroke-width="1" fill="none"/>';
-  } else {
-    inner = '<rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/>';
-  }
-  return `<svg class="df-close-tabs__type-icon" viewBox="0 0 16 16" fill="currentColor">${inner}</svg>`;
+// Storage-pressure gauge for the Close & Delete overlay (mirrors the Load & Import one; reuses the
+// .df-load-gauge CSS). Built from the persistence footprint helpers so you can watch the store empty as you
+// prune. tabs.js has `persistence` but not `toolbar`, so this is a small local mirror of storagePressureHtml.
+function storageGaugeHtml() {
+  let used = 0;
+  try { used = persistenceModule.getStorageFootprint?.() || 0; } catch { return ''; }
+  if (!(used > 0)) return '';
+  const warn = persistenceModule.STORAGE_WARNING_BYTES || 4_000_000;
+  const level = gaugeLevel(used, warn);
+  const pct = Math.min(100, Math.round((used / warn) * 100));
+  const hint = level === 'ok' ? ''
+    : '<p class="df-load-gauge__hint">Browser storage is filling up - delete saved diagrams to free space.</p>';
+  return `<div class="df-load-gauge df-load-gauge--${level}" style="margin:0 0 var(--spacing-md)">
+      <div class="df-load-gauge__caption"><span>Browser storage</span><span>${escHtml((used / 1e6).toFixed(1))} MB used</span></div>
+      <div class="df-load-gauge__track"><div class="df-load-gauge__fill" style="width:${pct}%"></div></div>
+      ${hint}
+    </div>`;
 }
 
-function showCloseTabsModal() {
-  if (tabs.length === 0) return;
+// The single hub for deleting browser-stored diagrams: OPEN tabs (close + optional delete) AND CLOSED archives
+// (delete-only). Shows the storage gauge + per-diagram weight so you can free space deliberately.
+export function showCloseTabsModal() {
+  // Drop any "Closed (in Browser Storage)" archive whose Drive file is currently OPEN as a tab: reopening a Drive-
+  // backed closed tab leaves its browser archive behind, so it would otherwise list twice (Open Tabs + Closed) for
+  // the same diagram. The archive stays in storage (a backup); it's just hidden here while the diagram is open.
+  const openDriveIds = new Set(tabs.map(t => t.driveFileId).filter(Boolean));
+  const archives = (persistenceModule.getNamedSaves?.() || []).filter(a => !(a.driveFileId && openDriveIds.has(a.driveFileId)));
+  if (tabs.length === 0 && archives.length === 0) return;
 
   document.querySelector('.df-close-tabs-modal')?.remove();
 
-  const rowsHtml = tabs.map(t => {
-    const active = t.id === activeTabId ? ' (active)' : '';
+  // Storage chips + Copy/Collab pill use the SAME shared builders as the Save/Load managers (driveChipsHtml /
+  // sharePillHtml in util.js) so Close & Delete reads identically - including the greyed "My Drive (off)" chip for an
+  // un-synced tab, which the old hand-rolled chips here used to omit (the inconsistency the user flagged).
+  const driveOn = !!persistenceModule.isDriveConfigured?.();
+
+  // OPEN TABS — closable + deletable. Weight (8.4) = serialized graph size.
+  const openRowsHtml = tabs.map(t => {
     const typeLabel = DIAGRAM_TYPES[t.diagramType]?.short || 'Architecture';
     const rel = formatRelativeTime(t.lastModifiedAt || t.lastSavedAt);
     const g = t.groupId ? getGroup(t.groupId) : null;
-    return `
-      <label class="df-close-tabs__row" data-tab-id="${escHtml(t.id)}">
-        <input type="checkbox" class="df-close-tabs__checkbox" data-tab-id="${escHtml(t.id)}" />
-        ${typeIconSvg(t.diagramType)}
-        ${t.dirty ? '<span class="df-close-tabs__dirty" title="Unsaved changes"></span>' : ''}
-        <div class="df-close-tabs__info">
-          <span class="df-close-tabs__name">${escHtml(t.name)}${active}</span>
-          ${rel ? `<span class="df-close-tabs__meta">Modified ${rel}</span>` : ''}
-        </div>
-        ${groupBadgeHtml(g)}
-        <span class="df-close-tabs__badge">${escHtml(typeLabel)}</span>
-      </label>`;
+    const graphJSON = getTabGraphJSON(t.id);
+    const shapes = countDiagramShapes(graphJSON?.cells);
+    const weight = formatBytes(JSON.stringify(graphJSON || {}).length);
+    const sharedCount = (t.driveCopies || []).filter(c => c && c.kind === 'shared-drive').length;
+    const hasBackup = (t.driveCopies || []).some(c => c && c.kind === 'mydrive-backup');
+    const chipsHtml = driveChipsHtml({ ...t, driveSharedCopies: sharedCount }, { driveOn, onSharedDrive: !!t.driveDriveId, hasMyDriveBackup: hasBackup });
+    const src = t.driveSharedSource;
+    // Item #5: the Copy/Collab pill sits on the BOTTOM chip row right after the "Shared File" chip (sm), not up by
+    // the title - the access type goes WITH the Shared-File state. Matches Load -> Drive + the Save Manager.
+    const sharePill = (src && src.fileId && !isViewForkTab(t)) ? sharePillHtml(src.canEdit, { sm: true }) : '';   // a view fork is your own file → no pill
+    const nameSuffix = t.dirty ? ' <span class="df-close-tabs__dirty" title="Unsaved changes"></span>' : '';
+    return storageRowHtml({
+      tag: 'label', rowClass: 'df-close-tabs__row', rowAttrs: `data-tab-id="${escHtml(t.id)}"`,
+      active: t.id === activeTabId,
+      checkbox: `<input type="checkbox" class="df-close-tabs__checkbox" data-tab-id="${escHtml(t.id)}" />`,
+      diagramType: t.diagramType, typeTitle: typeLabel, name: t.name, nameSuffix,
+      groupBadge: groupBadgeHtml(g), count: shapes,
+      metaLeft: `<span class="df-save-mgr__chips">${chipsHtml}${sharePill}</span>`,
+      metaRight: `${rel ? `Edited ${rel}` : ''}${weight ? `${rel ? ' · ' : ''}${weight}` : ''}`,
+    });
   }).join('');
 
-  // dialog width (460px/90vw) comes from `.df-close-tabs-modal .df-modal__dialog` CSS
+  // CLOSED ARCHIVES — delete-only (you can't "close" what isn't open). Weight = stored entry size.
+  const archiveRowsHtml = archives.map(s => {
+    const rel = formatRelativeTime(s.timestamp) || 'just now';
+    const weight = formatBytes(s.bytes);
+    const sharedCount = (s.driveCopies || []).filter(c => c && c.kind === 'shared-drive').length;
+    const hasBackup = (s.driveCopies || []).some(c => c && c.kind === 'mydrive-backup');
+    const chipsHtml = driveChipsHtml({ ...s, driveSharedCopies: sharedCount }, { driveOn, onSharedDrive: !!s.driveDriveId, hasMyDriveBackup: hasBackup });
+    const asrc = s.driveSharedSource;
+    const archivePill = (asrc && asrc.fileId && !isViewForkTab(s)) ? sharePillHtml(asrc.canEdit, { sm: true }) : '';   // a view fork is your own file → no pill
+    return storageRowHtml({
+      tag: 'label', rowClass: 'df-close-tabs__row', rowAttrs: `data-save-key="${escHtml(s.key)}"`,
+      diagramType: s.diagramType, typeTitle: DIAGRAM_TYPES[s.diagramType]?.short || 'Architecture',
+      name: s.name, count: s.shapes, groupBadge: '',
+      checkbox: `<input type="checkbox" class="df-close-tabs__checkbox" data-save-key="${escHtml(s.key)}" data-save-name="${escHtml(s.name)}" />`,
+      metaLeft: `<span class="df-save-mgr__chips">${chipsHtml}${archivePill}</span>`,
+      metaRight: `Last Modified ${rel}${weight ? ` · ${weight}` : ''}`,   // "Last Modified" = a CLOSED archive (vs "Edited" for live tabs); matches the Load Manager archive rows
+    });
+  }).join('');
+
+  // Item 3: when BOTH sections exist, render them as two separate bordered, collapsible TABLES (the same split
+  // styling as Load -> Drive / Load -> Browser) - each a header band with a chevron + count. With only one section,
+  // a single plain box (no redundant header), as before. The Select all + group-pick bar floats above both tables.
+  const chevron = '<svg class="df-load-open__chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const splitTable = (label, count, rowsHtml) => `<div class="df-split-table df-modal__list-box"><div class="df-split-table__head" role="button" tabindex="0">${chevron}<span>${label}</span><span class="df-split-table__count">${count}</span></div><div class="df-split-table__rows">${rowsHtml}</div></div>`;
+  const controlsHtml = `<div class="df-modal__list-header df-split-table__controls"><label class="df-modal__select-all"><input type="checkbox" class="df-close-tabs__checkbox" data-role="select-all" /> Select all</label>${groupSelectHtml(getGroups())}</div>`;
+  const tablesHtml = (openRowsHtml && archiveRowsHtml)
+    ? splitTable('Open tabs', tabs.length, openRowsHtml) + splitTable('Closed (in Browser Storage)', archives.length, archiveRowsHtml)
+    : `<div class="df-modal__list-box">${openRowsHtml || archiveRowsHtml}</div>`;
+
   const { body, footer, close } = buildModal({
-    title: 'Close Multiple Tabs',
+    title: 'Close & Delete',
     className: 'df-close-tabs-modal',
     zIndex: 3000,
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: `
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm)">
-        Select the tabs you want to close.
+        Close open tabs, or delete any diagram from this browser to free space.
       </p>
-      <div class="df-close-tabs__list">
-        <label class="df-close-tabs__row df-close-tabs__row--header">
-          <input type="checkbox" class="df-close-tabs__checkbox" data-role="select-all" />
-          <span class="df-close-tabs__name">Select all</span>
-        </label>
-        ${rowsHtml}
-      </div>`,
-    footerHtml: '<button class="df-close-tabs__btn df-close-tabs__btn--primary" data-action="close" style="margin-left:auto" disabled>Close Selected</button>',
+      ${storageGaugeHtml()}
+      ${controlsHtml}
+      ${tablesHtml}`,
+    footerHtml: `
+      <button class="df-close-tabs__btn df-close-tabs__btn--danger" data-action="close-delete" style="margin-right:auto" disabled>Delete Selected</button>
+      <button class="df-close-tabs__btn df-close-tabs__btn--accent" data-action="close" disabled>Close Selected</button>`,
   });
 
   const selectAllEl = body.querySelector('[data-role="select-all"]');
-  const rowBoxes = Array.from(body.querySelectorAll('.df-close-tabs__checkbox[data-tab-id]'));
+  const rowBoxes = Array.from(body.querySelectorAll('.df-close-tabs__checkbox')).filter(b => b.dataset.role !== 'select-all');
+  const tabBoxes = () => rowBoxes.filter(b => b.dataset.tabId);
   const closeBtn = footer.querySelector('[data-action="close"]');
+  const deleteBtn = footer.querySelector('[data-action="close-delete"]');
 
-  const updateState = () => {
+  // `expand` is true only for the bulk actions (Select all / Select Tab Group): a table that gains a selection is
+  // auto-uncollapsed + its header count flips to "selected/total" (item 1). An individual row toggle just updates
+  // the counts without forcing any table open.
+  const updateState = (expand = false) => {
     const checked = rowBoxes.filter(b => b.checked);
-    closeBtn.disabled = checked.length === 0;
-    closeBtn.textContent = checked.length > 1 ? `Close Selected (${checked.length})` : 'Close Selected';
-    if (checked.length === 0) {
-      selectAllEl.checked = false;
-      selectAllEl.indeterminate = false;
-    } else if (checked.length === rowBoxes.length) {
-      selectAllEl.checked = true;
-      selectAllEl.indeterminate = false;
-    } else {
-      selectAllEl.checked = false;
-      selectAllEl.indeterminate = true;
-    }
+    const openChecked = checked.filter(b => b.dataset.tabId);
+    // Close Selected → open tabs only (archives aren't open). Delete Selected → ANYTHING selected (8.5).
+    closeBtn.disabled = openChecked.length === 0;
+    closeBtn.textContent = openChecked.length > 1 ? `Close Selected (${openChecked.length})` : 'Close Selected';
+    deleteBtn.disabled = checked.length === 0;
+    deleteBtn.textContent = checked.length > 1 ? `Delete Selected (${checked.length})` : 'Delete Selected';
+    if (checked.length === 0) { selectAllEl.checked = false; selectAllEl.indeterminate = false; }
+    else if (checked.length === rowBoxes.length) { selectAllEl.checked = true; selectAllEl.indeterminate = false; }
+    else { selectAllEl.checked = false; selectAllEl.indeterminate = true; }
+    refreshSplitTableCounts(body, '.df-close-tabs__checkbox', { expand });
   };
 
-  selectAllEl.addEventListener('change', () => {
-    rowBoxes.forEach(b => { b.checked = selectAllEl.checked; });
-    updateState();
-  });
-  rowBoxes.forEach(b => b.addEventListener('change', updateState));
+  selectAllEl.addEventListener('change', () => { rowBoxes.forEach(b => { b.checked = selectAllEl.checked; }); updateState(true); });
+  rowBoxes.forEach(b => b.addEventListener('change', () => updateState()));
 
-  // Clicking the row (outside the native label-to-input propagation edge cases)
-  // — rely on default label click behaviour, but make sure checkbox doesn't double-fire.
-  body.querySelectorAll('.df-close-tabs__row[data-tab-id]').forEach(row => {
-    row.addEventListener('click', (e) => {
-      // The <label> already forwards clicks to the checkbox; just stop propagation
-      // from the checkbox itself so it doesn't trigger twice.
-      if (e.target.tagName === 'INPUT') e.stopPropagation();
+  // Collapse/expand each split-table (item 3) - the two tables read like the Load -> Drive / Browser ones.
+  body.querySelectorAll('.df-split-table__head').forEach((h) => {
+    const grp = h.closest('.df-split-table');
+    const toggle = () => grp.classList.toggle('is-collapsed');
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
+
+  // "Select Tab Group" — replaces the selection with the chosen group's OPEN tabs (archives carry no group).
+  const groupSel = body.querySelector('.df-group-select');
+  if (groupSel) {
+    const tabGroup = new Map(tabs.map(t => [t.id, t.groupId || null]));
+    groupSel.addEventListener('change', () => {
+      const chosen = groupSel.value;
+      if (chosen) rowBoxes.forEach(b => { b.checked = !!b.dataset.tabId && tabInGroup(tabGroup.get(b.dataset.tabId), chosen); });
+      groupSel.value = '';
+      updateState(true);
     });
+  }
+
+  body.querySelectorAll('.df-close-tabs__row[data-tab-id], .df-close-tabs__row[data-save-key]').forEach(row => {
+    row.addEventListener('click', (e) => { if (e.target.tagName === 'INPUT') e.stopPropagation(); });
   });
 
+  // Close Selected — close the selected OPEN tabs (their browser archive is kept). Dirty tabs prompt.
   closeBtn.addEventListener('click', () => {
-    const selectedIds = rowBoxes.filter(b => b.checked).map(b => b.dataset.tabId);
+    const selectedIds = tabBoxes().filter(b => b.checked).map(b => b.dataset.tabId);
     if (selectedIds.length === 0) return;
     const dirtyIds = selectedIds.filter(id => tabs.find(t => t.id === id)?.dirty);
     if (dirtyIds.length > 0) {
-      showMultiDiscardConfirm(
-        dirtyIds.length,
-        () => { close(); performMultiClose(selectedIds); },
-        () => {
-          close();
-          persistenceModule.saveMultipleTabs(dirtyIds);
-          performMultiClose(selectedIds);
-        }
-      );
-    } else {
-      close();
-      performMultiClose(selectedIds);
-    }
+      showMultiDiscardConfirm(dirtyIds.length,
+        () => { close(); performMultiClose(selectedIds, { noArchiveIds: new Set(dirtyIds) }); },
+        () => { close(); performMultiClose(selectedIds); });
+    } else { close(); performMultiClose(selectedIds); }
+  });
+
+  // Delete Selected (8.5) — remove from browser storage entirely: open tabs → close + delete their existing
+  // archive + Drive master (if synced); closed archives → delete the localStorage entry. Works for ANY selection.
+  deleteBtn.addEventListener('click', async () => {
+    const checked = rowBoxes.filter(b => b.checked);
+    if (!checked.length) return;
+    const tabIds = checked.filter(b => b.dataset.tabId).map(b => b.dataset.tabId);
+    const saveItems = checked.filter(b => b.dataset.saveKey).map(b => ({ key: b.dataset.saveKey, name: b.dataset.saveName }));
+    const driveTabs = tabIds.map(id => tabs.find(t => t.id === id)).filter(t => t && t.driveFileId);
+    const browserTotal = tabIds.length + saveItems.length;
+    const parts = [];
+    if (tabIds.length) parts.push(`close ${tabIds.length} open tab${tabIds.length === 1 ? '' : 's'}`);
+    parts.push(`remove ${browserTotal} diagram${browserTotal === 1 ? '' : 's'} from this browser`);
+    if (driveTabs.length) parts.push(`move ${driveTabs.length} to your Google Drive trash (recoverable 30 days)`);
+    const ok = await confirmModal({
+      title: 'Delete selected diagrams?',
+      message: `This will ${parts.join(', ')}. This can't be undone${driveTabs.length ? " (Drive's trash aside)" : ''}.`,
+      okLabel: 'Delete', cancelLabel: 'Cancel', tone: 'danger',
+    });
+    if (!ok) return;
+    close();
+    for (const t of driveTabs) { try { await persistenceModule.deleteDiagramFromDrive(t.driveFileId); } catch (e) { console.warn('Diagramforce: Drive delete failed', t.id, e); } }
+    // Remove the existing browser archive of EVERY selected open tab (synced or not), then the standalone archives.
+    for (const id of tabIds) { const t = tabs.find(x => x.id === id); if (t?.browserSaveName) deleteBrowserArchive(t.browserSaveName); }
+    for (const s of saveItems) { persistenceModule.deleteNamedSave?.(s.key); forgetBrowserSaveName(s.name); }
+    // Close the open tabs WITHOUT re-archiving (we're deleting their browser copy).
+    if (tabIds.length) performMultiClose(tabIds, { noArchiveIds: new Set(tabIds) });
   });
 }
 
-function performMultiClose(ids) {
+function performMultiClose(ids, { noArchiveIds = null } = {}) {
   // Mark all selected tabs as non-dirty so doCloseTab proceeds without prompting.
   for (const id of ids) {
     const tab = tabs.find(t => t.id === id);
@@ -667,9 +1113,10 @@ function performMultiClose(ids) {
   }
   // Close in reverse so splice indices stay stable and we don't churn the active tab.
   // If the active tab is in the set, doCloseTab will switch to the nearest remaining
-  // one each time — which is the right behaviour.
+  // one each time — which is the right behaviour. `noArchiveIds` are the delete-closed tabs
+  // (their copies are being removed), so they skip the auto-archive; the rest archive normally.
   for (const id of [...ids]) {
-    if (tabs.some(t => t.id === id)) doCloseTab(id);
+    if (tabs.some(t => t.id === id)) doCloseTab(id, { archive: !(noArchiveIds && noArchiveIds.has(id)) });
   }
 }
 
@@ -694,12 +1141,15 @@ function showMultiDiscardConfirm(dirtyCount, onDiscard, onSaveAndClose) {
   footer.querySelector('[data-action="confirm"]').addEventListener('click', () => { close(); onDiscard(); });
 }
 
-function switchTab(id) {
+export function switchTab(id) {
   if (id === activeTabId) return;
   // A module may veto/defer the switch — e.g. an open Data Mapping table edit session
   // prompts to Save/Discard the unapplied edits first. The guard returns false to block
   // now and re-invokes this continuation once the user resolves (then it returns true).
   if (_switchGuard && !_switchGuard(() => switchTab(id))) return;
+  // Flush any pending Drive autosave for the OUTGOING tab before the graph swaps
+  // (it reads the still-active graph synchronously). No dialog, best-effort.
+  persistenceModule.flushDriveSave?.();
   saveCurrentTabState();
   // Capture the outgoing active tab's position so we can slide a focus bar from it to the new one.
   const oldActiveEl = tabListEl.querySelector('.df-tab--active');
@@ -799,12 +1249,13 @@ export function getActiveTabType() {
 function markDirty() {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
-  // Stamp the modified time on REAL edits only — the change handler also fires
-  // during fromJSON loads / tab switches (guarded by canvas isLoadingJSON), and
-  // those must not count as "modified".
-  if (!canvasModule.isLoadingJSON?.()) {
-    tab.lastModifiedAt = Date.now();
-  }
+  // The change handler ALSO fires during fromJSON loads / tab switches / the post-load icon+link migrations
+  // (graph.fromJSON then migrateLinks/migrateNodes/refreshAllIconHrefs re-resolve placeholders + legacy formats).
+  // NONE of those are real edits, so they must not stamp a modified time NOR mark the tab dirty. The previous code
+  // guarded only the time stamp, so a hard refresh's migrations marked the RESTORED tab dirty + active-undo - the
+  // reported "diagram shows changes after a hard refresh" bug. Guard the WHOLE thing (matches the documented intent).
+  if (canvasModule.isLoadingJSON?.()) return;
+  tab.lastModifiedAt = Date.now();
   if (!tab.dirty) {
     tab.dirty = true;
     render();
@@ -819,13 +1270,22 @@ export function markSaved(saveType) {
     tab.lastSaveType = saveType;
     render();
   }
+}
 
-  // If a "Save and Close" was pending, close the tab now
-  if (pendingCloseAfterSave) {
-    const closeId = pendingCloseAfterSave;
-    pendingCloseAfterSave = null;
-    doCloseTab(closeId);
-  }
+// A SPECIFIC tab (not necessarily the active one) finished syncing to Google Drive - clear its dirty dot. The
+// autosave SWEEP saves many tabs in quick succession, so coalesce the re-render into one rAF instead of
+// thrashing the tab bar per save. Drive is now a first-class "save" for the dot: before this, only browser
+// saves (markSaved / markTabsBrowserSaved) ever cleared `dirty`, so a Drive-synced diagram looked permanently
+// unsaved (and made the user think auto-sync wasn't running).
+let _driveSavedRenderTimer = null;
+function markTabDriveSaved(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab || !tab.dirty) return;
+  tab.dirty = false;
+  tab.lastSavedAt = Date.now();
+  tab.lastSaveType = 'drive';
+  if (_driveSavedRenderTimer) return;
+  _driveSavedRenderTimer = setTimeout(() => { _driveSavedRenderTimer = null; render(); }, 60);
 }
 
 
@@ -852,7 +1312,65 @@ export function getAllTabs() {
     dirty: t.dirty,
     lastModifiedAt: t.lastModifiedAt || null,
     lastSavedAt: t.lastSavedAt || null,
+    // Drive status for the Save-to-Drive modal's per-row chip.
+    driveFileId: t.driveFileId || null,
+    driveDriveId: t.driveDriveId || null,             // set → the file LIVES on a team Shared Drive → "Shared Drive" chip + tab glyph
+    driveHasMyDriveBackup: (t.driveCopies || []).some(c => c && c.kind === 'mydrive-backup'),   // a Shared-Drive file mirrored into My Drive → "My Drive" chip too
+    driveSharedCopies: (t.driveCopies || []).filter(c => c && c.kind === 'shared-drive').length,
+    driveEditShares: (t.driveCopies || []).filter(c => c && c.kind === 'edit-share').length,   // # of editable copies fanned out (Collab/Copy) → "shared by you" out-chip
+    driveCopies: (t.driveCopies && t.driveCopies.length) ? t.driveCopies : null,   // raw fan-out targets → lets the Load library cross-ref + hide recipient-editable copies created before the dfEditShareOf stamp
+    driveOutgoingGrants: t.driveOutgoingGrants || 0,  // # of direct view/edit invites on the master → "shared by you" out-chip (D3)
+    driveSharedSource: t.driveSharedSource || null,   // upstream shared file → Save Manager "Shared File" chip
+    driveSharedInEdit: t.driveSharedInEdit || null,   // Phase B: fileId IS a directly-edited shared file → "Shared File" chip + 'both' glyph
+    driveImported: t.driveImported || false,          // legacy imported flag (pre Shared File model)
+    // Name this tab was last saved-to / loaded-from in the browser named-saves store (used by the Browser
+    // Storage manager's reuse-in-place archive + forgetBrowserSaveName cleanup). The Save Manager's browser
+    // chip is "This browser" (always on - session auto-save), NOT a getNamedSaves cross-check.
+    browserSaveName: t.browserSaveName || null,
   }));
+}
+
+/** Record (or clear, with null) the browser named-save this tab maps to. Powers the Save Manager chip. */
+export function setTabBrowserSaveName(tabId, name) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+  tab.browserSaveName = name || null;
+  saveCurrentTabState();
+}
+
+/**
+ * A batch of tabs was just saved to the browser under given names. Stamp browserSaveName + clear `dirty` +
+ * record the save time/type on EACH, then persist + re-render ONCE. Clearing dirty for every saved tab (not
+ * just the active one) prevents inactive saved tabs from being left spuriously dirty — which otherwise
+ * triggers a stray beforeunload prompt and a sticky dirty dot across reloads (adversarial-review finding).
+ * `entries`: [{ id, name }].
+ */
+export function markTabsBrowserSaved(entries) {
+  if (!Array.isArray(entries) || !entries.length) return;
+  const now = Date.now();
+  let any = false;
+  for (const { id, name } of entries) {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) continue;
+    tab.browserSaveName = name || tab.browserSaveName || null;
+    tab.dirty = false;
+    tab.lastSavedAt = now;
+    tab.lastSaveType = 'browser';
+    any = true;
+  }
+  if (any) { saveCurrentTabState(); render(); }
+}
+
+/**
+ * Forget a browser named-save mapping on every open tab — called when that save is DELETED. Without this the
+ * tab's browserSaveName dangles: the Save Manager "In Browser" chip would re-light if a DIFFERENT diagram is
+ * later saved under the freed name, and a re-save-in-place would clobber it (adversarial-review finding).
+ */
+export function forgetBrowserSaveName(name) {
+  if (!name) return;
+  let changed = false;
+  for (const tab of tabs) { if (tab.browserSaveName === name) { tab.browserSaveName = null; changed = true; } }
+  if (changed) { saveCurrentTabState(); render(); }
 }
 
 /** Get the graph JSON for a specific tab. Active tab reads live graph. */
@@ -889,21 +1407,6 @@ export function getTabMappingMode(tabId) {
   const tab = tabs.find(t => t.id === tabId);
   return tab?.diagramType === 'datamapping' || !!tab?.mappingMode;
 }
-export function setActiveMappingMode(on) {
-  const tab = tabs.find(t => t.id === activeTabId);
-  if (!tab) return;
-  tab.mappingMode = !!on;
-  // Re-sync DataObject field ports so mapping ports appear/disappear immediately
-  // (mapping ON = every field connectable; OFF = PK/FK + already-linked only).
-  for (const el of graph.getElements()) {
-    if (el.get('type') !== 'sf.DataObject') continue;
-    const view = el.findView(paper);
-    if (view && typeof view._syncFieldPorts === 'function') view._syncFieldPorts();
-  }
-  saveTabs();
-  notifyChange();
-}
-
 export function onChange(cb) { onChangeCallbacks.push(cb); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }
 
@@ -962,6 +1465,17 @@ function updateGroup(id, patch) {
 }
 
 function toggleGroupCollapsed(id) {
+  if (id === UNGROUPED_ID) {
+    // Synthetic Ungrouped group: collapse flag lives in `ungroupedCollapsed`, not a `groups[]` entry.
+    if (!ungroupedCollapsed && !tabs.some(t => !t.groupId)) return;   // nothing to hide
+    const oldTrayU = tabListEl.querySelector(`.df-tab-group-tray[data-group-id="${UNGROUPED_ID}"]`);
+    const oldWU = oldTrayU ? oldTrayU.getBoundingClientRect().width : null;
+    ungroupedCollapsed = !ungroupedCollapsed;
+    saveTabs();
+    render();
+    animateTrayWidth(UNGROUPED_ID, oldWU);
+    return;
+  }
   const g = getGroup(id);
   if (!g) return;
   // An empty group can't be collapsed — there's nothing to hide.
@@ -1089,7 +1603,7 @@ function confirmDeleteGroup(group) {
       </p>
       <p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
         <strong>Delete group</strong> keeps the diagram${n === 1 ? '' : 's'} (they become ungrouped).
-        <strong>Delete group with diagrams</strong> also closes ${n === 1 ? 'it' : 'them'}${dirty ? ` — <strong style="color:var(--color-danger,#c23934)">${dirty} ha${dirty === 1 ? 's' : 've'} unsaved changes</strong>` : ''}.
+        <strong>Delete group with diagrams</strong> also closes ${n === 1 ? 'it' : 'them'}${dirty ? ` - <strong style="color:var(--color-danger,#c23934)">${dirty} ha${dirty === 1 ? 's' : 've'} unsaved changes</strong>` : ''}.
       </p>`,
     footerHtml: `
       <button class="df-modal__btn" data-action="cancel" style="margin-right:auto">Cancel</button>
@@ -1194,6 +1708,8 @@ function openGroupIconPopover(anchorEl, group) {
 
 function openGroupMenu(anchorEl, group) {
   openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    panel.appendChild(menuItem('New diagram in group', () => showNewDiagramModal(group.id), { icon: 'add' }));
+    panel.appendChild(menuSep());
     panel.appendChild(menuItem(group.collapsed ? 'Expand group' : 'Collapse group', () => toggleGroupCollapsed(group.id), { icon: group.collapsed ? 'chevronright' : 'chevrondown' }));
     panel.appendChild(menuItem('Rename group', () => {
       const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${group.id}"]`);
@@ -1205,12 +1721,39 @@ function openGroupMenu(anchorEl, group) {
     panel.appendChild(menuSep());
     if (tabs.some(t => t.groupId === group.id)) {
       panel.appendChild(menuItem('Export group to JSON', () => exportGroup(group.id), { icon: 'download' }));
+      // Share the whole group via Google Drive (a classic URL can't carry a multi-diagram group) —
+      // shown only when synced, since it needs Drive.
+      if (persistenceModule.isDriveConnected?.()) {
+        panel.appendChild(menuItem('Share group', () => shareGroup(group.id), { icon: 'share_link' }));
+      }
+      panel.appendChild(menuSep());
       panel.appendChild(menuItem('Ungroup all tabs', () => {
         for (const t of tabs) if (t.groupId === group.id) t.groupId = null;
         reorderTabsByGroup(); saveTabs(); render();
       }, { icon: 'unlinked' }));
     }
     panel.appendChild(menuItem('Delete group', () => confirmDeleteGroup(group), { danger: true, icon: 'delete' }));
+  });
+}
+
+/** Context menu for the synthetic Ungrouped group (#10): Collapse/Expand, Export to JSON, Share - acting on the
+ *  loose tabs (no rename/colour/delete/drag, which are meaningless for it). Collapse reads the module-level
+ *  `ungroupedCollapsed` flag (not a groups[] .collapsed). */
+function openUngroupedMenu(anchorEl) {
+  const hasTabs = tabs.some(t => !t.groupId);
+  openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    panel.appendChild(menuItem(
+      ungroupedCollapsed ? 'Expand group' : 'Collapse group',
+      () => toggleGroupCollapsed(UNGROUPED_ID),
+      { icon: ungroupedCollapsed ? 'chevronright' : 'chevrondown' }
+    ));
+    if (hasTabs) {
+      panel.appendChild(menuSep());
+      panel.appendChild(menuItem('Export group to JSON', () => exportGroup(UNGROUPED_ID), { icon: 'download' }));
+      if (persistenceModule.isDriveConnected?.()) {
+        panel.appendChild(menuItem('Share group', () => shareGroup(UNGROUPED_ID), { icon: 'share_link' }));
+      }
+    }
   });
 }
 
@@ -1222,12 +1765,53 @@ function openGroupMenu(anchorEl, group) {
  * export" toast there.
  */
 function exportGroup(groupId) {
+  saveCurrentTabState();   // flush the active tab's live graph before reading tab graphs
+  // The synthetic Ungrouped group (#10): export its loose tabs as a PLAIN bundle (no `groups` meta) so it
+  // doesn't re-import as a literal "Ungrouped" named group.
+  if (groupId === UNGROUPED_ID) {
+    const tabIds = tabs.filter(t => !t.groupId).map(t => t.id);
+    if (tabIds.length === 0) return;
+    persistenceModule.exportSelection({ tabIds });
+    return;
+  }
   const g = getGroup(groupId);
   if (!g) return;
-  saveCurrentTabState();   // flush the active tab's live graph before reading tab graphs
   const tabIds = tabs.filter(t => t.groupId === groupId).map(t => t.id);
   if (tabIds.length === 0) return;
   persistenceModule.exportSelection({ tabIds, groups: [{ id: g.id, name: g.name, icon: g.icon || null, color: g.color || null }] });
+}
+
+/** Share a whole group via Google Drive — saves each diagram to Drive, makes them public, and shows ONE
+ *  group link (`#dfg=`) that opens them all and rebuilds the group, plus the per-diagram links. Drive-only
+ *  (a classic URL can't carry a group). The group's colour + icon ride along so the recipient's group matches. */
+function shareGroup(groupId) {
+  saveCurrentTabState();
+  // The synthetic Ungrouped group (#10): share its loose tabs under a generic "Ungrouped" group link.
+  if (groupId === UNGROUPED_ID) {
+    const tabIds = tabs.filter(t => !t.groupId).map(t => t.id);
+    if (tabIds.length === 0) return;
+    persistenceModule.shareGroupToDrive(tabIds, 'Ungrouped', { color: null, icon: null });
+    return;
+  }
+  const g = getGroup(groupId);
+  if (!g) return;
+  const tabIds = tabs.filter(t => t.groupId === groupId).map(t => t.id);
+  if (tabIds.length === 0) return;   // menu only offers Share when the group has diagrams
+  persistenceModule.shareGroupToDrive(tabIds, g.name, { color: g.color || null, icon: g.icon || null });
+}
+
+// Mobile: the single "+" button opens a tiny menu choosing Diagram (full new-diagram modal) or Group
+// (create + inline-rename), mirroring the two labelled desktop buttons that are hidden on narrow viewports.
+function openNewMobileMenu(anchorEl) {
+  openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    panel.appendChild(menuItem('Diagram', () => showNewDiagramModal(), { icon: 'add' }));
+    panel.appendChild(menuItem('Group', () => {
+      const id = createGroup(uniqueGroupName('Group'));
+      const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${id}"]`);
+      const nameEl = chip?.querySelector('.df-tab-group__name');
+      if (chip && nameEl) startGroupRename(chip, nameEl, getGroup(id));
+    }, { icon: 'tabset' }));
+  });
 }
 
 // Right-click "+ Diagram" → a quick type picker (icon + name per diagram type), bypassing the full
@@ -1245,9 +1829,39 @@ function openNewDiagramMenu(anchorEl) {
   });
 }
 
-// Right-click a tab → assign it to a group (or ungroup / create a new group).
+// Clone glyph — the same line-art "duplicate" mark the canvas context menu + properties pane use (self-styled
+// inside the <g> so it renders regardless of the menu icon's CSS).
+const CLONE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/></g>';
+
+// Right-click a tab → clone / export / share it, or assign it to a group (ungroup / create a new group).
 function openTabGroupMenu(anchorEl, tab) {
   openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    // Clone — an exact duplicate of this diagram as a NEW tab named "<name> (clone)". Deep-copies the cells into
+    // a separate graph (ids may repeat across tabs - each tab is its own isolated graph), so the copy is
+    // byte-identical in layout. importDiagramAsTab uniquifies the name and fits the new tab.
+    panel.appendChild(menuItem('Clone', () => {
+      saveCurrentTabState();   // flush the active tab's live graph so a clone of the ACTIVE tab is current
+      const cells = (tab.id === activeTabId ? graph.toJSON().cells : getTabGraphJSON(tab.id)?.cells) || [];
+      const cloneCells = JSON.parse(JSON.stringify(cells));   // separate graph — never share cell object refs
+      importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode);
+      saveTabs();
+    }, { iconSvg: CLONE_GLYPH }));
+    panel.appendChild(menuSep());
+    // Per-diagram export / share actions.
+    panel.appendChild(menuItem('Export diagram to JSON', () => {
+      saveCurrentTabState();   // flush the active tab's live graph before reading it
+      persistenceModule.exportSelection({ tabIds: [tab.id] });
+    }, { icon: 'download' }));
+    panel.appendChild(menuItem('Export diagram to PNG', () => {
+      activateTab(tab.id);                 // PNG rasterizes the LIVE canvas, so switch to this tab first
+      requestAnimationFrame(() => persistenceModule.exportPNG(false));
+    }, { icon: 'image' }));
+    panel.appendChild(menuItem('Share diagram', () => {
+      activateTab(tab.id);                 // the Share overlay shares the ACTIVE tab
+      persistenceModule.shareAsURL();
+    }, { icon: 'share_link' }));
+    panel.appendChild(menuSep());
+
     const header = document.createElement('div'); header.className = 'df-tab-pop__header'; header.textContent = 'Move to group';
     panel.appendChild(header);
     for (const g of groups) panel.appendChild(menuItem(g.name, () => setTabGroup(tab.id, g.id), { checked: tab.groupId === g.id, icon: g.icon || 'tabset' }));
@@ -1259,6 +1873,30 @@ function openTabGroupMenu(anchorEl, tab) {
       if (chip && nameEl) startGroupRename(chip, nameEl, getGroup(id));
     }, { icon: 'add' }));
     if (tab.groupId) { panel.appendChild(menuSep()); panel.appendChild(menuItem('Remove from group', () => setTabGroup(tab.id, null), { icon: 'unlinked' })); }
+    // Close actions, set apart at the bottom. A Drive-synced tab gets Close and Delete FIRST (trash the master +
+    // close), then the plain Close below it; a local-only tab gets just Close (nothing on Drive to delete). Plain
+    // Close routes through the unsaved-changes guard when dirty.
+    panel.appendChild(menuSep());
+    if (tab.driveFileId) {
+      panel.appendChild(menuItem('Close and Delete', async () => {
+        const ok = await confirmModal({
+          title: 'Close and delete from Google Drive?',
+          message: 'This diagram moves to your Google Drive trash (recoverable for 30 days) and the tab closes. Any shared copies are unaffected.',
+          okLabel: 'Move to trash', cancelLabel: 'Cancel', tone: 'danger',
+        });
+        if (!ok) return;
+        if (await persistenceModule.deleteDiagramFromDrive?.(tab.driveFileId)) {
+          showToast('Moved to Google Drive trash ✓', 'info');
+          const t = tabs.find(x => x.id === tab.id);
+          if (t) {
+            t.dirty = false;          // already confirmed → don't re-prompt the unsaved-changes guard
+            if (t.browserSaveName) deleteBrowserArchive(t.browserSaveName);   // go together: remove the browser copy too
+          }
+          doCloseTab(tab.id, { archive: false });   // deleting, so don't re-archive on close
+        }
+      }, { danger: true, icon: 'delete' }));
+    }
+    panel.appendChild(menuItem('Close', () => closeTab(tab.id), { icon: 'close' }));   // plain Close LAST (below Close and Delete)
   });
 }
 
@@ -1271,6 +1909,19 @@ function saveCurrentTabState() {
   tab.viewport = canvasModule.getViewport();
   // Preserve undo/redo stacks for this tab
   tab.historyState = historyModule.save();
+}
+
+/** Persist the active tab's live graph to the browser session now AND flush any pending Drive autosave — the
+ *  same "save" a tab switch performs (switchTab), exposed so an explicit surface (the Save & Export manager)
+ *  can commit the current work before it reads tab state. Best-effort, no dialog: saveCurrentTabState captures
+ *  the live graph into tab.graphJSON, saveTabs writes the session to localStorage, and flushDriveSave is a
+ *  no-op unless auto-sync is on with a dirty, signed-in active tab (so it never spams Drive revisions). */
+export function commitActiveTab() {
+  saveCurrentTabState();
+  saveTabs();
+  // Returns the Drive-flush promise (resolved immediately when there's nothing to flush) so a caller can update
+  // its UI once the active tab's Drive file is actually written/created.
+  return persistenceModule.flushDriveSave?.() || Promise.resolve();
 }
 
 function activateTab(id, isFresh) {
@@ -1316,7 +1967,7 @@ function saveTabs() {
   try {
     // Save lightweight tab metadata (not graph data — that's per-tab autosave)
     const data = tabs.map(t => ({ id: t.id, name: t.name, dirty: t.dirty }));
-    const meta = { activeTabId, nextId, nextGroupId, appVersion: APP_VERSION, tabs: data,
+    const meta = { activeTabId, nextId, nextGroupId, appVersion: APP_VERSION, tabs: data, ungroupedCollapsed,
       groups: groups.map(g => ({ id: g.id, name: g.name, icon: g.icon || null, color: g.color || null, collapsed: !!g.collapsed })) };
 
     // Also save full graph state for each tab
@@ -1330,6 +1981,10 @@ function saveTabs() {
       lastSavedAt: t.lastSavedAt || null,
       lastSaveType: t.lastSaveType || null,
       lastModifiedAt: t.lastModifiedAt || null,
+      browserSaveName: t.browserSaveName || null,   // Save Manager "In Browser" chip survives a reload
+      // Google Drive sync state (Phase 2) — ONE canonical field list (serializeDriveFields) shared with the restore
+      // path below, so a synced tab keeps syncing after a reload and no drive field can silently drift out of sync.
+      ...serializeDriveFields(t),
       // Compact each tab's graph (drop reconstructed-on-load ports/size/angle/icon/routing) so the
       // session blob — the heaviest, most-frequently-written localStorage entry — stays small.
       // compactGraphForSave deep-clones, so the live `t.graphJSON` is untouched; session restore
@@ -1337,7 +1992,8 @@ function saveTabs() {
       graphJSON: compactGraphForSave(t.id === activeTabId ? graph.toJSON() : t.graphJSON),
       viewport: t.id === activeTabId ? canvasModule.getViewport() : t.viewport,
     }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...meta, tabs: full }));
+    const payload = JSON.stringify({ ...meta, tabs: full });
+    localStorage.setItem(STORAGE_KEY, payload);
     // CR-7.1 / Gap 32 (v1.12.0) — proactive pressure check, sampled every
     // 5 successful saves. The deterministic counter (not random) makes
     // behaviour reproducible for debugging. The footprint loop itself is
@@ -1346,13 +2002,23 @@ function saveTabs() {
     // doing work whose result can't realistically change in <5 saves.
     if (++saveCounter % 5 === 0) checkStoragePressure();
   } catch (err) {
-    // Gap 22 (v1.12.0) — distinguish quota errors so the user sees a
-    // clear recovery path. Throttle the toast to once per session so we
-    // don't spam during continuous editing — the user only needs the
-    // warning the first time the backup starts dropping writes.
-    if (isQuotaError(err) && !quotaToastShown) {
-      quotaToastShown = true;
-      showError('Browser storage full — session backup paused. Export to JSON or delete saved diagrams to make space.');
+    // Gap 22 (v1.12.0) — quota recovery. The SESSION blob is the heaviest, most-frequently-written entry, so
+    // it's the first to hit the wall. Before pausing (which silently drops recent edits until reload), do what
+    // the NAMED-SAVE path does: shed redundant Drive-backed archives (recoverable from Drive) and retry the
+    // write ONCE. Only if the retry still fails do we warn + pause (throttled to once per session).
+    if (isQuotaError(err)) {
+      try {
+        evictRedundantArchives(0);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...meta, tabs: full }));
+        return;   // recovered - the backup is current again
+      } catch (e2) {
+        if (!quotaToastShown) {
+          quotaToastShown = true;
+          showError('Browser storage full - session backup paused. Export to JSON or delete saved diagrams to make space.');
+        }
+        console.warn('SF Diagrams: Tab save failed after evict+retry:', e2);
+        return;
+      }
     }
     console.warn('SF Diagrams: Tab save failed:', err);
   }
@@ -1388,6 +2054,14 @@ function checkStoragePressure() {
     return;
   }
   if (bytes < STORAGE_WARNING_BYTES) return;
+  // Offload first: shed the OLDEST redundant (Drive-backed) browser archives — they're reloadable from Drive.
+  // Only warn if we're STILL over after that, i.e. the remaining archives are browser-only / irreplaceable.
+  let evicted = 0;
+  try { evicted = evictRedundantArchives() || 0; bytes = getStorageFootprint(); } catch { /* keep last bytes */ }
+  if (bytes < STORAGE_WARNING_BYTES) {
+    if (evicted) console.info(`Diagramforce: freed browser storage by offloading ${evicted} Drive-backed archive${evicted === 1 ? '' : 's'} (still safe in Google Drive).`);
+    return;
+  }
   pressureToastShown = true;
   showToast(
     'Browser storage almost full. Export to JSON and delete saved diagrams to free space.',
@@ -1399,6 +2073,7 @@ function checkStoragePressure() {
 function doRestoreTabData(data) {
   if (data.nextId) nextId = data.nextId;
   if (data.nextGroupId) nextGroupId = data.nextGroupId;
+  ungroupedCollapsed = !!data.ungroupedCollapsed;   // synthetic Ungrouped group's fold state
 
   // Restore tab groups (v1.16.0). Absent in pre-1.16 sessions → no groups, everything ungrouped.
   groups.length = 0;
@@ -1435,7 +2110,13 @@ function doRestoreTabData(data) {
         // (one-time migration — persisted on the next save, so it won't reset).
         lastModifiedAt: t.lastModifiedAt || t.lastSavedAt
           || (t.graphJSON?.cells?.length > 0 ? Date.now() : null),
+        browserSaveName: t.browserSaveName || null,
+        // Same canonical Drive-field list as saveTabs (serializeDriveFields) — the two can't drift.
+        ...serializeDriveFields(t),
       });
+      // Re-seed remote-store's runtime sync state so a synced tab keeps syncing. A shared tab may have a
+      // sharedSource but no own master yet, so hydrate when EITHER is present.
+      if (t.driveFileId || t.driveSharedSource) persistenceModule.hydrateTabDrive?.(t.id, serializeDriveFields(t));
     }
     activeTabId = data.activeTabId || tabs[0].id;
   } else {
@@ -1533,7 +2214,7 @@ function showSessionVersionWarning(savedVersion, diff) {
         </p>`
       : '';
     const backupBtn = isMajor
-      ? `<button class="df-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>`
+      ? `<button class="df-modal__btn" data-action="backup" style="margin-left:auto">Export JSON</button>`
       : '';
     const buttons = isMajor
       ? `<button class="df-modal__btn" data-action="reset">Don't load</button>
@@ -1612,7 +2293,7 @@ function showSessionVersionWarning(savedVersion, diff) {
         } catch (err) {
           console.warn('SF Diagrams: Session backup export failed:', err);
         }
-        btn.textContent = 'Saved!';
+        btn.textContent = 'Exported!';
         btn.style.background = '#2e844a';
         btn.style.color = '#fff';
         btn.style.borderColor = '#2e844a';
@@ -1630,10 +2311,39 @@ function showSessionVersionWarning(savedVersion, diff) {
 let tabSaveTimer = null;
 export function setupAutoSave() {
   graph.on('change add remove', () => {
+    // Capture "this is the FIRST real content edit on the active tab" BEFORE markDirty flips the flag. markDirty's
+    // own isLoadingJSON guard means a load/restore/migration never counts; viewport + selection never reach here.
+    const tab = tabs.find(t => t.id === activeTabId);
+    const firstRealEdit = !!tab && !tab.dirty && !canvasModule.isLoadingJSON?.();
     markDirty();
+    // Mode C: a VIEW (Copy) share diverges into the user's own copy on its first edit → rename to "(changed)".
+    if (firstRealEdit) maybeForkViewShareOnEdit(tab);
+    // Drive autosave — only on REAL edits (markDirty's same isLoadingJSON gate), so a
+    // tab switch / open / restore doesn't trigger a Drive write.
+    if (!canvasModule.isLoadingJSON?.()) persistenceModule.notifyDriveChange?.();
     clearTimeout(tabSaveTimer);
     tabSaveTimer = setTimeout(() => saveTabs(), 1000);
   });
+}
+
+// Mode C (shared-copy): a diagram opened from someone else's VIEW (Copy) share carries a `driveSharedSource` but no
+// own My-Drive master (the open path intentionally mints nothing - that eager mint was the orphan/duplicate-row bug).
+// The moment the user makes a real content edit it "diverges" into their own copy, so rename it to "<name> (changed)":
+// the new master that the normal Drive autosave mints a beat later - and the tab itself - then both read as the
+// user's fork, while Refresh still re-pulls the untouched original. Only a PROVEN view share (canEdit === false)
+// forks; an editable (Collab) share keeps its name + writes back, and an unknown (null) share keeps its name until
+// its access resolves. Idempotent: once a master exists (driveFileId set) it no longer matches, so it fires once.
+function maybeForkViewShareOnEdit(tab) {
+  const src = tab && tab.driveSharedSource;
+  if (!src || !src.fileId || tab.driveFileId) return;   // not a master-less shared-in tab
+  if (src.canEdit === true) return;                     // editable (Collab) share keeps its name + its own path
+  // A PROVEN view share (canEdit === false) renames to "(changed)" - the divergence signal. An unknown (null) share
+  // (e.g. a #gd= link whose access hasn't resolved) keeps its name but STILL gets its working copy minted below.
+  if (src.canEdit === false) { const forked = forkName(tab.name); if (forked !== tab.name) renameTab(tab.id, forked); }
+  // Mint the working copy NOW, independent of the auto-sync toggle: in MANUAL Drive mode notifyDriveChange never
+  // schedules a save, which would strand the edit (tab renamed "(changed)" with no Drive file behind it). Fire-and-
+  // forget; self-gates on a live token, so offline it defers to the sign-in sweep / a manual save.
+  persistenceModule.forkSharedViewOnEdit?.(tab.id);
 }
 
 // ── Drag insertion line (single shared element) ──────────────────────
@@ -1650,6 +2360,9 @@ function showInsertionLine(el, after) {
   // Centre of the ~2px gap on the chosen side, in bar coordinates (correct even when the list is scrolled).
   _insertionLine.style.left = ((after ? r.right + 1 : r.left - 1) - barRect.left) + 'px';
   _insertionLine.style.display = 'block';
+  // The precise insertion line and a group "drop into me" highlight are mutually exclusive — showing
+  // one clears the other (else a collapsed group could wear both: its tray highlight + a stray line).
+  tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach((t) => t.classList.remove('df-tab-group-tray--drag-over'));
 }
 function hideInsertionLine() { if (_insertionLine) _insertionLine.style.display = 'none'; }
 
@@ -1718,10 +2431,15 @@ function render() {
     label.className = 'df-tab__label';
     label.textContent = tab.name;
 
+    // R7 — collaboration glyph: only when edits here reach OTHER people. Two glyphs by direction (out vs in);
+    // see buildShareGlyph. Local-only + view-only shared sources show nothing.
+    const shareGlyph = buildShareGlyph(tab);
+
     // Compose the row title so the dirty hint reaches both pointer-hover
     // and screen-reader announcements via the same channel.
+    const sharedSuffix = shareGlyph ? ' - shared (your edits reach others)' : '';
     el.setAttribute('title', tab.dirty ? `${tab.name} (unsaved)` : tab.name);
-    el.setAttribute('aria-label', tab.dirty ? `${tab.name} — unsaved changes` : tab.name);
+    el.setAttribute('aria-label', (tab.dirty ? `${tab.name} - unsaved changes` : tab.name) + sharedSuffix);
 
     const close = document.createElement('button');
     close.className = 'df-tab__close';
@@ -1738,10 +2456,19 @@ function render() {
       startInlineRename(el, label, tab);
     });
 
+    // Idea 1: the share glyph and the close button share ONE right-edge slot - the amber glyph shows at rest, and on
+    // hover / active / keyboard-focus it swaps to the x, reclaiming the glyph's width for the tab name. The glyph is
+    // decorative (pointer-events:none in CSS) so the close underneath always takes the click. On touch (no hover) the
+    // two sit side by side instead (CSS .df-tab__end under @media (hover:none)), so the share cue never disappears.
+    const end = document.createElement('div');
+    end.className = 'df-tab__end';
+    if (shareGlyph) end.appendChild(shareGlyph);
+    end.appendChild(close);
+
     el.appendChild(typeIcon);
     el.appendChild(dot);
     el.appendChild(label);
-    el.appendChild(close);
+    el.appendChild(end);
 
     // Drag-and-drop reorder
     el.draggable = true;
@@ -1773,7 +2500,15 @@ function render() {
       const after = (evt.clientX - rect.left) > rect.width / 2;   // recompute from the drop point (no class needed)
       hideInsertionLine();
       const data = evt.dataTransfer.getData('text/plain');
-      if (data.startsWith('group:')) { moveGroupBefore(data.slice(6), tab.groupId); return; }
+      if (data.startsWith('group:')) {
+        // Group dropped onto a tab inside a tray: honour the before/after target the tray dragover computed
+        // (so it matches the shown insertion line), falling back to "before this tab's group".
+        const gid = data.slice(6);
+        const before = _groupDropBefore === undefined ? tab.groupId : _groupDropBefore;
+        _groupDropBefore = undefined;
+        if (gid !== before) moveGroupBefore(gid, before);
+        return;
+      }
       const draggedId = data.replace(/^tab:/, '');
       if (draggedId === tab.id) return;
       const dragged = tabs.find(t => t.id === draggedId);
@@ -1797,9 +2532,10 @@ function render() {
 
   // A group header chip: collapse caret, optional icon, name, and (when collapsed) a count.
   const renderGroupChip = (group, count) => {
+    const isUngrouped = group.id === UNGROUPED_ID;   // synthetic group: no menu / no drag / gray accent
     const collapsed = group.collapsed && count > 0;
     const chip = document.createElement('div');
-    chip.className = 'df-tab-group' + (collapsed ? ' df-tab-group--collapsed' : '') + (count === 0 ? ' df-tab-group--empty' : '');
+    chip.className = 'df-tab-group' + (collapsed ? ' df-tab-group--collapsed' : '') + (count === 0 ? ' df-tab-group--empty' : '') + (isUngrouped ? ' df-tab-group--ungrouped' : '');
     chip.dataset.groupId = group.id;
     if (group.color) chip.style.setProperty('--group-accent', group.color);
 
@@ -1825,34 +2561,40 @@ function render() {
     countEl.className = 'df-tab-group__count';
     countEl.textContent = String(count);
     lead.appendChild(countEl);
+    // Every chip gets the ⋯ options menu. The Ungrouped group routes to its slimmer menu (Collapse / Export /
+    // Share only - no rename/colour/delete); real groups get the full menu.
     const menuBtn = document.createElement('button');
     menuBtn.className = 'df-tab-group__menu';
     menuBtn.title = 'Group options';
     menuBtn.setAttribute('aria-label', 'Group options');
     menuBtn.innerHTML = '<svg width="12" height="4" viewBox="0 0 12 4" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="10" cy="2" r="1.4"/></svg>';
-    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); openGroupMenu(menuBtn, group); });
+    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); isUngrouped ? openUngroupedMenu(menuBtn) : openGroupMenu(menuBtn, group); });
     lead.appendChild(menuBtn);
     chip.appendChild(lead);
 
     // Click toggles collapse (accordion). An EMPTY group can't be collapsed (nothing to hide).
     chip.title = count === 0 ? group.name : (collapsed ? 'Expand group' : 'Collapse group');
     chip.addEventListener('click', () => { if (count > 0) toggleGroupCollapsed(group.id); });
-    chip.addEventListener('contextmenu', (e) => { e.preventDefault(); openGroupMenu(chip, group); });
 
-    // Drag the chip to reorder groups (drops are handled by the surrounding tray).
-    chip.draggable = true;
-    chip.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', 'group:' + group.id);
-      e.dataTransfer.effectAllowed = 'move';
-      _dragKind = 'group';
-      chip.classList.add('df-tab-group--dragging');
-    });
-    chip.addEventListener('dragend', () => {
-      _dragKind = null;
-      chip.classList.remove('df-tab-group--dragging');
-      hideInsertionLine();
-      tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach(c => c.classList.remove('df-tab-group-tray--drag-over'));
-    });
+    // Both chips get a right-click menu (Ungrouped → its slimmer menu). Only REAL groups can be reordered/dragged.
+    chip.addEventListener('contextmenu', (e) => { e.preventDefault(); isUngrouped ? openUngroupedMenu(chip) : openGroupMenu(chip, group); });
+    if (!isUngrouped) {
+      // Drag the chip to reorder groups (drops are handled by the surrounding tray).
+      chip.draggable = true;
+      chip.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', 'group:' + group.id);
+        e.dataTransfer.effectAllowed = 'move';
+        _dragKind = 'group';
+        _dragGroupId = group.id;
+        chip.classList.add('df-tab-group--dragging');
+      });
+      chip.addEventListener('dragend', () => {
+        _dragKind = null; _dragGroupId = null; _groupDropBefore = undefined;
+        chip.classList.remove('df-tab-group--dragging');
+        hideInsertionLine();
+        tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach(c => c.classList.remove('df-tab-group-tray--drag-over'));
+      });
+    }
     return chip;
   };
 
@@ -1862,7 +2604,28 @@ function render() {
     tray.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (_dragKind === 'tab') tray.classList.add('df-tab-group-tray--drag-over');   // "drop into this group"
+      if (_dragKind === 'group') {
+        // Group reorder: show an insertion line at the LEFT (insert before this group) or RIGHT (after it = before
+        // the next group) edge of the hovered tray. The Ungrouped tray is pinned last + can't be reordered, so it
+        // never shows a target; nor does the dragged group's own tray.
+        if (group.id === UNGROUPED_ID || group.id === _dragGroupId) { hideInsertionLine(); _groupDropBefore = undefined; return; }
+        const r = tray.getBoundingClientRect();
+        const after = e.clientX > r.left + r.width / 2;
+        showInsertionLine(tray, after);
+        if (after) {
+          const idx = groups.findIndex(g => g.id === group.id);
+          _groupDropBefore = (idx >= 0 && idx + 1 < groups.length) ? groups[idx + 1].id : null;   // null = end
+        } else {
+          _groupDropBefore = group.id;
+        }
+        return;
+      }
+      if (_dragKind !== 'tab') return;
+      // If the pointer is over a child tab, that tab's handler owns the precise insertion line — don't
+      // also light up the whole tray (the double-marker bug). Only a direct chip/tray hover = "drop into".
+      if (e.target.closest && e.target.closest('.df-tab')) return;
+      tray.classList.add('df-tab-group-tray--drag-over');
+      hideInsertionLine();   // mutually exclusive with the precise insertion line
     });
     tray.addEventListener('dragleave', (e) => { if (!tray.contains(e.relatedTarget)) tray.classList.remove('df-tab-group-tray--drag-over'); });
     tray.addEventListener('drop', (e) => {
@@ -1870,8 +2633,16 @@ function render() {
       tray.classList.remove('df-tab-group-tray--drag-over');
       hideInsertionLine();
       const data = e.dataTransfer.getData('text/plain');
-      if (data.startsWith('group:')) { const gid = data.slice(6); if (gid !== group.id) moveGroupBefore(gid, group.id); }
-      else if (data.startsWith('tab:')) { setTabGroup(data.slice(4), group.id); suppressTabHover(); }   // a tab joins this group
+      if (data.startsWith('group:')) {
+        const gid = data.slice(6);
+        if (group.id === UNGROUPED_ID) { _groupDropBefore = undefined; return; }   // can't reorder onto Ungrouped
+        // Use the before/after target the dragover computed (null = move to the end); fall back to "before this".
+        const before = _groupDropBefore === undefined ? group.id : _groupDropBefore;
+        _groupDropBefore = undefined;
+        if (gid !== before) moveGroupBefore(gid, before);
+      }
+      // Dropping a tab onto the Ungrouped tray removes it from its group (groupId → null); onto a real tray, joins it.
+      else if (data.startsWith('tab:')) { setTabGroup(data.slice(4), group.id === UNGROUPED_ID ? null : group.id); suppressTabHover(); }   // a tab joins this group
     });
   };
   for (const group of groups) {
@@ -1883,17 +2654,42 @@ function render() {
     if (group.color) tray.style.setProperty('--group-accent', group.color);
     tray.appendChild(renderGroupChip(group, groupTabs.length));
     if (collapsed) {
-      // Collapsed: keep ONLY the active tab visible (the "lingering active tab") so you don't lose
-      // your place; it hides too the moment you switch away. Expand to see them all again.
+      // Collapsed: keep ONLY the active tab visible (the "lingering active tab") so you don't lose your place; it
+      // hides too the moment you switch away. The `df-tab--lingering` class CONDENSES it (icon-only) so the group
+      // visibly folds while the active tab stays clickable - it no longer reads as a full, un-collapsed tab.
       const active = groupTabs.find(t => t.id === activeTabId);
-      if (active) tray.appendChild(renderTab(active));
+      if (active) { const lt = renderTab(active); lt.classList.add('df-tab--lingering'); tray.appendChild(lt); }
     } else {
       for (const t of groupTabs) tray.appendChild(renderTab(t));
     }
     wireTrayDrop(tray, group);
     tabListEl.appendChild(tray);
   }
-  for (const t of tabs) if (!t.groupId) tabListEl.appendChild(renderTab(t));
+  // Ungrouped tabs: once at least one REAL group exists, wrap them in a collapsible gray "Ungrouped" tray (so
+  // the user can fold them to focus on a group); otherwise render them bare as before.
+  const ungroupedTabs = tabs.filter(t => !t.groupId);
+  if (groups.length > 0 && ungroupedTabs.length > 0) {
+    const ug = { id: UNGROUPED_ID, name: 'Ungrouped', icon: 'tabset', color: null, collapsed: ungroupedCollapsed };
+    const ugCollapsed = ungroupedCollapsed && ungroupedTabs.length > 0;
+    const tray = document.createElement('div');
+    tray.className = 'df-tab-group-tray df-tab-group-tray--ungrouped' + (ugCollapsed ? ' df-tab-group-tray--collapsed' : '');
+    tray.dataset.groupId = UNGROUPED_ID;
+    tray.appendChild(renderGroupChip(ug, ungroupedTabs.length));
+    // NOTE: ungrouped tabs deliberately keep NO `df-tab--grouped` marker (that means "in a NAMED group" —
+    // delete-group/ungroup flows assert its absence). The tray's transparent-bg + gray hover come from the
+    // `.df-tab-group-tray--ungrouped .df-tab` descendant CSS instead.
+    const addUg = (t, lingering) => { const el = renderTab(t); if (lingering) el.classList.add('df-tab--lingering'); tray.appendChild(el); };
+    if (ugCollapsed) {
+      const active = ungroupedTabs.find(t => t.id === activeTabId);
+      if (active) addUg(active, true);   // keep the lingering active tab visible (condensed), like a real collapsed group
+    } else {
+      for (const t of ungroupedTabs) addUg(t);
+    }
+    wireTrayDrop(tray, ug);
+    tabListEl.appendChild(tray);
+  } else {
+    for (const t of ungroupedTabs) tabListEl.appendChild(renderTab(t));
+  }
 
   // Size tabs uniformly, set the « » buttons, THEN measure pins off the final layout. measurePins →
   // updatePins builds the rail and (last) calls updateActiveTabIndicator, so the bottom-bar gap lands
@@ -1915,21 +2711,27 @@ function sizeTabsUniform() {
     tabListEl.querySelectorAll('.df-tab').forEach(t => { t.style.width = ''; t.style.flex = ''; });
     return;
   }
+  // A collapsed group's lingering active tab is CONDENSED to a fixed icon-only width, so it is EXCLUDED from the
+  // uniform divide and counted as fixed overhead instead (else it would steal a full tab's width while showing
+  // only an icon). Its width comes from CSS (.df-tab--lingering), so we clear any stale inline width.
+  const LINGER_W = 38;
   let fixed = 0, tabCount = 0;
   for (const c of tabListEl.children) {
     if (c.classList.contains('df-tab-group-tray')) {
       const chip = c.querySelector('.df-tab-group');
       if (chip) fixed += chip.offsetWidth + 3;   // chip + its margin-right
       fixed += 3;                                  // tray padding-right
-      tabCount += c.querySelectorAll('.df-tab').length;
+      tabCount += c.querySelectorAll('.df-tab:not(.df-tab--lingering)').length;
+      fixed += c.querySelectorAll('.df-tab--lingering').length * (LINGER_W + 2);
     } else if (c.classList.contains('df-tab')) {
       tabCount += 1;
     }
   }
+  tabListEl.querySelectorAll('.df-tab--lingering').forEach(t => { t.style.flex = ''; t.style.width = ''; });
   if (tabCount === 0) return;
   fixed += 2 * Math.max(0, tabListEl.children.length - 1);   // inter-item gaps (list gap)
   const w = Math.max(MIN_TAB_W, Math.min(MAX_TAB_W, Math.floor((tabListEl.clientWidth - fixed) / tabCount)));
-  tabListEl.querySelectorAll('.df-tab').forEach(t => { t.style.flex = '0 0 auto'; t.style.width = `${w}px`; });
+  tabListEl.querySelectorAll('.df-tab:not(.df-tab--lingering)').forEach(t => { t.style.flex = '0 0 auto'; t.style.width = `${w}px`; });
 }
 
 // ── Pinned rail (group pills + active tab) ───────────────────────────
@@ -1954,7 +2756,9 @@ function measurePins() {
   const contentLeft = (r) => Math.round(r.left - listRect.left + s);   // scroll-independent (content space)
   const contentRight = (r) => Math.round(r.right - listRect.left + s);
   const groups = [];
-  for (const chip of tabListEl.querySelectorAll('.df-tab-group')) {
+  // The synthetic Ungrouped tray never pins (it's the rightmost utility fold, and getGroup() can't resolve
+  // its id) — exclude it so it doesn't push a phantom proxy entry that skews the rail width math.
+  for (const chip of tabListEl.querySelectorAll('.df-tab-group:not(.df-tab-group--ungrouped)')) {
     const r = chip.getBoundingClientRect();
     const tray = chip.closest('.df-tab-group-tray');
     // contentRight = the right edge of the group's whole tray (chip + all its tabs): used to tell whether
@@ -2003,6 +2807,8 @@ function buildGroupPin(g, revealTo) {
   }
   chip.title = group.name;
   chip.addEventListener('click', () => revealInList(revealTo));   // click a pinned header → jump back to its group
+  // Right-click a PINNED group header → the SAME menu as the unpinned chip (a pinned group must behave identically).
+  chip.addEventListener('contextmenu', (e) => { e.preventDefault(); group.id === UNGROUPED_ID ? openUngroupedMenu(chip) : openGroupMenu(chip, group); });
   return chip;
 }
 
@@ -2010,7 +2816,9 @@ function buildActivePin(a, revealTo) {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return null;
   const el = document.createElement('div');
-  el.className = 'df-tab df-tab--active df-pin-tab' + (tab.groupId ? ' df-tab--grouped' : '');
+  el.className = 'df-tab df-tab--active df-pin-tab'
+    + (tab.dirty ? ' df-tab--dirty' : '')   // mirror the dirty dot so a dirty active tab doesn't shift on pin
+    + (tab.groupId ? ' df-tab--grouped' : '');
   el.style.width = `${a.w}px`;   // match the real (uniform-shrunk) active tab's width — item 3
   // Set the group accent so the active-tab strip is the GROUP colour, matching the real grouped active
   // tab (which inherits it from its tray). A colourless group falls back to --color-primary via the
@@ -2021,12 +2829,29 @@ function buildActivePin(a, revealTo) {
   ti.setAttribute('width', '12'); ti.setAttribute('height', '12'); ti.setAttribute('viewBox', '0 0 16 16'); ti.setAttribute('fill', 'currentColor');
   ti.innerHTML = diagramTypeIconMarkup(tab.diagramType);
   el.appendChild(ti);
+  const dot = document.createElement('span');   // dirty dot — hidden by CSS unless .df-tab--dirty (above)
+  dot.className = 'df-tab__dirty';
+  dot.setAttribute('aria-hidden', 'true');
+  el.appendChild(dot);
   const label = document.createElement('span');
   label.className = 'df-tab__label';
   label.textContent = tab.name;
   el.appendChild(label);
+  // NOTE: the pin proxy DELIBERATELY omits the share glyph (buildShareGlyph). The proxy is always in the DOM, so
+  // a glyph here would render TWICE for a shared active tab (once on the real tab, once on the pin) and double the
+  // count the R7 E2E asserts. The real tab carries the glyph; the pin stays glyph-free on purpose.
+  // Mirror the real active tab's × so the pin doesn't visually "jump" (label reflow) and stays closeable.
+  // stopPropagation keeps the × from also firing the reveal-in-list body click.
+  const close = document.createElement('button');
+  close.className = 'df-tab__close';
+  close.title = 'Close tab';
+  close.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>';
+  close.addEventListener('click', (evt) => { evt.stopPropagation(); closeTab(tab.id); });
+  el.appendChild(close);
   el.title = tab.name;
   el.addEventListener('click', () => revealInList(revealTo));
+  // Right-click the ACTIVE-tab pin proxy → the SAME per-diagram menu as the real tab (Clone / Export / Share / …).
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); openTabGroupMenu(el, tab); });
   return el;
 }
 
@@ -2099,7 +2924,19 @@ function updatePins() {
   leftRail.hidden = leftW === 0;
   leftRail.style.left = `${Math.round(listLeftInBar)}px`;
   rightRail.hidden = !activeRight;
-  if (activeRight) rightRail.style.left = `${Math.round(listLeftInBar + listRect.width - a.w)}px`;
+  if (activeRight) {
+    const railLeft = listLeftInBar + listRect.width - a.w;
+    rightRail.style.left = `${Math.round(railLeft)}px`;
+    // Extend the opaque rail PAST the list's right clip edge so it masks the 1-2px sliver of the clipped real
+    // tab WebKit/Safari paints at that boundary (worse at fractional zoom — the "tab peeking next to the »"
+    // bug). Reach the » arrow's left edge when it's shown (it's opaque + above the rail, so it caps the
+    // extension); else a small fixed overhang into the bar gutter. The proxy stays flex-start at railLeft, so
+    // its own geometry — and the bottom-bar gap under it — are unchanged.
+    const rb = document.getElementById('btn-scroll-tabs-right');
+    let rightEdge = listLeftInBar + listRect.width + 4;
+    if (rb && !rb.hidden) rightEdge = rb.getBoundingClientRect().left - barRect.left;
+    rightRail.style.width = `${Math.max(Math.round(a.w), Math.round(rightEdge - railLeft))}px`;
+  }
 
   // Items 2/3: the LAST pinned GROUP blends into the scrolled tabs (flat right, no gap) when its OWN
   // tabs still extend past the rail; otherwise it caps (rounded right + a slight gap). Re-evaluated every

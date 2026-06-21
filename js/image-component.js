@@ -1,4 +1,4 @@
-import { showError } from './feedback.js?v=1.16.1';
+import { showError } from './feedback.js?v=1.17.0.199';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //
@@ -164,7 +164,7 @@ function showImageConsentModal(callback) {
       </div>
       <div class="df-modal__body" style="padding:16px 20px">
         <p style="margin:0 0 12px;line-height:1.5">
-          Adding image components will <strong>disable URL sharing</strong> for this diagram while images are present.
+          Adding image shapes will <strong>disable URL sharing</strong> for this diagram while images are present.
         </p>
         <p style="margin:0 0 12px;color:var(--text-secondary);line-height:1.5;font-size:var(--font-size-sm)">
           Other download options (Export to JSON, PNG, WEBP) stay available, but file sizes will grow with each image. Remove every image to re-enable URL sharing.

@@ -1,7 +1,7 @@
 {
   "name": "Diagramforce",
   "short_name": "Diagramforce",
-  "description": "Browser-based Salesforce architecture diagram editor.",
+  "description": "Browser-based Salesforce diagram editor - architecture, data models, Data Cloud field mappings, process flows, org charts, Gantt charts, and UML sequence diagrams.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

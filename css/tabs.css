@@ -6,8 +6,16 @@
   background: var(--bg-canvas);
   flex-shrink: 0;
   height: 36px;
+  /* Equal 4px gutters on both sides: the "+ Diagram / + Group" buttons sit near the right edge, so the trash
+     button gets the same 4px on the left for symmetric tab-bar spacing. (A wider gutter would also compress
+     the flex tab strip ~8px, which on WebKit shoves the loose tab in the "Ungrouped" tray under the tray
+     header and makes it un-clickable — tab-groups.spec.js:116 catches it.) */
   padding: 0 4px;
-  gap: 2px;
+  /* 4px between every top-level tab-bar element so the spacing is uniform: trash ↔ « ↔ first group, and
+     last visible tab (cut) / » ↔ + Diagram ↔ + Group. The per-element margins (trash margin-right, the new
+     buttons' margin-left) were removed so this single gap is the only spacing source. The inter-tab gap stays
+     2px via .df-tabs__list. */
+  gap: 4px;
   overflow: visible;
   position: relative;
   isolation: isolate;   /* own stacking context so the tab-bar z-index ladder (slide 1 < active 2 < pill 3 < scroll 4) is self-contained */
@@ -67,7 +75,10 @@
   pointer-events: none;           /* the backing doesn't catch clicks; the proxies opt back in */
 }
 .df-tabs__pinrail[hidden] { display: none; }
-.df-tabs__pinrail--right { justify-content: flex-end; }
+/* The active proxy sits at the rail's LEFT (its natural [listRight − a.w, listRight] slot); updatePins then
+   widens the rail a few px PAST the list's clip edge so its opaque backing masks the 1-2px sliver of the
+   clipped real tab WebKit paints at that boundary (worse at fractional zoom) — see updatePins. */
+.df-tabs__pinrail--right { justify-content: flex-start; }
 .df-tabs__pinrail .df-tab-group,
 .df-tabs__pinrail .df-pin-tab { pointer-events: auto; cursor: pointer; }
 /* A pinned group is a mini-tray — same soft accent bar + spacing as a real (unpinned) tray (item 2). It
@@ -84,6 +95,12 @@
 .df-tab-group-tray--pinned.df-tab-group-tray--blend-right > :last-child {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
+}
+/* …but when that last child is the ACTIVE proxy (a tab, not the pill header), keep its rounded top-right so
+   it reads as the same tab shape as the real active grouped tab (6px top-right / square bottom). The flatten
+   stays for the group CHIP, which is the pill header the blend was designed for. */
+.df-tab-group-tray--pinned.df-tab-group-tray--blend-right > .df-pin-tab {
+  border-top-right-radius: var(--border-radius-sm);
 }
 .df-tab-group-tray--pinned.df-tab-group-tray--cap-right { margin-right: 4px; }
 /* The STANDALONE active-tab proxy (ungrouped, or the right rail) mirrors the active tab and reaches the
@@ -123,10 +140,13 @@
   white-space: nowrap;
   max-width: 180px;
   min-width: 120px;   /* squish floor: ALL tabs shrink to here, then the row scrolls (mobile overrides) */
+  /* The ACTIVE tab shows its share glyph BESIDE the x (not overlapped), so it needs ~18px more room or the label
+     would truncate harder than its neighbours. Widen it only when it actually carries a glyph (:has). */
   transition: background var(--transition-fast), color var(--transition-fast);
   position: relative;
   user-select: none;
 }
+.df-tab--active:has(.df-tab__shared) { max-width: 202px; }
 
 .df-tab:hover {
   background: var(--toolbar-button-hover);
@@ -165,11 +185,11 @@
   opacity: 0.4;
 }
 
-.df-tab--drag-over {
-  box-shadow: inset 2px 0 0 var(--color-primary);
-}
-
 .df-tab__label {
+  flex: 1;   /* fill the tab so the close button pins to the RIGHT edge. sizeTabsUniform() pins every tab to a
+                uniform width (up to 180px); without grow the label sat at its content width and the slack landed
+                AFTER the × as trailing whitespace (intermittent - only when a tab's content was narrower than its
+                pinned width). With grow + min-width:0 + ellipsis the label expands or truncates and × stays right. */
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -255,6 +275,8 @@
   text-overflow: ellipsis;
   max-width: 140px;
 }
+/* "Show Group Labels" off → group pill shows only icon + count (Display menu toggle, default on). */
+.df-hide-group-labels .df-tab-group__name { display: none; }
 /* Right "lead" slot: shows the tab COUNT pill by default and swaps to the ⋯ menu on hover, so the
    slot is never empty (the menu used to be hover-only, leaving a gap). The count pill sits in-flow
    (defining the slot width); the ⋯ overlays it (inset:0) and they cross-fade — no layout shift. */
@@ -288,6 +310,17 @@
 /* The ACTIVE tab keeps its outline + a SOFT top strip that matches the group's bar tone (grouped) or
    a faint neutral (ungrouped) — a tint, not a bright accent line, so the group reads as one tone. */
 .df-tab--active { box-shadow: inset 0 2.5px 0 color-mix(in srgb, var(--group-accent, var(--text-muted)) 30%, transparent); }
+
+/* Synthetic "Ungrouped" tray (auto-wraps every tab not in a named group, once one named group exists).
+   Neutral GRAY accent — the same `--text-muted` an ungrouped active tab already falls back to — so it reads
+   as a quiet utility fold, not another coloured group. It has its own slim ⋯ menu (Collapse / Export / Share),
+   so the count pill cross-fades to the ⋯ on hover exactly like a real group (no special count override). */
+.df-tab-group--ungrouped,
+.df-tab-group-tray--ungrouped { --group-accent: var(--text-muted); }
+/* Ungrouped-tray tabs carry NO `df-tab--grouped` marker (that's reserved for named groups), so give them
+   the same let-the-bar-show-through treatment via the tray descendant instead — gray hover from --group-accent. */
+.df-tab-group-tray--ungrouped .df-tab:not(.df-tab--active) { background: transparent; }
+.df-tab-group-tray--ungrouped .df-tab:not(.df-tab--active):hover { background: color-mix(in srgb, var(--group-accent) 14%, transparent); }
 
 /* After a drag-drop the cursor sits over the freshly-rendered tab, and Chromium leaves a STUCK
    :hover (clears only on the next pointer interaction) — so a tab dropped into a group wore the
@@ -340,6 +373,13 @@
   z-index: 6;
   display: none;
 }
+
+/* The mobile-only single "+" (Diagram / Group picker) is hidden on desktop, where the two
+   labelled buttons are shown instead. The mobile @media block flips this. The compound
+   `.df-tabs__new.df-tabs__new--mobile` selector out-specifies the base `.df-tabs__new { display: flex }`
+   (which is declared later in this file) so the button stays hidden on desktop. */
+.df-tabs__new.df-tabs__new--mobile { display: none; }
+.df-tabs__new--mobile svg { margin: 0; }
 
 /* "+ Group" button is the secondary action next to the primary "+ New" — muted, not brand-blue. */
 .df-tabs__new--group {
@@ -426,6 +466,24 @@
 .df-tab-pop--menu { padding: 4px 0; min-width: 180px; }
 .df-tab-pop--menu .df-tab-pop__item { border-radius: 0; }
 .df-tab-pop__sep { height: 1px; margin: 4px 6px; background: var(--border-color); }
+
+/* Export-menu format glyph (item 11): a rounded rect with the format token ({ } / CSV / PNG / WEBP / SVG / GIF).
+   Filled (amber) for an opaque output; a wire (transparent-fill) rect for the "(transparent)" variants - so the
+   glyph mirrors what you'll get. Darker amber in light mode for text contrast (like the amber Export buttons). */
+.df-tab-pop__item--fmt { display: flex; align-items: center; gap: 8px; }
+.df-fmt-glyph {
+  --_a: #D4911F;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 16px; padding: 0 4px;
+  border: 1px solid var(--_a); border-radius: 4px;
+  background: var(--_a); color: #fff;
+  font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0.3px; flex-shrink: 0;
+}
+[data-theme="dark"] .df-fmt-glyph { --_a: var(--brand-amber); color: #1a1a1a; }
+.df-fmt-glyph--wire { background: transparent; color: var(--_a); }
+/* The dark filled-glyph rule above (#1a1a1a text) out-specifies the wire rule, which made the transparent
+   variants' text dark-on-transparent → invisible on the dark menu. Restore the amber wire text in dark. */
+[data-theme="dark"] .df-fmt-glyph--wire { color: var(--_a); }
 .df-tab-pop__header {
   padding: 4px 10px 2px;
   font-size: var(--font-size-xs, 11px);
@@ -529,6 +587,44 @@
   outline-offset: -2px;
 }
 
+/* Idea 1: the share glyph + close button share ONE right-edge slot. BASE (touch / narrow / no-hover): they sit side
+   by side, exactly as before - the close is always shown on touch, so the share cue must stay visible beside it. */
+.df-tab__end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* WIDE + hover-capable: overlap them into one close-sized slot. The amber glyph sits centred over the (hidden) close
+   at rest; reaching for the tab (hover), the active tab, or keyboard focus fades the glyph out and the close in - so
+   the glyph's width is reclaimed for the tab name, and a non-active shared tab still shows its cue. The glyph is
+   decorative (pointer-events:none) so the close underneath always takes the click. (min-width:769px so a narrow
+   desktop window keeps the side-by-side layout that the mobile always-on close already assumes.) */
+@media (hover: hover) and (min-width: 769px) {
+  /* NON-active tabs overlap the glyph + close into one slot and swap on hover/focus. The ACTIVE tab is excluded:
+     its close is always shown, so overlapping would permanently hide the share cue - instead it keeps the base
+     side-by-side layout (glyph beside the x) and just widens a touch to fit both. */
+  .df-tab:not(.df-tab--active) .df-tab__end {
+    position: relative;
+    gap: 0;
+    width: 16px;
+    height: 16px;
+    justify-content: center;
+  }
+  .df-tab:not(.df-tab--active) .df-tab__end .df-tab__shared {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+  }
+  .df-tab:not(.df-tab--active):hover .df-tab__end .df-tab__shared,
+  .df-tab:not(.df-tab--active) .df-tab__end:focus-within .df-tab__shared {
+    opacity: 0;
+  }
+}
+
 /* Close-multiple-tabs button (left end of tab bar) */
 .df-tabs__close-multi {
   display: flex;
@@ -536,8 +632,9 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-right: 2px;   /* tight gap to the first tab/group (the inset drop-ring needs no clearance) */
-  border: 1px solid transparent;
+  /* Right gap comes from the bar's uniform 4px gap (no per-element margin). */
+  /* Red dashed wire, mirroring the dashed "+ Diagram" new-tab button (which is blue dashed). */
+  border: 1px dashed var(--brand-red);
   border-radius: var(--border-radius-sm);
   background: transparent;
   color: var(--brand-red);
@@ -555,17 +652,12 @@
 
 /* ── Close-multiple-tabs modal ──────────────────────────── */
 .df-close-tabs-modal .df-modal__dialog {
-  width: 460px;
+  width: 520px;   /* match the Save Manager / Browser Storage width */
   max-width: 90vw;
 }
 
-.df-close-tabs__list {
-  max-height: 360px;
-  overflow-y: auto;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--bg-canvas);
-}
+/* The Close & Delete list now uses the shared .df-split-table component (two collapsible tables + a floating
+   controls bar) - the old single .df-close-tabs__list container + .df-close-tabs__subhead dividers were removed. */
 
 .df-close-tabs__row {
   display: flex;
@@ -587,19 +679,6 @@
   background: var(--toolbar-button-hover);
 }
 
-.df-close-tabs__row--header {
-  background: var(--bg-surface);
-  font-weight: 600;
-  color: var(--text-secondary);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.df-close-tabs__row--header:hover {
-  background: var(--bg-surface);
-}
-
 .df-close-tabs__checkbox {
   flex-shrink: 0;
   width: 16px;
@@ -608,36 +687,8 @@
   cursor: pointer;
 }
 
-.df-close-tabs__type-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-
-/* Name + "Modified …" stacked, so the row mirrors the Load/Export anatomy. */
-.df-close-tabs__info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.df-close-tabs__name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Inside the info column the name must not flex-grow vertically. */
-.df-close-tabs__info .df-close-tabs__name {
-  flex: 0 0 auto;
-}
-.df-close-tabs__meta {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
+/* Data rows use the shared two-line storage row (.df-srow), which now centres the checkbox + action button
+   vertically (see modals.css). */
 
 .df-close-tabs__dirty {
   width: 6px;
@@ -646,15 +697,6 @@
   background: var(--color-primary);
   flex-shrink: 0;
   margin-right: 4px;
-}
-
-.df-close-tabs__badge {
-  font-size: 11px;
-  color: var(--text-muted);
-  padding: 2px 6px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  flex-shrink: 0;
 }
 
 /* Group badge for the Save / Close-tabs rows — a neutral pill matching the type badge, with the
@@ -668,7 +710,7 @@
   color: var(--text-secondary);
   padding: 2px 8px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 999px;   /* D5: explicit pill, matching .df-modal__row-badge / .df-chip (10px already pilled at this height) */
   white-space: nowrap;
   flex-shrink: 0;
   max-width: 120px;
@@ -684,19 +726,21 @@
 }
 
 .df-close-tabs__btn {
-  padding: 6px 14px;
+  padding: 5px var(--spacing-sm);   /* D2: match the canonical .df-modal__btn size (was 6px 14px) */
   border-radius: var(--border-radius-sm);
   /* Default (secondary): neutral grey fill — Cancel. */
   border: 1px solid transparent;
   background: var(--modal-btn-neutral-bg);
   color: var(--modal-btn-neutral-fg);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);   /* D2: 11px, matching .df-modal__btn (was --font-size-sm / 12px) */
   font-family: var(--font-family);
+  font-weight: 500;   /* match the sibling modal buttons (.df-close-confirm__btn / .df-modal__btn) */
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-/* Secondary hover — scoped so it never recolours the primary / save variants. */
-.df-close-tabs__btn:not(.df-close-tabs__btn--primary):not(.df-close-tabs__btn--save):hover:not(:disabled) {
+/* Secondary hover — scoped so it never recolours the filled variants. */
+.df-close-tabs__btn:not(.df-close-tabs__btn--primary):not(.df-close-tabs__btn--save):not(.df-close-tabs__btn--accent):not(.df-close-tabs__btn--danger):hover:not(:disabled) {
   background: var(--modal-btn-neutral-bg-hover);
 }
 
@@ -728,13 +772,31 @@
   filter: brightness(1.1);
 }
 
+/* "Close Selected" (--accent, right) is the PRIMARY destructive action — brand-red FILL. "Close and Delete
+   Selected" (--danger, left) is the SECONDARY — a brand-red WIRE (transparent fill) — so the two read as
+   primary vs secondary rather than two identical filled reds. */
+.df-close-tabs__btn--accent {
+  background: var(--brand-red);
+  color: #FFFFFF;
+  border-color: var(--brand-red);
+}
+.df-close-tabs__btn--accent:hover:not(:disabled) { filter: brightness(1.08); }
+.df-close-tabs__btn--danger {
+  background: transparent;
+  color: var(--brand-red);
+  border-color: var(--brand-red);
+}
+.df-close-tabs__btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-red) 12%, transparent); }
+
 /* New tab button */
 .df-tabs__new {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  margin-left: 8px;
+  /* Left gap comes from the bar's uniform 4px gap (no per-element margin), so + Diagram sits the same 4px
+     from the last visible tab / » that the trash sits from « on the other end. (Mobile re-adds margin-left
+     for the single "+" button below.) */
   height: 28px;
   border: 1px dashed var(--color-primary);
   border-radius: var(--border-radius-sm);
@@ -789,9 +851,28 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   text-align: center;
 }
+
+/* Create / Open — a centred segmented toggle: a grey track with the active pill in the brand colour. */
+.df-new-modal__tabs {
+  display: flex; width: fit-content; margin: 0 auto 22px; gap: 2px; padding: 3px;
+  background: rgba(127, 127, 127, 0.14); border-radius: 999px;
+}
+.df-new-modal__tab {
+  padding: 7px 24px; border: 0; border-radius: 999px; cursor: pointer;
+  font-family: var(--font-family); font-size: var(--font-size-sm); font-weight: 600;
+  color: var(--text-secondary); background: transparent;
+}
+.df-new-modal__tab.is-active { background: var(--color-primary); color: #fff; }
+/* Stack both panels in ONE grid cell so the container always reserves the TALLER (Create) panel's
+   height — switching tabs no longer jumps the modal. The inactive panel stays laid out but hidden. */
+.df-new-modal__panels { display: grid; }
+.df-new-modal__panel { grid-area: 1 / 1; }
+.df-new-modal__panel[hidden] { display: block; visibility: hidden; }   /* override the UA display:none so it keeps reserving height */
+/* The Open panel: 3 cards per row (Browser / Drive / File), then 2 (Paste JSON / Paste Mermaid). */
+.df-new-modal__grid--open .df-new-modal__card { flex: 0 1 248px; }
 
 .df-new-modal__grid {
   /* Flex-wrap + centre so the last (short) row is centred under the full rows
@@ -916,6 +997,9 @@
   color: var(--text-primary);
 }
 
+/* "From Paste" is the last card in the grid — reuses .df-new-modal__card style (same title colour
+   and primary-tinted icon as the diagram-type cards). */
+
 /* ── Mobile tabs ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .df-tabs {
@@ -928,8 +1012,14 @@
     flex: 1;
     min-width: 0;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
     scroll-snap-type: x proximity;
   }
+
+  /* The « / » scroll chevrons are a desktop affordance (no touch-scroll there). On mobile they
+     overlay the active tab and don't respond to taps — drop them and let the tab strip scroll
+     natively (overflow-x: auto above handles touch/momentum). */
+  .df-tabs__scroll { display: none !important; }
 
   .df-tab {
     padding: 6px 12px;
@@ -948,11 +1038,17 @@
     opacity: 1; /* always visible on touch */
   }
 
-  /* New tab button — always visible, pinned right */
-  .df-tabs__new {
+  /* Collapse the two labelled "+ Diagram" / "+ Group" buttons into one "+" that opens a picker —
+     the labelled pair would eat the whole narrow tab bar. */
+  .df-tabs__new#btn-new-tab,
+  .df-tabs__new--group { display: none; }
+  .df-tabs__new.df-tabs__new--mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
     height: 32px;
-    padding: 4px 10px;
-    font-size: var(--font-size-sm);
+    padding: 0;
     flex-shrink: 0;
     margin-left: 4px;
   }
@@ -965,3 +1061,37 @@
   flex-shrink: 0;
   opacity: 0.6;
 }
+
+/* R7 — collaboration glyph: a tab whose edits reach other people (shared-out copies, or an
+   editable shared source that writes back). Amber to read as "heads up, this is shared", and
+   always visible (not hover-gated like the close button) since it carries a real warning. */
+.df-tab__shared {
+  /* The three directional share glyphs (buildShareGlyph: --out #share, --in #share_link, --both #socialshare) are
+     all amber, filled SLDS symbols, normalized to the tab's diagram-type icon (.df-tab__type-icon, 12px box) so the
+     tab reads at one consistent glyph height. The ICON conveys the direction (out / in / both), not the colour. */
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--brand-amber);
+  fill: currentColor;
+}
+.df-tab__shared use { fill: currentColor; }
+/* --both = #socialshare (Collab + Shared-Drive files). It's the DENSEST symbol (three filled nodes), so at the shared
+   12px box it reads visually heavier than the lighter #share_mobile / #share_link - drop it a touch so all three
+   glyphs carry the same visual weight next to the diagram-type icon. */
+.df-tab__shared--both { width: 11px; height: 11px; }
+
+/* A collapsed group's lingering active tab, condensed to icon-only: the label + close fold away so the group reads
+   as collapsed while the active tab stays clickable. The name is in the title tooltip; switching tabs removes it
+   entirely (it is only rendered while active). Width is fixed (sizeTabsUniform treats it as overhead). */
+.df-tab--lingering {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  padding-left: 0;
+  padding-right: 0;
+  gap: 0;
+  justify-content: center;
+}
+.df-tab--lingering .df-tab__label,
+.df-tab--lingering .df-tab__end { display: none; }   /* hide the whole right slot (share glyph + close) on the icon-only lingering chip */

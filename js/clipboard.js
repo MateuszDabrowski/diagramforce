@@ -1,6 +1,6 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.16.1';
+import * as history from './history.js?v=1.17.0.199';
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the
@@ -17,6 +17,9 @@ export function init(_graph, _paper, _selection) {
   paper = _paper;
   selection = _selection;
 }
+
+/** True when there's something to paste — drives the canvas right-click "Paste" enabled state. */
+export function hasClipboard() { return clipboardCells.length > 0; }
 
 export function copy() {
   const allCells = selection.getSelectedElements();

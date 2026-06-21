@@ -2,6 +2,12 @@
   --color-primary: var(--brand-red);
   --color-secondary: var(--brand-blue);
 
+  /* Cloud-sync status — lighter stops for contrast on the dark toolbar (see variables.css). */
+  --sync-off: #8B8F98;
+  --sync-ok: var(--brand-amber);      /* "working" — orange in dark mode */
+  --sync-pending: var(--brand-amber);
+  --sync-error: #F09595;
+
   --bg-app: #212121;
   --bg-surface: #18191A;
   --bg-surface-raised: #242526;
@@ -31,6 +37,10 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 5px 40px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, 0.4), 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+  /* Drop-shadow for the button-merge panels (managers + Display/Drive). Offset (14) ≥ its upward reach
+     (blur 24 − spread 10) so it casts DOWN + sideways but never blurs UP onto the merged button above it —
+     that upward bleed was darkening the button's bottom edge (~rgb 21,22,23) vs the panel. */
+  --shadow-dropdown: 0 14px 24px -10px rgba(0, 0, 0, 0.55);
 
   --node-bg: #242526;
   --node-border: #3A3B3C;

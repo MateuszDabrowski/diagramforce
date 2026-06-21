@@ -1,17 +1,19 @@
 // JSON pipeline — untrusted-graph sanitisation + the load/import path for every
 // Diagramforce file format (single diagram, export bundle, templates), driven by
-// the file picker (importJSON) and the paste-JSON modal (pasteJSON). Extracted
+// the file picker (importJSON) and the unified Load-from-Paste modal (loadJSONText
+// + describePastedJSON). Extracted
 // from persistence.js (Phase 3, Slice 2). sanitizeGraphJSON is PURE (consts only)
 // so unit tests reach it through the facade with no init(). Everything else is
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.16.1';
-import { normalizeDateSuffix } from '../util.js?v=1.16.1';
-import { escHtml } from '../util.js?v=1.16.1';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.16.1';
-import { pctx } from './context.js?v=1.16.1';
-import { slimForShare } from '../share-codec.js?v=1.16.1';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.17.0.199';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.17.0.199';
+import { normalizeDateSuffix } from '../util.js?v=1.17.0.199';
+import { escHtml } from '../util.js?v=1.17.0.199';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.17.0.199';
+import { pctx } from './context.js?v=1.17.0.199';
+import { slimForShare } from '../share-codec.js?v=1.17.0.199';
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
 const MAX_CELL_COUNT = 2000;
@@ -151,7 +153,7 @@ export function importJSON() {
     for (const file of files) {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const fallbackName = file.name.replace(/\.json$/i, '') || 'Imported';
+        const fallbackName = file.name.replace(KNOWN_EXT_RE, '') || 'Imported';
         await loadJSONText(e.target.result, fallbackName);
       };
       reader.readAsText(file);
@@ -240,10 +242,10 @@ function prepareImportedDiagrams(rawDiagrams) {
  *     opens so the user sees them); templates merged into the library.
  *   - `diagramforce-templates`: merged into the template library.
  *   - single diagram (`{graph,…}`): opened as a new tab (the original behaviour).
- * Used by `importJSON` (file picker) and `pasteJSON` (textarea modal). Returns
+ * Used by `importJSON` (file picker) and the unified Load-from-Paste modal. Returns
  * true on success.
  */
-async function loadJSONText(jsonText, fallbackName) {
+export async function loadJSONText(jsonText, fallbackName) {
   const { templatesBackupApi, showLoadModal: showLoadModalCallback, onImport: onImportCallback, normalizeDiagramType, graph, canvas: canvasModule } = pctx;
   let data;
   try { data = JSON.parse(jsonText); }
@@ -282,8 +284,13 @@ async function loadJSONText(jsonText, fallbackName) {
     if (diagrams.length === 0) { showToast('No diagrams found in that group file.', 'warning'); return true; }
     const groupMetas = data.groups.map(g => ({ name: String(g.name || 'Group').slice(0, 60), icon: g.icon || null, color: g.color || null }));
     onImportGroup(groupMetas, diagrams);
+    // A full backup can be a kind:'group' bundle that ALSO carries templates - import them too so a restore
+    // doesn't silently drop the user's template library (item 4).
+    const tc = (Array.isArray(data.templates) && data.templates.length && templatesBackupApi?.importMerge)
+      ? (templatesBackupApi.importMerge(data.templates) || 0) : 0;
     const gLabel = groupMetas.length === 1 ? `group "${groupMetas[0].name}"` : `${groupMetas.length} groups`;
-    showToast(`Imported ${gLabel} — ${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'} ✓`, 'success');
+    const tLabel = tc ? ` + ${tc} template${tc === 1 ? '' : 's'}` : '';
+    showToast(`Imported ${gLabel} - ${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'}${tLabel} ✓`, 'success');
     return true;
   }
 
@@ -294,6 +301,22 @@ async function loadJSONText(jsonText, fallbackName) {
   if (isBundle) {
     const rawDiagrams = Array.isArray(data.diagrams) ? data.diagrams : [];
     const rawTemplates = Array.isArray(data.templates) ? data.templates : [];
+    // A bundle that carries exactly ONE diagram (and no templates) opens DIRECTLY as a tab - same as a
+    // single-diagram export - instead of landing in browser saves and reopening the Load manager (item 2). A
+    // multi-diagram backup still lands in saves + shows the summary (you don't want 10 tabs forced open).
+    if (rawDiagrams.length === 1 && rawTemplates.length === 0 && onImportCallback) {
+      const d = rawDiagrams[0];
+      if (Array.isArray(d?.graph?.cells)) {
+        sanitizeGraphJSON(d.graph);
+        const nm = String(d.name || d.title || fallbackName || 'Imported').slice(0, 80) || 'Imported';
+        // #7: a 1-diagram bundle's per-diagram `group` is a bare NAME tag (bundle meta lives in data.groups, handled
+        // by the onImportGroup path above) - wrap it so recreate-or-rejoin works by name.
+        const grp = typeof d.group === 'string' ? { name: d.group } : (d.group || null);
+        onImportCallback(nm, normalizeDiagramType(d.diagramType), d.graph, d.viewport || null, d.mappingMode || false, null, grp);
+        showToast(`Loaded "${nm}" ✓`, 'success');
+        return true;
+      }
+    }
     const diagrams = prepareImportedDiagrams(rawDiagrams);   // dedup + rename + sanitise
 
     let saved = 0;
@@ -361,7 +384,8 @@ async function loadJSONText(jsonText, fallbackName) {
       droppedLinks = Math.max(0, before - countLinks(data.graph));
     }
     if (onImportCallback && data?.graph) {
-      onImportCallback(name, normalizeDiagramType(data.diagramType), data.graph, data.viewport, data.mappingMode);
+      // #7: a single-diagram file can carry its tab-group meta ({name,icon,color}) so import recreate-or-rejoins it.
+      onImportCallback(name, normalizeDiagramType(data.diagramType), data.graph, data.viewport, data.mappingMode, null, data.group || null);
     } else if (data?.graph) {
       canvasModule.setLoadingJSON(true);
       try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }
@@ -371,7 +395,7 @@ async function loadJSONText(jsonText, fallbackName) {
     }
     if (droppedLinks > 0) {
       showToast(
-        `Loaded "${name}" — skipped ${droppedLinks} connector${droppedLinks === 1 ? '' : 's'} `
+        `Loaded "${name}" - skipped ${droppedLinks} connector${droppedLinks === 1 ? '' : 's'} `
         + `pointing to a shape that isn't in the file.`,
         'warning',
       );
@@ -389,77 +413,34 @@ async function loadJSONText(jsonText, fallbackName) {
  * Paste-from-JSON modal: shows a textarea, validates the input is parseable
  * JSON with a `graph` field, and loads it via the same pipeline as `importJSON`.
  */
-export function pasteJSON() {
-  const { normalizeDiagramType, appVersion: APP_VERSION } = pctx;
-  document.querySelector('.df-paste-json-modal')?.remove();
-
-  const { dialog, body, footer, close } = buildModal({
-    title: 'Paste JSON',
-    className: 'df-paste-json-modal',
-    width: '620px',
-    bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
-    bodyHtml: `
-      <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
-        Paste a Diagramforce JSON:
-      </p>
-      <textarea class="df-paste-json-modal__input" spellcheck="false" rows="14"
-        placeholder='{ "appVersion": "${APP_VERSION}", "diagramType": "architecture", "graph": { "cells": [...] } }'
-        style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
-      <p class="df-paste-json-modal__status" style="margin:var(--spacing-sm) 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5;min-height:1.4em">
-        Paste a diagram exported via <strong>Save → Export to JSON</strong> or generated using <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" style="color:var(--color-primary)">Diagram JSON Spec for LLMs</a>.
-      </p>`,
-    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-paste-json-modal__load" style="margin-left:auto" disabled>Load</button>',
-  });
-  dialog.style.maxWidth = '92vw'; // preserve prior inline override (CSS default is calc(100vw - 32px))
-
-  const input = body.querySelector('.df-paste-json-modal__input');
-  const status = body.querySelector('.df-paste-json-modal__status');
-  const loadBtn = footer.querySelector('.df-paste-json-modal__load');
-  const errColor = 'var(--color-error, #ba0517)';
-  const okColor = 'var(--text-secondary)';
-
-  const validate = () => {
-    const text = input.value.trim();
-    if (!text) {
-      status.style.color = okColor;
-      status.innerHTML = 'Paste a diagram exported via <strong>Save → Export to JSON</strong> or generated using <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" style="color:var(--color-primary)">Diagram JSON Spec for LLMs</a>.';
-      loadBtn.disabled = true;
-      return;
-    }
-    try {
-      const data = JSON.parse(text);
-      // Accept any format loadJSONText handles: single diagram, export bundle,
-      // or templates file.
-      const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams' || Array.isArray(data?.diagrams);
-      const isTemplates = data?.schema === 'diagramforce-templates' || (Array.isArray(data?.templates) && !data?.graph && !Array.isArray(data?.diagrams));
-      let detected;
-      if (data?.graph?.cells) {
-        detected = `<strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(normalizeDiagramType(data.diagramType))}, ${data.graph.cells.length} cells)`;
-      } else if (isBundle) {
-        const dN = Array.isArray(data.diagrams) ? data.diagrams.length : 0;
-        const tN = Array.isArray(data.templates) ? data.templates.length : 0;
-        detected = `Bundle — ${dN} diagram${dN === 1 ? '' : 's'}${tN ? `, ${tN} template${tN === 1 ? '' : 's'}` : ''}`;
-      } else if (isTemplates) {
-        const tN = Array.isArray(data.templates) ? data.templates.length : 0;
-        detected = `Templates — ${tN} template${tN === 1 ? '' : 's'}`;
-      } else {
-        throw new Error('Unrecognised format (no graph, diagrams, or templates).');
-      }
-      status.style.color = okColor;
-      status.innerHTML = `Detected: ${detected}`;
-      loadBtn.disabled = false;
-    } catch (err) {
-      status.style.color = errColor;
-      status.textContent = `Invalid JSON: ${err.message}`;
-      loadBtn.disabled = true;
-    }
-  };
-  input.addEventListener('input', validate);
-
-  loadBtn.addEventListener('click', async () => {
-    const ok = await loadJSONText(input.value, 'Pasted');
-    if (ok) close();
-  });
-
-  setTimeout(() => input.focus(), 50);
+/**
+ * Classify pasted text as Diagramforce JSON (single diagram / export bundle / templates file) for the unified
+ * Load-from-Paste modal's live feedback. Returns { ok: true, label } (HTML, safe to inject) or { ok: false,
+ * error } (plain text). The same shapes `loadJSONText` accepts. Mermaid is detected separately (mermaid-import).
+ */
+export function describePastedJSON(text) {
+  const { normalizeDiagramType } = pctx;
+  const t = (text || '').trim();
+  if (!t) return { ok: false, error: 'Empty input.' };
+  let data;
+  try { data = JSON.parse(t); }
+  catch (err) { return { ok: false, error: `Invalid JSON: ${err.message}` }; }
+  const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams' || Array.isArray(data?.diagrams);
+  const isTemplates = data?.schema === 'diagramforce-templates' || (Array.isArray(data?.templates) && !data?.graph && !Array.isArray(data?.diagrams));
+  if (data?.graph?.cells) {
+    const norm = normalizeDiagramType(data.diagramType);
+    // `rawType` = the diagramType string as it appears in the pasted JSON (may be an alias, e.g. "organization");
+    // `diagramType` = the normalised internal type. The Paste pane shows "rawType → friendly label".
+    return { ok: true, diagramType: norm, rawType: String(data.diagramType || norm), label: `<strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(norm)}, ${data.graph.cells.length} cells)` };
+  }
+  if (isBundle) {
+    const dN = Array.isArray(data.diagrams) ? data.diagrams.length : 0;
+    const tN = Array.isArray(data.templates) ? data.templates.length : 0;
+    return { ok: true, label: `Bundle - ${dN} diagram${dN === 1 ? '' : 's'}${tN ? `, ${tN} template${tN === 1 ? '' : 's'}` : ''}` };
+  }
+  if (isTemplates) {
+    const tN = Array.isArray(data.templates) ? data.templates.length : 0;
+    return { ok: true, label: `Templates - ${tN} template${tN === 1 ? '' : 's'}` };
+  }
+  return { ok: false, error: 'Unrecognised format (no graph, diagrams, or templates).' };
 }

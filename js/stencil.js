@@ -1,14 +1,14 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.16.1';
-import { getAllIcons, getCategories } from './icons.js?v=1.16.1';
-import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.16.1';
-import { startImageAddFlow } from './image-component.js?v=1.16.1';
-import * as history from './history.js?v=1.16.1';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.16.1';
-import { confirmModal } from './feedback.js?v=1.16.1';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.16.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.17.0.199';
+import { getAllIcons, getCategories } from './icons.js?v=1.17.0.199';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.17.0.199';
+import { startImageAddFlow } from './image-component.js?v=1.17.0.199';
+import * as history from './history.js?v=1.17.0.199';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.17.0.199';
+import { confirmModal } from './feedback.js?v=1.17.0.199';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.17.0.199'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -98,27 +98,29 @@ export function setDiagramType(type) {
 function renderCategories() {
   bodyEl.innerHTML = '';
 
-  // Custom templates — ONE count-aware accordion per diagram type that has saved
-  // templates, pinned ABOVE everything (Generic Shapes etc.). The active workspace's
-  // group sorts first and stays expanded; every other type's group is auto-collapsed.
-  // Types with zero templates render nothing (no dead headers / empty dividers).
+  // The stencil is grouped into THREE bands (v1.17.0): "Custom {Type} Shapes" (the user's own saved shapes +
+  // templates for THIS type), "{Type} Shapes" (this type's built-in shapes), and "Other Shapes" (everything for
+  // the OTHER types). "My Shapes" = single shapes saved via Save Shape (kind:'shape'); "My Templates" = multi-
+  // shape groups (kind unset). Both live in the template store, so they share thumbnail / drop / sync / delete.
   const allTemplates = getTemplates();
-  if (allTemplates.length > 0) {
-    // Active type first, then the remaining known types in DIAGRAM_TYPES order, then
-    // any legacy/imported type not in the registry (appended last).
-    const knownTypes = Object.keys(DIAGRAM_TYPES);
-    const knownSet = new Set(knownTypes);
-    const orderedKnown = [currentDiagramType, ...knownTypes.filter(t => t !== currentDiagramType)];
-    const unknownTypes = [...new Set(allTemplates.map(t => t.diagramType).filter(t => !knownSet.has(t)))];
-    for (const type of [...orderedKnown, ...unknownTypes]) {
-      const group = allTemplates.filter(t => t.diagramType === type);
-      if (group.length === 0) continue;                         // hide empty types
-      const short = DIAGRAM_TYPES[type]?.short || type || 'Untyped';
-      const collapsed = type !== currentDiagramType;            // expand only the active type's group
-      bodyEl.appendChild(buildTemplatesSection(`My ${short} Templates`, `my-templates-${type || 'untyped'}`, group, collapsed));
-    }
+  const isShape = (t) => t.kind === 'shape';
+  const myTemplates = allTemplates.filter((t) => !isShape(t));
+  const myShapes = allTemplates.filter(isShape);
+  const knownTypes = Object.keys(DIAGRAM_TYPES);
+  const shortOf = (t) => DIAGRAM_TYPES[t]?.short || t || 'Other';
+  const curShort = shortOf(currentDiagramType);
+
+  // ── Group 1: Custom {Type} Shapes (current type's My Shapes + My Templates) ──
+  const curShapes = myShapes.filter((t) => t.diagramType === currentDiagramType);
+  const curTemplates = myTemplates.filter((t) => t.diagramType === currentDiagramType);
+  if (curShapes.length || curTemplates.length) {
+    bodyEl.appendChild(buildGroupHeader(`Custom ${curShort} Shapes`));
+    if (curShapes.length) bodyEl.appendChild(buildTemplatesSection('My Shapes', `my-shapes-${currentDiagramType}`, curShapes));
+    if (curTemplates.length) bodyEl.appendChild(buildTemplatesSection('My Templates', `my-templates-${currentDiagramType}`, curTemplates));
   }
 
+  // ── Group 2: {Type} Shapes (the current type's built-in shapes + SLDS icons) ──
+  bodyEl.appendChild(buildGroupHeader(`${curShort} Shapes`));
   const rawCategories = currentDiagramType === 'process' ? BPMN_CATEGORIES
                       : currentDiagramType === 'datamapping' ? DATAMAPPING_CATEGORIES
                       : currentDiagramType === 'datamodel' ? DATAMODEL_CATEGORIES
@@ -162,6 +164,33 @@ function renderCategories() {
       bodyEl.appendChild(buildIconSection(cat, icons, displayLabel));
     }
   }
+
+  // ── Group 3: Other Shapes — every OTHER type's My Shapes + My Templates + built-in shapes, grouped by type,
+  // all collapsed, so a shape can be reused across diagram types. ──
+  const unknownTypes = [...new Set(allTemplates.map((t) => t.diagramType).filter((t) => t && !knownTypes.includes(t)))];
+  let otherShown = false;
+  for (const type of [...knownTypes.filter((t) => t !== currentDiagramType), ...unknownTypes]) {
+    const tShapes = myShapes.filter((t) => t.diagramType === type);
+    const tTemplates = myTemplates.filter((t) => t.diagramType === type);
+    const cross = knownTypes.includes(type) ? buildCrossTypeSection(type) : null;
+    if (!tShapes.length && !tTemplates.length && !cross) continue;
+    if (!otherShown) { bodyEl.appendChild(buildGroupHeader('Other Shapes')); otherShown = true; }
+    const s = shortOf(type);
+    if (tShapes.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Shapes`, `my-shapes-${type || 'untyped'}`, tShapes, true));
+    if (tTemplates.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true));
+    if (cross) bodyEl.appendChild(cross);
+  }
+}
+
+// A non-collapsible band divider that introduces a run of related sections (Custom {Type} Shapes / {Type}
+// Shapes / Other Shapes). Distinct from a category header (no chevron / count - it's a grouping label).
+function buildGroupHeader(label) {
+  const h = document.createElement('div');
+  h.className = 'df-stencil__group-header';
+  const span = document.createElement('span');
+  span.textContent = label;
+  h.appendChild(span);
+  return h;
 }
 
 function buildComponentSection(category) {
@@ -181,6 +210,37 @@ function buildComponentSection(category) {
     items.appendChild(buildComponentItem(template));
   }
 
+  section.appendChild(header);
+  section.appendChild(items);
+  return section;
+}
+
+// ── Feature 1.2: cross-type Shape sections ──
+// Below the current diagram type's sections, surface the OTHER types' type-SPECIFIC shapes in one collapsed
+// section each ("Process Shapes", "Data Model Shapes", …) so a shape can be reused across types. The generic
+// shapes (Note/Container/…) are omitted - they already appear in the current type's own sections.
+function categoriesForType(type) {
+  return type === 'process' ? BPMN_CATEGORIES
+       : type === 'datamapping' ? DATAMAPPING_CATEGORIES
+       : type === 'datamodel' ? DATAMODEL_CATEGORIES
+       : type === 'gantt' ? GANTT_CATEGORIES
+       : type === 'org' ? ORG_CATEGORIES
+       : type === 'sequence' ? SEQUENCE_CATEGORIES
+       : COMPONENT_CATEGORIES;
+}
+function buildCrossTypeSection(type) {
+  const isGeneric = (c) => /generic/i.test(c.id || '') || c.label === 'Generic Shapes';
+  const comps = categoriesForType(type).filter((c) => !isGeneric(c)).flatMap((c) => c.components || []);
+  if (comps.length === 0) return null;
+  const short = DIAGRAM_TYPES[type]?.short || type;
+  const section = document.createElement('div');
+  section.className = 'df-stencil__category df-stencil__category--collapsed df-stencil__category--cross';
+  section.dataset.categoryId = `cross-${type}`;
+  const header = buildCategoryHeader(`${short} Shapes`, comps.length);
+  header.addEventListener('click', () => section.classList.toggle('df-stencil__category--collapsed'));
+  const items = document.createElement('div');
+  items.className = 'df-stencil__items';
+  for (const comp of comps) items.appendChild(buildComponentItem(comp));
   section.appendChild(header);
   section.appendChild(items);
   return section;
@@ -298,6 +358,9 @@ function buildIconSection(cat, icons, displayLabel) {
       evt.dataTransfer.effectAllowed = 'copy';
       setDragPreview(evt, iconTpl);
     });
+    // Double-click / double-tap adds to centre — the only add path on touch (HTML5 drag never fires from
+    // touch). Mirrors buildComponentItem so SLDS sprites are reachable on a tablet, not just by mouse drag.
+    item.addEventListener('dblclick', () => { addToCenter(iconTpl); });
 
     grid.appendChild(item);
   }
@@ -835,7 +898,11 @@ function setupTouchDrag() {
   };
 
   panelEl.addEventListener('touchstart', (e) => {
-    if (window.innerWidth > 768) return;
+    // Enable touch-drag-to-canvas on any touch device, including a tablet in desktop layout (>768px) where
+    // HTML5 drag-and-drop never fires. Keep it off for a wide screen with a FINE pointer (desktop + mouse),
+    // which uses the native HTML5 drag path instead.
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (window.innerWidth > 768 && !coarse) return;
     const item = e.target.closest('.df-stencil__item');
     if (!item) return;
     const tpl = getTemplateFor(item);

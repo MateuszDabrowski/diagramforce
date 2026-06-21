@@ -7,9 +7,10 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.16.1';
-import { pctx } from './context.js?v=1.16.1';
-import { compactGraphForSave } from './json-pipeline.js?v=1.16.1';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.17.0.199';
+import { pctx } from './context.js?v=1.17.0.199';
+import { compactGraphForSave } from './json-pipeline.js?v=1.17.0.199';
+import { countDiagramShapes } from '../util.js?v=1.17.0.199';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -42,38 +43,6 @@ function namedSaveSingle() {
   saveSingleTab(name, graph.toJSON(), canvasModule.getViewport(),
     getDiagramTypeCallback ? getDiagramTypeCallback() : 'architecture',
     getMappingModeCallback ? getMappingModeCallback() : false);
-}
-
-/** Save multiple tabs by id with a name prefix. */
-export async function saveMultipleTabs(tabIds, namePrefix) {
-  const { getAllTabs: getAllTabsCallback, getTabGraph: getTabGraphCallback, getTabViewport: getTabViewportCallback, getTabDiagramType: getTabDiagramTypeCallback, getTabMappingMode: getTabMappingModeCallback, onSaveComplete: onSaveCompleteCallback } = pctx;
-  if (!getAllTabsCallback || !getTabGraphCallback) return;
-  const allTabs = getAllTabsCallback();
-  let savedCount = 0;
-  const silent = tabIds.length > 1;
-  for (const tabId of tabIds) {
-    const tab = allTabs.find(t => t.id === tabId);
-    if (!tab) continue;
-    const graphJSON = getTabGraphCallback(tabId);
-    const viewport = getTabViewportCallback ? getTabViewportCallback(tabId) : null;
-    const diagramType = getTabDiagramTypeCallback ? getTabDiagramTypeCallback(tabId) : 'architecture';
-    const mappingMode = getTabMappingModeCallback ? getTabMappingModeCallback(tabId) : false;
-    if (!graphJSON) continue;
-    // Use the tab name as save name (with date suffix)
-    const saveName = namePrefix
-      ? `${namePrefix} — ${tab.name}`
-      : tab.name;
-    const ok = await saveSingleTab(saveName, graphJSON, viewport, diagramType, mappingMode, silent);
-    if (ok) savedCount++;
-  }
-  if (savedCount > 0 && onSaveCompleteCallback) {
-    onSaveCompleteCallback('browser');
-  }
-  // For multi-tab saves, emit a single summary toast (single-tab path
-  // already gets its own toast from saveSingleTab in non-silent mode).
-  if (silent && savedCount > 0) {
-    showToast(`Saved ${savedCount} ${savedCount === 1 ? 'tab' : 'tabs'} to browser ✓`, 'success');
-  }
 }
 
 async function saveSingleTab(name, graphJSON, viewport, diagramType, mappingMode = false, silent = false) {
@@ -116,7 +85,7 @@ async function saveSingleTab(name, graphJSON, viewport, diagramType, mappingMode
     // numeric code 1014. A few Safari builds set neither — fall through
     // to the human-readable message as a last-resort check.
     if (isQuotaError(err)) {
-      showError('Browser storage full — export to JSON to keep your work safe, then delete older saves.');
+      showError('Browser storage full - export to JSON to keep your work safe, then delete older saves.');
     } else {
       showError('Save failed: ' + (err.message || 'unknown error'));
     }
@@ -182,6 +151,58 @@ export function getStorageFootprint() {
 export const STORAGE_WARNING_BYTES = 4_000_000;
 
 /**
+ * Quota-pressure relief valve (v1.17.0). Evict the OLDEST-by-modified browser archives that are **Drive-backed**
+ * — i.e. redundant, because the same diagram is also in the user's Google Drive and can be reloaded — until the
+ * footprint drops under `targetBytes`. Stops early if no redundant archives remain.
+ *
+ * NEVER touches a **browser-only** archive (no `driveFileId`): that archive is the diagram's ONLY copy, so
+ * evicting it would be permanent data loss. When only those remain over the line the caller falls back to the
+ * backup reminder instead. Returns the number evicted.
+ *
+ * `targetBytes` defaults to the warning threshold (proactive trim); pass 0 from a hard quota-error path to shed
+ * every redundant archive before retrying the write.
+ */
+export function evictRedundantArchives(targetBytes = STORAGE_WARNING_BYTES) {
+  if (getStorageFootprint() <= targetBytes) return 0;
+  const candidates = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(NAMED_SAVE_PREFIX)) continue;
+    try {
+      const data = JSON.parse(localStorage.getItem(key));
+      // Redundant = also in the user's Drive (has a driveFileId) → reloadable, so safe to shed. A browser-only
+      // archive has no driveFileId and is NEVER a candidate (it would be permanent data loss).
+      if (data && data.driveFileId) candidates.push({ key, ts: data.timestamp || 0 });
+    } catch { /* skip corrupt entry */ }
+  }
+  candidates.sort((a, b) => a.ts - b.ts);   // oldest first
+  let evicted = 0;
+  for (const c of candidates) {
+    if (getStorageFootprint() <= targetBytes) break;
+    localStorage.removeItem(c.key);
+    evicted++;
+  }
+  return evicted;
+}
+
+/**
+ * Delete every browser archive that was saved from a given Drive file (matched on the stored `driveFileId`).
+ * The reliable "browser" half of a go-together delete from the Drive library (which knows the fileId but has
+ * no open-tab context). Returns the number removed.
+ */
+export function forgetArchivesForDriveFile(fileId) {
+  if (!fileId) return 0;
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(NAMED_SAVE_PREFIX)) continue;
+    try { if (JSON.parse(localStorage.getItem(key))?.driveFileId === fileId) keys.push(key); } catch { /* skip */ }
+  }
+  for (const key of keys) localStorage.removeItem(key);
+  return keys.length;
+}
+
+/**
  * Ask the browser to mark this origin's storage bucket as **persistent** so it
  * is exempt from automatic eviction — both storage-pressure clearing and
  * Safari's idle (≈7-day no-interaction) eviction. Covers the whole origin
@@ -228,6 +249,11 @@ export function getNamedSaves() {
         expiresIn: SAVE_TTL_MS - age,
         diagramType: data.diagramType || 'architecture',
         appVersion: data.appVersion || null,
+        shapes: countDiagramShapes(data.graph?.cells),   // nodes-only count for the storage-row "N elements"
+        driveFileId: data.driveFileId || null,           // present → also in My Drive (recorded at archive time)
+        driveDriveId: data.driveDriveId || null,         // present → the file lives on a team Shared Drive (item 5: "Shared Drive" chip)
+        driveSharedSource: data.driveSharedSource || null, // present → a file shared TO you (item 5: shows the Shared File chip)
+        bytes: (localStorage.getItem(key) || '').length, // serialized footprint, for the storage-weight column
       });
     } catch (err) {
       console.warn('SF Diagrams: Skipping corrupt save entry:', key, err);
@@ -249,7 +275,10 @@ export async function loadNamedSave(key) {
     if (data?.graph) sanitizeGraphJSON(data.graph);
     if (onImportCallback && data?.graph) {
       const type = normalizeDiagramType(data.diagramType);
-      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode);
+      // Item 1.3: pass the archived Drive linkage (driveFileId + driveSharedSource + driveCopies + baseline) so
+      // the loaded tab re-marks "In My Drive" and shows the shares it had, instead of becoming a browser-only tab.
+      // #7: data.group recreate-or-rejoins the tab group this diagram was saved from.
+      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode, data, data.group || null);
     } else if (data?.graph) {
       canvasModule.setLoadingJSON(true);
       try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }
@@ -269,8 +298,10 @@ export function deleteNamedSave(key) {
 
 // --- Import / Export ---
 
-/** Build the canonical single-diagram file object (drop-in export shape). */
-function buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false) {
+/** Build the canonical single-diagram file object (drop-in export shape).
+ *  `group` (#7): {name,icon,color} when the source tab was in a tab group, so re-importing this single file
+ *  recreate-or-rejoins that group (additive + back-compat - older readers ignore it). */
+function buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false, group = null) {
   const { appVersion: APP_VERSION } = pctx;
   return {
     version: 1,
@@ -281,12 +312,13 @@ function buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode 
     mappingMode,
     graph: graphJSON,
     viewport: viewport || null,
+    ...(group && group.name ? { group } : {}),
   };
 }
 
-function downloadSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false) {
+function downloadSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false, group = null) {
   const { triggerDownload, dateSuffix } = pctx;
-  const data = buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode);
+  const data = buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode, group);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const safeName = (name || 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
   triggerDownload(URL.createObjectURL(blob), `df_${safeName}_${dateSuffix()}.json`);
@@ -348,7 +380,10 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
     // Group export (v1.16.0): caller passes the groups [{id,name,icon,color}] whose
     // tabs are being exported. Each diagram is tagged with its group NAME so import
     // can re-group it; the bundle carries the group metadata under `groups`.
-    const groupById = new Map(groups.map(g => [g.id, g]));
+    // For a single-tab export the caller passes no `groups`; fall back to the live group registry so we can still
+    // resolve THIS tab's group meta (#7). `isGroupExport` stays gated on the explicit param (bundle format only).
+    const allGroups = (groups && groups.length) ? groups : (pctx.getGroups ? (pctx.getGroups() || []) : []);
+    const groupById = new Map(allGroups.map(g => [g.id, g]));
     const isGroupExport = groups.length > 0;
     for (const id of tabIds) {
       const t = tabById.get(id); if (!t) continue;
@@ -387,7 +422,11 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
     let ok = true;
     if (diagrams.length === 1 && templates.length === 0 && !isGroupExport) {
       const d = diagrams[0];
-      downloadSingleDiagram(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode);
+      // #7: if the single diagram is an open tab inside a group, stamp the group meta so re-import restores it.
+      const srcTab = tabIds.length === 1 ? tabById.get(tabIds[0]) : null;
+      const g = srcTab && srcTab.groupId ? groupById.get(srcTab.groupId) : null;
+      const grpMeta = g ? { name: g.name, icon: g.icon || null, color: g.color || null } : null;
+      downloadSingleDiagram(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, grpMeta);
       showToast(`Exported "${d.name}" ✓`, 'success');
     } else if (diagrams.length === 0 && templates.length > 0) {
       ok = !!(templatesBackupApi?.exportFn?.());   // templates-only → templates file
@@ -429,11 +468,15 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
 /** Export EVERYTHING (all non-empty tabs + named saves + templates) as a full
  *  backup. Used by the reminder overlay's single "Export" button. */
 export function exportEverything() {
-  const { getAllTabs: getAllTabsCallback, templatesBackupApi } = pctx;
+  const { getAllTabs: getAllTabsCallback, getGroups: getGroupsCallback, templatesBackupApi } = pctx;
   const tabIds = (getAllTabsCallback ? getAllTabsCallback() : []).map(t => t.id);
   const saveKeys = getNamedSaves().map(s => s.key);
   const includeTemplates = (templatesBackupApi?.getTemplates?.() || []).length > 0;
-  return exportSelection({ tabIds, saveKeys, includeTemplates }, { markBackup: true });
+  // Pass the current groups so the backup carries group metadata (name/icon/colour + per-diagram tag) - loading
+  // it then restores grouped diagrams back into their groups (item 4). exportSelection only marks the bundle
+  // kind:'group' when a grouped diagram is actually included, so a group-less backup stays a plain bundle.
+  const groups = getGroupsCallback ? getGroupsCallback() : [];
+  return exportSelection({ tabIds, saveKeys, includeTemplates, groups }, { markBackup: true });
 }
 
 /** True when there's at least one non-empty open tab or named browser save. */
@@ -477,6 +520,9 @@ export function maybeShowBackupReminder() {
     const hasTemplates = templates.length > 0;
     const hasDiagrams = backupHasDiagrams();
     if (!hasTemplates && !hasDiagrams) return; // nothing to lose → no nag
+    // Syncing to Google Drive already keeps the work safe off this browser, so the export-to-JSON nag is
+    // redundant for connected users — skip it for them. Non-connected users still get reminded.
+    if (pctx.isDriveConnected?.()) return;
 
     const now = Date.now();
     const lastBackup   = +localStorage.getItem(LAST_BACKUP_KEY) || 0;
@@ -498,6 +544,9 @@ export function maybeShowBackupReminder() {
 function showBackupReminderModal() {
   if (document.querySelector('.df-backup-modal')) return; // already open
 
+  // Connected users are skipped upstream, so the only Drive-aware state left is configured-but-not-connected:
+  // offer "Connect to Google Drive" as a durable cloud alternative to the local JSON export.
+  const canConnect = !!pctx.isDriveConfigured?.();
   const { body, footer, close } = buildModal({
     title: 'Backup your diagrams',
     className: 'df-backup-modal',
@@ -505,11 +554,18 @@ function showBackupReminderModal() {
     width: '480px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: '<p class="df-backup-modal__msg" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>',
-    footerHtml: '<button class="df-close-confirm__btn df-close-confirm__btn--save df-backup-modal__btn" style="margin-left:auto">Export</button>',
+    footerHtml: `${canConnect ? '<button class="df-close-confirm__btn df-backup-modal__connect" style="margin-right:auto"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Connect Google Drive</button>' : ''}<button class="df-close-confirm__btn df-close-confirm__btn--save df-backup-modal__btn"${canConnect ? '' : ' style="margin-left:auto"'}>Export</button>`,
   });
   // textContent (not innerHTML) for the body copy — no interpolation risk.
-  body.querySelector('.df-backup-modal__msg').textContent =
-    "You've been using Diagramforce for a while! Since this app has no backend, your templates and diagrams live entirely in this browser. To ensure you never lose your work if your browser clears its cache, export a backup to your computer.";
+  body.querySelector('.df-backup-modal__msg').textContent = canConnect
+    ? "You've been using Diagramforce for a while! Since this app has no backend, your diagrams live in this browser, which can clear its cache. Connect Google Drive to keep them safe in the cloud, or download a JSON backup file to your computer."
+    : "You've been using Diagramforce for a while! Since this app has no backend, your templates and diagrams live entirely in this browser. To ensure you never lose your work if your browser clears its cache, download a JSON backup file to your computer.";
+
+  // Connect to Google Drive — durable cloud backup; sign in, then close (saving happens via the Save Manager).
+  footer.querySelector('.df-backup-modal__connect')?.addEventListener('click', async () => {
+    try { await pctx.driveSignIn?.(); } catch { /* the sign-in flow surfaces its own errors */ }
+    close();
+  });
 
   const exportBtn = footer.querySelector('.df-backup-modal__btn');
   exportBtn.addEventListener('click', () => {

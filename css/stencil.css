@@ -245,6 +245,9 @@
   stroke-linejoin: round;
 }
 
+/* Cross-type Shape sections read slightly dimmer than the current type's own sections. */
+.df-stencil__category--cross .df-stencil__category-label { opacity: 0.82; }
+
 .df-stencil__icon-preview {
   width: 22px;
   height: 22px;
@@ -269,17 +272,33 @@
    delete (×) in the top-right corner. */
 .df-stencil__items--templates {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--spacing-sm);
+  /* ~4-5 mini-thumbnails per row (was minmax(84px) ≈ 3/row) so a saved shape / template reads as a small
+     recognizable tile, not a big card. */
+  grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+  gap: 6px;
   padding: 4px var(--spacing-sm) var(--spacing-sm);
 }
+
+/* Stencil band divider (v1.17.0): "Custom {Type} Shapes" / "{Type} Shapes" / "Other Shapes". A grouping label,
+   distinct from a collapsible category header (no chevron / count). */
+.df-stencil__group-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 12px var(--spacing-sm) 4px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border-color);
+}
+.df-stencil__group-header:first-child { border-top: none; margin-top: 0; }
 
 .df-stencil__item--template {
   position: relative;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  padding: var(--spacing-sm);
+  gap: 3px;
+  padding: 4px;
   border: 1px solid var(--border-color);
 }
 
@@ -288,7 +307,7 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 64px;
+  height: 42px;
   border-radius: var(--border-radius-sm);
   background: var(--bg-canvas, rgba(127, 127, 127, 0.06));
   overflow: hidden;

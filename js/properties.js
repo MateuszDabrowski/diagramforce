@@ -1,28 +1,29 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.16.1';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.16.1';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.16.1';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.16.1';
-import * as stencilModule from './stencil.js?v=1.16.1';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.16.1';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.16.1';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.17.0.199';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.0.199';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.0.199';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.0.199';
+import * as stencilModule from './stencil.js?v=1.17.0.199';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.0.199';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.0.199';
 import {
   duplicate as clipboardDuplicate,
+  copy as clipboardCopy,
   cloneElementWithConnectors,
   countConnectors,
   countConnectedConnectors,
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.16.1';
-import * as history from './history.js?v=1.16.1';
-import { startImageAddFlow } from './image-component.js?v=1.16.1';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.16.1';
-import { getActiveTabName } from './tabs.js?v=1.16.1';
-import { saveSelectionAsTemplate } from './templates.js?v=1.16.1';
-import { newFid } from './shapes.js?v=1.16.1';
+} from './clipboard.js?v=1.17.0.199';
+import * as history from './history.js?v=1.17.0.199';
+import { startImageAddFlow } from './image-component.js?v=1.17.0.199';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.0.199';
+import { getActiveTabName } from './tabs.js?v=1.17.0.199';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.0.199';
+import { newFid } from './shapes.js?v=1.17.0.199';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -158,6 +159,23 @@ const DEFAULT_SIZES = {
   'sf.SequenceFragment':    { width: 400, height: 200 },
 };
 
+/** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
+ *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and
+ *  the canvas right-click "Auto size" (wired via selection.setAutoSizer in app.js). No-op for links. */
+export function autoSizeCell(cell) {
+  if (!cell || !cell.isElement || !cell.isElement()) return;
+  const type = cell.get('type');
+  if (type === 'sf.DataObject') { resizeDataObjectToFit(cell); return; }
+  // A Note fits its HEIGHT to the rendered description (item 1.2) rather than snapping to the default 200x120 -
+  // its view measures the content and grows/shrinks to it. Fall back to the default size if the view is absent.
+  if (type === 'sf.Note') {
+    const view = paper.findViewByModel(cell);
+    if (view && typeof view.fitNoteToContent === 'function') { view.fitNoteToContent(); return; }
+  }
+  const def = DEFAULT_SIZES[type];
+  if (def) cell.resize(def.width, def.height);
+}
+
 // Per-type color field schema used by the multi-select Colors section.
 // Each entry lists the color "slots" the type exposes in its single-element
 // panel; multi-select intersects these by label so only colors that ALL
@@ -175,6 +193,7 @@ const COLOR_SCHEMA = {
           c.attr('label/fill', tc);
           c.attr('subtitle/fill', tc);
           c.attr('subtitle/opacity', 0.7);
+          recolorCellIcon(c, tc);   // R4: the icon must follow the contrast text colour, as in the single-node panel
         }
       } },
     { label: 'Border',
@@ -182,7 +201,8 @@ const COLOR_SCHEMA = {
       set: (c, v) => c.attr('body/stroke', v) },
     { label: 'Label color',
       get: c => c.attr('label/fill'),
-      set: (c, v) => { c.attr('label/fill', v); c.attr('subtitle/fill', v); } },
+      // R4: recolor the icon too (multi-select was only recolouring the text; the single-node panel does both).
+      set: (c, v) => { c.attr('label/fill', v); c.attr('subtitle/fill', v); recolorCellIcon(c, v); } },
   ],
   'sf.Container': [
     { label: 'Accent',
@@ -228,7 +248,8 @@ const COLOR_SCHEMA = {
       set: (c, v) => c.attr('body/fill', v) },
     { label: 'Border',
       get: c => c.attr('body/stroke'),
-      set: (c, v) => c.attr('body/stroke', v) },
+      // The dog-ear fold tracks the border colour (fill + stroke) so the user controls the flipped corner (#8).
+      set: (c, v) => { c.attr('body/stroke', v); c.attr('fold/stroke', v); c.attr('fold/fill', v); } },
   ],
   'sf.Line': [
     { label: 'Label color',
@@ -524,6 +545,8 @@ function getInlineEditTarget(cell) {
   if (type === 'sf.Line') return null; // no label
   if (type === 'sf.OrgPerson') return { kind: 'model', prop: 'personName', selector: 'nameLabel' };
   if (type === 'sf.Container' || type === 'sf.DataObject') return { kind: 'attr', path: 'headerLabel/text', selector: 'headerLabel' };
+  // A Note's main field is its multi-line description (subtitle), not the heading - edit that on double-click (R5).
+  if (type === 'sf.Note') return { kind: 'attr', path: 'subtitle/text', selector: 'subtitle' };
   return { kind: 'attr', path: 'label/text', selector: 'label' };
 }
 
@@ -622,6 +645,18 @@ function startInlineEdit(cellView, evt) {
     fontWeight = textEl.getAttribute('font-weight') || computed.fontWeight || 700;
     fontFamily = textEl.getAttribute('font-family') || computed.fontFamily || fontFamily;
     textAnchor = textEl.getAttribute('text-anchor') || 'start';
+  } else if (type === 'sf.Note' && target.path === 'subtitle/text') {
+    // Note description (R5): cover the subtitle AREA (model x:12 y:38, w-24 × h-48) - the hidden SVG text has a
+    // zero bbox, so derive geometry from the note's on-screen box. Multi-line, left-aligned, top-anchored.
+    const elRect = cellView.el.getBoundingClientRect();
+    left = elRect.left + 12 * scale - containerRect.left;
+    top = elRect.top + 38 * scale - containerRect.top;
+    width = Math.max(elRect.width - 24 * scale, 60 * scale);
+    height = Math.max(elRect.height - 48 * scale, 36 * scale);
+    fontSize = (parseFloat(cell.attr('subtitle/fontSize')) || 11) * scale;
+    fontWeight = 'normal';
+    fontFamily = cell.attr('subtitle/fontFamily') || fontFamily;
+    textAnchor = 'start';
   } else {
     // Cover just the label text area (not the whole element)
     const r = textEl.getBoundingClientRect();
@@ -917,7 +952,7 @@ function showMultiProperties(count) {
           addText(mapSec, 'Expression / rules', sameExpr ? exprs[0] : '', v => {
             history.startBatch();
             try { links.forEach(l => applyLinkExpression(l, v)); } finally { history.endBatch(); }
-          }, null, sameExpr ? undefined : { placeholder: 'Multiple — type to set all' });
+          }, null, sameExpr ? undefined : { placeholder: 'Multiple - type to set all' });
         }
       }
     }
@@ -1439,8 +1474,7 @@ function renderTextLabelProps(cell) {
   // matches the universal Content / Appearance / Size & Order rhythm.
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
-  addNumber(appearance, 'Font size', cell.attr('label/fontSize') ?? 16,
-    v => cell.attr('label/fontSize', v), { min: 6, max: 96 });
+  // Font size moved to the Size & Order section (item 1) - added generically there for every text shape.
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -1557,8 +1591,7 @@ function renderLinkElementProps(cell) {
     cell.attr('label/fill', v);
     cell.attr('iconImage/href', getStencilSvgDataUri(COMPONENT_SVG.linkIcon, v, 20));
   });
-  addNumber(appearance, 'Font size', cell.attr('label/fontSize') ?? 14,
-    v => cell.attr('label/fontSize', v), { min: 6, max: 96 });
+  // Font size moved to the Size & Order section (item 1) - added generically there for every text shape.
 
   // Size & Order
   const size = section(bodyEl, 'Size & Order');
@@ -1589,13 +1622,20 @@ function renderNoteProps(cell) {
   const descInput = addTextarea(content, 'Description', cell.attr('subtitle/text'),
     v => cell.attr('subtitle/text', v));
   wireMarkdownShortcuts(descInput, content);
-  addIconPicker(content, 'Icon', cell.attr('icon/href'), v => cell.attr('icon/href', v),
-    () => cell.attr('label/fill') || '#5D4037');
+  // Item 1.2: the icon picker also records whether the user CLEARED the icon (`iconCleared`), so the on-load
+  // self-heal won't re-add the default light-bulb to a note the user deliberately emptied, and shifts the
+  // heading left (to the description indent) when the icon is gone.
+  addIconPicker(content, 'Icon', cell.attr('icon/href'), v => {
+    cell.attr('icon/href', v);
+    cell.set('iconCleared', !v);   // empty = user removed it; a picked icon clears the flag
+    updateNoteIconLayout(cell);
+  }, () => cell.attr('label/fill') || '#5D4037');
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Fill',       cell.attr('body/fill'),   v => cell.attr('body/fill', v));
-  addColor(appearance, 'Border',     cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
+  // Border also recolours the folded corner (fold fill + stroke) so the user controls the dog-ear (#8).
+  addColor(appearance, 'Border',     cell.attr('body/stroke'), v => { cell.attr('body/stroke', v); cell.attr('fold/stroke', v); cell.attr('fold/fill', v); });
   addColor(appearance, 'Label color', cell.attr('label/fill'),  v => {
     cell.attr('label/fill', v);
     cell.attr('subtitle/fill', v);
@@ -2217,7 +2257,7 @@ function openFieldEditorModal(cell, onClose) {
   // (footerClass) come from the extended factory API; onClose fires the caller's
   // callback after teardown (matches the old close()).
   const { overlay, body: bodyEl, close } = buildModal({
-    title: `Edit Fields — ${cell.get('objectName') || 'Object'}`, // textContent — buildModal escapes
+    title: `Edit Fields - ${cell.get('objectName') || 'Object'}`, // textContent - buildModal escapes
     dialogClass: 'df-field-modal__dialog',
     bodyClass: 'df-field-modal__body',
     footerClass: 'df-field-modal__footer',
@@ -2456,7 +2496,7 @@ function openFieldEditorModal(cell, onClose) {
           <button type="button" class="df-modal__btn df-csv-tools__btn df-csv-tools__import-paste">Import Fields from Paste</button>
         </div>
         <textarea class="df-csv-tools__textarea" rows="4" spellcheck="false" placeholder="API Name,Label,Type,Length,Required,Deprecated,Key,Sample Values&#10;Id,Record ID,ID,,Yes,No,PK,003Ax00000ABCDE&#10;AccountId,Account,Lookup,,Yes,No,FK,001Ax00000XYZab&#10;Email__c,Email,Email,,No,No,,jane@example.com"></textarea>
-        <p class="df-csv-tools__hint">Paste rows in the box above, then <strong>Import Fields from Paste</strong>. Columns: <strong>API&nbsp;Name, Label, Type, Length, Required, Deprecated, Key, Sample&nbsp;Values</strong> — a header row is auto-detected; importing <strong>overwrites every field</strong> on this object. Grab the Sample CSV for the full list of valid Type / Key values.</p>
+        <p class="df-csv-tools__hint">Paste rows in the box above, then <strong>Import Fields from Paste</strong>. Columns: <strong>API&nbsp;Name, Label, Type, Length, Required, Deprecated, Key, Sample&nbsp;Values</strong> - a header row is auto-detected; importing <strong>overwrites every field</strong> on this object. Grab the Sample CSV for the full list of valid Type / Key values.</p>
         <span class="df-csv-tools__status" aria-live="polite"></span>
         <input type="file" accept=".csv,text/csv" class="df-csv-tools__file" hidden>
       </div>`;
@@ -2473,7 +2513,7 @@ function openFieldEditorModal(cell, onClose) {
     // into the open batch before it closes.
     const doImport = async (text) => {
       const parsed = parseBulkFields(text);
-      if (!parsed.length) { setStatus('No valid rows found — check the format (see Sample CSV).', true); return; }
+      if (!parsed.length) { setStatus('No valid rows found - check the format (see Sample CSV).', true); return; }
       const prevCount = (cell.get('fields') || []).length;
       const ok = await confirmModal({
         title: 'Overwrite fields?',
@@ -3589,6 +3629,45 @@ function applyLinkLineStyle(cell, v) {
   if (cell.attr('line/strokeDasharray')) cell.attr('line/strokeDasharray', null);
 }
 
+// Canonical ER marker def for an endpoint key, built with the link's own stroke/width (mirrors the marker-picker
+// `markerDefs`). Only the keys the quick-set presets need; null = remove the marker on that side.
+function erMarkerDef(key, stroke, lineWidth) {
+  switch (key) {
+    case 'none':  return { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke, 'stroke-width': lineWidth, 'stroke-dasharray': 'none' };
+    case 'arrow': return { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z', 'stroke-dasharray': 'none' };   // auto-inherits line stroke
+    case 'one':   return { type: 'path', d: 'M -12 -8 L -12 8 M -12 0 L 0 0', fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' };
+    case 'many':  return { type: 'path', d: 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0', fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' };
+    default: return null;
+  }
+}
+
+/** Quick-set a link's source + target ER markers (connector right-click presets: → / 1:1 / 1:M / M:1). Each key
+ *  is 'none' | 'arrow' | 'one' | 'many' (undefined = leave that side untouched). Applies BOTH ends in one attrs
+ *  replacement + the Safari <marker>-cache re-insert (same as applyMarker), so a stale arrowhead never lingers. */
+export function setLinkEndpoints(cell, sourceKey, targetKey) {
+  if (!cell || !cell.isLink || !cell.isLink()) return;
+  const stroke = cell.attr('line/stroke') || '#888888';
+  const lineWidth = cell.attr('line/strokeWidth') || 2;
+  const allAttrs = JSON.parse(JSON.stringify(cell.get('attrs') || {}));
+  if (!allAttrs.line) allAttrs.line = {};
+  const apply = (key, markerKey) => {
+    if (key === undefined) return;
+    const def = erMarkerDef(key, stroke, lineWidth);
+    if (def) allAttrs.line[markerKey] = def; else delete allAttrs.line[markerKey];
+  };
+  apply(sourceKey, 'sourceMarker');
+  apply(targetKey, 'targetMarker');
+  cell.set('attrs', allAttrs);
+  paper.updateViews();
+  const view = paper.findViewByModel(cell);
+  if (view?.el?.parentNode) {
+    const parent = view.el.parentNode;
+    const next = view.el.nextSibling;
+    parent.removeChild(view.el);
+    if (next) parent.insertBefore(view.el, next); else parent.appendChild(view.el);
+  }
+}
+
 // ── Shared Data Cloud mapping setters (single-link panel + multi-select Mapping section) ──
 // The 5-value transform picklist, shared so single + multi stay in lockstep.
 const MAPPING_TYPES = ['Standard', 'Formula', 'Streaming Transform', 'Batch Transform', 'Calculated Insight'];
@@ -3978,8 +4057,65 @@ function orderPeerLabel(cell) {
   return SPECIFIC[type] || tierNameForType(type);
 }
 
-function addOrderButtons(sec, cell) {
+/** Raise a cell above its same-tier peers (undoable). Shared by the properties Order button + the context menu. */
+export function bringToFront(cell) {
   const type = cell.get('type');
+  const tierBase = Z_BASE[type] ?? 20000;
+  const tierMax = tierBase + Z_TIER_SPAN;
+  const peers = graph.getElements().filter(el => el !== cell && el.get('z') >= tierBase && el.get('z') < tierMax);
+  const maxZ = peers.length ? Math.max(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
+  const oldZ = cell.get('z');
+  const newZ = maxZ + 1;
+  if (oldZ === newZ) return;
+  cell.set('z', newZ);
+  history.recordCommand(
+    () => { const c = graph.getCell(cell.id); if (c) c.set('z', oldZ); },
+    () => { const c = graph.getCell(cell.id); if (c) c.set('z', newZ); },
+  );
+}
+
+/** Drop a cell below its same-tier peers (undoable). Shared by the properties Order button + the context menu. */
+export function sendToBack(cell) {
+  const type = cell.get('type');
+  const tierBase = Z_BASE[type] ?? 20000;
+  const tierMax = tierBase + Z_TIER_SPAN;
+  const peers = graph.getElements().filter(el => el !== cell && el.get('z') >= tierBase && el.get('z') < tierMax);
+  const minZ = peers.length ? Math.min(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
+  const oldZ = cell.get('z');
+  const newZ = Math.max(tierBase, minZ - 1);
+  if (oldZ === newZ) return;
+  cell.set('z', newZ);
+  history.recordCommand(
+    () => { const c = graph.getCell(cell.id); if (c) c.set('z', oldZ); },
+    () => { const c = graph.getCell(cell.id); if (c) c.set('z', newZ); },
+  );
+}
+
+// Primary text selectors a shape may use for its MAIN label, in priority order. Detecting which one a cell
+// actually has (a non-null fontSize) lets ONE generic Font-size control serve every text-rendering shape, added
+// uniformly to the Size & Order section (item 1). A shape whose label font is COMPUTED by a custom view
+// (sf.OrgPerson sizes nameLabel/positionLabel dynamically in OrgPersonView; DataObject field rows are hard-coded)
+// has none of these as an attr-driven primary label, so it gets no control here - correct, the value would not stick.
+const FONT_LABEL_SELECTORS = ['label', 'headerLabel', 'titleText'];
+function primaryFontSelector(cell) {
+  for (const sel of FONT_LABEL_SELECTORS) {
+    if (cell.attr && cell.attr(`${sel}/fontSize`) != null) return sel;
+  }
+  return null;
+}
+/** Append a single Font-size control for the cell's primary label, if it has an attr-driven one. Stores at
+ *  `<selector>/fontSize` (the same path the existing TextLabel/Link controls used) so it is lossless + reversible. */
+function addFontSizeControl(sec, cell) {
+  const sel = primaryFontSelector(cell);
+  if (!sel) return;
+  addNumber(sec, 'Font size', cell.attr(`${sel}/fontSize`) ?? 13, (v) => cell.attr(`${sel}/fontSize`, v), { min: 6, max: 96 });
+}
+
+function addOrderButtons(sec, cell) {
+  // Item 1: a Font-size control lives in EVERY shape's Size & Order section (this is the universal terminal call
+  // of that section), placed above the z-order buttons. One definition covers all text shapes; the old per-shape
+  // controls in Appearance (TextLabel / Link) were removed so it is not duplicated.
+  addFontSizeControl(sec, cell);
   const peerLabel = orderPeerLabel(cell);
 
   const btnRow = document.createElement('div');
@@ -3989,16 +4125,7 @@ function addOrderButtons(sec, cell) {
   // base `.df-prop-pair` flex behaviour is preserved.
   btnRow.className = 'df-prop-pair df-prop-pair--order';
 
-  const tierBase = Z_BASE[type] ?? 20000;
-  const tierMax  = tierBase + Z_TIER_SPAN;
-
-  function sameTierElements() {
-    return graph.getElements().filter(
-      el => el !== cell && el.get('z') >= tierBase && el.get('z') < tierMax
-    );
-  }
-
-  // Bring to Front
+  // Bring to Front (the z-logic lives in the exported bringToFront/sendToBack, shared with the context menu)
   const frontBtn = document.createElement('button');
   frontBtn.className = 'df-properties__btn df-properties__btn--order';
   frontBtn.innerHTML = `
@@ -4007,22 +4134,7 @@ function addOrderButtons(sec, cell) {
     </svg>
     Bring to Front`;
   frontBtn.title = `Bring in front of other ${peerLabel}`;
-  frontBtn.addEventListener('click', () => {
-    const peers = sameTierElements();
-    const maxZ = peers.length
-      ? Math.max(...peers.map(el => el.get('z') ?? tierBase))
-      : tierBase;
-    const oldZ = cell.get('z');
-    const newZ = maxZ + 1;
-    if (oldZ === newZ) return;
-    cell.set('z', newZ);
-    // `z` is auto-managed by the canvas tier system (no blanket change:z listener),
-    // so record this explicit reorder ourselves to make it undoable.
-    history.recordCommand(
-      () => { const c = graph.getCell(cell.id); if (c) c.set('z', oldZ); },
-      () => { const c = graph.getCell(cell.id); if (c) c.set('z', newZ); },
-    );
-  });
+  frontBtn.addEventListener('click', () => bringToFront(cell));   // shared with the context menu
 
   // Send to Back
   const backBtn = document.createElement('button');
@@ -4033,20 +4145,7 @@ function addOrderButtons(sec, cell) {
     </svg>
     Send to Back`;
   backBtn.title = `Send behind other ${peerLabel}`;
-  backBtn.addEventListener('click', () => {
-    const peers = sameTierElements();
-    const minZ = peers.length
-      ? Math.min(...peers.map(el => el.get('z') ?? tierBase))
-      : tierBase;
-    const oldZ = cell.get('z');
-    const newZ = Math.max(tierBase, minZ - 1);
-    if (oldZ === newZ) return;
-    cell.set('z', newZ);
-    history.recordCommand(
-      () => { const c = graph.getCell(cell.id); if (c) c.set('z', oldZ); },
-      () => { const c = graph.getCell(cell.id); if (c) c.set('z', newZ); },
-    );
-  });
+  backBtn.addEventListener('click', () => sendToBack(cell));   // shared with the context menu
 
   btnRow.appendChild(frontBtn);
   btnRow.appendChild(backBtn);
@@ -4063,12 +4162,23 @@ function addOrderButtons(sec, cell) {
 
 // ── Standalone convert button (not inside accordion) ───────────────
 
-function addActionBtn(parent, label, onClick) {
+// Item 2: give every bottom action button the SAME glyph as the single-shape footer + the right-click menu.
+// Auto-picked from the label so all addActionBtn callers (Save as Template / Save Shape / Select all / Convert
+// all to X) get a matching icon without threading it through each multi-line call.
+function autoActionIcon(label) {
+  if (/^save/i.test(label)) return SAVE_SHAPE_ICON_SVG;
+  if (/^select all/i.test(label)) return SELECT_ALL_ICON_SVG;
+  if (/^convert/i.test(label)) return CONVERT_ICON_SVG;
+  return '';
+}
+function addActionBtn(parent, label, onClick, iconSvg = '') {
   const wrap = document.createElement('div');
   wrap.className = 'df-convert-strip';
   const btn = document.createElement('button');
   btn.className = 'df-properties__btn df-properties__btn--convert';
-  btn.textContent = label;
+  const icon = iconSvg || autoActionIcon(label);
+  if (icon) btn.innerHTML = `${icon} ${escHtml(label)}`;
+  else btn.textContent = label;
   btn.addEventListener('click', onClick);
   wrap.appendChild(btn);
   parent.appendChild(wrap);
@@ -4092,6 +4202,23 @@ function addConvertBtn(parent, label, onClick) {
 const CLONE_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <rect x="5" y="5" width="9" height="9" rx="2"/>
     <path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/>
+  </svg>`;
+// Copy-to-clipboard glyph (a clipboard) — distinct from Clone (in-place duplicate); matches the canvas menu's
+// Copy icon. Copy lets you paste into another tab/diagram; Clone duplicates beside the original.
+const COPY_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="3" width="8" height="11" rx="1.5"/>
+    <path d="M6 3V1.8h4V3"/>
+  </svg>`;
+// Footer-button glyphs matching the right-click menu's CTX_ICON set (item 2): Save Shape = a bookmark, Select
+// all = a dashed marquee, Convert = the swap arrows (the same path addConvertBtn draws).
+const SAVE_SHAPE_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 2h8a1 1 0 011 1v11l-5-3-5 3V3a1 1 0 011-1z"/>
+  </svg>`;
+const SELECT_ALL_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke-dasharray="2.4 1.8"/>
+  </svg>`;
+const CONVERT_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 4h11l-3-3M15 12H4l3 3"/>
   </svg>`;
 
 /** Default clone behavior for a single cell: place a copy beside the original. */
@@ -4149,7 +4276,110 @@ function addCloneBtn(parent, cell) {
     }
   }
 
+  // Copy to clipboard (paste into another tab / diagram) — a sibling to Clone, available for every cell.
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'df-properties__btn df-properties__btn--clone';
+  copyBtn.innerHTML = `${COPY_ICON_SVG} Copy`;
+  copyBtn.addEventListener('click', () => clipboardCopy());
+  wrap.appendChild(copyBtn);
+
   parent.appendChild(wrap);
+
+  // Save Shape (item 1) - the single-shape counterpart to the multi-select "Save as Template", in EVERY single-
+  // element footer (addCloneBtn is the shared call), just above Delete. Same bookmark glyph as the right-click
+  // menu's Save Shape. Images can't be saved (no thumbnail / storage).
+  if (cell?.isElement?.() && cell.get('type') !== 'sf.Image') {
+    addActionBtn(parent, 'Save Shape', () => saveCellAsShape(cell), SAVE_SHAPE_ICON_SVG);
+  }
+}
+
+/**
+ * The bottom-of-properties-panel actions for a single ELEMENT, as an ordered descriptor list, so the canvas
+ * right-click menu can mirror them (#6). Same handlers the panel buttons call (clone variants, copy, convert,
+ * order, auto size). Delete is NOT included - the context menu owns its danger Delete (deleteSelected).
+ * Each item: { label, iconKey (CTX_ICON key in selection.js), group (for separators), handler }.
+ * Wired into selection.js via setActionProvider in app.js (selection.js can't import properties.js - cycle).
+ */
+// ── Copy / Paste STYLE (colours only) — a type-aware style clipboard ──────────────
+// captureCellStyle snapshots the cell's COLOR_SCHEMA colour slots BY LABEL; pasteCellStyle applies them to a
+// TARGET via the target's OWN setters, so the correct attr paths + side-effects run (icon re-tint, text
+// contrast) and only the labels both types share transfer (a Node's Fill/Border/Label colour lands on a
+// Container too, ignoring slots the target lacks). One undo per paste. Colours only by design (the user picked
+// that scope); fonts / line styles are out of scope. Module-scoped, so it clears on reload — expected.
+let _styleClip = null;   // { type, styles: { [label]: value } }
+export function hasStyleClip() { return !!_styleClip; }
+/** Snapshot a cell's colour style into the clipboard. Returns true if anything was captured. */
+export function copyCellStyle(cell) {
+  const schema = cell && COLOR_SCHEMA[cell.get('type')];
+  if (!schema) return false;
+  const styles = {};
+  for (const slot of schema) { const v = slot.get(cell); if (v != null && v !== '') styles[slot.label] = v; }
+  if (!Object.keys(styles).length) return false;
+  _styleClip = { type: cell.get('type'), styles };
+  showToast('Style copied - right-click another shape to paste it', 'info');
+  return true;
+}
+/** Apply the clipboard's colours to one cell via ITS schema's setters (label-matched). Returns true if any slot set. */
+function applyClipStyle(cell, clip) {
+  const schema = cell && COLOR_SCHEMA[cell.get('type')];
+  if (!schema || !clip) return false;
+  let any = false;
+  for (const slot of schema) {
+    if (Object.prototype.hasOwnProperty.call(clip.styles, slot.label)) { slot.set(cell, clip.styles[slot.label]); any = true; }
+  }
+  return any;
+}
+/** Paste the clipboard style onto every element in `cells` (one undo batch). Returns the count styled. */
+export function pasteCellStyle(cells) {
+  if (!_styleClip || !cells || !cells.length) return 0;
+  let n = 0;
+  history.startBatch();
+  try { for (const c of cells) { if (c?.isElement?.() && applyClipStyle(c, _styleClip)) n++; } }
+  finally { history.endBatch(); }
+  if (n) { refresh(); showToast(`Style pasted to ${n} component${n === 1 ? '' : 's'} ✓`, 'success'); }
+  return n;
+}
+
+export function buildCellActions(cell) {
+  if (!cell || !cell.isElement?.()) return [];
+  const type = cell.get('type');
+  const iconMode = !!cell.get('iconMode');
+  const acts = [];
+
+  // Clone variants + Copy (the addCloneBtn set).
+  acts.push({ label: 'Clone', iconKey: 'clone', group: 'clone', handler: () => cloneCellPlain(cell) });
+  if (countConnectors(cell) > 0) acts.push({ label: 'Clone with Connectors', iconKey: 'clone', group: 'clone', handler: () => cloneElementWithConnectors(cell, 'dangling') });
+  if (countConnectedConnectors(cell) > 0) acts.push({ label: 'Clone with connected Connectors', iconKey: 'clone', group: 'clone', handler: () => cloneElementWithConnectors(cell, 'connected') });
+  acts.push({ label: 'Copy', iconKey: 'copy', group: 'clone', handler: () => clipboardCopy() });
+
+  // Copy / Paste STYLE (colours) — its own group so it reads apart from the clipboard Copy above (#1).
+  if (COLOR_SCHEMA[type]) {
+    acts.push({ label: 'Copy style', iconKey: 'copyStyle', group: 'style', handler: () => copyCellStyle(cell) });
+    if (hasStyleClip()) acts.push({ label: 'Paste style', iconKey: 'pasteStyle', group: 'style', handler: () => pasteCellStyle([cell]) });
+  }
+
+  // Convert (only where the panel offers it): SimpleNode <-> Container/Icon, Container -> Node.
+  if (type === 'sf.SimpleNode' && !iconMode) {
+    acts.push({ label: 'Convert to Container', iconKey: 'convert', group: 'convert', handler: () => convertToContainer(cell) });
+    acts.push({ label: 'Convert to Icon', iconKey: 'convert', group: 'convert', handler: () => convertToIcon(cell) });
+  } else if (type === 'sf.SimpleNode' && iconMode) {
+    acts.push({ label: 'Convert to Node', iconKey: 'convert', group: 'convert', handler: () => convertFromIcon(cell) });
+  } else if (type === 'sf.Container') {
+    acts.push({ label: 'Convert to Node', iconKey: 'convert', group: 'convert', handler: () => convertToNode(cell) });
+  }
+
+  // Order (z within the same tier).
+  acts.push({ label: 'Bring to Front', iconKey: 'front', group: 'order', handler: () => bringToFront(cell) });
+  acts.push({ label: 'Send to Back', iconKey: 'back', group: 'order', handler: () => sendToBack(cell) });
+
+  // Auto size (every element type except sf.Image, which the panel omits).
+  if (type !== 'sf.Image') acts.push({ label: 'Auto size', iconKey: 'autosize', group: 'size', handler: () => autoSizeCell(cell) });
+
+  // Save Shape - stash this shape (content + style) in My Shapes for reuse (the single-shape counterpart to the
+  // multi-select "Save as Template"). Images can't be saved (storage). Its own group so it reads apart.
+  if (type !== 'sf.Image') acts.push({ label: 'Save Shape', iconKey: 'saveShape', group: 'save', handler: () => saveCellAsShape(cell) });
+
+  return acts;
 }
 
 // ── Delete button (red, bottom of panel) ─────────────────────────────
@@ -4633,8 +4863,9 @@ function addColor(parent, label, value, onChange, opts = {}) {
   f.appendChild(row);
 
   // Brand palette strip (v1.12.4) — saved swatches below the picker.
-  // Click a swatch to apply, hover for an × remove control, press + to
-  // bank the current color for reuse.  Subscribes to onPaletteChange so
+  // Click a swatch to apply; long-hover OR right-click reveals its × remove control (so a quick
+  // click never deletes by accident); press + (right end) to bank the current color for reuse.
+  // Subscribes to onPaletteChange so
   // multiple open pickers (e.g., Fill + Border + Label) stay in sync.
   const paletteRow = document.createElement('div');
   paletteRow.className = 'df-prop-palette-strip';
@@ -4662,7 +4893,11 @@ function addColor(parent, label, value, onChange, opts = {}) {
         if (e.target.classList.contains('df-prop-palette-swatch__remove')) return;
         applySwatch(hex);
       });
-      // × remove button — visible on hover/focus only via CSS.
+      // Right-click reveals the × immediately (CSS otherwise only shows it after a LONG hover), so a
+      // quick left-click always APPLIES the colour — no more deleting swatches you meant to apply.
+      item.addEventListener('contextmenu', (e) => { e.preventDefault(); item.classList.add('is-removable'); });
+      item.addEventListener('mouseleave', () => item.classList.remove('is-removable'));
+      // × remove button — revealed only on long hover / right-click (see properties.css).
       const remove = document.createElement('span');
       remove.className = 'df-prop-palette-swatch__remove';
       remove.textContent = '×';
@@ -4676,17 +4911,15 @@ function addColor(parent, label, value, onChange, opts = {}) {
       item.appendChild(remove);
       paletteRow.appendChild(item);
     }
-    // Save-current button — disabled when the palette is full AND the
-    // current color is already in the palette, otherwise enabled
-    // (adding a new color promotes-to-front and bumps the oldest off,
-    // which is desirable behaviour we explicitly support).
+    // Save-current button — sits at the RIGHT end of the strip; a newly saved colour appends right
+    // here (next to this +). When the palette is full, saving drops the oldest (left-most) swatch.
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'df-prop-palette-save';
     saveBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
     saveBtn.setAttribute('aria-label', 'Save current color to palette');
     saveBtn.title = palette.length >= PALETTE_MAX_SLOTS
-      ? `Palette full (${PALETTE_MAX_SLOTS}) — saving will replace the oldest`
+      ? `Palette full (${PALETTE_MAX_SLOTS}) - saving will replace the oldest`
       : 'Save current color to palette';
     saveBtn.addEventListener('click', () => {
       const ok = addToPalette(lastValid);
@@ -4895,14 +5128,14 @@ function addRotationField(parent, cell) {
   rotationField(parent, 'Rotation', () => cell.angle(), v => cell.rotate(v, true));
 }
 
+// Shared auto-size glyph — the SAME stroke-style "fit" arrows the canvas right-click menu uses (#7), so the
+// action reads identically in the sidebar and the menu. (Exported so selection.js's CTX_ICON reuses the path.)
+export const AUTOSIZE_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3h4M13 9v4H9M3 3l4 4M13 13l-4-4"/></svg>`;
+
 function addAutoSizeBtn(parent, onClick) {
   const btn = document.createElement('button');
   btn.className = 'df-properties__btn df-properties__btn--auto-size';
-  btn.innerHTML = `
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-      <path d="M1 1h5v2H3v3H1V1zm9 0h5v5h-2V3h-3V1zM1 10h2v3h3v2H1v-5zm12 3h-3v2h5v-5h-2v3z"/>
-    </svg>
-    Auto Size`;
+  btn.innerHTML = `${AUTOSIZE_ICON_SVG} Auto Size`;
   btn.title = 'Fit to default minimum size (or fit embedded content)';
   btn.addEventListener('click', onClick);
   parent.appendChild(btn);
@@ -5251,24 +5484,6 @@ function addSelect(parent, label, value, options, onChange) {
   f.appendChild(sel);
 }
 
-// Extensible picklist: free-text input backed by a <datalist> of suggestions.
-// Lets users pick a standard tier (Source/DLO/DMO…) or type a custom one,
-// avoiding the fragmentation of pure free text without a rigid enum.
-function addDatalist(parent, label, value, suggestions, onChange) {
-  const f = field(parent, label);
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'df-properties__input';
-  input.value = value || '';
-  const listId = 'df-dl-' + Math.random().toString(36).slice(2, 9);
-  const dl = document.createElement('datalist');
-  dl.id = listId;
-  suggestions.forEach(s => { const o = document.createElement('option'); o.value = s; dl.appendChild(o); });
-  input.setAttribute('list', listId);
-  input.addEventListener('input', () => onChange(input.value));
-  f.appendChild(input);
-  f.appendChild(dl);
-}
 
 function addMarkerPicker(parent, label, current, options, svgs, onChange, opts = {}) {
   const f = field(parent, label);
@@ -5541,7 +5756,7 @@ function preserveParentEmbedding(oldCell, newCell) {
   history.suppressEmbedTracking(() => parent.embed(newCell));
 }
 
-function convertToContainer(cell) {
+export function convertToContainer(cell) {
   const pos = cell.position();
   const size = cell.size();
   const connections = collectConnections(cell);
@@ -5568,7 +5783,7 @@ function convertToContainer(cell) {
   } finally { history.endBatch(); }
 }
 
-function convertToNode(cell) {
+export function convertToNode(cell) {
   const pos = cell.position();
   const def = DEFAULT_SIZES['sf.SimpleNode'];
   const connections = collectConnections(cell);
@@ -5596,7 +5811,7 @@ function convertToNode(cell) {
   } finally { history.endBatch(); }
 }
 
-function convertToIcon(cell) {
+export function convertToIcon(cell) {
   // Convert a SimpleNode to icon mode — circle with icon only
   const pos = cell.position();
   const connections = collectConnections(cell);
@@ -5627,7 +5842,7 @@ function convertToIcon(cell) {
   } finally { history.endBatch(); }
 }
 
-function convertContainerToIcon(cell) {
+export function convertContainerToIcon(cell) {
   // Convert a Container to icon mode SimpleNode
   const pos = cell.position();
   const connections = collectConnections(cell);
@@ -5657,7 +5872,7 @@ function convertContainerToIcon(cell) {
   } finally { history.endBatch(); }
 }
 
-function convertFromIcon(cell) {
+export function convertFromIcon(cell) {
   // Restore a SimpleNode from icon mode back to normal
   const pos = cell.position();
   const connections = collectConnections(cell);

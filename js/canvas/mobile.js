@@ -38,7 +38,7 @@ export function initMobileDragHandles() {
     // a draggable splitter that resizes adjacent regions.
     if (!handle.hasAttribute('role'))            handle.setAttribute('role', 'separator');
     if (!handle.hasAttribute('aria-orientation')) handle.setAttribute('aria-orientation', 'horizontal');
-    if (!handle.hasAttribute('aria-label'))      handle.setAttribute('aria-label', 'Resize panel — use arrow keys');
+    if (!handle.hasAttribute('aria-label'))      handle.setAttribute('aria-label', 'Resize panel - use arrow keys');
     if (!handle.hasAttribute('tabindex'))        handle.setAttribute('tabindex', '0');
 
     // Gap 25 (v1.12.0) — keyboard nudge. Up/Down adjust height by 16 px

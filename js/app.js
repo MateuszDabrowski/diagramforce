@@ -1,26 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.16.1';
-import * as icons       from './icons.js?v=1.16.1';
-import { getAllStencilSvgs } from './components.js?v=1.16.1';
-import * as shapes      from './shapes.js?v=1.16.1';
-import * as canvas      from './canvas.js?v=1.16.1';
-import * as stencil     from './stencil.js?v=1.16.1';
-import * as selection   from './selection.js?v=1.16.1';
-import * as history     from './history.js?v=1.16.1';
-import * as clipboard   from './clipboard.js?v=1.16.1';
-import * as templates    from './templates.js?v=1.16.1';
-import * as keyboard    from './keyboard.js?v=1.16.1';
-import * as toolbar     from './toolbar.js?v=1.16.1';
-import * as properties  from './properties.js?v=1.16.1';
-import * as persistence from './persistence.js?v=1.16.1';
-import * as tabs        from './tabs.js?v=1.16.1';
-import * as mermaidImport from './mermaid-import.js?v=1.16.1';
-import * as tableView    from './table-view.js?v=1.16.1';
-import * as walkthrough  from './walkthrough.js?v=1.16.1';
-import * as a11y         from './a11y.js?v=1.16.1';
-import { seedDefaultPalette } from './brand-palette.js?v=1.16.1';
+import * as theme       from './theme.js?v=1.17.0.199';
+import * as icons       from './icons.js?v=1.17.0.199';
+import { getAllStencilSvgs } from './components.js?v=1.17.0.199';
+import * as shapes      from './shapes.js?v=1.17.0.199';
+import * as canvas      from './canvas.js?v=1.17.0.199';
+import * as stencil     from './stencil.js?v=1.17.0.199';
+import * as selection   from './selection.js?v=1.17.0.199';
+import * as history     from './history.js?v=1.17.0.199';
+import * as clipboard   from './clipboard.js?v=1.17.0.199';
+import * as templates    from './templates.js?v=1.17.0.199';
+import * as keyboard    from './keyboard.js?v=1.17.0.199';
+import * as toolbar     from './toolbar.js?v=1.17.0.199';
+import * as properties  from './properties.js?v=1.17.0.199';
+import * as persistence from './persistence.js?v=1.17.0.199';
+import * as tabs        from './tabs.js?v=1.17.0.199';
+import * as mermaidImport from './mermaid-import.js?v=1.17.0.199';
+import * as tableView    from './table-view.js?v=1.17.0.199';
+import * as walkthrough  from './walkthrough.js?v=1.17.0.199';
+import * as whatsNew     from './whats-new.js?v=1.17.0.199';
+import * as a11y         from './a11y.js?v=1.17.0.199';
+import { seedDefaultPalette } from './brand-palette.js?v=1.17.0.199';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -34,9 +35,21 @@ if (window.top !== window.self && location.hostname === 'diagramforce.mateuszdab
 }
 
 async function main() {
-  // Set app version in About modal
+  // Set app version in About modal - and make it a button that re-opens "What's new" (keeps the release notes
+  // reachable, and lets the author review them pre-release). Close the About modal first so they don't stack.
   const versionEl = document.getElementById('about-version');
-  if (versionEl) versionEl.textContent = `v${persistence.APP_VERSION}`;
+  if (versionEl) {
+    versionEl.textContent = `v${persistence.APP_VERSION}`;
+    versionEl.setAttribute('role', 'button');
+    versionEl.setAttribute('tabindex', '0');
+    versionEl.title = "See what's new in this version";
+    const openWhatsNew = () => {
+      document.getElementById('btn-close-about')?.click();
+      whatsNew.showWhatsNewNow();
+    };
+    versionEl.addEventListener('click', openWhatsNew);
+    versionEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWhatsNew(); } });
+  }
 
   // --- Phase 1: Foundation ---
   theme.init();
@@ -64,6 +77,10 @@ async function main() {
   // --- Phase 4: Interaction ---
   selection.init(graph, paper);
   history.init(graph);
+  // While a diagram LOADS (graph.fromJSON + the post-load icon/link normalisations), history must NOT record:
+  // those are not user edits. Wire the canvas loading flag so history skips them (else re-resolving a placeholder
+  // icon href, or migrating a legacy connector, shows up as a phantom undoable change + marks the tab dirty).
+  history.setLoadingGuard(canvas.isLoadingJSON);
   clipboard.init(graph, paper, selection);
 
   // Custom templates library (capture from multi-select, drop from stencil).
@@ -100,6 +117,14 @@ async function main() {
 
   // --- Phase 5: Properties panel ---
   properties.init(graph, paper, selection);
+  // Canvas right-click "Auto size" reuses the properties-pane sizer (wired here to avoid a module cycle).
+  selection.setAutoSizer(properties.autoSizeCell);
+  // The canvas right-click menu mirrors the SAME bottom-of-properties actions per shape (#6) via this provider.
+  selection.setActionProvider(properties.buildCellActions);
+  // Connector right-click ER endpoint quick-set (→ / 1:1 / 1:M / M:1) → properties.setLinkEndpoints (item R1).
+  selection.setEndpointSetter(properties.setLinkEndpoints);
+  // Copy/Paste style clipboard for the MULTI-select right-click menu (single-element uses the action provider).
+  selection.setStyleApi({ copy: properties.copyCellStyle, has: properties.hasStyleClip, paste: properties.pasteCellStyle });
 
   // --- Phase 5b: Canvas accessibility — narrate selection to assistive tech ---
   a11y.init({ graph, selection });
@@ -143,7 +168,9 @@ async function main() {
     getTemplates: templates.getTemplates,
     exportFn: templates.exportTemplatesJSON,
     importMerge: templates.importTemplatesArray,
+    syncWithDrive: templates.syncTemplatesWithDrive,   // item 17: remote-store calls this after a Drive connect
   });
+  persistence.setThumbnailRenderer(templates.renderTemplateThumbnail);   // Phase C: the Review conflict modal's diff-highlighted preview cards
 
   // --- Phase 7b: Mermaid import (needs tabs + canvas + graph) ---
   mermaidImport.init(moduleRefs);
@@ -154,11 +181,24 @@ async function main() {
   // --- Phase 9: Check for shared diagram in URL hash ---
   persistence.loadFromURL();
 
-  // --- Phase 9b: Periodic backup reminder ---
+  // --- Phase 9b: One-time "What's new" overlay on a new RELEASE (R23) ---
+  // Replaces the per-load minor-version notice. Shows ONCE when a returning user
+  // arrives on a newer major/minor build; a first-ever visitor is silently
+  // recorded (the walkthrough owns their onboarding). Decision is synchronous so
+  // we can skip the backup reminder this session and never stack two dialogs.
+  whatsNew.init(persistence.APP_VERSION);
+  const showedWhatsNew = whatsNew.maybeShowWhatsNew();
+
+  // --- Phase 9c: Periodic backup reminder ---
   // Deferred (setTimeout 0), mirroring the storage-pressure gauge, so it never
   // blocks first paint. Shows the "Backup your diagrams" overlay if it's been
   // ≥7 days since the last export (or since first content, if never exported).
-  setTimeout(() => persistence.maybeShowBackupReminder(), 0);
+  // Skipped this session if the What's-New overlay is already taking the screen.
+  setTimeout(() => { if (!showedWhatsNew) persistence.maybeShowBackupReminder(); }, 0);
+
+  // Custom Templates Drive sync (item 17) — opportunistic boot pull+merge when a Drive token is already valid
+  // this session (no sign-in popup). The connect-time sync (remote-store onDriveConnected) covers fresh logins.
+  setTimeout(() => templates.syncTemplatesOnBoot(), 0);
 
   // First-visit walkthrough — runs only when `df_first_visit_help_shown` is absent. It waits
   // for a diagram canvas to exist (the first screen is usually the Create-New-Diagram overlay),

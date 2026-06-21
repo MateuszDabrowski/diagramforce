@@ -148,17 +148,19 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Ctrl+S — Named save
+  // Ctrl+S — open Save & Export (delegate to the navbar Save button so the shortcut and the button
+  // land in the exact same manager, instead of the old prompt-based namedSave).
   if (mod && key === 's') {
     evt.preventDefault();
-    modules.persistence.namedSave();
+    document.getElementById('btn-save')?.click();
     return;
   }
 
-  // Ctrl+O — Import JSON
+  // Ctrl+O — open Load & Import (delegate to the navbar Load button so the shortcut opens the tabbed
+  // manager, instead of a bare OS file picker).
   if (mod && key === 'o') {
     evt.preventDefault();
-    modules.persistence.importJSON();
+    document.getElementById('btn-load')?.click();
     return;
   }
 

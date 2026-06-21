@@ -210,6 +210,22 @@
 #canvas-container.is-empty .df-canvas-empty { display: flex; }
 /* Hide the ghost while the read-only Table view owns the canvas area. */
 #canvas-container:has(.df-table-view:not([hidden])) .df-canvas-empty { display: none; }
+/* Discreet legal footer on the empty-canvas splash (homepage privacy/terms link). Pinned to the bottom so it
+   doesn't crowd the centred splash; pointer-events:auto re-enables clicks (the ghost is pointer-events:none). */
+.df-canvas-empty__legal {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: var(--font-size-xs, 12px);
+  pointer-events: auto;
+  user-select: none;
+}
+.df-canvas-empty__legal a { color: var(--text-muted); text-decoration: none; }
+.df-canvas-empty__legal a:hover { color: var(--brand-primary); text-decoration: underline; }
 .df-canvas-empty__wf {
   display: none;
   width: min(44%, 400px);
@@ -235,6 +251,12 @@
   opacity: 0.6;
   letter-spacing: 0.3px;
 }
+
+/* A Note with no icon assigned has an empty `<image href="">`, which browsers paint as a BROKEN-image
+   placeholder (the torn-photo glyph) - most visible right after a load. Hide the icon when it has no real
+   href so an icon-less Note shows nothing there (the label sits at x:36 regardless). */
+[data-type="sf.Note"] image:not([href]),
+[data-type="sf.Note"] image[href=""] { display: none; }
 
 /* CR-6.1: inline markdown inside sf.TextLabel / sf.Note foreignObjects.
    `<strong>`, `<em>`, `<del>` get default browser styling, but `<code>`
@@ -269,8 +291,12 @@ foreignObject[data-md] del { text-decoration: line-through; }
   50% { opacity: 0; }
 }
 
-/* ── Mobile touch: larger ports & link tools ──────────────────── */
-@media (max-width: 768px) {
+/* ── Touch: larger ports & link tools ─────────────────────────── */
+/* Gated on coarse pointer too (not just narrow width) so a TABLET in desktop layout (>768px, touch,
+   no hover) can reveal + grab ports to draw links. The `.joint-element.selected .joint-port` reveal
+   below also overrides the DataObject "hover-only" hide (canvas.css ~28) by equal specificity + later
+   source order, so DataObject ER/mapping links become drawable on touch. */
+@media (max-width: 768px), (pointer: coarse) {
   /* Make ports bigger for touch (scale up from 5px radius to ~12px) */
   .joint-port circle {
     r: 10;
@@ -393,8 +419,15 @@ foreignObject[data-md] del { text-decoration: line-through; }
   margin: 0;
   white-space: nowrap;
 }
-/* overflow-x:auto for wide technical sheets; -y for tall ones */
-.df-tbl__scroll { flex: 1 1 auto; overflow: auto; }
+/* overflow-x:auto for wide technical sheets; -y for tall ones. touch-action re-grants native
+   touch panning inside this scroll region: #canvas-container is `touch-action: none` (the paper
+   owns pan/zoom via JS), which would otherwise suppress touch-scrolling of this nested overlay on
+   tablets/phones. Pairs with the viewport.js touch-handler bail-out for `.df-table-view`. */
+.df-tbl__scroll { flex: 1 1 auto; overflow: auto; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
+/* While the table overlay is up the paper is hidden, so the container no longer needs to own touch:
+   relax its `touch-action: none` so the browser can scroll the table natively (defensive belt to the
+   JS bail-out above, for engines that honour an ancestor's `none` over a scroll-container descendant). */
+#canvas-container:has(.df-table-view:not([hidden])) { touch-action: pan-x pan-y; }
 .df-tbl__table {
   border-collapse: separate;
   border-spacing: 0;
@@ -418,10 +451,10 @@ foreignObject[data-md] del { text-decoration: line-through; }
   text-transform: uppercase;
   color: #fff;
 }
-.df-tbl__sec--src { background: #F6B355; }   /* Data Sources — brand amber */
-.df-tbl__sec--map { background: #DA4E55; }   /* Data Mapping — brand red */
-.df-tbl__sec--tgt { background: #1D73C9; }   /* Data Targets — brand blue */
-.df-tbl__sec--mdl { background: #1D73C9; }   /* Data Model (single section) — brand blue */
+.df-tbl__sec--src { background: var(--brand-amber); }   /* Data Sources — brand amber */
+.df-tbl__sec--map { background: var(--brand-red); }     /* Data Mapping — brand red */
+.df-tbl__sec--tgt { background: var(--brand-blue); }    /* Data Targets — brand blue */
+.df-tbl__sec--mdl { background: var(--brand-blue); }    /* Data Model (single section) — brand blue */
 /* Tier 2 — column headers (stick just below the section blocks) */
 .df-tbl__cols th {
   position: sticky;

@@ -1,6 +1,7 @@
 {
   "name": "diagramforce-tests",
-  "version": "1.16.1",
+  "version": "1.17.0",
+  "devBuild": 199,
   "private": true,
   "type": "module",
   "description": "Two-tier regression tests for Diagramforce — both DEV-ONLY; the shipped app stays build-free and zero-runtime-dependency. (1) `npm test`: fast unit/characterization suites on Node's native runner (node:test) — NO Jest/Vitest/Babel/bundler. (2) `npm run test:e2e`: real-browser E2E (Chromium/WebKit/Firefox) via @playwright/test, booting the actual app served as static files (tests/e2e/). `type:module` so Node treats the specs as ES modules.",
@@ -8,7 +9,8 @@
     "test": "node --test 'tests/**/*.test.js'",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e",
-    "bump": "node scripts/bump-version.mjs"
+    "bump": "node scripts/bump-version.mjs",
+    "bump:dev": "node scripts/bump-version.mjs --dev"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

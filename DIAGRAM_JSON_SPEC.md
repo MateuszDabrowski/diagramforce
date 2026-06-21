@@ -4,14 +4,14 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.16.1** — matches the app's current `appVersion`; set `"appVersion": "1.16.1"` in generated files.
+> **Spec snapshot: v1.17.0** — matches the app's current `appVersion`; set `"appVersion": "1.17.0"` in generated files.
 
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.16.1",
+  "appVersion": "1.17.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -25,15 +25,22 @@
 }
 ```
 
+> **File extension (v1.17.0).** Diagramforce has its own extension **`.dgf`** (used mainly for Google
+> Drive, so Drive can offer "Open with Diagramforce") — but the **content is exactly this JSON envelope,
+> unchanged**. The app still imports plain `.json` too; format is detected from the JSON **structure**,
+> never the extension. Drive stores `.dgf` files with the MIME `application/vnd.diagramforce+json`
+> (the bytes are still the JSON envelope above).
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.16.1"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.17.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
 | `graph` | object | Yes | Contains `cells` array — the JointJS graph data |
 | `viewport` | object | No | Pan/zoom state. Omit to auto-fit on load |
+| `group` | object | No | `{ "name", "icon", "color" }` of the tab GROUP this diagram belonged to. Present only when the diagram was saved/exported from a named tab group. On load the app recreate-or-REJOINS a group of that name and drops the tab into it (so reopening one grouped diagram restores its group). Omit for ungrouped diagrams. Added v1.17.0 |
 
 > ⚠️ **Always set `diagramType` to match the shapes in the diagram.** If it is missing or wrong, the diagram opens as an architecture tab — the sequence-specific Auto Layout, the data-model stencil, the Gantt timeline controls, etc. are gated on the tab type and will be unavailable until the tab is recreated. Pick the type from the table below **before** choosing shapes.
 
@@ -42,8 +49,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.16.1", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.16.1" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -75,10 +82,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.16.1", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.16.1" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -1737,7 +1744,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.16.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.17.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1815,7 +1822,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.16.1",
+  "appVersion": "1.17.0",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1971,7 +1978,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.16.1",
+  "appVersion": "1.17.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2091,7 +2098,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.16.1",
+  "appVersion": "1.17.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

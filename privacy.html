@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'; frame-ancestors 'none'">
+  <title>Privacy Policy - Diagramforce</title>
+  <meta name="description" content="How Diagramforce handles your data: no backend, no accounts, no analytics. Your diagrams stay on your device and in your own Google Drive.">
+  <link rel="icon" href="assets/favicon.png">
+  <style>
+    :root {
+      --bg: #ffffff; --bg-soft: #f6f8fa; --card: #ffffff;
+      --text: #1a1d21; --muted: #5b6470; --border: #e2e6ea;
+      --link: #1D73C9; --accent: #1D73C9; --accent-soft: #eaf2fb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a1a; --bg-soft: #202124; --card: #232427;
+        --text: #ececec; --muted: #a8aeb6; --border: #34363a;
+        --link: #6cb0f0; --accent: #DA4E55; --accent-soft: #2a2122;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.62; font-size: 16px;
+    }
+    a { color: var(--link); }
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: var(--bg-soft); position: sticky; top: 0; z-index: 1;
+    }
+    .topbar img { width: 30px; height: 30px; border-radius: 6px; }
+    .topbar .name { font-weight: 700; letter-spacing: .01em; }
+    .topbar .spacer { flex: 1; }
+    .topbar a.back { font-size: 14px; text-decoration: none; font-weight: 600; }
+    .topbar a.back:hover { text-decoration: underline; }
+    main { max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+    .updated { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+    h2 {
+      font-size: 20px; margin: 36px 0 10px; padding-top: 8px;
+      scroll-margin-top: 70px;
+    }
+    h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+    h3 { font-size: 16px; margin: 22px 0 6px; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    ul { padding-left: 22px; }
+    li { margin: 5px 0; }
+    .tldr {
+      background: var(--accent-soft); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 20px; margin: 0 0 8px;
+    }
+    .tldr strong { color: var(--text); }
+    .toc {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 20px; margin: 28px 0; background: var(--card);
+    }
+    .toc-title { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+    .toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+    .toc a { text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    code { background: var(--accent-soft); padding: 1px 6px; border-radius: 5px; font-size: 14px; }
+    footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+    footer a { font-weight: 600; }
+    @media (max-width: 560px) { .toc ol { columns: 1; } h1 { font-size: 26px; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="assets/logo.png" alt="">
+    <span class="name">Diagramforce</span>
+    <span class="spacer"></span>
+    <a class="back" href="./">← Back to the app</a>
+  </header>
+
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: 21 June 2026</p>
+
+    <div class="tldr">
+      <strong>The short version.</strong> Diagramforce has no servers of its own, no user accounts, no cookies, and no analytics or tracking. It runs entirely in your browser. Your diagrams stay on your device - and, only if you choose, in <em>your own</em> Google Drive. Diagramforce never sees, collects, sells, or transmits your diagrams or personal data.
+    </div>
+
+    <nav class="toc" aria-label="Sections">
+      <p class="toc-title">On this page</p>
+      <ol>
+        <li><a href="#scope">Who this covers</a></li>
+        <li><a href="#device">Data on your device</a></li>
+        <li><a href="#sharing">Data you choose to share</a></li>
+        <li><a href="#google">Google Drive (optional)</a></li>
+        <li><a href="#hosting">Hosting &amp; technical logs</a></li>
+        <li><a href="#notdo">What we never do</a></li>
+        <li><a href="#control">Your control &amp; rights</a></li>
+        <li><a href="#children">Children</a></li>
+        <li><a href="#changes">Changes</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="scope"><span class="num">1.</span>Who this policy covers</h2>
+    <p>Diagramforce is a free, open-source, browser-based diagram editor created by Mateusz Dąbrowski and served as static files at <strong>diagramforce.mateuszdabrowski.pl</strong>. This policy explains what happens to your information when you use it. Because there is no backend and no account system, there is very little to explain - most of what follows describes data that simply never leaves your control.</p>
+
+    <h2 id="device"><span class="num">2.</span>Data stored on your device</h2>
+    <p>Diagramforce saves your work and preferences in your browser's local storage on your own device. This includes your open diagrams and tabs, any diagrams you save by name, your theme choice, your custom templates (which also sync to your Google Drive when you connect it), brand colours, and - if you connect Google Drive - your Google sync settings and the file IDs of diagrams the app has created or opened for you.</p>
+    <ul>
+      <li>This data stays in <strong>your browser</strong>. It is not transmitted to Diagramforce or any third party.</li>
+      <li>Diagramforce uses <strong>no cookies</strong>.</li>
+      <li>You can erase it at any time by clearing your browser's site data.</li>
+      <li>Local storage is per-browser and per-device. Private/incognito windows discard it when closed.</li>
+    </ul>
+
+    <h2 id="sharing"><span class="num">3.</span>Data you choose to share</h2>
+    <h3>Share links</h3>
+    <p>When you create a standard <strong>Diagramforce link</strong>, the <strong>entire diagram is compressed into the link itself</strong> (the part after the <code>#</code>). The link is built in your browser, and the part after the <code>#</code> is, by web standards, <strong>never sent to a web server</strong>. However, anyone who has the link can open the diagram, so treat a share link like the diagram itself: if you post it publicly it may be copied, cached, or indexed by others. A standard link is a frozen snapshot and cannot be revoked once shared.</p>
+    <p>If you connect Google Drive you can instead create a <strong>Google Drive link</strong> (a short link to a live file in your own Drive - see §4) or a <strong>group link</strong> that reopens every diagram in a tab group. Unlike a standard link, these point to live files you control: you can change who can open them, or stop sharing them, through Google Drive.</p>
+    <h3>Exports</h3>
+    <p>When you export a diagram (JSON, PNG, SVG, or GIF), the file is generated in your browser and saved wherever you direct your browser to put it. You control it entirely.</p>
+
+    <h2 id="google"><span class="num">4.</span>Google Drive integration (optional)</h2>
+    <p>Google Drive sync is <strong>off by default</strong>. You only ever involve Google if you explicitly connect it.</p>
+    <ul>
+      <li><strong>Limited access.</strong> When you connect, you authorise Diagramforce with Google's <code>drive.file</code> scope. Under this scope the app can access <strong>only the files it creates, or files you explicitly open with it</strong> through Google's own file picker. It cannot see or touch anything else in your Drive.</li>
+      <li><strong>Your Drive, directly.</strong> Diagrams are stored as ordinary files in a <strong>Diagramforce</strong> folder in <em>your own</em> Google Drive; your custom templates library is synced to a single file in the same folder. They move <strong>directly between your browser and Google</strong>. Diagramforce has no server in the middle and never receives or stores them.</li>
+      <li><strong>Sharing.</strong> If you share through Drive, you choose who can open it - a public link, anyone in your organisation, a team Shared Drive, or specific people (with view access, or edit/“collaborate” access) - using Google Drive's own sharing controls. You can also share a whole tab group as a single public link. Choosing editable/collaborate sharing creates an additional copy file in <em>your own</em> Drive that the recipient can edit.</li>
+      <li><strong>Opening a diagram shared with you.</strong> If you open an <em>editable</em> (collaborate) diagram someone shared with you and edit it, Diagramforce keeps a private backup copy in <em>your own</em> Drive so you don't lose your work if the owner later revokes access. If you open a <em>view-only</em> (copy) diagram and edit it, your changes are saved as a new copy in <em>your own</em> Drive (the original is untouched). These files live only in your Drive, and Diagramforce never receives them.</li>
+      <li><strong>Inviting specific people.</strong> When you invite named people, the email addresses you enter are sent to Google Drive to grant them access, and Google sends each person a notification email. Diagramforce does not store those addresses on any server (there is none).</li>
+      <li><strong>Organisation sharing and your email.</strong> Only if you choose the “Organisation” sharing option, the app asks once - with a separate, explicit consent - for the <code>openid</code>/<code>email</code> scope to read your email address. This is used solely to determine your Google Workspace domain so the link can be limited to your organisation. Your email is not stored on any server and is not used for anything else. If you never use Organisation sharing, this is never requested.</li>
+      <li><strong>Revoke anytime.</strong> You can withdraw Diagramforce's access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account permissions</a>, and delete any files it created from your Drive.</li>
+    </ul>
+    <p>Your use of Google Drive is also governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a> and your own agreement with Google. Diagramforce's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including its Limited Use requirements. Diagramforce does not transfer, sell, or use Google user data for advertising, and does not allow humans to read it.</p>
+
+    <h2 id="hosting"><span class="num">5.</span>Hosting &amp; technical logs</h2>
+    <p>The app is delivered as static files from <strong>GitHub Pages</strong> (GitHub, Inc.), served through <strong>Cloudflare</strong>. As with visiting any website, these providers automatically process standard request metadata - such as your IP address, browser type, and the files requested - purely to deliver and protect the site. Diagramforce adds no analytics, advertising, tracking pixels, or fingerprinting on top. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub</a> and <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare</a> privacy policies for how they handle that metadata.</p>
+    <p>All third-party libraries the app uses (JointJS, the Salesforce Lightning Design System, pako, and gifenc) are bundled and served from the same domain - <strong>no third-party CDN is contacted while you use the app</strong>. Google's servers are contacted only if you use the optional Drive features.</p>
+
+    <h2 id="notdo"><span class="num">6.</span>What we never do</h2>
+    <ul>
+      <li>No user accounts and no sign-up.</li>
+      <li>No analytics, tracking, advertising, or fingerprinting.</li>
+      <li>No cookies.</li>
+      <li>No selling or sharing of personal data.</li>
+      <li>No server-side storage of your diagrams - Diagramforce has no application server.</li>
+    </ul>
+
+    <h2 id="control"><span class="num">7.</span>Your control &amp; rights</h2>
+    <p>Because your data lives on your device and in your own Google Drive, you are in direct control of it at all times. You can clear your browser storage, delete your Drive files, and revoke Google access whenever you like. Diagramforce holds no copy of anything to request, export, or delete on your behalf. Where data-protection laws such as the GDPR apply, the practical effect is that you already hold and control your own data.</p>
+
+    <h2 id="children"><span class="num">8.</span>Children</h2>
+    <p>Diagramforce is a professional tool not directed at children, and it knowingly collects no personal data from anyone - including children.</p>
+
+    <h2 id="changes"><span class="num">9.</span>Changes to this policy</h2>
+    <p>We may update this policy from time to time. The “Last updated” date at the top always reflects the current version. Significant changes will be reflected here on this page.</p>
+
+    <h2 id="contact"><span class="num">10.</span>Contact</h2>
+    <p>Questions about this policy can be raised by contacting Mateusz Dąbrowski on <a href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener">LinkedIn</a>, or via the <a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener">project's GitHub repository</a>. There is no data to control, so there is no data controller in the usual sense; the person otherwise responsible for this site is Mateusz Dąbrowski (Poland).</p>
+  </main>
+
+  <footer>
+    <p>See also the <a href="terms.html">Terms of Use</a> · <a href="./">Back to Diagramforce</a></p>
+  </footer>
+</body>
+</html>

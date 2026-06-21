@@ -4,11 +4,21 @@
   --brand-red: #DA4E55;
   --brand-amber: #F6B355;
   --brand-green: #27AE60;   /* Success / confirmation accent (e.g. "Copied!" feedback) */
+  --brand-primary: var(--brand-blue);   /* the primary brand hue, theme-stable (does NOT flip like --color-primary) — used for focus rings / brand hovers */
+
+  /* Cloud-sync status — theme-stable semantic hues. Deliberately NOT --color-primary
+     (which flips blue↔red between themes); each picks the stop legible on its bg.
+     Dark-mode values in theme.css. Light = darker stops for contrast on white. */
+  --sync-off: #8A8F98;
+  --sync-ok: var(--brand-blue);       /* "working" — blue in light, orange in dark (theme.css) */
+  --sync-pending: var(--brand-blue);  /* pending is calm too — same as ok, just different text */
+  --sync-error: #A32D2D;
 
   /* Semantic colors (overridden per theme) */
   --color-primary: var(--brand-blue);
   --color-secondary: var(--brand-red);
   --color-accent: var(--brand-amber);
+  --color-danger: var(--brand-red);   /* destructive actions (delete / discard) — brand red, theme-stable */
 
   /* Neutral modal buttons (Cancel / Close) — light-grey fill, identical in
      both themes (NOT overridden in theme.css) so the secondary action reads
@@ -22,6 +32,11 @@
   --bg-surface: #FFFFFF;
   --bg-surface-raised: #FFFFFF;
   --bg-canvas: #FAFAFA;
+  /* Secondary surfaces — referenced by modal sub-blocks. Defined here so they resolve (and adapt per theme
+     via the tokens they alias) instead of silently falling back to mismatched literals. */
+  --bg-elevated: rgba(127, 127, 127, 0.08);   /* faint theme-neutral tint for inset/raised blocks (code, previews) */
+  --bg-panel: var(--bg-surface-raised);        /* solid panel / form-control surface (e.g. the group-select picklist) */
+  --bg-subtle: var(--toolbar-bg);              /* subtle block bg, one step off the modal surface */
 
   /* Text */
   --text-primary: #1C1E21;
@@ -56,7 +71,8 @@
   --canvas-grid-color: rgba(0, 0, 0, 0.08);
 
   /* Sizing */
-  --toolbar-height: 60px;
+  --toolbar-height: 50px;   /* trimmed from 60: the icons/controls are unchanged (~32px), this just removes the
+                               excess whitespace above/below them to reclaim ~10px of vertical canvas on laptops */
   --border-radius-sm: 6px;
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
@@ -75,6 +91,7 @@
 
   /* Typography */
   --font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-md: 14px;
@@ -86,6 +103,8 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
   --shadow-md: 0 5px 40px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, 0.2), 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  /* Button-merge panel shadow — casts down/sideways only, never blurs up onto the merged button (see theme.css). */
+  --shadow-dropdown: 0 14px 24px -10px rgba(0, 0, 0, 0.18);
 
   /* Transitions — matching Docusaurus/Infima timing */
   --transition-fast: 150ms ease;

@@ -73,20 +73,18 @@ function writePalette(arr) {
   notifyListeners();
 }
 
-/** Add a color to the front of the palette. Duplicates are deduped (the
- *  existing entry is moved to the front). When the palette is full the
- *  oldest entry drops off the back — newest first, ringbuffer style.
- *  Returns true if the palette changed, false if the input was rejected
- *  (non-hex) or was already at the front. */
+/** Add a color to the END of the palette (the right, next to the + button — where the eye already is).
+ *  Duplicates are deduped (the existing entry moves to the end). When the palette is full the OLDEST
+ *  (left-most) entry drops off the front — newest on the right, ringbuffer style. Returns true if the
+ *  palette changed, false if the input was rejected (non-hex) or was already the right-most entry. */
 export function addToPalette(hex) {
   const norm = normaliseHex(hex);
   if (!norm) return false;
   const current = getPalette();
-  // No-op if it's already the front entry (saves a write).
-  if (current[0] === norm) return false;
-  // Remove any existing copy further down so addToPalette doubles as
-  // "promote to front".
-  const next = [norm, ...current.filter(c => c !== norm)].slice(0, MAX_SLOTS);
+  // No-op if it's already the right-most entry (saves a write).
+  if (current[current.length - 1] === norm) return false;
+  // Append to the right; a duplicate moves to the end. When full, the oldest (left) drops off.
+  const next = [...current.filter(c => c !== norm), norm].slice(-MAX_SLOTS);
   writePalette(next);
   return true;
 }

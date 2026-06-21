@@ -5,7 +5,9 @@
   align-items: center;
   justify-content: space-between;
   height: var(--toolbar-height);
-  padding: 0 var(--spacing-lg);
+  /* 12px gutter (= --spacing-md) so the MD logo's left edge + the stencil-toggle's right edge align with the
+     tab bar (trash + new buttons) and the stencil's "Search components" inset (item 3). */
+  padding: 0 var(--spacing-md);
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--toolbar-border);
   gap: var(--spacing-md);
@@ -118,7 +120,7 @@
 
 .df-toolbar__button:hover:not(:disabled) {
   background: var(--toolbar-button-hover);
-  color: var(--text-primary);
+  color: var(--color-primary);   /* hover → brand primary, unified across the navbar (matches the theme toggle) */
 }
 
 .df-toolbar__button:disabled {
@@ -130,6 +132,35 @@
   background: var(--toolbar-button-active);
   color: var(--color-primary);
 }
+/* Highlighted/active toggles (open stencil, grid on, …) keep their active look on hover instead of falling
+   back to the plain hover background — only the navbar's non-active icons get the hover-to-primary treatment. */
+.df-toolbar__button--active:hover:not(:disabled) {
+  background: var(--toolbar-button-active);
+  color: var(--color-primary);
+}
+
+/* While its anchored manager (Save / Load / Share) is open, the navbar button MERGES into the panel that drops
+   below it: it takes the panel's surface + a top/side border and hides its bottom seam, so the button + panel read
+   as one connected shape (like the active tab joining the canvas). buildModal toggles this; the dialog drops its
+   matching top border (css/modals.css). border-bottom is coloured like the panel (not removed) so the box height
+   doesn't jump. */
+.df-toolbar__button--panel-open,
+.df-toolbar__button--panel-open:hover:not(:disabled),
+#display-dropdown.df-toolbar__dropdown--open > .df-toolbar__button,
+#display-dropdown.df-toolbar__dropdown--open > .df-toolbar__button:hover:not(:disabled),
+#sync-dropdown.df-toolbar__dropdown--open > .df-toolbar__button,
+#sync-dropdown.df-toolbar__dropdown--open > .df-toolbar__button:hover:not(:disabled) {
+  background: var(--bg-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--border-color);
+  border-bottom-color: var(--bg-surface);
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+  position: relative;
+  z-index: 1;
+  /* Snap the surface (don't transition `background`): the base button's bg fade would leave the merged button
+     briefly translucent (rgba …/.99) and reading DARKER than the opaque panel — item 4. */
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
 
 /* Icon-only buttons (undo, redo, zoom, delete, align…) */
 .df-toolbar__button--icon-only {
@@ -137,18 +168,103 @@
   gap: 0;
 }
 
-/* Theme toggle — circular pill like mateuszdabrowski.pl */
+/* Cloud sync control (Google Drive) — ONE icon (the multicolour 2026 Drive logo) recoloured by
+   CSS per [data-state]; no glyph swapping (that two-element toggle was the source of the icon
+   bugs). Four states:
+     off            → greyed logo (inactive), no text
+     synced/pending → full-colour logo, no text
+     saving         → full-colour logo, 3-step 120° "jump" spin, no text
+     error          → the SAME logo red-tinted via filter (keeps facet detail), + red "Sign in" text
+   ONE icon, ONE <use> href — nothing toggles display or href. Menu items elsewhere keep the
+   full-colour logo (these rules only scope the navbar instance). */
+.df-sync__btn { gap: 6px; }
+/* State changes are INSTANT (no filter transition): a `transition: filter` leaves the icon stuck
+   on the previous state's filter when the winning cascade rule changes (the filter-list↔filter-list
+   interpolation doesn't settle here). Instant is correct for a status glyph anyway. See GOTCHAS. */
+.df-sync__drive { filter: grayscale(0) opacity(1); }
+.df-sync__btn[data-state="off"] .df-sync__drive { filter: grayscale(1) opacity(0.55); }
+/* Error: the SAME detailed multicolour logo, red-tinted via filter (keeps the facet structure +
+   centre notch — a flat silhouette loses that). grayscale(1) flattens to luminance, then
+   sepia→saturate→hue-rotate pushes it into the red family (coral→deep-red, no amber). */
+.df-sync__btn[data-state="error"] .df-sync__drive { filter: grayscale(1) brightness(0.62) sepia(1) saturate(5) hue-rotate(-42deg); }
+/* Conflict (sync paused — needs Pull/Keep/Fork): the SAME logo, amber-tinted via filter — a "needs
+   attention" state distinct from the red error. grayscale→sepia→saturate→a small hue-rotate lands in
+   the amber family (the brand accent), keeping the facet detail like the error tint does. */
+.df-sync__btn[data-state="conflict"] .df-sync__drive { filter: grayscale(1) brightness(0.95) sepia(1) saturate(4.5) hue-rotate(-18deg); }
+/* Refresh-available (the original shared file gained changes — pull offered): the SAME logo, tinted BLUE
+   (info, distinct from the amber conflict + red error) so it reads "there's an update to pull", not "problem". */
+.df-sync__btn[data-state="refresh"] .df-sync__drive { filter: grayscale(1) brightness(0.95) sepia(1) saturate(4) hue-rotate(165deg); }
+/* Saving spin = the playful 120° jump. Driven by a JS-managed class (NOT [data-state]) so it always
+   COMPLETES the current 360° cycle and stops at rest (0°) instead of snapping mid-rotation when the
+   save finishes — toolbar.js removes the class on an `animationiteration` boundary once saving ends.
+   The Drive triangle is ~3-fold symmetric, so the silhouette reads as upright while the colours hop
+   through the three orientations and the loop closes seamlessly (360°≡0°). No scale() — overflow is
+   visible so the rotated corners (~1px past the 16px box, into the button padding) show, which means
+   stopping has NO size pop. transform-origin is the triangle's circum-centre (≈50% 58%), not the box
+   centre, so it spins in place without orbiting. */
+.df-sync__drive--spin {
+  transform-origin: 50% 58%;
+  overflow: visible;
+  animation: df-drive-jump 2.1s ease-in-out infinite;
+}
+@keyframes df-drive-jump {
+  0%,  15%  { transform: rotate(0deg); }
+  33%, 48%  { transform: rotate(120deg); }
+  66%, 81%  { transform: rotate(240deg); }
+  99%, 100% { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .df-sync__drive--spin { animation: none; }
+}
+/* Text shows in the error state (red "Sign in") + conflict (amber "Review"). */
+.df-sync__text { font-size: var(--font-size-sm); font-weight: 500; white-space: nowrap; color: var(--sync-error); }
+.df-sync__btn[data-state="conflict"] .df-sync__text { color: var(--brand-amber); }
+.df-sync__btn[data-state="refresh"] .df-sync__text { color: var(--color-primary); }   /* "Refresh" is an info action — blue */
+.df-sync__btn[data-state="saving"] .df-sync__text { color: var(--text-secondary); }   /* "Saving" is in-progress, not an error — neutral */
+
+/* Menu state-explainer row (first child, every state). In error it doubles as the reconnect
+   button (.df-sync__status--action). */
+.df-sync__status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; font-size: var(--font-size-sm); line-height: 1.45; color: var(--text-secondary);
+}
+.df-sync__status-text { flex: 1; min-width: 0; white-space: pre-line; }   /* honour any \n in the status text */
+/* The KEY contextual action as a wire button on the right (Sign in / Review / Refresh / Sync now). Tone-coloured
+   per state via --_tone: red (sign-in), amber (review/sync), blue (refresh) - matching the navbar icon's text. */
+.df-sync__status-btn {
+  flex-shrink: 0; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
+  padding: 4px 12px; border-radius: var(--border-radius-sm);
+  background: transparent; border: 1px solid var(--_tone, var(--brand-amber)); color: var(--_tone, var(--brand-amber));
+}
+.df-sync__status-btn:hover { background: color-mix(in srgb, var(--_tone, var(--brand-amber)) 12%, transparent); }
+.df-sync__status-btn[hidden] { display: none; }
+.df-sync__status-btn[data-tone="error"] { --_tone: var(--sync-error); }
+.df-sync__status-btn[data-tone="conflict"] { --_tone: var(--brand-amber); }
+.df-sync__status-btn[data-tone="refresh"] { --_tone: var(--color-primary); }
+.df-sync__status-btn[data-tone="sync"] { --_tone: var(--brand-amber); }
+
+/* Menu aligns to the right edge — the control sits in the right cluster. Double class
+   beats the base .df-toolbar__menu (which is declared later + sets left:0). Wider so the
+   longest item ("Enable sync to Google Drive") fits on one line. */
+.df-toolbar__menu.df-sync__menu { left: auto; right: 0; min-width: 240px; }
+
+/* Cadence sub-row — shown only when auto-sync is on. Select matches the app surfaces. */
+.df-sync__cadence {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 12px 6px 38px; font-size: 13px; color: var(--text-secondary);
+}
+.df-sync__cadence[hidden] { display: none; }   /* [hidden] alone loses to display:flex */
+.df-sync__cadence-note { line-height: 1.4; }
+
+/* Theme toggle — same squircle (rounded-square) as the other icon-only toolbar buttons. */
 #btn-theme {
-  border-radius: 50%;
+  border-radius: var(--border-radius-sm);
   width: 32px;
   height: 32px;
   padding: 0;
 }
 
-#btn-theme:hover:not(:disabled) {
-  background: var(--toolbar-button-hover);
-  color: var(--color-primary);
-}
+/* (#btn-theme hover is now the shared .df-toolbar__button:hover → primary; no per-button override needed.) */
 
 .df-toolbar__icon {
   width: 16px;
@@ -197,6 +313,47 @@
 
 .df-toolbar__dropdown.df-toolbar__dropdown--open .df-toolbar__menu {
   display: block;
+}
+
+/* Display dropdown — same button-merge as the storage managers (2.5): the open button takes the panel surface
+   + drops its bottom seam (.df-toolbar__button--panel-open extended above), and the menu joins it — same
+   --bg-surface, no 4px gap, squared top, with the top border resuming only PAST the button (--df-merge-w set
+   in setupDropdown's openMenu). Stays scrimless + current size; scoped to #display-dropdown because the Drive
+   menu is right-aligned (a different notch). */
+#display-dropdown.df-toolbar__dropdown--open .df-toolbar__menu {
+  margin-top: 0;
+  background: var(--bg-surface);
+  border-top: none;
+  border-top-left-radius: 0;   /* square only on the button side; top-right stays rounded (item 2) */
+  box-shadow: var(--shadow-dropdown);   /* no upward blur onto the merged button */
+}
+#display-dropdown.df-toolbar__dropdown--open .df-toolbar__menu::before {
+  content: '';
+  position: absolute;
+  top: 0; left: var(--df-merge-w, 0); right: 0;
+  border-top: 1px solid var(--border-color);
+  border-top-right-radius: var(--border-radius-md, 10px);
+  pointer-events: none;
+}
+
+/* Drive sync dropdown — same merge, MIRRORED for the right-aligned menu (item 1): the button sits at the
+   menu's RIGHT, so the squared corner + notch are on the top-RIGHT and the top border resumes from the rounded
+   top-LEFT up to the button. setupDropdown('btn-sync') already sets --df-merge-w; the button look comes from
+   the #sync-dropdown selector added to .df-toolbar__button--panel-open above. */
+#sync-dropdown.df-toolbar__dropdown--open .df-sync__menu {
+  margin-top: 0;
+  background: var(--bg-surface);
+  border-top: none;
+  border-top-right-radius: 0;   /* square on the button side (right); top-LEFT stays rounded */
+  box-shadow: var(--shadow-dropdown);   /* no upward blur onto the merged button */
+}
+#sync-dropdown.df-toolbar__dropdown--open .df-sync__menu::before {
+  content: '';
+  position: absolute;
+  top: 0; right: var(--df-merge-w, 0); left: 0;
+  border-top: 1px solid var(--border-color);
+  border-top-left-radius: var(--border-radius-md, 10px);
+  pointer-events: none;
 }
 
 /* Mobile: a toolbar dropdown's menu surfaced as a full-width overlay from the hamburger.
@@ -431,7 +588,6 @@
   .df-toolbar__left > .df-toolbar__dropdown,
   .df-toolbar__left > .df-toolbar__separator,
   .df-toolbar__center,
-  .df-toolbar__right > #btn-share-url,
   .df-toolbar__right > #btn-about,
   .df-toolbar__right > #btn-theme,
   /* Help/Walkthrough lives in the hamburger on mobile (above About); hiding it here leaves a
@@ -519,12 +675,14 @@
    Save / Load / Display text labels and keep just the icon + dropdown chevron. */
 @media (max-width: 1300px) and (min-width: 769px) {
   #btn-save > span,
+  #btn-share-url > span,
   #btn-load > span,
   #btn-display > span {
     display: none;
   }
   /* tighten the now icon-only buttons so the chevron sits close to the icon */
   #btn-save,
+  #btn-share-url,
   #btn-load,
   #btn-display {
     gap: 4px;

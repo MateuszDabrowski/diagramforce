@@ -533,11 +533,22 @@
   text-align: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--transition-fast);
+  pointer-events: none;   /* not clickable until revealed — stops accidental deletes while applying */
+  transition: opacity var(--transition-fast), pointer-events 0s;
 }
+/* Reveal the × only after a LONG hover (the delay) — a quick click on the swatch applies the colour
+   instead, so you stop deleting swatches you meant to apply. */
 .df-prop-palette-swatch:hover .df-prop-palette-swatch__remove,
 .df-prop-palette-swatch:focus-within .df-prop-palette-swatch__remove {
   opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.55s;
+}
+/* Right-click on a swatch reveals the × immediately (no wait). */
+.df-prop-palette-swatch.is-removable .df-prop-palette-swatch__remove {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 .df-prop-palette-swatch__remove:hover {
   color: var(--brand-red);
@@ -663,16 +674,6 @@
   background: var(--stencil-item-hover);
   color: var(--text-primary);
   border-color: var(--border-color-strong);
-}
-
-.df-properties__btn--primary {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.df-properties__btn--primary:hover {
-  background: var(--color-primary);
-  color: #fff;
 }
 
 /* ── Order section ─────────────────────────────────────────────── */
@@ -900,12 +901,6 @@
   -webkit-appearance: none;
   appearance: none;
   padding-right: 2px;
-}
-
-.df-field-input--length {
-  font-size: 9px;
-  text-align: center;
-  width: 100%;
 }
 
 .df-field-delete {

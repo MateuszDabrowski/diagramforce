@@ -5,9 +5,24 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.16.1';
-import { showToast, showError } from '../feedback.js?v=1.16.1';
-import { pctx } from './context.js?v=1.16.1';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.17.0.199';
+import { showToast, showError } from '../feedback.js?v=1.17.0.199';
+import { pctx } from './context.js?v=1.17.0.199';
+
+// Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
+// canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
+// and `img.onerror` does NOT fire for an over-large canvas - the file just comes out empty. So clamp the scale
+// so neither side nor the total pixel area exceeds a conservative, cross-engine-safe budget. Returns the largest
+// scale <= desired that fits; callers warn when it drops below 1 (the raster is then lower-res than the diagram,
+// and SVG export is the full-fidelity alternative).
+const EXPORT_MAX_SIDE = 8192;        // widest dimension any mainstream canvas reliably rasterizes
+const EXPORT_MAX_AREA = 33554432;    // 32 Mpx total - guards engines whose area cap is below side*side
+function clampExportScale(w, h, desired = 2) {
+  if (!(w > 0) || !(h > 0)) return desired;
+  const sideCap = Math.min(EXPORT_MAX_SIDE / w, EXPORT_MAX_SIDE / h);
+  const areaCap = Math.sqrt(EXPORT_MAX_AREA / (w * h));
+  return Math.max(0, Math.min(desired, sideCap, areaCap));
+}
 
 export function exportWEBP(transparent = false) {
   return exportRaster(transparent, 'webp');
@@ -15,6 +30,68 @@ export function exportWEBP(transparent = false) {
 
 export function exportPNG(transparent = false) {
   return exportRaster(transparent, 'png');
+}
+
+/**
+ * Export the diagram as a standalone, scalable .svg. Reuses the same standalone-SVG pipeline as the raster
+ * export (foreignObject→text, CSS-var resolution, line-style inlining, SLDS sprite inlining) but downloads the
+ * serialized SVG directly instead of rasterizing it. Transparent by default (no background rect); pass false
+ * to bake in the canvas background.
+ */
+export function exportSVG(transparent = true) {
+  const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
+  try {
+    const contentBBox = paper.getContentBBox();
+    if (!contentBBox || contentBBox.width === 0) {
+      showError('Diagram is empty - nothing to export.');
+      return;
+    }
+    const padding = 32;
+    const exportW = contentBBox.width + padding * 2;
+    const exportH = contentBBox.height + padding * 2;
+
+    const svgClone = paper.svg.cloneNode(true);
+    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgClone.setAttribute('width', exportW);
+    svgClone.setAttribute('height', exportH);
+    svgClone.setAttribute('viewBox', `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`);
+
+    const viewport = svgClone.querySelector('.joint-viewport');
+    if (viewport) viewport.removeAttribute('transform');
+    svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
+
+    const spritesContainer = document.getElementById('slds-icons');
+    if (spritesContainer) {
+      const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      defsEl.innerHTML = spritesContainer.innerHTML;
+      svgClone.insertBefore(defsEl, svgClone.firstChild);
+    }
+
+    // Opaque variant bakes in the canvas background as a full-bleed rect behind everything.
+    if (!transparent) {
+      const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-canvas')?.trim() || '#1A1A1A';
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', contentBBox.x - padding);
+      bg.setAttribute('y', contentBBox.y - padding);
+      bg.setAttribute('width', exportW);
+      bg.setAttribute('height', exportH);
+      bg.setAttribute('fill', bgColor);
+      svgClone.insertBefore(bg, svgClone.firstChild);
+    }
+
+    replaceForeignObjects(svgClone);
+    resolveCssVars(svgClone);
+    applyLineStyleInline(svgClone, transparent);
+
+    const svgStr = new XMLSerializer().serializeToString(svgClone);
+    const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
+    const safeName = (getTabNameCallback?.() || 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
+    triggerDownload(url, `df_${safeName}_${dateSuffix()}.svg`);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('SVG exported ✓', 'success');
+  } catch (err) {
+    showError('SVG export failed: ' + (err.message || 'unknown error'));
+  }
 }
 
 function exportRaster(transparent, format) {
@@ -25,7 +102,7 @@ function exportRaster(transparent, format) {
   try {
     const contentBBox = paper.getContentBBox();
     if (!contentBBox || contentBBox.width === 0) {
-      showError('Diagram is empty — nothing to export.');
+      showError('Diagram is empty - nothing to export.');
       return;
     }
 
@@ -76,10 +153,13 @@ function exportRaster(transparent, format) {
 
     const img = new Image();
     img.onload = () => {
-      const scale = 2; // 2× for retina sharpness
+      // 2× for retina sharpness, but clamped so a large diagram never overflows the canvas size limit and exports
+      // blank/clipped. If the clamp pushes us below 1×, warn (the raster is downscaled; SVG keeps full fidelity).
+      const scale = clampExportScale(exportW, exportH, 2);
+      if (scale < 1) showToast(`Diagram is large - ${fmtLabel} exported at ${Math.round(scale * 100)}% scale. Use SVG export for full resolution.`, 'info');
       const canvas = document.createElement('canvas');
-      canvas.width = exportW * scale;
-      canvas.height = exportH * scale;
+      canvas.width = Math.round(exportW * scale);
+      canvas.height = Math.round(exportH * scale);
       const ctx = canvas.getContext('2d');
 
       if (!transparent) {
@@ -141,7 +221,7 @@ export async function exportGIF(transparent = false) {
   try {
     const contentBBox = paper.getContentBBox();
     if (!contentBBox || contentBBox.width === 0) {
-      showError('Diagram is empty — nothing to export.');
+      showError('Diagram is empty - nothing to export.');
       return;
     }
 
@@ -159,7 +239,10 @@ export async function exportGIF(transparent = false) {
     const padding = 32;
     const exportW = contentBBox.width + padding * 2;
     const exportH = contentBBox.height + padding * 2;
-    const scale = 2; // 2× for retina sharpness
+    // 2× for retina, clamped to the canvas size budget (a per-frame GIF canvas blanks past the same limits as a
+    // PNG; gifenc would then encode empty frames). Warn once if the diagram is too large to hold full 2×.
+    const scale = clampExportScale(exportW, exportH, 2);
+    if (scale < 1) showToast(`Diagram is large - GIF rendered at ${Math.round(scale * 100)}% scale.`, 'info');
     const canvasW = Math.round(exportW * scale);
     const canvasH = Math.round(exportH * scale);
 

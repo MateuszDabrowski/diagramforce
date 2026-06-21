@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.16.1';
-import { escHtml } from './util.js?v=1.16.1';
+import { trapFocus } from './feedback.js?v=1.17.0.199';
+import { escHtml } from './util.js?v=1.17.0.199';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -62,27 +62,33 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Welcome to Diagramforce',
-    body: 'A fast, browser-based canvas for architecture, data models, Data Cloud mappings, process flows, org charts, Gantt charts, and UML sequence diagrams — no account, and nothing leaves your browser.\n\nLet’s do a quick 60-second tour of the key tools.\n\nIn a rush? Hit skip. You can always jump right back into this walkthrough by clicking the {{help}} Help icon in the top toolbar.',
+    body: "A fast, browser-based canvas for architecture, data models, Data Cloud mappings, process flows, org charts, Gantt charts, and UML sequence diagrams - no account, and nothing leaves your browser.\n\nLet's do a quick 60-second tour of the key tools.\n\nIn a rush? Hit skip. You can always jump right back into this walkthrough by clicking the {{help}} Help icon in the top toolbar.",
   },
   {
-    targets: ['#btn-save', '#btn-load'], placement: 'below-start',
-    title: 'Save & Load',
-    body: 'Keep your work safe. Export a compact native JSON file for version control, share a diagram via a copyable URL, or save a clean PNG / WEBP / GIF for your documentation.\n\nYou can also use the [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) to have an AI draft a diagram, then load it.',
+    targets: ['#btn-save', '#btn-load', '#btn-share-url'], placement: 'below-start',
+    title: 'Save, Load & Share',
+    body: 'Keep your work safe and shareable:\n- **Save** - keep each diagram in your browser, your own Google Drive, or a team Shared Drive, and export as JSON, CSV, or image (PNG / WEBP / SVG / GIF).\n- **Load** - bring diagrams back from the browser, Google Drive, a file, or pasted JSON / Mermaid.\n- **Share** - hand out a Diagramforce link or a Google Drive link.\n\nTip: use the [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) to have an AI draft a diagram, then load it.',
+  },
+  {
+    // Drive-only step — start() drops it when the sync control is hidden (Drive not configured).
+    target: '#btn-sync', placement: 'below', driveOnly: true,
+    title: 'Google Drive sync',
+    body: 'Sync every diagram to your own **Google Drive** - sign in once and each one auto-saves into a Diagramforce folder you own, ready to open or share from any device.\n\nThe icon shows status at a glance:\n- **Grey** - off\n- **Full colour** - synced\n- **Spinning** - saving\n- **Blue** - a shared file you opened has a newer version to pull\n- **Amber** - a change needs resolving\n- **Red** - your hour-long sign-in needs a refresh\n\nOpen the menu for **version history**, **auto-sync** (with a cadence), and connect or disconnect - or **right-click** the icon to sync now or reconnect in one go.',
   },
   {
     target: '#btn-display', placement: 'below-start',
     title: 'Context-Aware Display',
-    body: 'The Display menu adapts to the active diagram type — auto-layout, focus dimming to trace connections, plus type-specific toggles (field labels & lengths, swimlane fit, participant labels, and more).',
+    body: 'The Display menu adapts to the active diagram type - auto-layout, focus dimming to trace connections, plus type-specific toggles (field labels & lengths, swimlane fit, participant labels, and more).',
   },
   {
     target: '#stencil-panel', placement: 'left',
     title: 'Your Diagram Stencil',
-    body: 'Your canvas toolbox. This side panel auto-loads the shapes for the active diagram type — Salesforce & cloud products, BPMN steps, data objects, lifelines, Gantt tasks, and more.\n\nMissing something? Copy-paste it from another diagram type.',
+    body: 'Your canvas toolbox. This side panel auto-loads the shapes for the active diagram type - Salesforce & cloud products, BPMN steps, data objects, lifelines, Gantt tasks, and more.\n\nSave your own: **My Shapes** keeps a single shape you reuse a lot, and **My Templates** captures a whole multi-selection (shapes + connectors) as one reusable block - both follow you across devices when Google Drive is connected.\n\nNeed a shape from another diagram type? They are all at the bottom under **Other Shapes**, grouped by type - drag one onto any canvas.',
   },
   {
     target: '#properties-panel', placement: 'right',
     title: 'Manage Properties',
-    body: 'Click any shape or connector to edit it here — labels, colors, data types and keys, connector ends, and type-specific settings. You can also convert between shape types or apply changes across a multi-selection.',
+    body: 'Click any shape or connector to edit it here - labels, colors, data types and keys, connector ends, and type-specific settings. You can also convert between shape types or apply changes across a multi-selection.',
     // Open an example shape's properties panel on enter so the step has something to point at;
     // clear it on leave so it closes again. Selection is UI state — no graph mutation / history.
     // Prefer a real content shape over a background grouper (Zone / Container / Pool / timeline).
@@ -99,7 +105,7 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Time to Build!',
-    body: 'Pro-tip for fast workflows:\n- Share [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) and [reference diagram](https://architect.salesforce.com/diagrams#reference-architecture-gallery) with your context to create first draft with LLM of your choice\n- {{mod}} + A to select all elements, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nFind more [here](https://github.com/MateuszDabrowski/diagramforce/tree/main#keyboard-shortcuts).\n\nTime to build!',
+    body: 'Pro-tip for fast workflows:\n- Share [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) and [reference diagram](https://architect.salesforce.com/diagrams#reference-architecture-gallery) with your context to create first draft with LLM of your choice\n- {{mod}} + A to select all shapes, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nFind more [here](https://github.com/MateuszDabrowski/diagramforce/tree/main#keyboard-shortcuts).\n\nTime to build!',
   },
 ];
 
@@ -113,7 +119,7 @@ const TYPE_STEP = {
   },
   datamodel: {
     target: '#btn-map-bridge', placement: 'below',
-    title: 'The ‘Map’ Transition Bridge',
+    title: "The 'Map' Transition Bridge",
     body: 'Moving from schema to integration? This clones your structural model straight into a new Data Mapping tab, wrapping your tables in a default Source layer so you can immediately wire up pipelines.',
   },
 };
@@ -130,7 +136,10 @@ export function isActive() { return !!activeTour; }
 export function start() {
   if (activeTour) return;                                   // already running
   const type = modules?.tabs?.getActiveTabType?.() || '';
-  const steps = BASE_TOUR.slice();
+  // Drop the Drive-sync step when the sync control isn't on screen (Drive not configured for this
+  // origin) — otherwise it would degrade to a centred card describing a feature the user can't see.
+  const driveOn = !!document.querySelector('#btn-sync')?.offsetParent;
+  const steps = BASE_TOUR.filter(s => !s.driveOnly || driveOn);
   const extra = TYPE_STEP[type];
   if (extra) steps.splice(steps.length - 1, 0, extra);      // insert before the final "Time to Build"
   runTour(steps);

@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.16.1';
+import { cctx } from './context.js?v=1.17.0.199';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -155,6 +155,13 @@ function refreshCrossingBumpOpacity() {
   });
 }
 
+// Perf guard: the pairwise crossing detection is O(segments²) and runs on a debounced recompute after every
+// edit. On a very large diagram the segment count can reach thousands, enough to jank the main thread. Past this
+// conservative cap we skip the whole bump pass - the jump-over arcs are a cosmetic nicety, and the links still
+// render + route correctly without them. (~1200 segments ≈ 720k cheap range tests worst case.)
+const MAX_BUMP_SEGMENTS = 1200;
+let _bumpGuardLogged = false;
+
 function recomputeCrossingBumps() {
   const { graph, paper } = cctx;
   if (!_bumpLayer || !graph || !paper) return;
@@ -177,6 +184,13 @@ function recomputeCrossingBumps() {
     for (const seg of linkSegs) {
       segments.push({ link, seg, stroke, strokeWidth, z });
     }
+  }
+
+  // Perf short-circuit on very large diagrams (the bump layer is already cleared above, so links just render
+  // without arcs). Logged once so it's discoverable without spamming the console on every recompute.
+  if (segments.length > MAX_BUMP_SEGMENTS) {
+    if (!_bumpGuardLogged) { _bumpGuardLogged = true; console.info(`SF Diagrams: crossing-bump arcs skipped (${segments.length} segments > ${MAX_BUMP_SEGMENTS} cap) to keep large diagrams responsive.`); }
+    return;
   }
 
   // Pairwise orthogonal-crossing detection.  O(S²) but S is small in

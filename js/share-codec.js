@@ -251,3 +251,43 @@ export function decodeShareV2(payload) {
   if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
   return remapKeys(JSON.parse(json), EXPAND_V2);
 }
+
+// ── Group link codec (g1) ────────────────────────────────────────────────────
+// A "Share Group" link doesn't carry diagram CONTENT (that lives in each member's
+// own Drive file) — only the Drive file ids + the group's display metadata, so the
+// recipient app can read each file and re-assemble the group. The payload is tiny
+// and the ids are high-entropy (no compression win), so this is a plain
+// base64url(JSON) with a `g1.` version tag — NOT the heavy v1/v2 content codec.
+// FROZEN once shipped: a future shape ships as `g2.` and decodeGroupLink keeps the
+// g1 branch alive (same back-compat rule as the content codec). Drive file ids are
+// `[A-Za-z0-9_-]`, so ids are validated on both ends to keep the round-trip clean.
+const GROUP_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const cleanIds = (ids) => (Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string' && GROUP_ID_RE.test(id));
+
+/** Encode a group share payload {name, ids, color, icon} → `g1.<base64url>`. */
+export function encodeGroupLink({ name = 'Group', ids = [], color = null, icon = null } = {}) {
+  const safeIds = cleanIds(ids);
+  if (!safeIds.length) throw new Error('A group link needs at least one Drive file id');
+  // Short keys (n/i/c/k) keep the URL compact; color/icon omitted when absent.
+  const payload = { n: String(name || 'Group').slice(0, 120), i: safeIds };
+  if (color) payload.c = String(color).slice(0, 32);
+  if (icon) payload.k = String(icon).slice(0, 64);
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  return 'g1.' + bytesToUrlSafe(bytes);
+}
+
+/** Decode a `g1.<base64url>` group payload → {name, ids, color, icon}. Throws on a malformed payload. */
+export function decodeGroupLink(payload) {
+  if (typeof payload !== 'string' || !payload.startsWith('g1.')) throw new Error('Not a g1 group payload');
+  const json = new TextDecoder().decode(urlSafeToBytes(payload.slice(3)));
+  if (json.length > 64 * 1024) throw new Error('Group link too large');   // a sane ceiling — ids are ~33 chars each
+  const p = JSON.parse(json);
+  const ids = cleanIds(p && p.i);
+  if (!ids.length) throw new Error('Group link carries no valid file ids');
+  return {
+    name: p && typeof p.n === 'string' ? p.n : 'Group',
+    ids,
+    color: p && typeof p.c === 'string' ? p.c : null,
+    icon: p && typeof p.k === 'string' ? p.k : null,
+  };
+}

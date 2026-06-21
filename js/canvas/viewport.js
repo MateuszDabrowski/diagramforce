@@ -8,8 +8,8 @@
 // them onto cctx in init(), then calls registerViewportControls(cctx) to attach
 // the listeners and expose `getZoom` + `fitContent` back onto cctx for the
 // sub-modules that need them (e.g. auto-layout.js calls cctx.fitContent()).
-import { cctx } from './context.js?v=1.16.1';
-import { centerX, centerY, clamp } from '../util/geometry.js?v=1.16.1';
+import { cctx } from './context.js?v=1.17.0.199';
+import { centerX, centerY, clamp } from '../util/geometry.js?v=1.17.0.199';
 
 // ── Zoom + grid state ───────────────────────────────────────────────
 let currentZoom = 1;
@@ -151,7 +151,14 @@ export function registerViewportControls(cctx) {
 
   const canvasEl = document.getElementById('canvas-container');
 
+  // The table view (Data Mapping/Model) is an absolute overlay INSIDE #canvas-container with its own
+  // scroll region (.df-tbl__scroll). These pan/pinch handlers preventDefault() every touchmove, which
+  // would cancel that overlay's native touch scrolling. Bail out for touches that start inside it so the
+  // browser scrolls the table normally (the paper is hidden behind the overlay anyway — nothing to pan).
+  const inScrollableOverlay = (evt) => !!evt.target?.closest?.('.df-table-view');
+
   canvasEl.addEventListener('touchstart', (evt) => {
+    if (inScrollableOverlay(evt)) { touchPanStart = null; touchPinchDist = null; return; }
     if (evt.touches.length === 1) {
       // Single-finger → pan
       touchPanStart = { x: evt.touches[0].clientX, y: evt.touches[0].clientY };

@@ -22,14 +22,26 @@ const TOAST_DEFAULT_DURATION = 2000;
 let toastContainerEl = null;
 
 function ensureToastContainer() {
-  if (toastContainerEl && toastContainerEl.isConnected) return toastContainerEl;
+  if (toastContainerEl && toastContainerEl.isConnected) { positionToastContainer(); return toastContainerEl; }
   toastContainerEl = document.createElement('div');
   toastContainerEl.className = 'df-toast-container';
   toastContainerEl.setAttribute('role', 'status');
   toastContainerEl.setAttribute('aria-live', 'polite');
   toastContainerEl.setAttribute('aria-atomic', 'true');
   document.body.appendChild(toastContainerEl);
+  positionToastContainer();
   return toastContainerEl;
+}
+
+/** Toasts sit at the TOP, centered, just below the tab bar — that's where the user's eyes are (the menus +
+ *  the actions that fire toasts live up there). Measured from the live tab-bar bottom so it tracks navbar
+ *  height / wrapping / mobile; falls back to a sane offset if the tab bar isn't mounted yet. */
+function positionToastContainer() {
+  if (!toastContainerEl) return;
+  let top = 80;   // fallback ≈ toolbar + tab bar
+  try { const r = document.querySelector('.df-tabs')?.getBoundingClientRect(); if (r && r.bottom > 0) top = r.bottom + 12; }
+  catch { /* keep fallback */ }
+  toastContainerEl.style.top = `${Math.round(top)}px`;
 }
 
 /**
@@ -211,14 +223,14 @@ export function buildModal(opts = {}) {
   const {
     title = '', bodyHtml = '', footerHtml = null, width, zIndex = 3000,
     className = '', dialogClass = '', bodyClass = '', bodyStyle = '', footerClass = '',
-    showClose = true, closeClass = '', closeHtml = '', onClose, onEscape,
+    showClose = true, closeClass = '', closeHtml = '', onClose, onEscape, origin = null, anchor = null,
   } = opts;
 
   const prevFocus = document.activeElement;
   const titleId = `df-modal-title-${Math.random().toString(36).slice(2, 8)}`;
 
   const overlay = document.createElement('div');
-  overlay.className = `df-modal${className ? ' ' + className : ''}`;
+  overlay.className = `df-modal${className ? ' ' + className : ''}${anchor ? ' df-modal--anchored' : ''}`;
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', titleId);
@@ -240,18 +252,110 @@ export function buildModal(opts = {}) {
       ${footerHtml != null ? `<div class="df-modal__footer${footerClass ? ' ' + footerClass : ''}">${footerHtml}</div>` : ''}
     </div>`;
   overlay.querySelector('.df-modal__title').textContent = title; // textContent — no title injection
+  // Anchored managers hide the header (the merged trigger button is the title), so the visually-hidden h2 can't
+  // name the dialog — give the overlay a direct aria-label instead so screen readers still announce it.
+  if (anchor && title) { overlay.setAttribute('aria-label', title); overlay.removeAttribute('aria-labelledby'); }
 
   document.body.appendChild(overlay);
+
+  let replacingAnchored = false;   // set when this anchored manager replaced an already-open one (swap, no scrim blink)
+
+  // Anchored placement (opt-in via `anchor`, an element — e.g. the navbar button that opened this): the dialog's
+  // top-left sits just under the button's bottom-left (like the Display dropdown), instead of viewport-centred.
+  // This keeps the three storage managers uniform + their tab strip from jumping vertically as panes change
+  // height (the content grows DOWNWARD from a fixed top). Skipped on mobile (≤768px) — the CSS override there
+  // restores a centred/stretched dialog. Re-runs on resize; the listener is torn down in close().
+  if (anchor && typeof anchor.getBoundingClientRect === 'function') {
+    // The bright top bar lets you click straight to another manager — close any other open anchored one first
+    // (so two panels never stack and the previous trigger un-merges). If one WAS open, we're swapping panels
+    // under the same scrim, so the entry animation below skips the scrim fade (else it dips off→on = a blink).
+    document.querySelectorAll('.df-modal--anchored').forEach((m) => {
+      if (m !== overlay && typeof m.__dfClose === 'function') { m.__dfClose(); replacingAnchored = true; }
+    });
+    const dlg = overlay.querySelector('.df-modal__dialog');
+    const MERGE = 'df-toolbar__button--panel-open';
+    const reposition = () => {
+      if (window.matchMedia('(max-width: 768px)').matches) {
+        dlg.style.left = ''; dlg.style.top = ''; anchor.classList?.remove(MERGE);
+        dlg.classList.remove('df-modal__dialog--merged'); return;
+      }
+      const a = anchor.getBoundingClientRect();
+      const w = dlg.offsetWidth || dlg.getBoundingClientRect().width;
+      const margin = 8;
+      let left = Math.min(a.left, window.innerWidth - w - margin);   // clamp so a wide dialog never overflows right
+      left = Math.max(margin, left);
+      // Snap to the DEVICE-pixel grid (not integer CSS px). At devicePixelRatio 2, an integer CSS-px value always
+      // lands on an EVEN device pixel — so a button whose left edge sits on an ODD device pixel (e.g. Load/Share,
+      // but not Save) would have the panel's left border 1 device-px off the button's, jogging the merged shape's
+      // side border at the seam. Rounding `left` to the device grid makes the panel's left border COINCIDE with the
+      // button's. `top` is FLOORED to the device grid so the panel always sits at or just inside the button's
+      // bottom (overlap < 1 device-px, never a gap — a rounded-up top would leak a 1-device-px toolbar hairline).
+      const dpr = window.devicePixelRatio || 1;
+      const snap = (v) => Math.round(v * dpr) / dpr;        // nearest device px — borders coincide
+      const snapFloor = (v) => Math.floor(v * dpr) / dpr;   // largest device px <= v — overlap, never gap
+      dlg.style.left = `${snap(left)}px`;
+      // Cover the button's bottom (overlap, never a gap) so the panel MERGES with the active button (which drops
+      // its bottom border + takes the panel surface, like the active tab joining the canvas). The dialog squares
+      // its top corners + redraws its top border only PAST the button (--df-merge-w = button width), so the border
+      // flows around to the button's edge. Skip the merge when the dialog clamped away from the button's left.
+      dlg.style.top = `${snapFloor(a.bottom)}px`;
+      const merged = Math.abs(left - a.left) < 1;
+      anchor.classList?.toggle(MERGE, merged);
+      dlg.classList.toggle('df-modal__dialog--merged', merged);
+      dlg.style.setProperty('--df-merge-w', `${snap(a.width)}px`);
+    };
+    reposition();
+    requestAnimationFrame(reposition);     // re-measure once the button's final width settled (so --df-merge-w,
+                                           // the top-border notch, lands exactly at the button's right edge)
+    window.addEventListener('resize', reposition);
+    overlay.__dfReposition = reposition;   // stashed so close() can remove the listener
+    overlay.__dfAnchor = anchor;           // so close() un-merges the trigger button
+  }
+
+  // Origin-aware entry (opt-in via `origin`, an element — e.g. the navbar button that opened this): the dialog
+  // scales up FROM the trigger's position instead of just appearing. transform-origin is the trigger's centre
+  // expressed relative to the (already-centred) dialog box. Honours prefers-reduced-motion (then it just snaps).
+  if (origin && typeof origin.getBoundingClientRect === 'function'
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const dlg = overlay.querySelector('.df-modal__dialog');
+    const ov = overlay.querySelector('.df-modal__overlay');
+    try {
+      const o = origin.getBoundingClientRect();
+      const d = dlg.getBoundingClientRect();
+      if ((o.width || o.height) && (d.width || d.height)) {
+        dlg.style.transformOrigin = `${(o.left + o.width / 2) - d.left}px ${(o.top + o.height / 2) - d.top}px`;
+        dlg.style.transform = 'scale(0.9)';
+        dlg.style.opacity = '0';
+        // Swapping managers under an already-present scrim: leave the scrim solid (don't fade it 0→1) so it
+        // doesn't blink off/on. The dialog still scales in for a panel-swap cue.
+        if (ov && !replacingAnchored) ov.style.opacity = '0';
+        void dlg.offsetWidth;   // commit the initial state before transitioning
+        dlg.style.transition = 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease-out';
+        if (ov && !replacingAnchored) { ov.style.transition = 'opacity 150ms ease-out'; ov.style.opacity = ''; }
+        dlg.style.transform = 'scale(1)';
+        dlg.style.opacity = '';
+        const cleanup = () => {   // clear inline styles so resize / Safari repaint aren't affected later
+          dlg.style.transition = ''; dlg.style.transform = ''; dlg.style.transformOrigin = '';
+          if (ov) ov.style.transition = '';
+          dlg.removeEventListener('transitionend', cleanup);
+        };
+        dlg.addEventListener('transitionend', cleanup);
+      }
+    } catch { /* entry animation is best-effort */ }
+  }
 
   let releaseTrap = () => {};
   const close = () => {
     releaseTrap();
+    if (overlay.__dfReposition) window.removeEventListener('resize', overlay.__dfReposition);
+    overlay.__dfAnchor?.classList?.remove('df-toolbar__button--panel-open');   // un-merge the trigger button
     overlay.remove();
     if (prevFocus && typeof prevFocus.focus === 'function') {
       try { prevFocus.focus(); } catch { /* element may be gone */ }
     }
     onClose?.();
   };
+  overlay.__dfClose = close;   // so a newly-opened anchored manager can close this one (single-panel rule)
   releaseTrap = trapFocus(overlay, { onEscape: onEscape || close });
   overlay.querySelector('.df-modal__overlay').addEventListener('click', close);
   overlay.querySelector('.df-modal__close')?.addEventListener('click', close);
@@ -294,6 +398,7 @@ export function confirmModal(opts) {
     okLabel = 'OK',
     cancelLabel = 'Cancel',
     tone = 'primary',
+    cancelTone = null,   // 'amber' → the secondary button is an amber-wire action (a real alternative, not a plain dismiss)
   } = opts || {};
 
   return new Promise((resolve) => {
@@ -320,6 +425,7 @@ export function confirmModal(opts) {
     const cancelBtn = footer.querySelector('.df-confirm-modal__cancel');
     okBtn.textContent = okLabel;
     cancelBtn.textContent = cancelLabel;
+    if (cancelTone === 'amber') cancelBtn.classList.add('df-modal__btn--amber-outline');   // a real alternative action, not a plain dismiss
 
     okBtn.addEventListener('click', () => { result = true; close(); });
     cancelBtn.addEventListener('click', () => close());

@@ -2,9 +2,30 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.16.1';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.16.1';
-import { nodeContrastText } from '../util.js?v=1.16.1';
+import { cctx } from './context.js?v=1.17.0.199';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.0.199';
+import { nodeContrastText } from '../util.js?v=1.17.0.199';
+import { getIconDataUri } from '../icons.js?v=1.17.0.199';
+
+// sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
+// `iconCleared` flag). #5D4037 is the note text colour.
+const NOTE_DEFAULT_ICON = 'light_bulb';
+const NOTE_FOLD = 14;   // mirror of the flap size in shapes.js (label-indent maths)
+
+/** Position the Note heading: indented past the icon when one is shown, flush-left (aligned with the
+ *  description) when the icon is absent (item 1.2 - "if the icon is manually deleted, the label goes to the
+ *  left to start at the same indent as the description"). Idempotent. */
+export function updateNoteIconLayout(cell) {
+  if (!cell || cell.get('type') !== 'sf.Note') return;
+  const hasIcon = !!cell.attr('icon/href');
+  if (hasIcon) {
+    cell.attr('label/x', 36);
+    cell.attr('label/textWrap', { width: `calc(w - ${48 + NOTE_FOLD})`, maxLineCount: 1, ellipsis: true });
+  } else {
+    cell.attr('label/x', 12);   // align with the subtitle (description) at x:12
+    cell.attr('label/textWrap', { width: 'calc(w - 24)', maxLineCount: 1, ellipsis: true });
+  }
+}
 
 // Legacy line-style dash strings → corrected standards. The line-style picklist
 // previews advertise round dots and long-dashes, but pre-fix saves stored
@@ -324,6 +345,26 @@ export function migrateNodes() {
       // bake a contrasting text colour when the body is an explicit solid but the text is the
       // theme default (which would otherwise flip to light and vanish on the light body).
       applyNodeTextContrast(el);
+    }
+    // The Note dog-ear fold now tracks the border colour (#8). Reconcile older notes whose fold still carries
+    // the legacy fixed tint so a custom border shows on the flipped corner. Idempotent + silent (no history).
+    if (el.get('type') === 'sf.Note') {
+      const border = el.attr('body/stroke');
+      if (border && (el.attr('fold/fill') !== border || el.attr('fold/stroke') !== border)) {
+        // Non-silent (like migrateLinks above) so the view repaints the fold; load is wrapped in the
+        // JSON-loading guard, so this records no history entry.
+        el.attr('fold/fill', border);
+        el.attr('fold/stroke', border);
+      }
+      // Self-heal the default light-bulb icon (item 1.2). A Note with NO icon - an old note from before the
+      // default, NOT one whose icon was a slim share-codec placeholder (those keep a data-icon-id and are
+      // re-resolved by refreshAllIconHrefs) - heals back to the light-bulb, UNLESS the user explicitly removed
+      // it (the persisted `iconCleared` flag). Idempotent + silent (load guard suppresses history/dirty).
+      if (!el.attr('icon/href') && !el.get('iconCleared')) {
+        el.attr('icon/href', getIconDataUri(NOTE_DEFAULT_ICON, el.attr('label/fill') || '#5D4037', 20));
+      }
+      // Keep the heading indent in sync with icon presence (flush-left when the user cleared the icon).
+      updateNoteIconLayout(el);
     }
     // The field "Decommissioned" flag was renamed to "Deprecated" — carry the old
     // `decommissioned` property forward to `deprecated` so pre-rename diagrams keep

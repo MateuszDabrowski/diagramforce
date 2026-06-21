@@ -11,12 +11,12 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.16.1';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.16.1';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.16.1';
-import { SF_FIELD_TYPES } from './properties.js?v=1.16.1';
-import { buildModal } from './feedback.js?v=1.16.1';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.16.1';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.0.199';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.17.0.199';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.17.0.199';
+import { SF_FIELD_TYPES } from './properties.js?v=1.17.0.199';
+import { buildModal } from './feedback.js?v=1.17.0.199';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.17.0.199';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -559,7 +559,7 @@ export function render() {
         const strike = isStruck(c.key, r) ? ' df-tbl__strike' : '';
         // The type-mismatch warning rides on the Mapping Type cell (read-only OR editable).
         const warn = (c.key === 'mappingType' && r._warn)
-          ? `<span class="df-tbl__warn-wrap" title="Source type “${escHtml(r.srcType)}” ≠ target type “${escHtml(r.tgtType)}” on a Standard mapping — a Formula/Calculated transform may be required.">${ICON_WARN}</span>`
+          ? `<span class="df-tbl__warn-wrap" title="Source type “${escHtml(r.srcType)}” ≠ target type “${escHtml(r.tgtType)}” on a Standard mapping - a Formula/Calculated transform may be required.">${ICON_WARN}</span>`
           : '';
         const ctrl = _editing ? renderEditableCell(c.key, r) : null;
         if (ctrl !== null) {
@@ -570,7 +570,7 @@ export function render() {
         }
         return `<td class="${(div + center + strike).trim()}">${cellHtml(c.key, r[c.key]) + warn}</td>`;
       }).join('')}</tr>`).join('')
-    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0)}" class="df-tbl__empty">${isModel ? 'No fields yet — add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet — draw field-to-field links on the canvas, then return here.'}</td></tr>`;
+    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0)}" class="df-tbl__empty">${isModel ? 'No fields yet - add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet - draw field-to-field links on the canvas, then return here.'}</td></tr>`;
 
   // In edit mode the note becomes a live unsaved-change tally; otherwise a mode-specific summary.
   const changeCount = _editing ? pendingChangeCount() : 0;

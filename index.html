@@ -19,7 +19,10 @@
     correct enforcement layer for a static GitHub Pages site anyway.
     See: Diagramforce-Security.md §3.1 for the full rationale.
   -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; child-src 'none';">
+  <!-- Google domains (accounts/apis/gstatic/googleapis/docs/drive) are allowlisted ONLY for the
+       opt-in Google Drive integration (GIS auth + Picker iframe + Drive REST). All non-Google
+       origins stay blocked. See Diagramforce-Security.md §3.1 + Diagramforce-Extended-Share.md §5. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://www.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com https://*.gstatic.com; font-src 'self'; connect-src 'self' https://www.googleapis.com https://content.googleapis.com https://accounts.google.com https://docs.google.com https://clients6.google.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src https://accounts.google.com https://apis.google.com https://content.googleapis.com https://docs.google.com https://drive.google.com; child-src 'none';">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Diagramforce</title>
 
@@ -42,20 +45,20 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.16.1">
-  <link rel="stylesheet" href="css/theme.css?v=1.16.1">
-  <link rel="stylesheet" href="css/layout.css?v=1.16.1">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.16.1">
-  <link rel="stylesheet" href="css/stencil.css?v=1.16.1">
-  <link rel="stylesheet" href="css/properties.css?v=1.16.1">
-  <link rel="stylesheet" href="css/tabs.css?v=1.16.1">
-  <link rel="stylesheet" href="css/canvas.css?v=1.16.1">
-  <link rel="stylesheet" href="css/modals.css?v=1.16.1">
+  <link rel="stylesheet" href="css/variables.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/theme.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/layout.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/stencil.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/properties.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/tabs.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/canvas.css?v=1.17.0.199">
+  <link rel="stylesheet" href="css/modals.css?v=1.17.0.199">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
        screen readers, so the heading hierarchy starts at h1 before the modal h2s. -->
-  <h1 class="df-visually-hidden">Diagramforce — Salesforce architecture diagram editor</h1>
+  <h1 class="df-visually-hidden">Diagramforce - free browser-based diagram editor for every part of a project</h1>
 
   <!-- A2 (v1.12.0) — skip-to-main link. Visually hidden until focused; lets
        keyboard users bypass the toolbar + tabs + stencil and land directly on
@@ -75,6 +78,30 @@
   <!-- Hidden SLDS icon sprites (loaded by js/icons.js) -->
   <div id="slds-icons" style="display:none" aria-hidden="true"></div>
 
+  <!-- Custom inline icon: Google Drive (official 2026 multicolour logo — gradients + mask).
+       Multicolour, so it's NOT currentColor-tintable; the navbar off-state greys it via a CSS
+       filter (.df-sync__drive), menu items show it in full colour. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <!-- viewBox padded to a centred 195-unit square around the logo's centre (96, 95) so the
+         glyph renders at the SLDS icon footprint (~13.8w × 12.6h) instead of overfilling the
+         16px box. The logo's tight bounds are 12 18 168 154; the mask coords stay absolute. -->
+    <symbol id="icon-gdrive" viewBox="-1.5 -2.5 195 195">
+      <mask id="gd_a" width="168" height="154" x="12" y="18" maskUnits="userSpaceOnUse">
+        <path fill="#fff" d="M63.09 37c14.626-25.333 51.193-25.334 65.819 0l45.033 78c14.626 25.334-3.657 57.001-32.91 57.001H50.967c-29.253 0-47.536-31.667-32.91-57.001Z"/>
+      </mask>
+      <g mask="url(#gd_a)">
+        <path fill="url(#gd_b)" d="M206.905 172.02h-91.888l-19.015-32.934 45.944-79.578Z"/>
+        <path fill="url(#gd_c)" d="M-14.919 172.006 50.04 59.494v.002L31.032 92.422h38.02L115 172.004l-129.918.001Z"/>
+        <path fill="url(#gd_d)" d="M96.007-20.085 141.954 59.5l-19.011 32.928H31.048Z"/>
+      </g>
+      <defs>
+        <linearGradient id="gd_b" x1="193.6" x2="103.09" y1="165.6" y2="111.21" gradientUnits="userSpaceOnUse"><stop offset=".09" stop-color="#ffe921"/><stop offset="1" stop-color="#fec700"/></linearGradient>
+        <linearGradient id="gd_c" x1="114.4" x2="15.53" y1="181.61" y2="121.8" gradientUnits="userSpaceOnUse"><stop offset=".15" stop-color="#a9a8ff"/><stop offset=".33" stop-color="#6d97ff"/><stop offset=".48" stop-color="#3186ff"/></linearGradient>
+        <linearGradient id="gd_d" x1="128.88" x2="28.7" y1="37.88" y2="84.64" gradientUnits="userSpaceOnUse"><stop offset=".55" stop-color="#0ebc5f"/><stop offset=".85" stop-color="#78c9ff"/></linearGradient>
+      </defs>
+    </symbol>
+  </svg>
+
   <!-- App Layout -->
   <div id="app" class="df-app">
     <!-- Toolbar -->
@@ -87,74 +114,28 @@
         </a>
         <div class="df-toolbar__group">
           <div class="df-toolbar__dropdown">
+            <!-- Save opens the Save Manager overlay directly (v1.17.0); per-diagram Export (JSON / Image / CSV)
+                 + "Export Selected" + "templates & backups" were folded into the manager. -->
             <button id="btn-save" class="df-toolbar__button" title="Save (Ctrl+S)">
               <svg class="df-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
               <span>Save</span>
-              <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <div class="df-toolbar__menu">
-              <button id="btn-save-browser" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#save"></use></svg>
-                Save to Browser
-              </button>
-              <button id="btn-save-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#code_playground"></use></svg>
-                Export to JSON
-              </button>
-              <button id="btn-save-csv" class="df-toolbar__menu-item df-toolbar__menu-item--icon" hidden>
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#quip_sheet"></use></svg>
-                Export to CSV
-              </button>
-              <div class="df-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-save-png" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
-                Save to PNG
-              </button>
-              <button id="btn-save-png-t" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
-                Save to transparent PNG
-              </button>
-              <button id="btn-save-webp" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
-                Save to WEBP
-              </button>
-              <button id="btn-save-webp-t" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#image"></use></svg>
-                Save to transparent WEBP
-              </button>
-              <div class="df-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-save-share" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
-                Share as URL
-              </button>
-            </div>
           </div>
           <div class="df-toolbar__dropdown">
+            <!-- Load opens the tabbed Load Manager overlay directly (Browser / Google Drive / File / Paste);
+                 the old per-source dropdown items were folded into its tabs (v1.17.0). -->
             <button id="btn-load" class="df-toolbar__button" title="Load (Ctrl+O)">
               <svg class="df-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
               <span>Load</span>
-              <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <div class="df-toolbar__menu">
-              <button id="btn-load-browser" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#open_folder"></use></svg>
-                Load from Browser
-              </button>
-              <button id="btn-load-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#file"></use></svg>
-                Import from JSON
-              </button>
-              <div class="df-toolbar__menu-separator" role="separator"></div>
-              <button id="btn-load-paste-json" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
-                Paste JSON
-              </button>
-              <button id="btn-load-mermaid" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
-                <svg class="df-toolbar__icon" aria-hidden="true"><use href="#paste"></use></svg>
-                Paste Mermaid
-                <span style="margin-left:6px;padding:1px 5px;font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;border-radius:3px;background:var(--brand-amber, #F6B355);color:#1A1A1A;vertical-align:middle">Beta</span>
-              </button>
-            </div>
+          </div>
+          <div class="df-toolbar__dropdown">
+            <!-- Share opens the Share Manager overlay directly (v1.17.0; the old dropdown's "Share Manager" +
+                 "Copy Diagramforce Link" items are now the click action + the right-click shortcut). -->
+            <button id="btn-share-url" class="df-toolbar__button" title="Share (right-click to copy the link)" aria-label="Share">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
+              <span>Share</span>
+            </button>
           </div>
         </div>
         <div class="df-toolbar__dropdown" id="display-dropdown">
@@ -172,6 +153,11 @@
               <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
             <div class="df-toolbar__menu">
+              <button id="btn-display-group-labels" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Show group names on tab-bar group pills (off = icon + count only)">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Tab Group Labels
+              </button>
+              <div class="df-toolbar__menu-separator" role="separator"></div>
               <button id="btn-display-auto-size" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Auto-Fit Containers
@@ -180,11 +166,11 @@
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Distributed Connectors
               </button>
-              <button id="btn-display-crossing-bumps" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="EDA-style bump arcs where two connectors cross — makes non-connection explicit">
+              <button id="btn-display-crossing-bumps" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="EDA-style bump arcs where two connectors cross - makes non-connection explicit">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Crossing Bumps
               </button>
-              <button id="btn-display-focus-dimming" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Dim components and connectors not connected to the current selection">
+              <button id="btn-display-focus-dimming" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Dim shapes and connectors not connected to the current selection">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Focus Dimming
               </button>
@@ -204,6 +190,10 @@
               <button id="btn-display-keys-only" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span id="keys-only-label">Key Fields Only</span>
+              </button>
+              <button id="btn-display-collapse" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Collapse every object to just its header (hide its fields); uncheck to expand them all">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Collapse Objects
               </button>
               <button id="btn-animate-flow" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Animate a flowing direction along every connector (the PNG export then becomes an animated GIF)">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -229,11 +219,11 @@
               </button>
 
               <div id="display-gantt-separator" style="border-top:1px solid var(--border-color);margin:4px 0"></div>
-              <button id="btn-gantt-week-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the week (Week timeline grid split) — click to cycle Monday / Sunday / Saturday">
+              <button id="btn-gantt-week-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the week (Week timeline grid split) - click to cycle Monday / Sunday / Saturday">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12M5.5 1.8v2.4M10.5 1.8v2.4" stroke-linecap="round"/></svg>
                 <span id="gantt-week-start-label">Week Starts: Monday</span>
               </button>
-              <button id="btn-gantt-weekend-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the weekend — shades the non-working columns in the Day timeline (Saturday → Sat–Sun, Friday → Fri–Sat)">
+              <button id="btn-gantt-weekend-start" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="First day of the weekend - shades the non-working columns in the Day timeline (Saturday → Sat–Sun, Friday → Fri–Sat)">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12" stroke-linecap="round"/><rect x="9.5" y="7" width="4.5" height="6.5" fill="currentColor" stroke="none" opacity="0.35"/></svg>
                 <span id="gantt-weekend-start-label">Weekend Starts: Saturday</span>
               </button>
@@ -307,10 +297,65 @@
 
       <!-- Right: Alignment + Theme -->
       <div class="df-toolbar__right">
-        <button id="btn-share-url" class="df-toolbar__button df-toolbar__button--icon-only" title="Share as URL" aria-label="Share as URL">
-          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#share_link"></use></svg>
-        </button>
-        <button id="btn-help" class="df-toolbar__button df-toolbar__button--icon-only" title="Help" aria-label="Help — start the walkthrough">
+        <!-- Cloud sync control (Google Drive). Always present; the Drive icon is colour+glyph
+             coded by sync state. Click opens the menu. Built to generalise to other providers.
+             Self-gates: hidden entirely unless remote-store.isDriveConfigured(). -->
+        <div class="df-toolbar__dropdown df-sync" id="sync-dropdown" hidden>
+          <button id="btn-sync" class="df-toolbar__button df-sync__btn" data-state="off" title="Cloud sync (Google Drive)" aria-label="Cloud sync (Google Drive)" aria-haspopup="true">
+            <span class="df-sync__text" style="display:none"></span>
+            <!-- ONE icon, ONE href for every state (no swapping): the multicolour Drive logo,
+                 recoloured by CSS per [data-state] — greyed (off), full colour (synced), spinning
+                 (saving), red-tinted via filter (error, keeps the facet detail). Left-click opens
+                 the menu; right-click fires the primary action. setupSyncControl() drives it. -->
+            <svg class="df-toolbar__icon df-sync__drive" aria-hidden="true"><use href="#icon-gdrive"></use></svg>
+          </button>
+          <div class="df-toolbar__menu df-sync__menu">
+            <!-- State explainer (left) + the KEY contextual action as a wire button (right): Sign in (signed off) /
+                 Review (conflict) / Refresh (upstream changed) / Sync now (connected, manual). So the first element
+                 under the icon is always the action that matters. setupSyncControl() drives both. -->
+            <div class="df-sync__status" data-sync-status>
+              <span class="df-sync__status-text" data-sync-status-text></span>
+              <button class="df-sync__status-btn" type="button" data-sync-status-btn hidden></button>
+            </div>
+            <div class="df-toolbar__menu-separator" role="separator"></div>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="enable">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#sync"></use></svg>
+              Connect Google Drive
+            </button>
+            <!-- Save & Export / Load & Import are NOT duplicated here: they live on the always-present
+                 navbar (Save / Load buttons). This menu carries only Drive-unique actions. -->
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="history">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#clock"></use></svg>
+              Version history
+            </button>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="reload">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#sync"></use></svg>
+              <span data-sync-reload-label>Open the original shared diagram</span>
+            </button>
+            <div class="df-toolbar__menu-separator" role="separator" data-sync-sep></div>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="syncnow" hidden>
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#sync"></use></svg>
+              Sync now
+            </button>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" data-sync="autosync" role="menuitemcheckbox" aria-checked="false">
+              <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Auto-sync Diagrams
+            </button>
+            <div class="df-sync__cadence" hidden>
+              <span class="df-sync__cadence-note">Saves every 2 minutes, and the moment you open, switch, or close a tab.</span>
+            </div>
+            <div class="df-toolbar__menu-separator" role="separator"></div>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon df-sync__disconnect" data-sync="disconnect">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#logout"></use></svg>
+              Disconnect Google Drive
+            </button>
+            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="about">
+              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>
+              <span data-sync-about-label>About Google Drive Sync</span>
+            </button>
+          </div>
+        </div>
+        <button id="btn-help" class="df-toolbar__button df-toolbar__button--icon-only" title="Diagramforce Guide" aria-label="Diagramforce Guide - start the walkthrough">
           <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
             <text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text>
@@ -361,6 +406,10 @@
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#open_folder"></use></svg>
             Load
           </button>
+          <button class="df-toolbar__menu-item" data-action="share">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#share_link"></use></svg>
+            Share
+          </button>
           <button class="df-toolbar__menu-item" data-action="display">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
             Display
@@ -383,10 +432,6 @@
             Redo
           </button>
           <div class="df-toolbar__menu-separator" role="separator"></div>
-          <button class="df-toolbar__menu-item" data-action="share">
-            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16"><use href="#share_link"></use></svg>
-            Share as URL
-          </button>
           <button class="df-toolbar__menu-item" data-action="theme">
             <svg class="df-toolbar__menu-icon df-toolbar__icon--theme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path class="df-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -408,7 +453,7 @@
 
     <!-- Tab bar -->
     <div id="tab-bar" class="df-tabs">
-      <button id="btn-close-tabs" class="df-tabs__close-multi" title="Close multiple tabs" aria-label="Close multiple tabs">
+      <button id="btn-close-tabs" class="df-tabs__close-multi" title="Close &amp; Delete" aria-label="Close and Delete">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
           <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.8 9.5a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9L12 4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6.5 7v5M9.5 7v5" stroke-linecap="round"/>
@@ -435,6 +480,11 @@
         <svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
         <span>Group</span>
       </button>
+      <!-- Mobile-only: a single "+" that opens a Diagram / Group menu (the two labelled buttons above would
+           eat the whole narrow tab bar). Hidden on desktop; the labelled buttons are hidden on mobile. -->
+      <button id="btn-new-mobile" class="df-tabs__new df-tabs__new--mobile" title="New" aria-label="New diagram or group" aria-haspopup="true">
+        <svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      </button>
     </div>
 
     <!-- Main content area -->
@@ -460,7 +510,7 @@
       </aside>
 
       <!-- Canvas -->
-      <main id="canvas-container" class="df-canvas" role="main" aria-label="Diagram canvas — visual editing area. Use the property panel to inspect or edit selected shapes.">
+      <main id="canvas-container" class="df-canvas" role="main" aria-label="Diagram canvas - visual editing area. Use the property panel to inspect or edit selected shapes.">
         <div id="paper"></div>
         <!-- Empty-canvas ghost wireframe — a faint, type-specific best-practice blueprint
              shown only while the active tab has zero cells (canvas.js toggles `is-empty` on
@@ -553,16 +603,24 @@
             <rect x="220" y="92" width="60" height="30" rx="5"/>
           </svg>
           <p class="df-canvas-empty__caption">Drag a shape from the sidebar to start →</p>
+          <!-- Visible homepage legal links (Google OAuth homepage requirement). Shown on the empty canvas - what a
+               first-time visitor / crawler sees. The accessible copies live in the About modal (this splash is
+               aria-hidden); pointer-events:auto re-enables clicks since the ghost itself is pointer-events:none. -->
+          <div class="df-canvas-empty__legal">
+            <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+            <span aria-hidden="true">·</span>
+            <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>
+          </div>
         </div>
         <div id="mapping-table-view" class="df-table-view" hidden aria-label="Field mapping table"></div>
       </main>
 
       <!-- Stencil Panel (right sidebar) -->
-      <aside id="stencil-panel" class="df-stencil" aria-label="Component stencil">
+      <aside id="stencil-panel" class="df-stencil" aria-label="Shape stencil">
         <div class="df-drag-handle" data-target="stencil-panel"></div>
         <div class="df-stencil__header">
           <div class="df-stencil__search-wrap">
-            <input type="search" id="stencil-search" class="df-stencil__search" placeholder="Search components..." aria-label="Search components">
+            <input type="search" id="stencil-search" class="df-stencil__search" placeholder="Search shapes…" aria-label="Search shapes">
             <button id="btn-stencil-search-clear" type="button" class="df-stencil__search-clear" aria-label="Clear search" title="Clear search" hidden>×</button>
           </div>
           <button id="btn-close-stencil" class="df-toolbar__button df-stencil__close df-toolbar__mobile-only" title="Close stencil" aria-label="Close stencil">
@@ -577,20 +635,8 @@
   </div>
 
   <!-- Load Diagram Modal -->
-  <div id="load-modal" class="df-modal df-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="load-modal-title">
-    <div id="load-modal-overlay" class="df-modal__overlay"></div>
-    <div class="df-modal__dialog">
-      <div class="df-modal__header">
-        <h2 id="load-modal-title" class="df-modal__title">Load Diagram</h2>
-        <button id="btn-close-load-modal" class="df-toolbar__button" aria-label="Close">
-          <svg class="df-toolbar__icon" aria-hidden="true"><use href="#close"></use></svg>
-        </button>
-      </div>
-      <div id="load-modal-list" class="df-modal__body">
-        <!-- Populated by js/toolbar.js showLoadModal() -->
-      </div>
-    </div>
-  </div>
+  <!-- The Browser Storage load list now lives in the tabbed Load Manager overlay (buildModal-based,
+       js/toolbar.js showLoadManagerModal); the old static #load-modal was removed in v1.17.0. -->
 
   <!-- About modal -->
   <div id="about-modal" class="df-modal df-modal--hidden" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
@@ -606,11 +652,11 @@
         <div class="df-about__logo">
           <img src="assets/logo.png" alt="Diagramforce" width="64" height="64">
         </div>
-        <p class="df-about__tagline">Visual Salesforce architecture diagramming tool</p>
+        <p class="df-about__tagline">Visual diagramming for every part of a project</p>
         <div class="df-about__info">
           <p>Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs.</p>
           <p>It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams.</p>
-          <p>Everything runs locally in your browser. No sign-up, no server, no data leaves your machine.</p>
+          <p>Everything runs in your browser - no sign-up and no Diagramforce server. Optionally connect your own Google Drive to auto-save, share diagrams, and browse version history; your work stays in your browser and your own Drive.</p>
           <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
@@ -623,6 +669,11 @@
           <span class="df-about__separator">·</span>
           <a href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener" class="df-about__link">Feedback</a>
         </div>
+        <div class="df-about__meta">
+          <a href="privacy.html" target="_blank" rel="noopener" class="df-about__link">Privacy Policy</a>
+          <span class="df-about__separator">·</span>
+          <a href="terms.html" target="_blank" rel="noopener" class="df-about__link">Terms of Use</a>
+        </div>
         <div class="df-about__meta df-about__meta--license">
           <span class="df-about__license-text">Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" class="df-about__link">CC BY-NC-SA 4.0</a></span>
         </div>
@@ -631,13 +682,13 @@
   </div>
 
   <!-- Hidden file input for JSON import -->
-  <input type="file" id="file-input" accept=".json" multiple style="display:none" aria-label="Import JSON file">
+  <input type="file" id="file-input" accept=".json,.dgf" multiple style="display:none" aria-label="Import Diagramforce file">
 
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.16.1"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.16.1"></script>
-  <script type="module" src="js/app.js?v=1.16.1"></script>
+  <script defer src="assets/vendor/joint.min.js?v=1.17.0.199"></script>
+  <script defer src="assets/vendor/pako.min.js?v=1.17.0.199"></script>
+  <script type="module" src="js/app.js?v=1.17.0.199"></script>
 </body>
 </html>

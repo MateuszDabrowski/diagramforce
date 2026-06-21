@@ -14,6 +14,12 @@ let currentBatch = null;
 // the Data Mapping table edit session, where undo/redo mid-edit would mutate the
 // graph out from under the open draft (the table holds an unapplied working copy).
 let locked = false;
+// While a diagram is being LOADED (graph.fromJSON + the post-load migrateLinks/migrateNodes/refreshAllIconHrefs
+// normalisations, which fire per-cell change events), recording must be OFF: those are not user edits, so they
+// must not land on the undo stack or mark the tab dirty. canvas.isLoadingJSON is wired in here via setLoadingGuard
+// (app.js). Without this, e.g. re-resolving a placeholder icon href on load showed up as a phantom undoable change.
+let loadingGuard = null;
+export function setLoadingGuard(fn) { loadingGuard = fn; }
 const onChangeCallbacks = [];
 
 // ── Drag-aware merge for continuous position/size/vertex changes ──
@@ -193,7 +199,7 @@ export function init(_graph) {
   graph = _graph;
 
   graph.on('add', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const id = cell.id;
     // Capture the initial JSON as a fallback. For links created via port-drag,
     // the `add` event fires BEFORE the arrowhead is dropped on a target port,
@@ -216,7 +222,7 @@ export function init(_graph) {
   });
 
   graph.on('remove', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const json = cell.toJSON();
     pushCommand({
       undo: () => graph.addCell(json),
@@ -228,7 +234,7 @@ export function init(_graph) {
   });
 
   graph.on('change:position', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     // v1.12.1 — `recordPositionsBatch()` snapshots positions itself and
     // doesn't want the debounced merge to double-record the same moves.
     if (_suppressPositionTracking) return;
@@ -249,7 +255,7 @@ export function init(_graph) {
   });
 
   graph.on('change:size', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     if (_suppressPositionTracking) return;  // recordPositionsBatch captures sizes itself
     const oldSize = cell.previous('size');
     if (!oldSize) return;
@@ -271,7 +277,7 @@ export function init(_graph) {
   // typing, repeated +90 — collapses to a SINGLE undo step (keeps the FIRST
   // oldAngle + the LATEST newAngle), not one entry per degree.
   graph.on('change:angle', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const id = cell.id;
     const newAngle = cell.get('angle') ?? 0;
     let entry = pendingChanges.get(id);
@@ -285,7 +291,7 @@ export function init(_graph) {
   });
 
   graph.on('change:attrs', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldAttrs = cell.previous('attrs');
     if (!oldAttrs) return;
     const newAttrs = JSON.parse(JSON.stringify(cell.get('attrs')));
@@ -301,7 +307,7 @@ export function init(_graph) {
   // so change:attrs never fires for it. Record it so undo/redo of a Connection-type
   // switch restores the kind (and the property panel's slider) too, not just the visual.
   graph.on('change:linkKind', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldKind = cell.previous('linkKind') ?? null;
     const newKind = cell.get('linkKind') ?? null;
     if (oldKind === newKind) return;
@@ -317,7 +323,7 @@ export function init(_graph) {
   // Without this handler, editing or removing a connector label is invisible to
   // undo/redo.
   graph.on('change:labels', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldLabels = cell.previous('labels');
     const newLabels = cell.get('labels');
     const oldStr = JSON.stringify(oldLabels ?? []);
@@ -339,7 +345,7 @@ export function init(_graph) {
   // Routed through the same pending-drag merge so a vertex drag collapses to
   // one undo command instead of one per pointer-move.
   graph.on('change:vertices', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldV = cell.previous('vertices') ?? [];
     const newV = cell.get('vertices') ?? [];
     if (JSON.stringify(oldV) === JSON.stringify(newV)) return;
@@ -357,7 +363,7 @@ export function init(_graph) {
   // Link connector — `cell.connector(name, args)` swaps how the line is drawn
   // (e.g. straight vs rounded). Same blind-spot as vertices above.
   graph.on('change:connector', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldC = cell.previous('connector') ?? null;
     const newC = cell.get('connector') ?? null;
     const oldStr = JSON.stringify(oldC);
@@ -381,7 +387,7 @@ export function init(_graph) {
   // hovers a different valid port mid-drag — collapses to ONE undo
   // entry instead of one per port-hover step. v1.12.4.
   graph.on('change:source', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     if (_suppressPositionTracking) return;  // recordPositionsBatch handles this
     const oldSrc = cell.previous('source');
     const newSrc = cell.get('source');
@@ -402,7 +408,7 @@ export function init(_graph) {
     schedulePendingDragCommit();
   });
   graph.on('change:target', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     if (_suppressPositionTracking) return;
     const oldTgt = cell.previous('target');
     const newTgt = cell.get('target');
@@ -425,7 +431,7 @@ export function init(_graph) {
   // Stored separately from `line/strokeDasharray` so the real line never
   // carries a dasharray; see canvas.js → startLineStyleOverlays().
   graph.on('change:lineStyle', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldStyle = cell.previous('lineStyle') ?? null;
     const newStyle = cell.get('lineStyle') ?? null;
     if (oldStyle === newStyle) return;
@@ -442,7 +448,7 @@ export function init(_graph) {
   // edits collapses to one undo entry per idle window, while a bulk import (a
   // single `set`) commits as its own atomic command.
   graph.on('change:fields', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     if (_suppressPositionTracking) return;
     const oldF = cell.previous('fields') ?? [];
     const newF = cell.get('fields') ?? [];
@@ -458,7 +464,7 @@ export function init(_graph) {
   // Mapping Type (Data Cloud transform: Standard / Formula / Calculated). A
   // discrete segmented-control click on a top-level prop → one undo per switch.
   graph.on('change:mappingType', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldT = cell.previous('mappingType') ?? null;
     const newT = cell.get('mappingType') ?? null;
     if (oldT === newT) return;
@@ -472,7 +478,7 @@ export function init(_graph) {
   // Mapping expression/rule note (expressionRule) — typed in the link inspector's
   // progressive-disclosure Expression field. Debounce-merged like field edits.
   graph.on('change:expressionRule', (cell) => {
-    if (isUndoRedoing) return;
+    if (isUndoRedoing || loadingGuard?.()) return;
     const oldML = cell.previous('expressionRule') ?? '';
     const newML = cell.get('expressionRule') ?? '';
     if (oldML === newML) return;
@@ -511,7 +517,7 @@ export function init(_graph) {
   // property-panel batch (addText/addColor) coalesces with its sibling attr change.
   CONTENT_PROPS.forEach((name) => {
     graph.on('change:' + name, (cell) => {
-      if (isUndoRedoing) return;
+      if (isUndoRedoing || loadingGuard?.()) return;
       const oldVal = cell.previous(name);
       const newVal = cell.get(name);
       if (JSON.stringify(oldVal ?? null) === JSON.stringify(newVal ?? null)) return;
@@ -740,9 +746,6 @@ export function suppressEmbedTracking(fn) {
   finally { _suppressParentTracking = prev; }
 }
 
-/** True when a batch is currently open via startBatch. */
-export function isInBatch() { return batchDepth > 0; }
-
 // Nesting depth — multiple startBatch calls now stack instead of
 // overwriting each other (the previous "always reset currentBatch"
 // behaviour silently dropped the outer batch's contents whenever an
@@ -818,7 +821,6 @@ export function canRedo() { return !locked && redoStack.length > 0; }
 // Lock / unlock undo+redo. notifyChange() fires so the toolbar refreshes the
 // button disabled-state immediately (it reads canUndo()/canRedo()).
 export function setLocked(v) { locked = !!v; notifyChange(); }
-export function isLocked() { return locked; }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }

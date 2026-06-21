@@ -4,10 +4,10 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver } from '../util.js?v=1.16.1';
-import { escHtml } from '../util.js?v=1.16.1';
-import { buildModal } from '../feedback.js?v=1.16.1';
-import { pctx } from './context.js?v=1.16.1';
+import { compareSemver } from '../util.js?v=1.17.0.199';
+import { escHtml } from '../util.js?v=1.17.0.199';
+import { buildModal } from '../feedback.js?v=1.17.0.199';
+import { pctx } from './context.js?v=1.17.0.199';
 
 function stableStringify(v) {
   if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
@@ -44,20 +44,43 @@ export function classifyVersionDiff(savedVersion) {
  * Returns a Promise that resolves to true (user wants to continue) or false.
  *
  * - Patch differences: no warning (silent load)
- * - Minor differences: soft warning (should still work)
- * - Major differences: strong warning (probably won't work)
+ * - Minor differences: no warning (R23, v1.17.0) — minor releases stay
+ *   backward-compatible, so an older minor loads cleanly. Surfacing a notice on
+ *   every minor was noise for shared links and a maintenance drag given how
+ *   often minors ship; the one-time "What's new" overlay (js/whats-new.js)
+ *   communicates app updates instead. Only a MAJOR mismatch (a breaking
+ *   persistence change) still warns.
+ * - Major differences: strong warning (probably won't load)
  * - No version info: treated as major
  */
+// Multi-load coalescing (item 3): when a single user action loads MANY files (Load Selected in the Browser /
+// Drive tabs), wrap the loop in begin/endVersionWarningBatch so a shared old version prompts ONCE, not per file.
+// The decision (load anyway / cancel) is cached per distinct version string and reused for the rest of the batch.
+let _versionBatchActive = false;
+const _versionBatchDecisions = new Map();   // savedVersion string -> boolean (the user's answer)
+export function beginVersionWarningBatch() { _versionBatchActive = true; _versionBatchDecisions.clear(); }
+export function endVersionWarningBatch() { _versionBatchActive = false; _versionBatchDecisions.clear(); }
+
 export function checkVersionWarning(savedAppVersion, sourceName, rawData) {
   const { appVersion: APP_VERSION } = pctx;
   if (compareSemver(savedAppVersion, APP_VERSION) >= 0) {
     return Promise.resolve(true); // same or newer — load without warning
   }
   const diff = classifyVersionDiff(savedAppVersion);
-  if (diff === 'none' || diff === 'patch') {
-    return Promise.resolve(true); // patch-only difference — no warning
+  if (diff !== 'major') {
+    // none / patch / minor — load silently. Only a MAJOR mismatch (breaking
+    // persistence change) is worth interrupting the load for (R23, v1.17.0).
+    return Promise.resolve(true);
   }
-  return showVersionWarningModal(savedAppVersion, sourceName, diff, rawData);
+  // In a batch, reuse the answer already given for this version (sequential awaits → the cache is set by the
+  // time the next file is checked). One modal per distinct old version instead of one per file.
+  const key = String(savedAppVersion || '(none)');
+  if (_versionBatchActive && _versionBatchDecisions.has(key)) {
+    return Promise.resolve(_versionBatchDecisions.get(key));
+  }
+  const p = showVersionWarningModal(savedAppVersion, sourceName, diff, rawData);
+  if (_versionBatchActive) return p.then((ok) => { _versionBatchDecisions.set(key, ok); return ok; });
+  return p;
 }
 
 function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
@@ -90,7 +113,7 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
         </p>`,
       footerHtml: `
         <button class="df-modal__btn" data-action="cancel">Don't load</button>
-        <button class="df-modal__btn" data-action="backup" style="margin-left:auto">Save as JSON</button>
+        <button class="df-modal__btn" data-action="backup" style="margin-left:auto">Export JSON</button>
         <button class="df-modal__btn df-modal__btn--primary" data-action="load">${loadLabel}</button>`,
       onClose: () => resolve(result), // backdrop / Escape / cancel resolve false
     });
@@ -117,7 +140,7 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
         const safeName = (backupData.title).replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'backup';
         triggerDownload(URL.createObjectURL(blob), `df_backup_${safeName}_${dateSuffix()}.json`);
       }
-      btn.textContent = 'Saved!';
+      btn.textContent = 'Exported!';
       btn.style.background = '#2e844a';
       btn.style.color = '#fff';
       btn.style.borderColor = '#2e844a';

@@ -2,8 +2,8 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.16.1';
-import { fieldFocus } from './canvas/focus-state.js?v=1.16.1';
+import { parseMarkdown } from './markdown.js?v=1.17.0.199';
+import { fieldFocus } from './canvas/focus-state.js?v=1.17.0.199';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -921,10 +921,12 @@ export function register() {
           strokeWidth: 1,
           strokeLinejoin: 'round',
         },
-        // Triangular folded-corner flap. Slightly darker fill gives depth.
+        // Triangular folded-corner flap. Fill + stroke track the note's BORDER colour (body/stroke) so the user
+        // controls the dog-ear by setting the border - the properties Border picker writes fold/fill + fold/stroke
+        // too (and migrateNodes reconciles older notes). Default = the body stroke colour.
         fold: {
           d: `M calc(w - ${NOTE_FOLD}) 0 L calc(w - ${NOTE_FOLD}) ${NOTE_FOLD} L calc(w) ${NOTE_FOLD} Z`,
-          fill: '#EDD56A',
+          fill: '#E8D44D',
           stroke: '#E8D44D',
           strokeWidth: 1,
           strokeLinejoin: 'round',
@@ -1011,6 +1013,50 @@ export function register() {
         css,
         hideSelector: 'subtitle',
       });
+      this._autoFitHeight();
+    },
+    // R6: GROW the note's HEIGHT so the whole description shows. Measures the rendered markdown's natural
+    // height and grows to fit (subtitle starts at y=38, ~10 px bottom pad → height = content + 48, floored at
+    // 120). Guards: `_fitting` blocks the resize's re-entrant re-render; `_lastFitKey` keys on width+text so a
+    // manual HEIGHT-only drag is respected (re-fits only when the width or the text changes).
+    // GROW-ONLY (never auto-shrink): a re-render re-runs this for EVERY note, so auto-shrinking made editing
+    // one note collapse its siblings — any note taller than its text (manually sized, or sized before R6)
+    // would snap down to content, and a Zone/Container hugging them then wrongly shrank to the smallest one
+    // (the "captured component shrinks to the active one" bug). Users still shrink a note by hand; the
+    // height-only drag survives via the _lastFitKey guard.
+    _autoFitHeight() {
+      if (this._fitting) return;
+      const m = this.model;
+      const { width, height } = m.size();
+      const text = m.attr('subtitle/text') || '';
+      const key = width + '|' + text;
+      if (key === this._lastFitKey) return;
+      const content = this.el.querySelector('foreignObject[data-md="subtitle"] [data-md-content]');
+      if (!content) return;
+      const needed = content.scrollHeight;
+      // scrollHeight 0 means the foreignObject hasn't laid out yet (common on the FIRST render). DON'T cache the
+      // key on that non-measurement: a later render with the same width+text would otherwise skip via the guard
+      // above and the note would stay clipped forever. Cache only once there is a real measurement.
+      if (!needed) return;
+      this._lastFitKey = key;
+      const target = Math.max(120, Math.round(needed + 48));
+      if (target <= height) return;   // grow-only — only EXPAND (never auto-shrink); no +1 slack so a 1px grow lands
+      this._fitting = true;
+      try { m.resize(width, target); } finally { this._fitting = false; }
+    },
+    // Explicit "Auto size" action (vs the passive grow-only _autoFitHeight): fit the height to the content
+    // EXACTLY at the current width - growing OR shrinking to it (floored at the 120 default) - so a note that
+    // was manually oversized snaps down to fit, and a clipped one grows. Bypasses the grow-only + key guards.
+    fitNoteToContent() {
+      const m = this.model;
+      const width = m.size().width;
+      this._renderMarkdown();
+      const content = this.el.querySelector('foreignObject[data-md="subtitle"] [data-md-content]');
+      const needed = content ? content.scrollHeight : 0;
+      const target = Math.max(120, Math.round((needed || 24) + 48));
+      this._lastFitKey = width + '|' + (m.attr('subtitle/text') || '');   // keep the passive fit from re-firing
+      this._fitting = true;
+      try { m.resize(width, target); } finally { this._fitting = false; }
     },
   });
 

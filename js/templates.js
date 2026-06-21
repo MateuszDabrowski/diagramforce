@@ -21,10 +21,15 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal } from './feedback.js?v=1.16.1';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature } from './persistence.js?v=1.16.1';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.17.0.199';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.17.0.199';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.17.0.199';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
+// Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
+// union merge would resurrect a template deleted on another device. Pruned after TOMBSTONE_TTL_MS.
+const STORAGE_KEY_DELETED = 'sfdiag::customTemplatesDeleted';
+const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;   // 90 days — long enough for any offline device to catch up
 // Self-describing format tag for the Save/Load-Templates-as-JSON backup file.
 const EXPORT_SCHEMA = 'diagramforce-templates';
 // Once-per-session guard for the persist() request (durability layer 1).
@@ -75,7 +80,81 @@ function writeTemplates(templates) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
 }
 
+// ── Google Drive sync (item 17, v1.17.0) ────────────────────────────────────
+// The whole library is mirrored to ONE Drive file (remote-store.pushTemplates / pullTemplates) so templates
+// follow the user across devices. Deletes PROPAGATE via tombstones (the deleted-id list synced alongside the
+// templates); a delete on one device removes the template on the others, with a confirmation overlay before
+// anything disappears locally. All Drive calls are best-effort + opportunistic (no-op without a valid token).
+let _drivePushTimer = null;
+const sigOf = (t) => contentSignature(t?.cells || []);
+
+/** The local tombstone list ({id, name, deletedAt}). */
+function getDeletedTombstones() {
+  try { const a = JSON.parse(localStorage.getItem(STORAGE_KEY_DELETED) || '[]'); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+function writeDeletedTombstones(list) {
+  try { localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.isArray(list) ? list : [])); } catch { /* private mode / full */ }
+}
+
+/** Debounced push of the current library + tombstones to Drive after a local add / delete / import. Best-effort. */
+function scheduleDrivePush() {
+  if (!isDriveConnected?.()) return;
+  if (_drivePushTimer) clearTimeout(_drivePushTimer);
+  _drivePushTimer = setTimeout(() => {
+    _drivePushTimer = null;
+    try { pushTemplates(getTemplates(), getDeletedTombstones()); } catch { /* best-effort */ }
+  }, 1500);
+}
+
+/** Pull the Drive library + tombstones, merge with DELETE PROPAGATION, then push the merged set back. Deletes
+ *  made on another device that would remove templates still present here are surfaced in a confirmation overlay
+ *  first (Remove vs Keep/resurrect). Called on Drive connect (remote-store) + once on boot when signed in.
+ *  Safe to call when not connected (no-ops). */
+export async function syncTemplatesWithDrive() {
+  if (!isDriveConnected?.()) return;
+  let remote = null;
+  try { remote = await pullTemplates(); } catch { remote = null; }
+  if (remote == null) {
+    // No remote file yet (or unreadable) → seed Drive from this device's library + tombstones.
+    try { await pushTemplates(getTemplates(), getDeletedTombstones()); } catch { /* best-effort */ }
+    return;
+  }
+  const res = mergeTemplatesWithTombstones({
+    localTemplates: getTemplates(), localDeleted: getDeletedTombstones(),
+    remoteTemplates: remote.templates, remoteDeleted: remote.deleted,
+    sigOf, max: MAX_TEMPLATES, now: Date.now(), ttlMs: TOMBSTONE_TTL_MS,
+  });
+
+  // Templates deleted on another device that are still here → confirm before they vanish locally.
+  if (res.incomingDeletions.length) {
+    const names = res.incomingDeletions.map((t) => `• ${t.name || 'Untitled template'}`).join('\n');
+    const remove = await confirmModal({
+      title: 'Templates deleted on another device',
+      message: `These template${res.incomingDeletions.length === 1 ? ' was' : 's were'} deleted on another device:\n\n${names}\n\nRemove ${res.incomingDeletions.length === 1 ? 'it' : 'them'} here too?`,
+      okLabel: 'Remove them', cancelLabel: 'Keep them', tone: 'danger',
+    });
+    if (!remove) {
+      // KEEP/resurrect: drop those tombstones + put the templates back, then push so the resurrection propagates.
+      const keepIds = new Set(res.incomingDeletions.map((t) => t.id));
+      res.templates = [...res.templates, ...res.incomingDeletions];
+      res.deleted = res.deleted.filter((d) => !keepIds.has(d.id));
+    }
+  }
+
+  try { writeTemplates(res.templates); writeDeletedTombstones(res.deleted); notifyChange(); }
+  catch { /* storage full → keep remote in Drive, local unchanged */ }
+  // Push the merged result so other devices converge (deduped if identical to what we pulled).
+  try { await pushTemplates(res.templates, res.deleted); } catch { /* best-effort */ }
+}
+
+/** Boot hook: if a Drive token is already valid this session, opportunistically sync (no sign-in popup). */
+export function syncTemplatesOnBoot() {
+  if (isSignedIn?.()) { syncTemplatesWithDrive(); }
+}
+
 export function deleteTemplate(id) {
+  const removed = getTemplates().find(p => p.id === id);
   const next = getTemplates().filter(p => p.id !== id);
   try {
     writeTemplates(next);
@@ -83,7 +162,14 @@ export function deleteTemplate(id) {
     showToast('Could not update template library.', 'error');
     return;
   }
+  // Record a tombstone so the deletion PROPAGATES across devices (item 17) instead of being resurrected by a merge.
+  if (removed) {
+    const tombs = getDeletedTombstones().filter((d) => d && d.id !== id);
+    tombs.push({ id, name: removed.name || '', deletedAt: Date.now() });
+    writeDeletedTombstones(tombs);
+  }
   notifyChange();
+  scheduleDrivePush();   // mirror the deletion + tombstone to Drive
 }
 
 /** Deep-copy + sanitise a template's cells before they ever touch a graph.
@@ -161,7 +247,7 @@ export function saveSelectionAsTemplate() {
   // confirms exactly what the bounding box caught.
   const elementCount = subgraph.filter(c => c.isElement()).length;
   const linkCount = subgraph.length - elementCount;
-  const componentText = `${elementCount} component${elementCount === 1 ? '' : 's'}`;
+  const componentText = `${elementCount} shape${elementCount === 1 ? '' : 's'}`;
   const connectorText = `${linkCount} connector${linkCount === 1 ? '' : 's'}`;
   // Body with the counts in bold, e.g. "**8 components** and **10 connectors**
   // selected." Built as DOM nodes (counts are integers → no injection risk).
@@ -200,10 +286,11 @@ export function saveSelectionAsTemplate() {
     try {
       writeTemplates(templates);
     } catch (err) {
-      showToast('Could not save template — browser storage may be full.', 'error');
+      showToast('Could not save template - browser storage may be full.', 'error');
       return;
     }
     notifyChange();
+    scheduleDrivePush();   // mirror the new template to Drive (if connected)
     showToast(`Saved "${finalName}" to My Templates ✓`, 'success');
 
     // Durability layer 1 — ask the browser to keep this origin's storage
@@ -215,6 +302,49 @@ export function saveSelectionAsTemplate() {
       persistRequested = true;
       requestPersistentStorage();
     }
+  });
+}
+
+/**
+ * "My Shapes" - save ONE shape (with its full content + style + embedded children) for reuse, the single-shape
+ * counterpart to a multi-shape Template. It is a normal stored template tagged `kind:'shape'`, so it reuses the
+ * whole template pipeline (thumbnail, drop-with-fresh-ids, Drive sync, delete). Captured from a given cell (the
+ * right-clicked / selected element), not the whole selection.
+ */
+export function saveCellAsShape(cell) {
+  if (!graph || !cell?.isElement?.()) { showToast('Select a shape to save.', 'warning'); return; }
+  const subgraph = graph.getSubgraph([cell], { deep: true });
+  if (subgraph.some(c => c.get('type') === 'sf.Image')) {
+    showToast('Shapes cannot include images to preserve storage space.', 'warning'); return;
+  }
+  const existing = getTemplates();
+  if (existing.length >= MAX_TEMPLATES) {
+    showToast(`Your shape + template library is full (max ${MAX_TEMPLATES}). Delete one first.`, 'warning'); return;
+  }
+  const cellsJSON = subgraph.map(c => c.toJSON());
+  const guess = String(cell.attr('label/text') || cell.attr('subtitle/text') || '').trim().slice(0, 40);
+  promptModal({
+    title: 'Save Shape',
+    message: 'Save this shape - with its content and style - to My Shapes, ready to drop into any diagram.',
+    defaultValue: guess,
+    placeholder: 'Shape name',
+    okLabel: 'Save',
+    requireValue: true,
+  }).then(name => {
+    if (name == null) return;
+    const finalName = name.trim() || `Shape ${existing.length + 1}`;
+    const shape = {
+      id: newCellId(), name: finalName, kind: 'shape',
+      diagramType: getDiagramType(), appVersion: APP_VERSION, createdAt: Date.now(), cells: cellsJSON,
+    };
+    const templates = getTemplates();
+    templates.push(shape);
+    try { writeTemplates(templates); }
+    catch { showToast('Could not save - browser storage may be full.', 'error'); return; }
+    notifyChange();
+    scheduleDrivePush();
+    showToast(`Saved "${finalName}" to My Shapes ✓`, 'success');
+    if (!persistRequested) { persistRequested = true; requestPersistentStorage(); }
   });
 }
 
@@ -310,18 +440,40 @@ export function instantiateTemplate(templateId, dropPoint) {
  *
  * Returns a wrapper <div> containing the cloned SVG, fit to `size`×`size`.
  */
-export function renderTemplateThumbnail(template, size = 76) {
+export function renderTemplateThumbnail(template, size = 76, height = size, diff = null) {
   const wrap = document.createElement('div');
   wrap.className = 'df-template-thumb';
 
   const cells = safeTemplateCells(template);
-  if (typeof joint === 'undefined' || cells.length === 0) {
+
+  // Removals (Version History preview): cells that existed in the PREVIOUS version but not this one are GHOSTED -
+  // rendered faded with a red-dashed outline - so a deletion reads as clearly as an addition. They come from
+  // diff.removedCells (the base cells). A removed LINK is kept only when both endpoints resolve in the combined set
+  // (a dangling ghost link can't be positioned). The two-card Review modal omits removedCells, so this stays empty there.
+  const presentIds = new Set(cells.map((c) => c && c.id).filter((id) => id != null));
+  const removedIds = new Set();
+  const ghostCells = [];
+  if (diff && Array.isArray(diff.removedCells) && diff.removedCells.length) {
+    const isLink = (c) => !!(c && c.source && c.target);
+    const candidates = diff.removedCells.filter((c) => c && c.id != null && !presentIds.has(c.id));
+    const resolvable = new Set([...presentIds, ...candidates.map((c) => c.id)]);
+    for (const c of candidates) {
+      if (isLink(c)) {
+        const s = c.source && c.source.id, t = c.target && c.target.id;
+        if ((s && !resolvable.has(s)) || (t && !resolvable.has(t))) continue;   // dangling endpoint → skip
+      }
+      removedIds.add(c.id);
+      ghostCells.push(c);
+    }
+  }
+
+  if (typeof joint === 'undefined' || (cells.length === 0 && ghostCells.length === 0)) {
     return wrap;
   }
 
   // Off-screen host so any DOM-measuring view code still works during render.
   const host = document.createElement('div');
-  host.style.cssText = `position:absolute;left:-99999px;top:0;width:${size}px;height:${size}px;`;
+  host.style.cssText = `position:absolute;left:-99999px;top:0;width:${size}px;height:${height}px;`;
   document.body.appendChild(host);
 
   let svgClone = null;
@@ -332,14 +484,42 @@ export function renderTemplateThumbnail(template, size = 76) {
       el: host,
       model: miniGraph,
       width: size,
-      height: size,
+      height,
       interactive: false,
       async: false,
       sorting: joint.dia.Paper.sorting.APPROX,
       background: { color: 'transparent' },
       cellViewNamespace: joint.shapes,
+      // Match the MAIN canvas's connection point (registered globally as sfConnectionPoint at canvas init) so preview
+      // links read identically: the 16px offset keeps arrowheads OFF the shapes, and routing to distinct field ports
+      // is preserved instead of collapsing every link onto one anchor (version-history / template thumbnails, #6).
+      defaultConnectionPoint: { name: 'sfConnectionPoint', args: { offset: 16 } },
+      // The compacted save (compactGraphForSave) DROPS link routing - the MAIN canvas rebuilds it via migrateLinks on
+      // load, but this throwaway paper does a raw fromJSON, so without these the links draw as straight diagonals.
+      // These match the main canvas's defaults; mapping links get sfMappingRouter re-applied below (per linkKind).
+      defaultRouter: { name: 'sfManhattan' },
+      defaultConnector: { name: 'rounded', args: { radius: 8 } },
     });
-    miniGraph.fromJSON({ cells });
+    miniGraph.fromJSON({ cells: ghostCells.length ? [...cells, ...ghostCells] : cells });
+    // Re-apply the mapping router/connector the compacted save dropped (mirrors migrateLinks) so Data Cloud mapping
+    // links read as the smooth left→right beziers, not the default orthogonal/straight routing. `linkKind` survives
+    // compaction even though the router/connector don't.
+    for (const link of miniGraph.getLinks()) {
+      if (link.prop('linkKind') === 'mapping') {
+        link.router({ name: 'sfMappingRouter' });
+        link.connector('sfMappingConnector');
+        link.prop('source/connectionPoint', { name: 'anchor', args: { offset: 12 } });
+        link.prop('target/connectionPoint', { name: 'anchor', args: { offset: 12 } });
+      }
+    }
+    // Fade the ghosted (removed) cells so they read as faint "was here, now gone" shapes behind the current diagram.
+    if (removedIds.size) {
+      for (const cell of miniGraph.getCells()) {
+        if (!removedIds.has(cell.id)) continue;
+        const view = miniPaper.findViewByModel(cell);
+        if (view && view.el) view.el.style.opacity = '0.4';
+      }
+    }
 
     const bbox = miniPaper.getContentBBox({ useModelGeometry: true });
     if (bbox && bbox.width > 0 && bbox.height > 0) {
@@ -347,6 +527,29 @@ export function renderTemplateThumbnail(template, size = 76) {
       const vb = `${bbox.x - pad} ${bbox.y - pad} ${bbox.width + pad * 2} ${bbox.height + pad * 2}`;
       miniPaper.svg.setAttribute('viewBox', vb);
       miniPaper.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+    // Phase C diff highlight: outline each ADDED element green and each CHANGED element amber (dashed), drawn into
+    // the same model-coordinate space as the cells (the paper has no pan/zoom, so getBBox is in viewBox units).
+    // non-scaling-stroke keeps the outline crisp regardless of how far the viewBox is scaled to fit the thumbnail.
+    if (diff && (diff.added || diff.changed || removedIds.size)) {
+      const NS = 'http://www.w3.org/2000/svg';
+      for (const el of miniGraph.getElements()) {
+        const added = !!(diff.added && diff.added.has(el.id));
+        const removed = removedIds.has(el.id);
+        const changed = !added && !removed && !!(diff.changed && diff.changed.has(el.id));
+        if (!added && !changed && !removed) continue;
+        const bb = el.getBBox();
+        if (!bb || !(bb.width > 0)) continue;
+        const r = document.createElementNS(NS, 'rect');
+        r.setAttribute('x', String(bb.x - 3)); r.setAttribute('y', String(bb.y - 3));
+        r.setAttribute('width', String(bb.width + 6)); r.setAttribute('height', String(bb.height + 6));
+        r.setAttribute('rx', '4'); r.setAttribute('fill', 'none');
+        // green = added, amber-dashed = changed, red-dashed = removed (ghosted)
+        r.setAttribute('stroke', removed ? '#C23934' : added ? '#1D9E75' : '#BA7517');
+        r.setAttribute('stroke-width', '2.5'); r.setAttribute('vector-effect', 'non-scaling-stroke');
+        if (changed || removed) r.setAttribute('stroke-dasharray', '5 3');
+        miniPaper.svg.appendChild(r);
+      }
     }
     svgClone = miniPaper.svg.cloneNode(true);
   } catch (err) {
@@ -359,7 +562,7 @@ export function renderTemplateThumbnail(template, size = 76) {
   if (svgClone) {
     svgClone.removeAttribute('style');
     svgClone.setAttribute('width', String(size));
-    svgClone.setAttribute('height', String(size));
+    svgClone.setAttribute('height', String(height));
     svgClone.classList.add('df-template-thumb__svg');
     wrap.appendChild(svgClone);
   }
@@ -442,9 +645,10 @@ export function importTemplatesArray(incoming) {
   try {
     writeTemplates(existing);
   } catch {
-    showToast('Could not save imported templates — storage may be full.', 'error');
+    showToast('Could not save imported templates - storage may be full.', 'error');
     return 0;
   }
   notifyChange();
+  scheduleDrivePush();   // mirror imported templates to Drive (if connected)
   return added;
 }
