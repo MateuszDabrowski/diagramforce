@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.17.0.199';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.0.199';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.0.199';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.0.199';
-import * as stencilModule from './stencil.js?v=1.17.0.199';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.0.199';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.0.199';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.17.1.4';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.1.4';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.1.4';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.1.4';
+import * as stencilModule from './stencil.js?v=1.17.1.4';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.1.4';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.1.4';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -17,13 +17,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.17.0.199';
-import * as history from './history.js?v=1.17.0.199';
-import { startImageAddFlow } from './image-component.js?v=1.17.0.199';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.0.199';
-import { getActiveTabName } from './tabs.js?v=1.17.0.199';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.0.199';
-import { newFid } from './shapes.js?v=1.17.0.199';
+} from './clipboard.js?v=1.17.1.4';
+import * as history from './history.js?v=1.17.1.4';
+import { startImageAddFlow } from './image-component.js?v=1.17.1.4';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.1.4';
+import { getActiveTabName } from './tabs.js?v=1.17.1.4';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.1.4';
+import { newFid } from './shapes.js?v=1.17.1.4';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -2802,6 +2802,13 @@ function renderGanttTaskProps(cell) {
       cell.attr('assigneeLabel/text', v);
     });
   }
+
+  // Schedule — the DATES drive the bar's position + width on the timeline (gantt-scale): editing a date moves the bar
+  // to its column. A bar with no dates stays where it's dragged (back-compat). Bind a task to a timeline by dropping
+  // it onto one (or by having a single timeline in the diagram).
+  const schedule = section(bodyEl, 'Schedule');
+  addDate(schedule, 'Start Date', cell.get('startDate') || '', v => cell.set('startDate', v));
+  addDate(schedule, 'End Date', cell.get('endDate') || '', v => cell.set('endDate', v));
 
   // Appearance — canonical: Fill → Border → typography → custom features
   const appearance = section(bodyEl, 'Appearance');

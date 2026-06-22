@@ -1,27 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.17.0.199';
-import * as icons       from './icons.js?v=1.17.0.199';
-import { getAllStencilSvgs } from './components.js?v=1.17.0.199';
-import * as shapes      from './shapes.js?v=1.17.0.199';
-import * as canvas      from './canvas.js?v=1.17.0.199';
-import * as stencil     from './stencil.js?v=1.17.0.199';
-import * as selection   from './selection.js?v=1.17.0.199';
-import * as history     from './history.js?v=1.17.0.199';
-import * as clipboard   from './clipboard.js?v=1.17.0.199';
-import * as templates    from './templates.js?v=1.17.0.199';
-import * as keyboard    from './keyboard.js?v=1.17.0.199';
-import * as toolbar     from './toolbar.js?v=1.17.0.199';
-import * as properties  from './properties.js?v=1.17.0.199';
-import * as persistence from './persistence.js?v=1.17.0.199';
-import * as tabs        from './tabs.js?v=1.17.0.199';
-import * as mermaidImport from './mermaid-import.js?v=1.17.0.199';
-import * as tableView    from './table-view.js?v=1.17.0.199';
-import * as walkthrough  from './walkthrough.js?v=1.17.0.199';
-import * as whatsNew     from './whats-new.js?v=1.17.0.199';
-import * as a11y         from './a11y.js?v=1.17.0.199';
-import { seedDefaultPalette } from './brand-palette.js?v=1.17.0.199';
+import * as theme       from './theme.js?v=1.17.1.4';
+import * as icons       from './icons.js?v=1.17.1.4';
+import { getAllStencilSvgs } from './components.js?v=1.17.1.4';
+import * as shapes      from './shapes.js?v=1.17.1.4';
+import * as canvas      from './canvas.js?v=1.17.1.4';
+import * as stencil     from './stencil.js?v=1.17.1.4';
+import * as selection   from './selection.js?v=1.17.1.4';
+import * as history     from './history.js?v=1.17.1.4';
+import * as clipboard   from './clipboard.js?v=1.17.1.4';
+import * as templates    from './templates.js?v=1.17.1.4';
+import * as keyboard    from './keyboard.js?v=1.17.1.4';
+import * as toolbar     from './toolbar.js?v=1.17.1.4';
+import * as properties  from './properties.js?v=1.17.1.4';
+import * as persistence from './persistence.js?v=1.17.1.4';
+import * as tabs        from './tabs.js?v=1.17.1.4';
+import * as mermaidImport from './mermaid-import.js?v=1.17.1.4';
+import * as tableView    from './table-view.js?v=1.17.1.4';
+import * as walkthrough  from './walkthrough.js?v=1.17.1.4';
+import * as whatsNew     from './whats-new.js?v=1.17.1.4';
+import * as a11y         from './a11y.js?v=1.17.1.4';
+import { seedDefaultPalette } from './brand-palette.js?v=1.17.1.4';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -187,7 +187,15 @@ async function main() {
   // recorded (the walkthrough owns their onboarding). Decision is synchronous so
   // we can skip the backup reminder this session and never stack two dialogs.
   whatsNew.init(persistence.APP_VERSION);
-  const showedWhatsNew = whatsNew.maybeShowWhatsNew();
+  // If the session was restored from an older release, hand What's-New the OLD session version as the baseline - a
+  // user updating in from a pre-What's-New release has no seen-key yet, but they're returning, not brand-new (this is
+  // why they used to get the old inline "Session Restored" notice instead of What's New). A MAJOR update already shows
+  // the Compatibility Warning (a reset decision), so skip What's New there to avoid stacking two dialogs (it stays
+  // reachable from the About modal's version chip).
+  const sessionUpdate = tabs.getSessionUpdate ? tabs.getSessionUpdate() : null;
+  const showedWhatsNew = sessionUpdate && sessionUpdate.diff === 'major'
+    ? false
+    : whatsNew.maybeShowWhatsNew(sessionUpdate ? sessionUpdate.fromVersion : null);
 
   // --- Phase 9c: Periodic backup reminder ---
   // Deferred (setTimeout 0), mirroring the storage-pressure gauge, so it never

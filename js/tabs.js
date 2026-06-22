@@ -1,13 +1,13 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.0.199';
-import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.0.199';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.0.199';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.0.199';
-import { createElementFromComponent, SVG } from './components.js?v=1.17.0.199';
-import { getPalette } from './brand-palette.js?v=1.17.0.199';
-import { getAllIcons } from './icons.js?v=1.17.0.199';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.1.4';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.1.4';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.1.4';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.1.4';
+import { createElementFromComponent, SVG } from './components.js?v=1.17.1.4';
+import { getPalette } from './brand-palette.js?v=1.17.1.4';
+import { getAllIcons } from './icons.js?v=1.17.1.4';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -2157,6 +2157,10 @@ function restoreTabs() {
     // treat them as 1.0.0 (the last version without this field).
     const savedVersion = data.appVersion || '1.0.0';
     const diff = classifyVersionDiff(savedVersion);
+    // Record a real version update (minor/major) so app.js can show the What's-New overlay (the rich changelog). For a
+    // MINOR update this REPLACES the old inline "Session Restored" notice; the MAJOR branch still asks about reset (a
+    // potential-incompatibility decision) and What's New is skipped there (app.js) to avoid stacking two dialogs.
+    if (diff === 'minor' || diff === 'major') _sessionUpdate = { fromVersion: savedVersion, diff };
     if (diff === 'major') {
       // Major version mismatch — ask user whether to reset or try loading
       showSessionVersionWarning(savedVersion, 'major').then(tryLoad => {
@@ -2170,10 +2174,6 @@ function restoreTabs() {
         render();
       });
       return;
-    }
-    if (diff === 'minor') {
-      // Minor version mismatch — show notice but restore normally
-      showSessionVersionWarning(savedVersion, 'minor');
     }
 
     doRestoreTabData(data);
@@ -2192,10 +2192,18 @@ function restoreTabs() {
   }
 }
 
+// Set during session restore when the saved session was from an OLDER release: { fromVersion, diff }, else null.
+// app.js reads it to drive the What's-New overlay (a returning user updating in from a pre-What's-New release has no
+// seen-key, so the session version is the only reliable "last release I ran" signal). Captured BEFORE saveTabs()
+// re-stamps the session to the current version.
+let _sessionUpdate = null;
+/** The version update detected on this session restore ({ fromVersion, diff:'minor'|'major' }) or null. */
+export function getSessionUpdate() { return _sessionUpdate; }
+
 /**
- * Show a warning when the auto-saved session version differs.
+ * Show a warning when the auto-saved session version differs. Now used for MAJOR only (a reset decision) — a MINOR
+ * update no longer shows this inline notice; the richer What's-New overlay (app.js) supersedes it.
  * For major: returns Promise<boolean> — true = try loading, false = reset.
- * For minor: shows informational modal, returns Promise<void>.
  */
 function showSessionVersionWarning(savedVersion, diff) {
   return new Promise(resolve => {

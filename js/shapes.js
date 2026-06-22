@@ -2,8 +2,9 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.17.0.199';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.0.199';
+import { parseMarkdown } from './markdown.js?v=1.17.1.4';
+import { fieldFocus } from './canvas/focus-state.js?v=1.17.1.4';
+import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.17.1.4';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -2510,6 +2511,8 @@ export function register() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
       this.listenTo(this.model, 'change:progress', () => this._updateProgress());
       this.listenTo(this.model, 'change:assignee change:showAssignee change:showProgress', () => this._updateDisplay());
+      // Dates are the source of truth: editing start/end re-derives the bar's x + width on the timeline (gantt-scale).
+      this.listenTo(this.model, 'change:startDate change:endDate', () => applyGanttGeometry(this.model));
     },
     update() {
       joint.dia.ElementView.prototype.update.apply(this, arguments);
@@ -2750,7 +2753,8 @@ export function register() {
   joint.shapes.sf.GanttTimelineView = joint.dia.ElementView.extend({
     initialize() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
-      this.listenTo(this.model, 'change:startDate change:endDate change:viewMode change:numPeriods change:size change:tasks change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay', () => this._renderColumns());
+      // Re-draw the ruler AND re-position dated task bars whenever the axis changes (the bars track the timeline).
+      this.listenTo(this.model, 'change:startDate change:endDate change:viewMode change:numPeriods change:size change:tasks change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay', () => { this._renderColumns(); layoutTimelineTasks(this.model); });
     },
     update() {
       joint.dia.ElementView.prototype.update.apply(this, arguments);

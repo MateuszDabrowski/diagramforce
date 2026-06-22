@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.17.0.199';
-import { pctx } from './context.js?v=1.17.0.199';
-import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.17.0.199';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.17.0.199';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.17.0.199';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.17.1.4';
+import { pctx } from './context.js?v=1.17.1.4';
+import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.17.1.4';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.17.1.4';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.17.1.4';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -35,32 +35,25 @@ const API    = 'https://www.googleapis.com/drive/v3/files';
 // prod origin + referrer-locked key are registered (see Extended-Share doc §5).
 // localhost embeds the DEV creds (below) so the feature works in every dev browser /
 // incognito without per-browser seeding. Empty clientId ⇒ feature self-gates off.
-const DEV_CREDS = {
-  // Dev OAuth client + API key, referrer-locked to http://localhost:* (the preview origin).
-  // PUBLIC + low-risk: a copy works ONLY from localhost, buys at most dev quota, exposes no data.
-  // Embedded so the feature works in every dev browser / incognito with no per-browser seeding.
-  // Rotate freely in Cloud Console; remove if you'd rather not ship a dev key (Security §3.1).
-  clientId: '873718407054-1kfdhkvijmte6s3eob21mfj3nb6g7596.apps.googleusercontent.com',
-  apiKey: 'AIzaSyDzynIFVZCp4OfkYzSLKZN-IebkasT4JqM',
-};
 const GOOGLE_CONFIG = {
   // PROD creds — PUBLIC by design (client-side Google app, no secret used). Safety comes from the locks, not
   // secrecy: the OAuth client is restricted to the JS origin https://diagramforce.mateuszdabrowski.pl, and the
   // API key is HTTP-referrer-locked to the same + restricted to the Drive + Picker APIs. A copied value works
   // ONLY from this site and buys at most this project's free quota — it exposes no user data. The OAuth client
   // *secret* is NOT part of the GIS token flow and is deliberately NOT stored here. (Setup: Drive-Setup.md.)
+  //
+  // ONLY the prod creds are embedded. There is deliberately NO localhost/dev key in the shipped code: for local
+  // Drive testing, seed your OWN per browser (see the dev fallback below). The E2E suite seeds a placeholder config.
   'diagramforce.mateuszdabrowski.pl': {
     clientId: '873718407054-pag1jhjql4f96l7u8vsv195uvadppfuf.apps.googleusercontent.com',
     apiKey: 'AIzaSyC56ShCUdPEll_aaMs0JjqDnOCBUWkS3wQ',
   },
-  'localhost': DEV_CREDS,
-  '127.0.0.1': DEV_CREDS,
 };
 function googleConfig() {
   const fixed = GOOGLE_CONFIG[location.hostname];
   if (fixed && fixed.clientId) return fixed;
-  // Dev fallback — seed once per browser:
-  //   localStorage.setItem('df.gdrive.clientId', '…'); localStorage.setItem('df.gdrive.apiKey', '…')
+  // Any non-prod origin (localhost / 127.0.0.1 / a fork) has NO embedded creds — seed your own dev key once per
+  // browser: localStorage.setItem('df.gdrive.clientId', '…'); localStorage.setItem('df.gdrive.apiKey', '…')
   return {
     clientId: localStorage.getItem('df.gdrive.clientId') || '',
     apiKey:   localStorage.getItem('df.gdrive.apiKey')   || '',
@@ -106,8 +99,19 @@ function getToken({ prompt = '' } = {}) {
   if (prompt === '' && tokenValid()) return Promise.resolve(_accessToken);
   return loadScript(GIS_SRC).then(() => new Promise((resolve, reject) => {
     if (!_tokenClient) {
-      _tokenClient = google.accounts.oauth2.initTokenClient({ client_id: clientId, scope: DRIVE_SCOPE, callback: () => {} });
+      _tokenClient = google.accounts.oauth2.initTokenClient({ client_id: clientId, scope: DRIVE_SCOPE, callback: () => {}, error_callback: () => {} });
     }
+    // GIS delivers POPUP-LEVEL failures to `error_callback`, NOT to `callback`: the popup being blocked/closed, the
+    // page's JS origin not being authorised for the OAuth client, or a COOP/FedCM hand-off failure. WITHOUT this
+    // handler those were swallowed and sign-in hung SILENTLY - "Google authenticates (passkey), then drops back to
+    // the app still signed out" - because the token Promise never settled. Surface the reason (toast + console).
+    _tokenClient.error_callback = (err) => {
+      console.warn('Diagramforce: Google sign-in error_callback', err);   // full detail (type/message) for diagnosis
+      const type = (err && err.type) || '';
+      if (type === 'popup_closed') { reject(new Error('Google sign-in cancelled.')); return; }   // quiet (caller matches /cancel/)
+      if (type === 'popup_failed_to_open') { reject(new Error('The sign-in window was blocked - allow it for this site and try again.')); return; }
+      reject(new Error(`Google sign-in failed: ${(err && (err.message || err.type)) || 'unknown error'}. The site's OAuth origin or a security header may need fixing.`));
+    };
     // The callback is reassigned each call so it resolves THIS request's promise.
     _tokenClient.callback = (resp) => {
       if (resp.error) { reject(new Error(resp.error_description || resp.error)); return; }

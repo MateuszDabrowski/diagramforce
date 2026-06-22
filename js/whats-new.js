@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.17.0.199';
-import { buildModal } from './feedback.js?v=1.17.0.199';
+import { compareSemver } from './util.js?v=1.17.1.4';
+import { buildModal } from './feedback.js?v=1.17.1.4';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -82,12 +82,18 @@ export function init(appVersion) { _appVersion = appVersion; }
  * for this version — even on a reload moments later, and even if the user never
  * actually read it.
  */
-export function maybeShowWhatsNew() {
+export function maybeShowWhatsNew(fallbackLastSeen = null) {
   const current = _appVersion;
   if (!current) return false;
 
   let lastSeen = null;
   try { lastSeen = localStorage.getItem(SEEN_KEY); } catch { /* private mode */ }
+  // A user updating in from a release that predates this feature has NO seen-key yet - but they're RETURNING, not
+  // brand-new. Fall back to the restored session's appVersion (their actual last-run release) so they still get the
+  // overlay, instead of being mistaken for a first-ever visitor and recorded silently. (A TRUE first-ever visitor has
+  // no session → caller passes no fallback → still silent.) Fixes "the old Session-Restored notice showed instead of
+  // What's New after the 1.16→1.17 update".
+  if (!lastSeen && fallbackLastSeen) lastSeen = fallbackLastSeen;
 
   const record = () => { try { localStorage.setItem(SEEN_KEY, current); } catch { /* ignore */ } };
 

@@ -2,10 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.17.0.199';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.0.199';
-import { nodeContrastText } from '../util.js?v=1.17.0.199';
-import { getIconDataUri } from '../icons.js?v=1.17.0.199';
+import { cctx } from './context.js?v=1.17.1.4';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.1.4';
+import { nodeContrastText } from '../util.js?v=1.17.1.4';
+import { getIconDataUri } from '../icons.js?v=1.17.1.4';
+import { applyGanttGeometry } from './gantt-layout.js?v=1.17.1.4';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -467,6 +468,10 @@ export function migrateNodes() {
         joint.shapes.sf.rebuildSeqActorPorts?.(el, n, ratios);
       }
     }
+    // Gantt rework (v1.17.1): a task bar's x + width DERIVE from its start/end dates against its timeline. Apply on
+    // load so an LLM-authored (or table-edited) schedule positions correctly. No-op for dateless / manually-placed
+    // bars, so existing diagrams are untouched (the load guard suppresses history).
+    if (el.get('type') === 'sf.GanttTask') applyGanttGeometry(el);
   }
   // Regenerate icon data URIs so all icons use current normalized viewBoxes
   refreshAllIconHrefs();

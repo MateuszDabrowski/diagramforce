@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.17.0.199';
+const CACHE_VERSION = '1.17.1.4';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is

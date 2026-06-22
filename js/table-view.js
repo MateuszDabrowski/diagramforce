@@ -11,12 +11,12 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.0.199';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.17.0.199';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.17.0.199';
-import { SF_FIELD_TYPES } from './properties.js?v=1.17.0.199';
-import { buildModal } from './feedback.js?v=1.17.0.199';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.17.0.199';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.1.4';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.17.1.4';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.17.1.4';
+import { SF_FIELD_TYPES } from './properties.js?v=1.17.1.4';
+import { buildModal } from './feedback.js?v=1.17.1.4';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.17.1.4';
 
 let graph = null;
 let container = null;      // #mapping-table-view

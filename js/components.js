@@ -1,8 +1,8 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.17.0.199';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.17.0.199';
+import { getIconDataUri } from './icons.js?v=1.17.1.4';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.17.1.4';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -107,21 +107,28 @@ export const SVG = {
   seqFragment:    '<rect x="2" y="3" width="16" height="14" rx="1"/><path d="M2 3 L8 3 L9 5 L9 7 L2 7 Z" fill="currentColor" stroke="none" opacity="0.2"/><text x="3" y="6" font-size="3" font-weight="bold" fill="currentColor" stroke="none">loop</text>',
 };
 
+// The shared "Generic Shapes" set — IDENTICAL across EVERY diagram type (harmonised v1.17.1), so the same building
+// blocks (a plain Node, a Container, a Zone, plus the annotation + connector shapes) are reachable everywhere. The
+// type-specific PRIMARY shapes (DataObject, OrgPerson, BPMN tasks, sequence participants, Gantt tasks, …) and the
+// Data-Mapping layer Zones live in their OWN categories. Shared by reference: these defs are read-only templates
+// (the element factory clones them on drop, never mutates them), so one array is safe across all the *_CATEGORIES.
+const GENERIC_SHAPES = [
+  { type: 'sf.SimpleNode',  label: 'Node',       iconName: null, stencilSvg: SVG.node, noCanvasIcon: true },
+  { type: 'sf.Container',   label: 'Container',  iconName: null, accentColor: '#1D73C9', stencilSvg: SVG.container },
+  { type: 'sf.Zone',        label: 'Zone',       stencilSvg: SVG.zone  },
+  { type: 'sf.Note',        label: 'Note',       stencilSvg: SVG.note  },
+  { type: 'sf.TextLabel',   label: 'Text',       stencilSvg: SVG.text  },
+  { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
+  { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
+  { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
+  { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
+];
+
 export const COMPONENT_CATEGORIES = [
   {
     id: 'generic',
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.SimpleNode',  label: 'Node',       iconName: null, stencilSvg: SVG.node, noCanvasIcon: true },
-      { type: 'sf.Container',   label: 'Container',  iconName: null, accentColor: '#1D73C9', stencilSvg: SVG.container },
-      { type: 'sf.Zone',        label: 'Zone',       stencilSvg: SVG.zone  },
-      { type: 'sf.Note',        label: 'Note',       stencilSvg: SVG.note  },
-      { type: 'sf.TextLabel',   label: 'Text',       stencilSvg: SVG.text  },
-      { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
-      { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
   // ── Salesforce Products ────────────────────────────────────────────
   {
@@ -399,15 +406,7 @@ export const BPMN_CATEGORIES = [
   {
     id: 'bpmn-generic',
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
-      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
 ];
 
@@ -475,15 +474,7 @@ export const GANTT_CATEGORIES = [
   {
     id: 'gantt-generic',
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
-      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
 ];
 
@@ -516,15 +507,7 @@ export const ORG_CATEGORIES = [
   {
     id: 'org-generic',
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
-      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
 ];
 
@@ -556,15 +539,7 @@ export const SEQUENCE_CATEGORIES = [
   {
     id: 'seq-generic',
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
-      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
 ];
 
@@ -572,8 +547,10 @@ export const SEQUENCE_CATEGORIES = [
 
 export const DATAMODEL_CATEGORIES = [
   {
-    id: 'dm-generic',
-    label: 'Generic Shapes',
+    // Object is the PRIMARY shape — its own "Objects" group (mirroring Data Mapping) so it's prominent, not buried
+    // among the generic decorators. The shared Generic Shapes follow below.
+    id: 'dm-objects',
+    label: 'Objects',
     components: [
       {
         type: 'sf.DataObject', label: 'Object', objectName: 'ObjectName', headerColor: '#1D73C9', stencilSvg: SVG.dataTable,
@@ -582,14 +559,12 @@ export const DATAMODEL_CATEGORIES = [
           { label: 'Name', apiName: 'Name', type: 'Text', keyType: null },
         ],
       },
-      { type: 'sf.Zone',       label: 'Zone',       stencilSvg: SVG.zone },
-      { type: 'sf.Note',       label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',  label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation', label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',       label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',       label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',      label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
     ],
+  },
+  {
+    id: 'dm-generic',
+    label: 'Generic Shapes',
+    components: GENERIC_SHAPES,
   },
   {
     id: 'dm-mc-dataviews',
@@ -968,19 +943,11 @@ export const DATAMODEL_CATEGORIES = [
 // sits in. A generic "Layer" covers any custom stage.
 export const DATAMAPPING_CATEGORIES = [
   {
+    // The DataObject lives in its own "Objects" group below Mapping Layers (nudging users toward layering); the
+    // shared Generic Shapes (incl. a plain Node, Container and Zone) are the same set every diagram type gets.
     id: 'dm-generic',
-    // Generic Shapes lead with a plain Node (the DataObject moves to its own
-    // "Objects" group below Mapping Layers, to nudge users toward layering).
     label: 'Generic Shapes',
-    components: [
-      { type: 'sf.SimpleNode',  label: 'Node',       iconName: null, stencilSvg: SVG.node, noCanvasIcon: true },
-      { type: 'sf.Note',        label: 'Note',       stencilSvg: SVG.note },
-      { type: 'sf.TextLabel',   label: 'Text',       stencilSvg: SVG.text },
-      { type: 'sf.Annotation',  label: 'Annotation', stencilSvg: SVG.annotation },
-      { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line },
-      { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
-      { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
-    ],
+    components: GENERIC_SHAPES,
   },
   {
     id: 'dm-layers',

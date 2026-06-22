@@ -1,10 +1,10 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.17.0.199';
-import * as history from './history.js?v=1.17.0.199';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.17.0.199';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.0.199';
+import * as clipboard from './clipboard.js?v=1.17.1.4';
+import * as history from './history.js?v=1.17.1.4';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.17.1.4';
+import { fieldFocus } from './canvas/focus-state.js?v=1.17.1.4';
 
 let graph, paper;
 const selectedIds = new Set();

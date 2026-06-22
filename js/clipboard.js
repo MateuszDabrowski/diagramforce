@@ -1,6 +1,6 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.17.0.199';
+import * as history from './history.js?v=1.17.1.4';
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the

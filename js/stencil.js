@@ -1,14 +1,14 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.17.0.199';
-import { getAllIcons, getCategories } from './icons.js?v=1.17.0.199';
-import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.17.0.199';
-import { startImageAddFlow } from './image-component.js?v=1.17.0.199';
-import * as history from './history.js?v=1.17.0.199';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.17.0.199';
-import { confirmModal } from './feedback.js?v=1.17.0.199';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.17.0.199'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent } from './components.js?v=1.17.1.4';
+import { getAllIcons, getCategories } from './icons.js?v=1.17.1.4';
+import { updateSimpleNodeLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.17.1.4';
+import { startImageAddFlow } from './image-component.js?v=1.17.1.4';
+import * as history from './history.js?v=1.17.1.4';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.17.1.4';
+import { confirmModal } from './feedback.js?v=1.17.1.4';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.17.1.4'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -129,12 +129,13 @@ function renderCategories() {
                       : currentDiagramType === 'sequence' ? SEQUENCE_CATEGORIES
                       : COMPONENT_CATEGORIES;
 
-  // Pin "Generic Shapes" to the top across every diagram type. For diagram
-  // types where it sat at the bottom (process / gantt / org / sequence) — i.e.
-  // shapes specific to that diagram type matter more than the generic
-  // fallback — present the group collapsed by default. Architecture and
-  // datamodel already lead with Generic Shapes, so leave them expanded.
-  const TYPES_GENERIC_AT_BOTTOM = new Set(['process', 'gantt', 'org', 'sequence']);
+  // Pin "Generic Shapes" to the top across every diagram type, but present it COLLAPSED by default everywhere EXCEPT
+  // Architecture: only Architecture treats the generic set as its PRIMARY content (a plain Node / Container ARE its
+  // building blocks). Every other type has type-specific shapes that matter more (BPMN tasks, the DataObject in its
+  // "Objects" group, Mapping Layers, …), so the generic group folds away to keep those prominent. (Data Model/Mapping
+  // joined this set in v1.17.1 once the DataObject moved OUT of Generic Shapes into its own "Objects" group — before
+  // that, datamodel was left expanded because the DataObject led the generic group.)
+  const TYPES_GENERIC_COLLAPSED = new Set(['process', 'gantt', 'org', 'sequence', 'datamodel', 'datamapping']);
   const isGeneric = (c) => /generic/i.test(c.id || '') || c.label === 'Generic Shapes';
   const generic = rawCategories.find(isGeneric);
   const others = rawCategories.filter(c => !isGeneric(c));
@@ -143,7 +144,7 @@ function renderCategories() {
         // Shallow-clone so we never mutate the exported source array — the
         // `collapsed` flag must be per-render, not stick across re-renders
         // initiated from a different diagram type later.
-        { ...generic, collapsed: TYPES_GENERIC_AT_BOTTOM.has(currentDiagramType) },
+        { ...generic, collapsed: TYPES_GENERIC_COLLAPSED.has(currentDiagramType) },
         ...others,
       ]
     : rawCategories;
