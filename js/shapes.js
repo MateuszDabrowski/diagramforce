@@ -2,9 +2,9 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.17.1.4';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.1.4';
-import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.17.1.4';
+import { parseMarkdown } from './markdown.js?v=1.17.2.11';
+import { fieldFocus } from './canvas/focus-state.js?v=1.17.2.11';
+import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.17.2.11';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -656,6 +656,56 @@ export function register() {
       ensureMarkdownFO(this, 'label', text, { x: 0, y: 0, width, height, css, hideSelector: 'label' });
     },
   });
+
+  // --- Pill ---
+  // A number / short-label badge: a filled circle that extends into a stadium "pill" as the content grows. Use it
+  // to reference points of a diagram in a legend / description, or to tag elements ("Phase 1"). It AUTO-WIDTHS to
+  // its `pillText` (min width = height → a circle for 1-2 chars); rx tracks half the height so the ends stay round.
+  joint.dia.Element.define(
+    'df.Pill',
+    {
+      size: { width: 32, height: 32 },
+      z: 2400,
+      pillText: '1',
+      attrs: {
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)', height: 'calc(h)',
+          rx: 'calc(0.5 * h)', ry: 'calc(0.5 * h)',
+          fill: '#E24B4A', stroke: 'none',
+        },
+        label: {
+          x: 'calc(0.5 * w)', y: 'calc(0.5 * h)',
+          textAnchor: 'middle', textVerticalAnchor: 'middle',
+          fontSize: 15, fontWeight: '700',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: '#FFFFFF', text: '1',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'text', selector: 'label' },
+      ],
+      // Auto-width the pill to its content at the MODEL level (a char-width estimate, ~0.62em/char) — runs at
+      // construction (before any render) and on every pillText edit, so it can't be lost to the async render cycle
+      // the way a view-side resize was. Min width = height → 1-2 chars stay a circle; rx=calc(0.5h) rounds the ends.
+      initialize() {
+        joint.dia.Element.prototype.initialize.apply(this, arguments);
+        this.on('change:pillText', () => this._fitWidth());
+        this._fitWidth();
+      },
+      _fitWidth() {
+        const txt = String(this.get('pillText') ?? '');
+        this.attr('label/text', txt, { silent: true });
+        const h = this.size().height || 32;
+        const fs = this.attr('label/fontSize') || 15;
+        const w = Math.max(h, Math.round(txt.length * fs * 0.62) + Math.round(h * 0.55));
+        if (Math.abs(this.size().width - w) > 0.5) this.resize(w, h);
+      },
+    }
+  );
 
   // --- Line ---
   // A decorative line element — horizontal by default, resizable.

@@ -18,8 +18,8 @@
 // Pure overlay — reads graph/selection, drives selection + offscreen nodes. Never mutates the
 // diagram or history. The "describe a shape" knowledge lives in properties.js (the inspector
 // already owns the type→label map + name accessors); we just narrate + navigate + outline.
-import { describeCell, cellName } from './properties.js?v=1.17.1.4';
-import { escHtml } from './util.js?v=1.17.1.4';
+import { describeCell, cellName } from './properties.js?v=1.17.2.11';
+import { escHtml } from './util.js?v=1.17.2.11';
 
 let graph = null;
 let selection = null;

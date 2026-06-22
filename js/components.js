@@ -1,8 +1,8 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.17.1.4';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.17.1.4';
+import { getIconDataUri } from './icons.js?v=1.17.2.11';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.17.2.11';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -57,6 +57,7 @@ export const SVG = {
   zone:       '<rect x="2" y="3" width="16" height="14" rx="1" stroke-dasharray="3 2"/><line x1="4" y1="6" x2="10" y2="6" stroke-width="1" opacity="0.5"/>',
   line:       '<line x1="2" y1="10" x2="18" y2="10" stroke-width="2" stroke-linecap="round"/>',
   image:      '<rect x="2" y="3" width="16" height="14" rx="2"/><circle cx="6.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/><path d="M3 16l4-5 3 3 3-4 4 5"/>',
+  pill:       '<rect x="5" y="5" width="10" height="10" rx="5"/><text x="10" y="10.2" font-size="7" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">1</text>',
   // linkIcon — external-link glyph (SVG Repo "External_Link"), translated to crop
   // the 24×24 source into the 20×20 viewBox and with the arrow head pulled one
   // unit toward the shape centre (M19 5 instead of M20 4).
@@ -122,6 +123,7 @@ const GENERIC_SHAPES = [
   { type: 'sf.Line',        label: 'Line',       stencilSvg: SVG.line  },
   { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
   { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
+  { type: 'df.Pill',        label: 'Pill',       stencilSvg: SVG.pill  },
 ];
 
 export const COMPONENT_CATEGORIES = [
@@ -1108,6 +1110,9 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
 
     case 'sf.Line':
       return new joint.shapes.sf.Line({ position });
+
+    case 'df.Pill':
+      return new joint.shapes.df.Pill({ position });
 
     case 'sf.Link': {
       const color = '#1D73C9';

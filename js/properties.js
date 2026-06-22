@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.17.1.4';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.1.4';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.1.4';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.1.4';
-import * as stencilModule from './stencil.js?v=1.17.1.4';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.1.4';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.1.4';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.17.2.11';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.2.11';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.2.11';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.2.11';
+import * as stencilModule from './stencil.js?v=1.17.2.11';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.2.11';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.2.11';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -17,13 +17,13 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.17.1.4';
-import * as history from './history.js?v=1.17.1.4';
-import { startImageAddFlow } from './image-component.js?v=1.17.1.4';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.1.4';
-import { getActiveTabName } from './tabs.js?v=1.17.1.4';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.1.4';
-import { newFid } from './shapes.js?v=1.17.1.4';
+} from './clipboard.js?v=1.17.2.11';
+import * as history from './history.js?v=1.17.2.11';
+import { startImageAddFlow } from './image-component.js?v=1.17.2.11';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.2.11';
+import { getActiveTabName } from './tabs.js?v=1.17.2.11';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.2.11';
+import { newFid } from './shapes.js?v=1.17.2.11';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -90,6 +90,7 @@ const TYPE_LABELS = {
   'sf.SequenceActor':       'Actor',
   'sf.SequenceActivation':  'Activation',
   'sf.SequenceFragment':    'Fragment',
+  'df.Pill':                'Pill',
 };
 
 /** The user-facing name of a cell (its label), or '' if unnamed. Single source of the
@@ -145,6 +146,7 @@ const DEFAULT_SIZES = {
   'sf.FlowOffPage':    { width: 60,  height: 60 },
   'sf.Annotation':     { width: 100, height: 120 },
   'sf.Line':           { width: 200, height: 8 },
+  'df.Pill':           { width: 32,  height: 32 },
   'sf.Link':           { width: 220, height: 44 },
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },
@@ -786,6 +788,68 @@ function restoreStencilAfterProperties() {
   stencilWasOpen = false;
 }
 
+// ── Highlight (review / diff overlay) ──────────────────────────────────
+// A fast way to mark elements during a review without hand-picking colours. Shown as a 4-stop
+// slider — None / New / Removed / Changed — that paints the element's `body` stroke:
+//   New     → a thicker GREEN  border (net-new element)
+//   Removed → a RED dashed     border (removed element)
+//   Changed → an ORANGE dotted border (changed element)
+//   None restores the shape's own border (default behaviour).
+// The pre-override stroke is stashed in `_origBorder` so None is lossless (it restores whatever the
+// border was, including user customisations). The choice persists as the top-level `borderStyle`
+// prop (kept stable across the rename to "Highlight" so older saves keep working).
+const HIGHLIGHT_STYLES = {
+  bold:   { stroke: '#2E9E5B', strokeWidth: 3,   strokeDasharray: 'none' },
+  dashed: { stroke: '#DA4E55', strokeWidth: 2.5, strokeDasharray: '7 4'  },
+  dotted: { stroke: '#E8881A', strokeWidth: 2.5, strokeDasharray: '2 4'  },
+};
+// Slider labels are the review SEMANTICS (None/New/Removed/Changed); the stored values stay the
+// style keys (standard/bold/dashed/dotted) so the persisted `borderStyle` prop is unchanged.
+const HIGHLIGHT_OPTS = [
+  { value: 'standard', label: 'None' },
+  { value: 'bold',     label: 'New' },
+  { value: 'dashed',   label: 'Removed' },
+  { value: 'dotted',   label: 'Changed' },
+];
+
+function applyHighlight(cell, style) {
+  const prev = cell.get('borderStyle') || 'standard';
+  if (style === prev) return;
+  if (style === 'standard') {
+    const orig = cell.get('_origBorder');
+    if (orig) {
+      cell.attr('body/stroke', orig.stroke ?? null);
+      cell.attr('body/strokeWidth', orig.strokeWidth ?? null);
+      cell.attr('body/strokeDasharray', orig.strokeDasharray ?? null);
+    }
+    cell.set('borderStyle', null);
+    cell.set('_origBorder', null);
+    return;
+  }
+  // First override away from None: remember the shape's own stroke so None can restore it.
+  if (prev === 'standard' || !cell.get('_origBorder')) {
+    cell.set('_origBorder', {
+      stroke: cell.attr('body/stroke') ?? null,
+      strokeWidth: cell.attr('body/strokeWidth') ?? null,
+      strokeDasharray: cell.attr('body/strokeDasharray') ?? null,
+    });
+  }
+  const s = HIGHLIGHT_STYLES[style];
+  cell.set('borderStyle', style);
+  cell.attr('body/stroke', s.stroke);
+  cell.attr('body/strokeWidth', s.strokeWidth);
+  cell.attr('body/strokeDasharray', s.strokeDasharray);
+}
+
+// Shared Highlight control — the LAST section in the panel, shown for any element with a `body`
+// outline to paint (boxes, pills, arrows, etc.). Links and body-less shapes are skipped.
+function maybeAddHighlightSection(cell) {
+  if (cell.isLink?.() || cell.attr('body') === undefined) return;
+  const sec = section(bodyEl, 'Highlight');
+  addSegmented(sec, '', cell.get('borderStyle') || 'standard', HIGHLIGHT_OPTS,
+    asUndoBatch(v => applyHighlight(cell, v)), { className: 'df-properties__segmented--compact' });
+}
+
 function showProperties(cell) {
   const wasHidden = panelEl.classList.contains('df-properties--hidden');
   panelEl.classList.remove('df-properties--hidden');
@@ -840,9 +904,14 @@ function showProperties(cell) {
   else if (type === 'sf.SequenceActivation')  renderSequenceActivationProps(cell);
   else if (type === 'sf.SequenceFragment')    renderSequenceFragmentProps(cell);
   else if (type === 'sf.Line')     renderLineProps(cell);
+  else if (type === 'df.Pill')     renderPillProps(cell);
   else if (type === 'sf.Link')     renderLinkElementProps(cell);
   else if (type === 'sf.Image')    renderImageProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
+
+  // Shared Highlight slider — appended LAST, after the type-specific sections, for every element
+  // with a body outline (None / New / Removed / Changed = the review/diff overlay).
+  maybeAddHighlightSection(cell);
 
   // Generic: keep any "Width"/"Height" inputs in the rendered panel synced
   // with the live cell size, so corner-handle resizes update the numbers in
@@ -1034,6 +1103,27 @@ function showMultiProperties(count) {
     'Height', allSameH ? heights[0] : '', h => elements.forEach(c => c.resize(c.size().width, h))
   );
 
+  // ── Rotation — every element supports an angle, so offer a shared rotation. Shows the shared
+  // angle (or 0 when mixed); setting applies to all selected elements in one undo step.
+  const angles = elements.map(c => c.angle());
+  const sameAngle = angles.every(a => a === angles[0]);
+  rotationField(sizeSec, 'Rotation', () => sameAngle ? angles[0] : 0, v => {
+    history.startBatch();
+    try { elements.forEach(c => c.rotate(v, true)); } finally { history.endBatch(); }
+  });
+
+  // ── Font size — shared across every selected element that carries a label font size (text-bearing
+  // shapes); shapes without one are unaffected. Blank = mixed sizes; type to set all.
+  const fsCells = elements.filter(c => c.attr('label/fontSize') != null);
+  if (fsCells.length > 0) {
+    const fontSizes = fsCells.map(c => parseFloat(c.attr('label/fontSize')) || 13);
+    const sameFS = fontSizes.every(s => s === fontSizes[0]);
+    addNumber(sizeSec, 'Font size', sameFS ? fontSizes[0] : '', v => {
+      history.startBatch();
+      try { fsCells.forEach(c => c.attr('label/fontSize', v)); } finally { history.endBatch(); }
+    }, { min: 6, max: 96 });
+  }
+
   // ── Shared appearance (corner radius) — only for SimpleNodes ──
   // Only makes sense when EVERY selected element is a SimpleNode; otherwise
   // applying a corner radius to mixed types would be meaningless.
@@ -1074,6 +1164,20 @@ function showMultiProperties(count) {
         else if (t === 'sf.SequenceActivation') joint.shapes.sf.rebuildSeqActivationPorts(c, n);
       });
     });
+  }
+
+  // ── Highlight — the same review/diff slider as single-select, applied to EVERY selected element
+  // with a body outline at once (mark a batch New / Removed / Changed in one undo step). Shows the
+  // shared value, or None when mixed. Last content section, mirroring the single-element panel.
+  const hlCells = elements.filter(c => c.attr('body') !== undefined);
+  if (hlCells.length > 0) {
+    const hlVals = hlCells.map(c => c.get('borderStyle') || 'standard');
+    const sameHl = hlVals.every(s => s === hlVals[0]);
+    const hlSec = section(bodyEl, 'Highlight');
+    addSegmented(hlSec, '', sameHl ? hlVals[0] : 'standard', HIGHLIGHT_OPTS, v => {
+      history.startBatch();
+      try { hlCells.forEach(c => applyHighlight(c, v)); } finally { history.endBatch(); }
+    }, { className: 'df-properties__segmented--compact' });
   }
 
   // ── Actions section (Order, Auto-size, Convert) ──
@@ -1489,6 +1593,26 @@ function renderTextLabelProps(cell) {
   addOrderButtons(size, cell);
 
   // Delete (in footer)
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+// df.Pill — a number / short-label badge that auto-widths to its content (circle → pill).
+function renderPillProps(cell) {
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Text', String(cell.get('pillText') ?? ''), v => {
+    cell.set('pillText', v);   // the PillView auto-widths + syncs the rendered label
+    titleEl.textContent = v || 'Pill';
+  });
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.attr('body/fill'), v => cell.attr('body/fill', v));
+  addColor(appearance, 'Text color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
+  const size = section(bodyEl, 'Size & Order');   // width auto-fits the text; height + rotation are free
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => cell.resize(w, cell.size().height),
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addRotationField(size, cell);
+  addOrderButtons(size, cell);
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
 }
@@ -5437,6 +5561,7 @@ function addSegmented(parent, label, value, options, onChange, opts = {}) {
   const f = field(parent, label);
   const wrap = document.createElement('div');
   wrap.className = 'df-properties__segmented';
+  if (opts.className) wrap.classList.add(opts.className);   // e.g. --compact for a 4-stop slider
   wrap.setAttribute('role', 'radiogroup');
   const buttons = [];
   const clearAll = () => buttons.forEach(b => {

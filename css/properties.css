@@ -411,6 +411,13 @@
   box-shadow: 0 0 0 2px rgba(218, 78, 85, 0.35);
 }
 
+/* Compact variant — a 4-stop slider (None / New / Removed / Changed for the Highlight overlay).
+   Tighter padding + font so four labels fit the panel width without wrapping. */
+.df-properties__segmented--compact .df-properties__segmented-option {
+  padding: 3px 4px;
+  font-size: 11px;
+}
+
 /* ── Color field ───────────────────────────────────────── */
 
 .df-prop-color-row {

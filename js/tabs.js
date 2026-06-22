@@ -1,13 +1,13 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.1.4';
-import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.1.4';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.1.4';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.1.4';
-import { createElementFromComponent, SVG } from './components.js?v=1.17.1.4';
-import { getPalette } from './brand-palette.js?v=1.17.1.4';
-import { getAllIcons } from './icons.js?v=1.17.1.4';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.2.11';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.2.11';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.2.11';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.2.11';
+import { createElementFromComponent, SVG } from './components.js?v=1.17.2.11';
+import { getPalette } from './brand-palette.js?v=1.17.2.11';
+import { getAllIcons } from './icons.js?v=1.17.2.11';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -562,6 +562,12 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   // The new tab is now active — load the graph into it.
   canvasModule.setLoadingJSON(true);
   try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+  // CRITICAL: newTab() created this tab with `graphJSON: null` and the load above only populated the LIVE
+  // graph — so flush the live graph into THIS (now active) tab's stored snapshot immediately. Without it the
+  // tab's graphJSON stays empty until the first tab-switch, and any activateTab() on it (a clone exported via
+  // the tab menu, before the switchTab guard; a re-activation) would fromJSON({cells:[]}) and CLEAR the canvas
+  // ("nothing to export"). This makes a freshly cloned / imported tab robust on its own.
+  saveCurrentTabState();
   // Loading content into a fresh tab IS a content event (markDirty is guarded by
   // isLoadingJSON, so it won't have stamped) — record it as the modified time so
   // imported / loaded / shared diagrams show a time like edited ones.
@@ -1853,11 +1859,15 @@ function openTabGroupMenu(anchorEl, tab) {
       persistenceModule.exportSelection({ tabIds: [tab.id] });
     }, { icon: 'download' }));
     panel.appendChild(menuItem('Export diagram to PNG', () => {
-      activateTab(tab.id);                 // PNG rasterizes the LIVE canvas, so switch to this tab first
+      // switchTab (NOT activateTab): on the ACTIVE tab it early-returns, so the LIVE canvas — including
+      // edits made since the last tab switch — rasterizes as-is. activateTab() has no same-tab guard and
+      // re-runs graph.fromJSON(tab.graphJSON), silently REVERTING the canvas to the stale stored snapshot
+      // (the autosave never writes tab.graphJSON back), which looked like "export changes the diagram".
+      switchTab(tab.id);
       requestAnimationFrame(() => persistenceModule.exportPNG(false));
     }, { icon: 'image' }));
     panel.appendChild(menuItem('Share diagram', () => {
-      activateTab(tab.id);                 // the Share overlay shares the ACTIVE tab
+      switchTab(tab.id);                   // same guard as PNG export: never fromJSON-revert the active tab to a stale snapshot before sharing
       persistenceModule.shareAsURL();
     }, { icon: 'share_link' }));
     panel.appendChild(menuSep());

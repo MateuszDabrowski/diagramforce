@@ -7,13 +7,13 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.17.1.4';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.17.1.4';
-import { normalizeDateSuffix } from '../util.js?v=1.17.1.4';
-import { escHtml } from '../util.js?v=1.17.1.4';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.17.1.4';
-import { pctx } from './context.js?v=1.17.1.4';
-import { slimForShare } from '../share-codec.js?v=1.17.1.4';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.17.2.11';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.17.2.11';
+import { normalizeDateSuffix } from '../util.js?v=1.17.2.11';
+import { escHtml } from '../util.js?v=1.17.2.11';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.17.2.11';
+import { pctx } from './context.js?v=1.17.2.11';
+import { slimForShare } from '../share-codec.js?v=1.17.2.11';
 
 // Maximum number of cells to accept from external sources (share URLs, JSON import)
 const MAX_CELL_COUNT = 2000;
@@ -46,6 +46,8 @@ const ALLOWED_CELL_TYPES = new Set([
   // Sequence
   'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation',
   'sf.SequenceFragment',
+  // Generic (df.* — net-new shapes use the df namespace; legacy shapes keep sf.* for save back-compat)
+  'df.Pill',
   // JointJS link
   'standard.Link',
 ]);

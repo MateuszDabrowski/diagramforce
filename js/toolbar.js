@@ -1,14 +1,14 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.17.1.4';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.17.1.4';
-import { resizeDataObjectToFit } from './components.js?v=1.17.1.4';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.17.1.4';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.17.1.4';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.17.1.4';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.17.1.4';
-import { renderTemplateThumbnail } from './templates.js?v=1.17.1.4';
+import { diagramHasImage } from './image-component.js?v=1.17.2.11';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.17.2.11';
+import { resizeDataObjectToFit } from './components.js?v=1.17.2.11';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.17.2.11';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.17.2.11';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.17.2.11';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.17.2.11';
+import { renderTemplateThumbnail } from './templates.js?v=1.17.2.11';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode

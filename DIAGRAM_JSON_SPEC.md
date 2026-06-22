@@ -4,14 +4,14 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.17.1** — matches the app's current `appVersion`; set `"appVersion": "1.17.1"` in generated files.
+> **Spec snapshot: v1.17.2** — matches the app's current `appVersion`; set `"appVersion": "1.17.2"` in generated files.
 
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.17.1",
+  "appVersion": "1.17.2",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -34,7 +34,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.17.1"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.17.2"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
@@ -49,8 +49,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.1", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.1" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.2", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.2" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -82,10 +82,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.1", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.17.2", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.1" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.17.2" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -110,6 +110,10 @@
 | `sequence` | UML sequence diagrams, message flows | SequenceParticipant, SequenceActor, SequenceActivation, SequenceFragment |
 
 > **`sf.Image`** is available in every diagram type's "Generic Shapes" stencil group (since v1.9). Note that any tab containing `sf.Image` cells has Share-as-URL automatically disabled — see [sf.Image](#sfimage-since-v19) for details.
+
+> **`df.Pill`** (an auto-widening number / short-label badge — a circle for `1`, a stadium pill for `Phase 1`, driven by the `pillText` prop) is a net-new GENERIC shape in every type's "Generic Shapes" group (since v1.17.2). It uses the **`df.` namespace** — the project marks net-new shapes `df.*` while legacy shapes keep `sf.*` (the type string is serialized, so renaming would break old saves); both resolve via `cellNamespace`/`cellViewNamespace = joint.shapes`.
+
+> **Highlight (review / diff overlay, since v1.17.2):** any element with a `body` outline gets a `None / New / Removed / Changed` slider (the last section of the property panel) that paints the body stroke green (new) / red (removed) / orange (changed). It persists as a top-level `borderStyle` prop (`"bold"` / `"dashed"` / `"dotted"`; the prop name predates the "Highlight" rename and is kept for back-compat). A companion `_origBorder` prop (`{stroke, strokeWidth, strokeDasharray}`) stashes the pre-override stroke so reverting to **None** restores the shape's own border losslessly. Both absent on a None / un-highlighted element.
 
 ## Cell Structure (Elements)
 
@@ -1744,7 +1748,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.17.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.17.2", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1822,7 +1826,7 @@ A simple 3-node architecture with one container:
 ```json
 {
   "version": 1,
-  "appVersion": "1.17.1",
+  "appVersion": "1.17.2",
   "timestamp": 1712700000000,
   "title": "Simple Architecture",
   "diagramType": "architecture",
@@ -1978,7 +1982,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.17.1",
+  "appVersion": "1.17.2",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2098,7 +2102,7 @@ A two-participant sync exchange with an activation box and an `alt` fragment. Me
 ```json
 {
   "version": 1,
-  "appVersion": "1.17.1",
+  "appVersion": "1.17.2",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {

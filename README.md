@@ -126,7 +126,7 @@ js/
 assets/
   icons/                SLDS SVG sprite files (self-hosted)
   vendor/               JointJS, pako, gifenc (vendored same-origin)
-tests/                  Zero-build characterization tests (Node's native test runner)
+dev/tests/                  Zero-build characterization tests (Node's native test runner)
 DIAGRAM_JSON_SPEC.md    LLM-facing JSON specification
 ```
 

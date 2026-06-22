@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.17.1.4';
-import { pctx } from './context.js?v=1.17.1.4';
-import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.17.1.4';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.17.1.4';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.17.1.4';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.17.2.11';
+import { pctx } from './context.js?v=1.17.2.11';
+import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.17.2.11';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.17.2.11';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.17.2.11';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -2350,8 +2350,13 @@ async function openSharedFileAuthed(fileId) {
     // direct read. It is NOT "moved or removed". The Picker's "Shared with me" view grants per-file access;
     // importDriveFileById then adopts it (editable when they hold writer). Lead them straight there.
     if (e?.status === 404) {
-      showToast("This diagram was shared with you privately - find it under 'Shared with me' to open it.", 'info', { duration: 6000 });
-      openFromDrive({ sharedFirst: true, title: "Open your shared diagram - look under 'Shared with me'" });
+      // Under drive.file we CANNOT tell "has access but needs the Picker" from "has no access at all" - a file
+      // the user didn't create/open 404s either way. So instead of optimistically promising "find it in Shared
+      // with me" + auto-popping the Picker (a dead end for a no-access account - e.g. an org-only share opened
+      // by an outside account, the reported case), show an honest modal that sets BOTH expectations + points to
+      // contacting whoever shared it (deliberately NOT the file owner's identity - we don't have it, and naming
+      // it would be a privacy leak), and only opens the Picker on the user's click.
+      showNoDirectAccessModal();
       return;
     }
     // 403 = this Google account genuinely isn't the one the file was shared to.
@@ -2377,6 +2382,28 @@ function showRestrictedOpenModal(fileId) {
   });
   footer.querySelector('[data-act="cancel"]')?.addEventListener('click', close);
   footer.querySelector('[data-act="open"]')?.addEventListener('click', () => { close(); openSharedFileAuthed(fileId); });
+}
+
+/** Shown after a SIGNED-IN recipient's direct read 404s. Under `drive.file` a 404 is ambiguous - the account may
+ *  have access (the Picker's "Shared with me" will list it) OR no access at all (an org-only share opened by an
+ *  outside account). We can't distinguish the two from the API, so we state both, point to contacting whoever
+ *  shared it (never the owner's identity - we don't have it), and only open the Picker on the user's click. */
+function showNoDirectAccessModal() {
+  document.querySelector('.df-drive-open-modal')?.remove();
+  const { footer, close } = buildModal({
+    title: 'Open this shared diagram',
+    className: 'df-drive-open-modal',
+    width: '460px',
+    bodyStyle: 'padding:16px 20px',
+    bodyHtml: `<p style="margin:0 0 10px;color:var(--text-secondary);line-height:1.5">This diagram is shared privately. If it was shared with you or your organisation, open it from your Drive - look under <strong>"Shared with me"</strong>.</p>
+      <p style="margin:0;color:var(--text-secondary);line-height:1.5">If it's not there, your account doesn't have access - contact the person who shared it with you.</p>`,
+    footerHtml: '<button class="df-modal__btn" data-act="cancel">Cancel</button><button class="df-modal__btn df-modal__btn--primary" data-act="open" style="margin-left:auto">Look under &quot;Shared with me&quot;</button>',
+  });
+  footer.querySelector('[data-act="cancel"]')?.addEventListener('click', close);
+  footer.querySelector('[data-act="open"]')?.addEventListener('click', () => {
+    close();
+    openFromDrive({ sharedFirst: true, title: "Open your shared diagram - look under 'Shared with me'" });
+  });
 }
 
 /** Authenticated read of a file the signed-in user can access (private share / app-created). */

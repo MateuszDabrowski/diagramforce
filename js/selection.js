@@ -1,10 +1,10 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.17.1.4';
-import * as history from './history.js?v=1.17.1.4';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.17.1.4';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.1.4';
+import * as clipboard from './clipboard.js?v=1.17.2.11';
+import * as history from './history.js?v=1.17.2.11';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.17.2.11';
+import { fieldFocus } from './canvas/focus-state.js?v=1.17.2.11';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -1284,7 +1284,20 @@ const CTX_ICON = {
   convert: _ctxSvg('<path d="M1 4h11l-3-3M15 12H4l3 3"/>'),
   front: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v2H2zM4 6h8v2H4zM6 10h4v4H6z"/></svg>',
   back: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6 2h4v4H6zM4 8h8v2H4zM2 12h12v2H2z"/></svg>',
+  // Release contents: a (dashed) container with an arrow leaving it — un-embed all captured children.
+  release: _ctxSvg('<rect x="2" y="3.5" width="7.5" height="9" rx="1.5" stroke-dasharray="2.2 1.6"/><path d="M8.5 8H14M11.5 5.5L14 8l-2.5 2.5"/>'),
 };
+
+/** Release contents: un-embed EVERY direct child of `parent` (they keep their positions) so the now-empty
+ *  container can be deleted on its own — instead of dragging each captured element out first. One undo entry; the
+ *  change:parent listener (embedding.js) then reverts the emptied container to its default footprint. */
+function releaseEmbeddedChildren(parent) {
+  const kids = (parent.getEmbeddedCells() || []).slice();   // copy: unembed mutates the parent's embeds array
+  if (!kids.length) return;
+  history.startBatch();
+  try { for (const k of kids) parent.unembed(k); }
+  finally { history.endBatch(); }
+}
 /**
  * The floating canvas context menu — shared by desktop right-click and the touch long-press. `model` is the
  * right-clicked cell, or `null` for the blank-canvas menu (Paste / Select all). `opts.placement`: 'cursor'
@@ -1381,6 +1394,13 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
         if (repActs.some((a) => a.group === 'style')) addItem('Copy style', () => _styleApi.copy(els[0]), { icon: CTX_ICON.copyStyle });
         if (_styleApi.has()) addItem('Paste style', () => _styleApi.paste(els), { icon: CTX_ICON.pasteStyle });
       }
+    }
+    // Release contents: a container that captured children → un-embed them ALL at once (they keep their positions),
+    // so the now-empty container can be deleted on its own instead of dragging each captured element out first.
+    // Single element only, and only when it actually holds children.
+    if (!model.isLink() && selectedIds.size <= 1 && (model.getEmbeddedCells() || []).length) {
+      addSep();
+      addItem('Release contents', () => releaseEmbeddedChildren(model), { icon: CTX_ICON.release });
     }
     addItem('Delete', () => {
       if (navigator.vibrate) navigator.vibrate(30);

@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/theme.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/layout.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/stencil.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/properties.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/tabs.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/canvas.css?v=1.17.1.4">
-  <link rel="stylesheet" href="css/modals.css?v=1.17.1.4">
+  <link rel="stylesheet" href="css/variables.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/theme.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/layout.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/stencil.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/properties.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/tabs.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/canvas.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/modals.css?v=1.17.2.11">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -686,9 +686,17 @@
 
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
-       app works fully offline once the service worker has cached them. -->
-  <script defer src="assets/vendor/joint.min.js?v=1.17.1.4"></script>
-  <script defer src="assets/vendor/pako.min.js?v=1.17.1.4"></script>
-  <script type="module" src="js/app.js?v=1.17.1.4"></script>
+       app works fully offline once the service worker has cached them.
+       data-cfasync="false" opts every script OUT of Cloudflare Rocket Loader. RL is a legacy
+       optimisation for render-blocking CLASSIC scripts; on this no-build ES-module app it gives
+       no benefit and actively harms: it nonce-rewrites `type="module"` -> `type="<hash>-module"`
+       and injects a credentials-mismatched <link rel=preload> for app.js (the "preload not used /
+       credentials mode does not match" console warnings), and the cache-first SW would precache
+       that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
+       the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
+       host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.17.2.11"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.17.2.11"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.17.2.11"></script>
 </body>
 </html>

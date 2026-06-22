@@ -3,7 +3,7 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.17.1.4';
+import { cctx } from './context.js?v=1.17.2.11';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────

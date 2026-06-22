@@ -5,9 +5,9 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.17.1.4';
-import { showToast, showError } from '../feedback.js?v=1.17.1.4';
-import { pctx } from './context.js?v=1.17.1.4';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.17.2.11';
+import { showToast, showError } from '../feedback.js?v=1.17.2.11';
+import { pctx } from './context.js?v=1.17.2.11';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,

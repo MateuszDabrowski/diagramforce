@@ -27,8 +27,8 @@ blob-report/
 Documentation/
 CLAUDE.md
 .claude/
-diagramforce.mdx
 examples/
+dev/
 
 # Dev-only debug pages
 reset.html

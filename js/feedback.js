@@ -18,7 +18,7 @@
 
 // ── Toast ─────────────────────────────────────────────────────────
 
-const TOAST_DEFAULT_DURATION = 2000;
+const TOAST_DEFAULT_DURATION = 4000;
 let toastContainerEl = null;
 
 function ensureToastContainer() {

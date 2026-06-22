@@ -1,27 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.17.1.4';
-import * as icons       from './icons.js?v=1.17.1.4';
-import { getAllStencilSvgs } from './components.js?v=1.17.1.4';
-import * as shapes      from './shapes.js?v=1.17.1.4';
-import * as canvas      from './canvas.js?v=1.17.1.4';
-import * as stencil     from './stencil.js?v=1.17.1.4';
-import * as selection   from './selection.js?v=1.17.1.4';
-import * as history     from './history.js?v=1.17.1.4';
-import * as clipboard   from './clipboard.js?v=1.17.1.4';
-import * as templates    from './templates.js?v=1.17.1.4';
-import * as keyboard    from './keyboard.js?v=1.17.1.4';
-import * as toolbar     from './toolbar.js?v=1.17.1.4';
-import * as properties  from './properties.js?v=1.17.1.4';
-import * as persistence from './persistence.js?v=1.17.1.4';
-import * as tabs        from './tabs.js?v=1.17.1.4';
-import * as mermaidImport from './mermaid-import.js?v=1.17.1.4';
-import * as tableView    from './table-view.js?v=1.17.1.4';
-import * as walkthrough  from './walkthrough.js?v=1.17.1.4';
-import * as whatsNew     from './whats-new.js?v=1.17.1.4';
-import * as a11y         from './a11y.js?v=1.17.1.4';
-import { seedDefaultPalette } from './brand-palette.js?v=1.17.1.4';
+import * as theme       from './theme.js?v=1.17.2.11';
+import * as icons       from './icons.js?v=1.17.2.11';
+import { getAllStencilSvgs } from './components.js?v=1.17.2.11';
+import * as shapes      from './shapes.js?v=1.17.2.11';
+import * as canvas      from './canvas.js?v=1.17.2.11';
+import * as stencil     from './stencil.js?v=1.17.2.11';
+import * as selection   from './selection.js?v=1.17.2.11';
+import * as history     from './history.js?v=1.17.2.11';
+import * as clipboard   from './clipboard.js?v=1.17.2.11';
+import * as templates    from './templates.js?v=1.17.2.11';
+import * as keyboard    from './keyboard.js?v=1.17.2.11';
+import * as toolbar     from './toolbar.js?v=1.17.2.11';
+import * as properties  from './properties.js?v=1.17.2.11';
+import * as persistence from './persistence.js?v=1.17.2.11';
+import * as tabs        from './tabs.js?v=1.17.2.11';
+import * as mermaidImport from './mermaid-import.js?v=1.17.2.11';
+import * as tableView    from './table-view.js?v=1.17.2.11';
+import * as walkthrough  from './walkthrough.js?v=1.17.2.11';
+import * as whatsNew     from './whats-new.js?v=1.17.2.11';
+import * as a11y         from './a11y.js?v=1.17.2.11';
+import { seedDefaultPalette } from './brand-palette.js?v=1.17.2.11';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.

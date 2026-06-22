@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.17.1.4';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.1.4';
-import { nodeContrastText } from '../util.js?v=1.17.1.4';
-import { getIconDataUri } from '../icons.js?v=1.17.1.4';
-import { applyGanttGeometry } from './gantt-layout.js?v=1.17.1.4';
+import { cctx } from './context.js?v=1.17.2.11';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.2.11';
+import { nodeContrastText } from '../util.js?v=1.17.2.11';
+import { getIconDataUri } from '../icons.js?v=1.17.2.11';
+import { applyGanttGeometry, backfillGanttDates } from './gantt-layout.js?v=1.17.2.11';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -468,10 +468,16 @@ export function migrateNodes() {
         joint.shapes.sf.rebuildSeqActorPorts?.(el, n, ratios);
       }
     }
-    // Gantt rework (v1.17.1): a task bar's x + width DERIVE from its start/end dates against its timeline. Apply on
-    // load so an LLM-authored (or table-edited) schedule positions correctly. No-op for dateless / manually-placed
-    // bars, so existing diagrams are untouched (the load guard suppresses history).
-    if (el.get('type') === 'sf.GanttTask') applyGanttGeometry(el);
+    // Gantt rework: a task bar's x + width DERIVE from its start/end dates against its timeline. (Load guard
+    // suppresses history + markDirty for all of this.)
+    //   v1.17.1 (Phase 1b): an explicitly-DATED bar is POSITIONED from its dates, so an LLM-authored (or
+    //     table-edited) schedule lands on the right columns.
+    //   v1.17.2 (Phase 2): a DATELESS bar (old, pre-dates diagram) is BACK-FILLED with dates derived from its
+    //     current pixels - so it becomes real schedule data for the Table view / LLM, WITHOUT moving on screen.
+    if (el.get('type') === 'sf.GanttTask') {
+      if (el.get('startDate') && el.get('endDate')) applyGanttGeometry(el);
+      else backfillGanttDates(el);
+    }
   }
   // Regenerate icon data URIs so all icons use current normalized viewBoxes
   refreshAllIconHrefs();
