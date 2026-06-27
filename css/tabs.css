@@ -1025,12 +1025,19 @@
     padding: 6px 12px;
     height: 34px;
     gap: 6px;
-    max-width: none;
-    min-width: max-content;
+    /* Cap a tab to ~38% of the viewport (within the 30-40% target) so a long name never eats the
+       whole bar. min-width:0 (was max-content) lets the label's existing overflow:hidden + ellipsis
+       engage; flex-shrink:0 keeps the capped width and the strip scrolls horizontally instead. */
+    max-width: 38vw;
+    min-width: 0;
     font-size: var(--font-size-sm);
     scroll-snap-align: start;
     flex-shrink: 0;
   }
+  /* The desktop shared-active widener (.df-tab--active:has(.df-tab__shared) -> 202px, specificity
+     0,2,0) would otherwise out-rank the cap above and re-widen a shared active tab past 40% on a
+     phone. Re-cap it here (later source order wins at equal specificity). */
+  .df-tab--active:has(.df-tab__shared) { max-width: 38vw; }
 
   .df-tab__close {
     width: 20px;

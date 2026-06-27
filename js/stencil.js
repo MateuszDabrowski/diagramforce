@@ -1,16 +1,16 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.18.0.5';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './canvas/gantt-layout.js?v=1.18.0.5';
-import { cctx } from './canvas/context.js?v=1.18.0.5';
-import { getAllIcons, getCategories } from './icons.js?v=1.18.0.5';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.18.0.5';
-import { startImageAddFlow } from './image-component.js?v=1.18.0.5';
-import * as history from './history.js?v=1.18.0.5';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.18.0.5';
-import { confirmModal } from './feedback.js?v=1.18.0.5';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.18.0.5'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.18.1';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './canvas/gantt-layout.js?v=1.18.1';
+import { cctx } from './canvas/context.js?v=1.18.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.18.1';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.18.1';
+import { startImageAddFlow } from './image-component.js?v=1.18.1';
+import * as history from './history.js?v=1.18.1';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.18.1';
+import { confirmModal } from './feedback.js?v=1.18.1';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.18.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;

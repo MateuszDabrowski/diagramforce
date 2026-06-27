@@ -11,15 +11,15 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.0.5';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.18.0.5';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.18.0.5';
-import { SF_FIELD_TYPES } from './properties.js?v=1.18.0.5';
-import { buildModal } from './feedback.js?v=1.18.0.5';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.18.0.5';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.0.5';
-import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.18.0.5';
-import { applyGanttDepLinkStyle } from './canvas.js?v=1.18.0.5';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.1';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.18.1';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.18.1';
+import { SF_FIELD_TYPES } from './properties.js?v=1.18.1';
+import { buildModal } from './feedback.js?v=1.18.1';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.18.1';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.1';
+import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.18.1';
+import { applyGanttDepLinkStyle } from './canvas.js?v=1.18.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view

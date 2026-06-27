@@ -1,14 +1,14 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.18.0.5';
-import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.18.0.5';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.18.0.5';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.18.0.5';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.18.0.5';
-import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.0.5';
-import { getPalette } from './brand-palette.js?v=1.18.0.5';
-import { getAllIcons } from './icons.js?v=1.18.0.5';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.18.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.18.1';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.18.1';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.18.1';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.18.1';
+import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.1';
+import { getPalette } from './brand-palette.js?v=1.18.1';
+import { getAllIcons } from './icons.js?v=1.18.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

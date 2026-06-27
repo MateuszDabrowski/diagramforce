@@ -435,6 +435,26 @@ foreignObject[data-md] del { text-decoration: line-through; }
    relax its `touch-action: none` so the browser can scroll the table natively (defensive belt to the
    JS bail-out above, for engines that honour an ancestor's `none` over a scroll-container descendant). */
 #canvas-container:has(.df-table-view:not([hidden])) { touch-action: pan-x pan-y; }
+
+/* Mobile: keep the table header bar fully reachable. The bar (title + count + Edit/CSV/toggle)
+   lives OUTSIDE the table's horizontal scroller, so on a narrow viewport its contents ran past
+   the right edge and were clipped by `.df-table-view{overflow:hidden}` - the controls became
+   unreachable. Syncing the bar to the table scroll would be worse (panning the table right would
+   carry the buttons off-screen), so instead let the bar WRAP within the viewport width: every
+   control stays visible regardless of where the table is scrolled. Width-gated - a coarse-pointer
+   desktop keeps the single-row bar. */
+@media (max-width: 768px) {
+  .df-tbl__topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--panel-header-height);
+    padding-top: 8px;
+    padding-bottom: 8px;
+    row-gap: 8px;
+  }
+  .df-tbl__note { white-space: normal; }   /* a long count string wraps instead of overflowing its line */
+  .df-tbl__push { margin-left: 0; }         /* drop the right-edge push so the buttons flow + wrap as a group */
+}
 .df-tbl__table {
   border-collapse: separate;
   border-spacing: 0;

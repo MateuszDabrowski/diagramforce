@@ -1,14 +1,14 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.18.0.5';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.18.0.5';
-import { resizeDataObjectToFit } from './components.js?v=1.18.0.5';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.18.0.5';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.18.0.5';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.18.0.5';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.18.0.5';
-import { renderTemplateThumbnail } from './templates.js?v=1.18.0.5';
+import { diagramHasImage } from './image-component.js?v=1.18.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.18.1';
+import { resizeDataObjectToFit } from './components.js?v=1.18.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.18.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.18.1';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.18.1';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.18.1';
+import { renderTemplateThumbnail } from './templates.js?v=1.18.1';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -2002,10 +2002,10 @@ function updateDisplayMenuVisibility() {
   const isDataObjectType = isDataModel || isDataMapping; // both use sf.DataObject
   const isSequence = type === 'sequence';
 
-  // Diagram | Table view switch — shown only for Data Mapping. Use inline display (not
-  // the `hidden` attr): `.df-toolbar__group { display:flex }` outranks `[hidden]`, so the
-  // attribute alone wouldn't hide it. Reset to the Diagram view on any tab change so the
-  // table never lingers showing another tab's data.
+  // Diagram | Table view switch — shown for Data Mapping (lineage), Data Model (schema) and Gantt
+  // (plan). Use inline display (not the `hidden` attr): `.df-toolbar__group { display:flex }`
+  // outranks `[hidden]`, so the attribute alone wouldn't hide it. Reset to the Diagram view on any
+  // tab change so the table never lingers showing another tab's data.
   const vsGroup = document.getElementById('view-switch-group');
   const vsSep = document.getElementById('view-switch-sep');
   const hasTable = isDataObjectType || isGantt;   // Data Mapping (lineage) + Data Model (schema) + Gantt (plan)
@@ -2024,7 +2024,10 @@ function updateDisplayMenuVisibility() {
   // The desktop toolbar groups live in .df-toolbar__left, which is hidden on mobile,
   // so without these the Table view + Map bridge were unreachable on a phone.
   const hmbView = document.getElementById('hmb-view-toggle');
-  if (hmbView) hmbView.style.display = (isDataMapping || isGantt) ? '' : 'none';
+  // Mirror the desktop gate (hasTable above): Data Mapping + Data Model + Gantt all have a Table view.
+  // Data Model was omitted here, so on mobile its Table switch was unreachable (the desktop control is
+  // CSS-hidden on narrow viewports, leaving the hamburger as the only path).
+  if (hmbView) hmbView.style.display = (isDataObjectType || isGantt) ? '' : 'none';
   const hmbMap = document.getElementById('hmb-map');
   if (hmbMap) hmbMap.style.display = isDataModel ? '' : 'none';
 

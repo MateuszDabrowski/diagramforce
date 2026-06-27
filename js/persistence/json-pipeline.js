@@ -7,17 +7,17 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.18.0.5';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.18.0.5';
-import { normalizeDateSuffix } from '../util.js?v=1.18.0.5';
-import { escHtml } from '../util.js?v=1.18.0.5';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.18.0.5';
-import { pctx } from './context.js?v=1.18.0.5';
-import { slimForShare } from '../share-codec.js?v=1.18.0.5';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.18.1';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.18.1';
+import { normalizeDateSuffix } from '../util.js?v=1.18.1';
+import { escHtml } from '../util.js?v=1.18.1';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.18.1';
+import { pctx } from './context.js?v=1.18.1';
+import { slimForShare } from '../share-codec.js?v=1.18.1';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.18.0.5';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.18.1';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */

@@ -2065,3 +2065,19 @@
 }
 .df-whatsnew__item--sub { font-size: 12.5px; }
 .df-whatsnew__item--sub .df-whatsnew__icon { width: 16px; height: 16px; }
+/* Per-version subtitle — only rendered when the user skipped releases and MULTIPLE entries show at once, so each
+   block of changes is labelled with its release. A muted uppercase label; sections after the first get a top rule. */
+.df-whatsnew__subtitle {
+  list-style: none;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.df-whatsnew__subtitle:not(:first-child) {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}

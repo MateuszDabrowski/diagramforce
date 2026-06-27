@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.18.0.5';
+import { cctx } from './context.js?v=1.18.1';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross

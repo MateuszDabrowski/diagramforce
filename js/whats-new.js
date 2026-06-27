@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.18.0.5';
-import { buildModal } from './feedback.js?v=1.18.0.5';
+import { compareSemver } from './util.js?v=1.18.1';
+import { buildModal } from './feedback.js?v=1.18.1';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -135,10 +135,16 @@ function showWhatsNewModal(entries) {
   const renderHighlight = (h) => h.children && h.children.length
     ? `<li class="df-whatsnew__item">${iconSvg(h.icon)}<div class="df-whatsnew__body"><span>${h.text}</span><ul class="df-whatsnew__sublist">${h.children.map(subItem).join('')}</ul></div></li>`
     : `<li class="df-whatsnew__item">${iconSvg(h.icon)}<span>${h.text}</span></li>`;
-  const items = entries.flatMap(e => e.highlights).map(renderHighlight).join('');
+  // When the user skipped releases, MULTIPLE entries show at once - prefix each with a version subtitle so it's clear
+  // which changes belong to which release. With a single entry the modal title already carries the version.
+  const multi = entries.length > 1;
+  const items = entries.map(e =>
+    (multi ? `<li class="df-whatsnew__subtitle">v${e.version}</li>` : '') + e.highlights.map(renderHighlight).join(''),
+  ).join('');
   const head = entries[0] || {};
-  // Title carries the release version after "Diagramforce" (e.g. "What's new in Diagramforce v1.17.0").
-  const titleText = head.title ? `${head.title}${head.version ? ` v${head.version}` : ''}` : "What's new";
+  // Title carries the release version after "Diagramforce" (e.g. "What's new in Diagramforce v1.18.0") - but only when
+  // a SINGLE entry shows; with multiple, the per-version subtitles carry the versions instead.
+  const titleText = head.title ? `${head.title}${(!multi && head.version) ? ` v${head.version}` : ''}` : "What's new";
   const { footer, close } = buildModal({
     title: titleText,
     className: 'df-whatsnew-modal',

@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.18.0.5';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.18.0.5';
-import { nodeContrastText } from '../util.js?v=1.18.0.5';
-import { getIconDataUri } from '../icons.js?v=1.18.0.5';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.18.0.5';
+import { cctx } from './context.js?v=1.18.1';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.18.1';
+import { nodeContrastText } from '../util.js?v=1.18.1';
+import { getIconDataUri } from '../icons.js?v=1.18.1';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.18.1';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.

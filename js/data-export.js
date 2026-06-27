@@ -3,8 +3,8 @@
 // source→target mapping lineage instead, reusing table-view.js — see the dispatch in toolbar.js.)
 // Columns mirror the per-object field CSV in properties.js (fieldsToCsv), prefixed with an
 // Object column so a flat, multi-object export stays unambiguous.
-import { sanitizeFilenamePart } from './util.js?v=1.18.0.5';
-import { getActiveTabName } from './tabs.js?v=1.18.0.5';
+import { sanitizeFilenamePart } from './util.js?v=1.18.1';
+import { getActiveTabName } from './tabs.js?v=1.18.1';
 
 const COLUMNS = ['Object', 'API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
 

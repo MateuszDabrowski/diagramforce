@@ -1,12 +1,12 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.18.0.5';
-import * as history from './history.js?v=1.18.0.5';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.18.0.5';
-import { fieldFocus } from './canvas/focus-state.js?v=1.18.0.5';
-import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.18.0.5';
-import { cctx } from './canvas/context.js?v=1.18.0.5';
+import * as clipboard from './clipboard.js?v=1.18.1';
+import * as history from './history.js?v=1.18.1';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.18.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.18.1';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.18.1';
+import { cctx } from './canvas/context.js?v=1.18.1';
 
 let graph, paper;
 const selectedIds = new Set();

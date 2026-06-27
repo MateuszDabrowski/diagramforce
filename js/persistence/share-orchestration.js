@@ -5,13 +5,13 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.18.0.5';
-import { diagramHasImage } from '../image-component.js?v=1.18.0.5';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.18.0.5';
-import { escHtml, sharePillHtml } from '../util.js?v=1.18.0.5';
-import { pctx } from './context.js?v=1.18.0.5';
-import { shareGlyphKind } from './drive-sync-logic.js?v=1.18.0.5';
-import { isDriveConfigured, isDriveConnected, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink } from './remote-store.js?v=1.18.0.5';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.18.1';
+import { diagramHasImage } from '../image-component.js?v=1.18.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.18.1';
+import { escHtml, sharePillHtml } from '../util.js?v=1.18.1';
+import { pctx } from './context.js?v=1.18.1';
+import { shareGlyphKind } from './drive-sync-logic.js?v=1.18.1';
+import { isDriveConfigured, isDriveConnected, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink } from './remote-store.js?v=1.18.1';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
