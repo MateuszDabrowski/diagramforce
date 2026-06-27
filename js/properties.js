@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.17.2.11';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.17.2.11';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.17.2.11';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.17.2.11';
-import * as stencilModule from './stencil.js?v=1.17.2.11';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.17.2.11';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.17.2.11';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.18.0.5';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.18.0.5';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.18.0.5';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.18.0.5';
+import * as stencilModule from './stencil.js?v=1.18.0.5';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.18.0.5';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.18.0.5';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -17,13 +17,14 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.17.2.11';
-import * as history from './history.js?v=1.17.2.11';
-import { startImageAddFlow } from './image-component.js?v=1.17.2.11';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.2.11';
-import { getActiveTabName } from './tabs.js?v=1.17.2.11';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.17.2.11';
-import { newFid } from './shapes.js?v=1.17.2.11';
+} from './clipboard.js?v=1.18.0.5';
+import * as history from './history.js?v=1.18.0.5';
+import { startImageAddFlow } from './image-component.js?v=1.18.0.5';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.0.5';
+import { getActiveTabName } from './tabs.js?v=1.18.0.5';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.18.0.5';
+import { newFid } from './shapes.js?v=1.18.0.5';
+import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './canvas/gantt-layout.js?v=1.18.0.5';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -83,7 +84,7 @@ const TYPE_LABELS = {
   'sf.OrgPerson':      'Person',
   'sf.GanttTask':      'Task',
   'sf.GanttMilestone': 'Milestone',
-  'sf.GanttMarker':    'Today Marker',
+  'sf.GanttMarker':    'Day Marker',
   'sf.GanttTimeline':  'Timeline',
   'sf.GanttGroup':     'Group',
   'sf.SequenceParticipant': 'Participant',
@@ -91,6 +92,8 @@ const TYPE_LABELS = {
   'sf.SequenceActivation':  'Activation',
   'sf.SequenceFragment':    'Fragment',
   'df.Pill':                'Pill',
+  'df.Legend':              'Legend',
+  'df.Table':               'Table',
 };
 
 /** The user-facing name of a cell (its label), or '' if unnamed. Single source of the
@@ -147,6 +150,8 @@ const DEFAULT_SIZES = {
   'sf.Annotation':     { width: 100, height: 120 },
   'sf.Line':           { width: 200, height: 8 },
   'df.Pill':           { width: 32,  height: 32 },
+  'df.Legend':         { width: 120, height: 28 },
+  'df.Table':          { width: 330, height: 90 },
   'sf.Link':           { width: 220, height: 44 },
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },
@@ -174,6 +179,16 @@ export function autoSizeCell(cell) {
     const view = paper.findViewByModel(cell);
     if (view && typeof view.fitNoteToContent === 'function') { view.fitNoteToContent(); return; }
   }
+  // df.Table / df.Legend OWN their size at the model level (height from rows / width from the label). Re-run
+  // their fit instead of forcing DEFAULT_SIZES, which would compress the rows or ignore the label until the
+  // next edit.
+  if (type === 'df.Table') {
+    cell._normalize?.();   // rectangle + width floor (model)
+    const view = paper.findViewByModel(cell);
+    if (view && typeof view._renderTable === 'function') view._renderTable();   // re-measure + fit height (view)
+    return;
+  }
+  if (type === 'df.Legend' && typeof cell._fitWidth === 'function') { cell.set('manualWidth', false); cell._fitWidth(); return; }   // Auto size = back to label-fit
   const def = DEFAULT_SIZES[type];
   if (def) cell.resize(def.width, def.height);
 }
@@ -283,7 +298,7 @@ const COLOR_SCHEMA = {
   'sf.GanttTask': [
     { label: 'Completion bar',
       get: c => c.attr('progressBar/fill') || '#1D73C9',
-      set: (c, v) => c.attr('progressBar/fill', v) },
+      set: (c, v) => { c.attr('progressBar/fill', v); c.set('colorManual', true); } },   // manual → stops following the group
     { label: 'Label color',
       get: c => c.get('userTextColor') || c.attr('label/fill') || '#FFFFFF',
       set: (c, v) => { c.set('userTextColor', v); c.attr('label/fill', v); } },
@@ -466,9 +481,11 @@ export function init(_graph, _paper, _selection) {
       if (cell) showProperties(cell);
     } else if (ids.length > 1) {
       clearActiveSizeListener();
+      clearActiveGanttDateListener();
       showMultiProperties(ids.length);
     } else {
       clearActiveSizeListener();
+      clearActiveGanttDateListener();
       panelEl.classList.add('df-properties--hidden');
       footerEl.innerHTML = '';
       restoreStencilAfterProperties();
@@ -489,6 +506,9 @@ export function init(_graph, _paper, _selection) {
   // segments keeps JointJS's vertex-add behaviour.
   paper.on('cell:pointerdblclick', (cellView, evt) => {
     if (cellView.model.isLink()) return;
+    // df.Table cells are MARKDOWN, multi-line content (not a single label), so a double-click opens the staged
+    // "Edit in Table" overlay rather than starting an inline label edit.
+    if (cellView.model.get('type') === 'df.Table') { openTableEditorModal(cellView.model); return; }
     startInlineEdit(cellView, evt);
   });
 
@@ -788,39 +808,49 @@ function restoreStencilAfterProperties() {
   stencilWasOpen = false;
 }
 
-// ── Highlight (review / diff overlay) ──────────────────────────────────
+// ── Shape state (review / diff border) ─────────────────────────────────
 // A fast way to mark elements during a review without hand-picking colours. Shown as a 4-stop
-// slider — None / New / Removed / Changed — that paints the element's `body` stroke:
-//   New     → a thicker GREEN  border (net-new element)
+// slider — None / Added / Removed / Changed — that paints the element's `body` stroke:
+//   Added   → a thicker GREEN  border (net-new element)
 //   Removed → a RED dashed     border (removed element)
 //   Changed → an ORANGE dotted border (changed element)
 //   None restores the shape's own border (default behaviour).
 // The pre-override stroke is stashed in `_origBorder` so None is lossless (it restores whatever the
 // border was, including user customisations). The choice persists as the top-level `borderStyle`
-// prop (kept stable across the rename to "Highlight" so older saves keep working).
-const HIGHLIGHT_STYLES = {
-  bold:   { stroke: '#2E9E5B', strokeWidth: 3,   strokeDasharray: 'none' },
-  dashed: { stroke: '#DA4E55', strokeWidth: 2.5, strokeDasharray: '7 4'  },
-  dotted: { stroke: '#E8881A', strokeWidth: 2.5, strokeDasharray: '2 4'  },
+// prop — the prop KEY is kept stable across the "Highlight" → "Shape state" UI rename so older
+// saves / share URLs keep working (do NOT rename `borderStyle` or `_origBorder`).
+const SHAPE_STATE_STYLES = {
+  bold:     { stroke: '#2E9E5B', strokeWidth: 3,   strokeDasharray: 'none'    },
+  dotted:   { stroke: '#E8881A', strokeWidth: 2.5, strokeDasharray: '2 4'     },
+  dashed:   { stroke: '#DA4E55', strokeWidth: 2.5, strokeDasharray: '7 4'     },
+  deferred: { stroke: '#1D73C9', strokeWidth: 2.5, strokeDasharray: '7 4'      },
 };
-// Slider labels are the review SEMANTICS (None/New/Removed/Changed); the stored values stay the
-// style keys (standard/bold/dashed/dotted) so the persisted `borderStyle` prop is unchanged.
-const HIGHLIGHT_OPTS = [
+// Row labels are the review SEMANTICS; the stored values stay the style keys (standard/bold/dotted/dashed/
+// deferred) so the persisted `borderStyle` prop is unchanged. Order matches the review lifecycle the user asked
+// for: None, Added, Changed, Removed, Deferred. `deferred` (violet dash-dot = on hold) joined in v1.17.3.
+const SHAPE_STATE_OPTS = [
   { value: 'standard', label: 'None' },
-  { value: 'bold',     label: 'New' },
-  { value: 'dashed',   label: 'Removed' },
+  { value: 'bold',     label: 'Added' },
   { value: 'dotted',   label: 'Changed' },
+  { value: 'dashed',   label: 'Removed' },
+  { value: 'deferred', label: 'Deferred' },
 ];
 
-function applyHighlight(cell, style) {
+// Most shapes paint the Shape-state border on `body`. df.Legend's `body` is a transparent full-bounds selection
+// frame, so its Shape-state belongs on the visible `swatch` squircle instead — keyed here.
+const SHAPE_STATE_TARGET = { 'df.Legend': 'swatch' };
+const shapeStateSel = (cell) => SHAPE_STATE_TARGET[cell.get('type')] || 'body';
+
+function applyShapeState(cell, style) {
+  const sel = shapeStateSel(cell);
   const prev = cell.get('borderStyle') || 'standard';
   if (style === prev) return;
   if (style === 'standard') {
     const orig = cell.get('_origBorder');
     if (orig) {
-      cell.attr('body/stroke', orig.stroke ?? null);
-      cell.attr('body/strokeWidth', orig.strokeWidth ?? null);
-      cell.attr('body/strokeDasharray', orig.strokeDasharray ?? null);
+      cell.attr(`${sel}/stroke`, orig.stroke ?? null);
+      cell.attr(`${sel}/strokeWidth`, orig.strokeWidth ?? null);
+      cell.attr(`${sel}/strokeDasharray`, orig.strokeDasharray ?? null);
     }
     cell.set('borderStyle', null);
     cell.set('_origBorder', null);
@@ -829,25 +859,89 @@ function applyHighlight(cell, style) {
   // First override away from None: remember the shape's own stroke so None can restore it.
   if (prev === 'standard' || !cell.get('_origBorder')) {
     cell.set('_origBorder', {
-      stroke: cell.attr('body/stroke') ?? null,
-      strokeWidth: cell.attr('body/strokeWidth') ?? null,
-      strokeDasharray: cell.attr('body/strokeDasharray') ?? null,
+      stroke: cell.attr(`${sel}/stroke`) ?? null,
+      strokeWidth: cell.attr(`${sel}/strokeWidth`) ?? null,
+      strokeDasharray: cell.attr(`${sel}/strokeDasharray`) ?? null,
     });
   }
-  const s = HIGHLIGHT_STYLES[style];
+  const s = SHAPE_STATE_STYLES[style];
   cell.set('borderStyle', style);
-  cell.attr('body/stroke', s.stroke);
-  cell.attr('body/strokeWidth', s.strokeWidth);
-  cell.attr('body/strokeDasharray', s.strokeDasharray);
+  cell.attr(`${sel}/stroke`, s.stroke);
+  cell.attr(`${sel}/strokeWidth`, s.strokeWidth);
+  cell.attr(`${sel}/strokeDasharray`, s.strokeDasharray);
 }
 
-// Shared Highlight control — the LAST section in the panel, shown for any element with a `body`
-// outline to paint (boxes, pills, arrows, etc.). Links and body-less shapes are skipped.
-function maybeAddHighlightSection(cell) {
-  if (cell.isLink?.() || cell.attr('body') === undefined) return;
-  const sec = section(bodyEl, 'Highlight');
-  addSegmented(sec, '', cell.get('borderStyle') || 'standard', HIGHLIGHT_OPTS,
-    asUndoBatch(v => applyHighlight(cell, v)), { className: 'df-properties__segmented--compact' });
+// Build the five-state vertical list (None / Added / Changed / Removed / Deferred) into `body`: each row is the
+// state's OWN border drawn directly on the checkbox (an SVG box stroked in the state's colour + dash, so the box
+// IS the preview), beside its label. Single-select; selecting fills the box + shows the tick. `current` is the
+// active state key; `onPick(value)` applies it. Shared by the single-element + multi-select panels.
+function buildShapeStateList(body, current, onPick) {
+  const list = document.createElement('div');
+  list.className = 'df-shapestate';
+  SHAPE_STATE_OPTS.forEach((opt) => {
+    const s = SHAPE_STATE_STYLES[opt.value];   // undefined for None
+    const stroke = s ? s.stroke : 'var(--text-tertiary, #8A8D91)';
+    const width = s ? s.strokeWidth : 1.5;
+    const dash = s ? s.strokeDasharray : 'none';
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'df-shapestate__row' + (opt.value === current ? ' is-selected' : '');
+    row.dataset.value = opt.value;
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('aria-checked', String(opt.value === current));
+    row.style.setProperty('--df-shapestate-color', stroke);
+    // The CSS border-style that matches this state's dash, for the SELECTED row's full-width border (the effect
+    // moves off the checkbox onto the whole row on check). dash-dot has no CSS equivalent → `dashed`.
+    row.style.setProperty('--df-shapestate-border-style', !s || dash === 'none' ? 'solid' : (dash === '2 4' ? 'dotted' : 'dashed'));
+    // The checkbox border IS the example visual (when UNSELECTED): an SVG box stroked in the state's own colour +
+    // dash pattern. On select, the box goes solid-filled with a tick and the dash effect moves to the whole row.
+    row.innerHTML = `<span class="df-shapestate__check" aria-hidden="true">`
+      + `<svg viewBox="0 0 20 20" width="20" height="20">`
+      + `<rect class="df-shapestate__box" x="2.5" y="2.5" width="15" height="15" rx="4" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-dasharray="${dash}"/>`
+      + `<path class="df-shapestate__tick" d="M6 10.5 L9 13.5 L14.5 7" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`
+      + `</svg></span>`
+      + `<span class="df-shapestate__label">${opt.label}</span>`;
+    row.addEventListener('click', () => {
+      onPick(opt.value);
+      list.querySelectorAll('.df-shapestate__row').forEach((r) => {
+        const sel = r.dataset.value === opt.value;
+        r.classList.toggle('is-selected', sel);
+        r.setAttribute('aria-checked', String(sel));
+      });
+    });
+    list.appendChild(row);
+  });
+  body.appendChild(list);
+}
+
+// Slot the Shape State `wrap` between the Content and Appearance sections (it's a structural/review attribute, so
+// it reads above pure styling). Inserts before the Appearance section when present; otherwise leaves it in place.
+function placeShapeStateSection(wrap) {
+  if (!wrap || wrap.parentElement !== bodyEl) return;
+  const appearance = [...bodyEl.querySelectorAll('.df-section')].find(sec =>
+    /^Appearance$/i.test(sec.querySelector('.df-section__header span')?.textContent?.trim() || ''));
+  if (appearance && appearance !== wrap) bodyEl.insertBefore(wrap, appearance);
+}
+
+// Whether the Highlight State section is expanded — remembered across re-renders so a state change (which
+// re-renders the panel to refresh the Border colour control) keeps the section as the user left it.
+let shapeStateOpen = false;
+
+// Shared Shape-state control — its OWN collapsible section, COLLAPSED by default (it's a review/diff aid, not
+// everyday styling), holding the five states stacked as styled checkbox rows. Shown for any element with a `body`
+// outline to paint (boxes, pills, legends, etc.); links + body-less shapes are skipped.
+function maybeAddShapeStateControl(cell) {
+  if (cell.isLink?.() || cell.attr(shapeStateSel(cell)) === undefined) return;
+  const body = section(bodyEl, 'Highlight State', shapeStateOpen);
+  // Track expand/collapse (the section() header handler toggles the class before this fires).
+  body.parentElement.querySelector('.df-section__header')?.addEventListener('click', () => {
+    shapeStateOpen = !body.parentElement.classList.contains('df-section--collapsed');
+  });
+  buildShapeStateList(body, cell.get('borderStyle') || 'standard', asUndoBatch((v) => {
+    applyShapeState(cell, v);
+    showProperties(cell);   // re-render so the Border colour control (and swatches) reflect the new stroke (issue 2)
+  }));
+  placeShapeStateSection(body.parentElement);   // move between Content and Appearance
 }
 
 function showProperties(cell) {
@@ -857,6 +951,7 @@ function showProperties(cell) {
   syncMobilePanelHeight(panelEl);
   bodyEl.innerHTML = '';
   footerEl.innerHTML = '';
+  clearActiveGanttDateListener();   // a prior gantt task's date binding (re-set below if this is a gantt task)
 
   const type = cell.get('type') || '';
   const typeLabel = TYPE_LABELS[type] || type.replace('sf.', '') || 'Element';
@@ -905,13 +1000,15 @@ function showProperties(cell) {
   else if (type === 'sf.SequenceFragment')    renderSequenceFragmentProps(cell);
   else if (type === 'sf.Line')     renderLineProps(cell);
   else if (type === 'df.Pill')     renderPillProps(cell);
+  else if (type === 'df.Legend')   renderLegendProps(cell);
+  else if (type === 'df.Table')    renderTableProps(cell);
   else if (type === 'sf.Link')     renderLinkElementProps(cell);
   else if (type === 'sf.Image')    renderImageProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);
 
-  // Shared Highlight slider — appended LAST, after the type-specific sections, for every element
-  // with a body outline (None / New / Removed / Changed = the review/diff overlay).
-  maybeAddHighlightSection(cell);
+  // Shared Shape-state slider — appended as the last control of the Content (first) section, for every
+  // element with a body outline (None / Added / Removed / Changed = the review/diff overlay).
+  maybeAddShapeStateControl(cell);
 
   // Generic: keep any "Width"/"Height" inputs in the rendered panel synced
   // with the live cell size, so corner-handle resizes update the numbers in
@@ -931,6 +1028,26 @@ function clearActiveSizeListener() {
   if (!activeSizeListener) return;
   try { activeSizeListener.cell.off('change:size', activeSizeListener.fn); } catch {}
   activeSizeListener = null;
+}
+
+// Round H item 1: keep the Gantt Schedule (Start/End Date) fields in sync with the model when the dates change from
+// OUTSIDE the panel - a drag or resize commits new dates on mouse-up, so the open inspector must reflect them rather
+// than showing the pre-drag value. A change:startDate/endDate listener fires once per interaction (the drag sets the
+// dates on pointerup, not per move), so this updates exactly when the user stops.
+let activeGanttDateListener = null;
+function clearActiveGanttDateListener() {
+  if (!activeGanttDateListener) return;
+  const { cell, events, fn } = activeGanttDateListener;
+  try { cell.off(events, fn); } catch {}
+  activeGanttDateListener = null;
+}
+// `bindings` = [{ prop, handle }] — each handle's field reflects cell.get(prop) when that prop changes elsewhere.
+function bindLiveGanttDates(cell, bindings) {
+  clearActiveGanttDateListener();
+  const events = bindings.map(b => `change:${b.prop}`).join(' ');
+  const fn = () => bindings.forEach(b => b.handle.set(cell.get(b.prop) || ''));
+  cell.on(events, fn);
+  activeGanttDateListener = { cell, events, fn };
 }
 
 function bindLiveSizeInputs(cell) {
@@ -1166,18 +1283,19 @@ function showMultiProperties(count) {
     });
   }
 
-  // ── Highlight — the same review/diff slider as single-select, applied to EVERY selected element
-  // with a body outline at once (mark a batch New / Removed / Changed in one undo step). Shows the
-  // shared value, or None when mixed. Last content section, mirroring the single-element panel.
-  const hlCells = elements.filter(c => c.attr('body') !== undefined);
+  // ── Shape state — the same collapsible checkbox list as single-select, applied to EVERY selected element with a
+  // body outline at once (mark a batch Added / Changed / Removed / Deferred in one undo step). Shows the shared
+  // value, or None when mixed. Collapsed by default, mirroring the single-element panel.
+  const hlCells = elements.filter(c => c.attr(shapeStateSel(c)) !== undefined);
   if (hlCells.length > 0) {
     const hlVals = hlCells.map(c => c.get('borderStyle') || 'standard');
     const sameHl = hlVals.every(s => s === hlVals[0]);
-    const hlSec = section(bodyEl, 'Highlight');
-    addSegmented(hlSec, '', sameHl ? hlVals[0] : 'standard', HIGHLIGHT_OPTS, v => {
+    const hlSec = section(bodyEl, 'Highlight State', false);
+    buildShapeStateList(hlSec, sameHl ? hlVals[0] : 'standard', v => {
       history.startBatch();
-      try { hlCells.forEach(c => applyHighlight(c, v)); } finally { history.endBatch(); }
-    }, { className: 'df-properties__segmented--compact' });
+      try { hlCells.forEach(c => applyShapeState(c, v)); } finally { history.endBatch(); }
+    });
+    placeShapeStateSection(hlSec.parentElement);   // between Content and Appearance, as in the single panel
   }
 
   // ── Actions section (Order, Auto-size, Convert) ──
@@ -1242,18 +1360,9 @@ function showMultiProperties(count) {
   orderRow.appendChild(multiBackBtn);
   actionSec.appendChild(orderRow);
 
-  // Auto-size button
-  addAutoSizeBtn(actionSec, () => {
-    elements.forEach(c => {
-      const type = c.get('type');
-      if (type === 'sf.DataObject') {
-        resizeDataObjectToFit(c);
-      } else {
-        const def = DEFAULT_SIZES[type];
-        if (def) c.resize(def.width, def.height);
-      }
-    });
-  });
+  // Auto-size button — route through the SHARED sizer so it stays in sync with the single-select path
+  // (which content-fits DataObject / Note / df.Table / df.Legend instead of forcing DEFAULT_SIZES).
+  addAutoSizeBtn(actionSec, () => { elements.forEach(c => autoSizeCell(c)); });
 
   // ── Selection, Convert & Delete (footer) ──
   const allNodes = elements.every(c => c.get('type') === 'sf.SimpleNode');
@@ -1518,7 +1627,7 @@ function renderContainerProps(cell) {
     titleEl.textContent = v || '';
   }, cell);
   addTextarea(content, 'Description', cell.attr('headerSubtitle/text'), v => cell.attr('headerSubtitle/text', v));
-  addIconPicker(content, 'Icon', cell.attr('headerIcon/href'), v => cell.attr('headerIcon/href', v),
+  addIconPicker(content, 'Icon', cell.attr('headerIcon/href'), v => { cell.attr('headerIcon/href', v); updateContainerHeaderLayout(cell); },
     () => resolveColor(cell.attr('headerLabel/fill')) || '#FFFFFF');
   // Tags + RACI — primarily for the Team variant in Org Chart diagrams, but
   // available on every Container. Empty values render nothing on canvas, so
@@ -1615,6 +1724,240 @@ function renderPillProps(cell) {
   addOrderButtons(size, cell);
   addCloneBtn(footerEl, cell);
   addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+// df.Legend — one legend KEY: a fillable swatch + a label. Drop several to build a colour key; each item
+// carries its own Shape state, and the item auto-widths to its label.
+function renderLegendProps(cell) {
+  const content = section(bodyEl, 'Content');
+  addText(content, 'Label', cell.attr('label/text'), v => {
+    cell.attr('label/text', v);   // the model auto-widths to the new text
+    titleEl.textContent = v || 'Legend';
+  });
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.attr('swatch/fill'), v => cell.attr('swatch/fill', v));
+  addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
+  const size = section(bodyEl, 'Size & Order');   // width auto-fits the label until set here (then it sticks)
+  addNumberPair(size,
+    'Width',  cell.size().width,  w => { cell.set('manualWidth', true); cell.resize(w, cell.size().height); },
+    'Height', cell.size().height, h => cell.resize(cell.size().width, h));
+  addRotationField(size, cell);
+  addOrderButtons(size, cell);
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+// df.Table — a minimal grid. Cells are edited in the shared "Edit in Table" overlay; the panel exposes the
+// header-row toggle + fill / border. Height auto-fits the row count; width divides equally across the columns.
+function renderTableProps(cell) {
+  const content = section(bodyEl, 'Content');
+  // Optional caption rendered above the grid (left-aligned). Empty by default — nothing renders until set.
+  addText(content, 'Label', cell.get('tableLabel') || '', v => {
+    cell.set('tableLabel', v);
+    titleEl.textContent = v || 'Table';
+  });
+  const editBtn = document.createElement('button');
+  editBtn.className = 'df-properties__btn df-properties__btn--full-edit';
+  editBtn.textContent = '⊞ Edit in Table';
+  editBtn.addEventListener('click', () => openTableEditorModal(cell));
+  content.appendChild(editBtn);
+
+  const appearance = section(bodyEl, 'Appearance');
+  addColor(appearance, 'Fill', cell.get('tableFill') || 'var(--node-bg)', v => cell.set('tableFill', v), { defaultValue: 'var(--node-bg)' });
+  addColor(appearance, 'Grid & Border', cell.get('tableBorder') || 'var(--node-border)', v => cell.set('tableBorder', v), { defaultValue: 'var(--node-border)' });
+  addColor(appearance, 'Text color', cell.get('tableTextColor') || 'var(--text-primary)', v => cell.set('tableTextColor', v), { defaultValue: 'var(--text-primary)' });
+
+  const size = section(bodyEl, 'Size & Order');   // height auto-fits the cell content; width is free (columns divide it)
+  addNumber(size, 'Width', cell.size().width, w => cell.resize(Math.max(w, 48), cell.size().height), { min: 48 });
+  addNumber(size, 'Font size', cell.get('fontSize') ?? 13, v => cell.set('fontSize', v), { min: 6, max: 96 });
+  addOrderButtons(size, cell);
+  addCloneBtn(footerEl, cell);
+  addDeleteBtn(footerEl, () => { graph.removeCells([cell]); selection.clearSelection(); });
+}
+
+/* ── Edit-in-Table overlay for a df.Table grid ───────────── */
+// A staged editor over a markdown grid. Edits apply LIVE to the cell (the canvas previews as you type) but the
+// whole session is history-LOCKED (setLocked) so the keystrokes don't pollute undo: Save records ONE undo entry
+// (snapshot -> final), Cancel / ✕ / Escape reverts to the snapshot and records nothing. Layout: a Display-style
+// "Highlight first row / first column" toolbar; a grid with the row-delete × on the LEFT of each row and the
+// column-delete × on TOP of each column (column delete confirms); a full-width "+ Row" strip below and a
+// full-height "+ Column" strip on the right. Cells are markdown textareas (multi-line, same shortcuts as the
+// node description).
+function openTableEditorModal(cell) {
+  const staleModal = document.getElementById('table-editor-modal');
+  if (staleModal?.__dfClose) staleModal.__dfClose(); else staleModal?.remove();
+
+  const getRows = () => (cell.get('rows') || []).map(r => [...r]);
+  const snap = () => ({
+    rows: getRows(),
+    highlightFirstRow: !!cell.get('highlightFirstRow'),
+    highlightFirstCol: !!cell.get('highlightFirstCol'),
+    size: { ...cell.size() },
+  });
+  const applyState = (s) => {
+    cell.set({ rows: s.rows.map(r => [...r]), highlightFirstRow: s.highlightFirstRow, highlightFirstCol: s.highlightFirstCol });
+    cell.resize(s.size.width, s.size.height);
+  };
+  const before = snap();
+  // SUPPRESS recording so the live preview edits never hit the undo stack (setLocked only blocks playback, NOT
+  // recording — relying on it alone double-records). Also lock so a stray Cmd+Z mid-edit can't pop a prior entry.
+  history.setSuppressed(true);
+  history.setLocked(true);
+
+  let saved = false, ended = false;
+  function endSession() {
+    if (ended) return; ended = true;
+    let after = null;
+    try {
+      if (saved) after = snap();
+      else applyState(before);              // revert the live edits (still suppressed → unrecorded)
+      history.flushPendingDragCommit();     // while suppressed, the "commit" is a no-op that just DROPS the pending merge
+    } finally {
+      history.setSuppressed(false);         // always re-enable recording, even if snap/revert threw …
+      history.setLocked(false);             // … so the app can never get stuck unable to undo
+    }
+    // ONE undo entry for the whole session (recorded only now that suppression is off).
+    if (saved && after && JSON.stringify(before) !== JSON.stringify(after)) {
+      history.recordCommand(() => applyState(before), () => applyState(after));
+    }
+  }
+
+  const { overlay, body: modalBody, close } = buildModal({
+    title: 'Edit Table',
+    dialogClass: 'df-field-modal__dialog df-table-modal__dialog',
+    bodyClass: 'df-field-modal__body',
+    footerClass: 'df-table-modal__footer',
+    closeClass: 'df-field-modal__close',
+    closeHtml: '✕',
+    footerHtml: '<button class="df-modal__btn df-table-modal__cancel">Cancel</button>'
+              + '<button class="df-modal__btn df-modal__btn--primary df-table-modal__save">Save</button>',
+    onClose: endSession,   // fires once on teardown (✕ / Escape / backdrop / either button) → commit-or-revert
+  });
+  overlay.id = 'table-editor-modal';
+  overlay.querySelector('.df-table-modal__save')?.addEventListener('click', () => { saved = true; close(); });
+  overlay.querySelector('.df-table-modal__cancel')?.addEventListener('click', () => { saved = false; close(); });
+
+  const commit = (rows, newWidth) => {   // structural change (add/remove row/col) → resize + rebuild
+    if (newWidth != null) cell.resize(Math.max(newWidth, 1), cell.size().height);
+    cell.set('rows', rows);
+    rebuild();
+  };
+
+  const delBtn = (title, onClick) => {
+    const b = document.createElement('button');
+    b.className = 'df-table-modal__del-btn'; b.type = 'button'; b.title = title; b.textContent = '×';
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  const stripBtn = (text, cls, onClick) => {
+    const b = document.createElement('button');
+    b.className = 'df-table-modal__strip ' + cls; b.type = 'button'; b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  const checkRow = (checked, label, onChange) => {
+    const row = document.createElement('div');
+    row.className = 'df-table-modal__check';
+    const btn = makeFieldCheckToggle(checked, label, '', onChange);
+    const span = document.createElement('span'); span.textContent = label;
+    span.addEventListener('click', () => btn.click());
+    row.appendChild(btn); row.appendChild(span);
+    return row;
+  };
+  // Size every cell in a row to the TALLEST one — so a multi-line cell makes its whole row match (no short
+  // siblings next to a tall cell), in BOTH the initial layout and live as the user types.
+  const matchRowHeights = (ta) => {
+    const grid = ta.closest('.df-table-modal__grid2');
+    if (!grid) return;
+    const gr = ta.style.gridRow;
+    const group = [...grid.querySelectorAll('.df-table-modal__cell')].filter(t => t.style.gridRow === gr);
+    group.forEach(t => { t.style.height = '0px'; t.style.height = Math.max(28, t.scrollHeight) + 'px'; });
+    const max = Math.max(28, ...group.map(t => parseFloat(t.style.height) || 28));
+    group.forEach(t => { t.style.height = max + 'px'; });
+  };
+  const cellEditor = (ri, ci, val, bold) => {
+    const ta = document.createElement('textarea');
+    ta.className = 'df-field-input df-table-modal__cell' + (bold ? ' is-bold' : '');
+    ta.rows = 1; ta.value = val;
+    ta.addEventListener('input', () => { const r = getRows(); (r[ri] = r[ri] || [])[ci] = ta.value; cell.set('rows', r); matchRowHeights(ta); });
+    wireMarkdownShortcuts(ta, null);   // Cmd+B/I/E + Shift+X; the hint is shown once in the toolbar
+    return ta;
+  };
+
+  function rebuild() {
+    modalBody.innerHTML = '';
+    const rows = getRows();
+    const cols = Math.max(1, rows[0]?.length || 1);
+    const hlRow = !!cell.get('highlightFirstRow');
+    const hlCol = !!cell.get('highlightFirstCol');
+
+    // Toolbar: Display-style highlight checkboxes + a markdown hint.
+    const bar = document.createElement('div');
+    bar.className = 'df-table-modal__bar';
+    bar.appendChild(checkRow(hlRow, 'Highlight first row', (next) => { cell.set('highlightFirstRow', next); rebuild(); }));
+    bar.appendChild(checkRow(hlCol, 'Highlight first column', (next) => { cell.set('highlightFirstCol', next); rebuild(); }));
+    modalBody.appendChild(bar);
+    const hint = document.createElement('div');
+    hint.className = 'df-table-modal__hint';
+    hint.innerHTML = 'Cells support <b>**bold**</b>, <i>*italic*</i>, ~~strike~~, <code>`code`</code> and multiple lines.';
+    modalBody.appendChild(hint);
+
+    // Grid: [row-× | data cols | +Col strip] × [col-× row | data rows | +Row strip].
+    const grid = document.createElement('div');
+    grid.className = 'df-table-modal__grid2';
+    grid.style.gridTemplateColumns = `22px repeat(${cols}, minmax(88px, 1fr)) 34px`;
+    const place = (el, gc, gr) => { el.style.gridColumn = String(gc); el.style.gridRow = String(gr); grid.appendChild(el); };
+
+    // Top row: column-delete × above each column (confirmed).
+    for (let c = 0; c < cols; c++) {
+      const del = delBtn('Delete column', async () => {
+        if (cols <= 1) return;
+        const ok = await confirmModal({ title: 'Delete column?', message: 'The column and all of its cells will be removed.', okLabel: 'Delete column', tone: 'danger' });
+        if (!ok) return;
+        const r = getRows(); r.forEach(row => row.splice(c, 1));
+        const newCols = Math.max(1, r[0]?.length || 1);
+        const perCol = cell.size().width / cols;
+        commit(r, Math.max(Math.round(cell.size().width - perCol), newCols * 48));
+      });
+      del.classList.add('df-table-modal__coldel');
+      if (cols <= 1) del.disabled = true;
+      place(del, c + 2, 1);
+    }
+
+    // Data rows: row-delete × on the LEFT + the markdown cells.
+    rows.forEach((row, ri) => {
+      const rdel = delBtn('Delete row', () => { if (rows.length <= 1) return; const r = getRows(); r.splice(ri, 1); commit(r); });
+      rdel.classList.add('df-table-modal__rowdel');
+      if (rows.length <= 1) rdel.disabled = true;
+      place(rdel, 1, ri + 2);
+      for (let ci = 0; ci < cols; ci++) {
+        place(cellEditor(ri, ci, row[ci] ?? '', (hlRow && ri === 0) || (hlCol && ci === 0)), ci + 2, ri + 2);
+      }
+    });
+
+    // Full-height "+ Column" strip on the right.
+    const addCol = stripBtn('+ Column', 'df-table-modal__addcol', () => {
+      const r = getRows(); r.forEach(row => row.push(''));
+      const perCol = cell.size().width / cols;
+      commit(r, Math.round(cell.size().width + perCol));
+    });
+    addCol.style.gridColumn = String(cols + 2); addCol.style.gridRow = `2 / span ${rows.length}`;
+    grid.appendChild(addCol);
+
+    // Full-width "+ Row" strip below.
+    const addRow = stripBtn('+ Row', 'df-table-modal__addrow', () => { const r = getRows(); r.push(new Array(cols).fill('')); commit(r); });
+    addRow.style.gridColumn = `2 / span ${cols}`; addRow.style.gridRow = String(rows.length + 2);
+    grid.appendChild(addRow);
+
+    modalBody.appendChild(grid);
+    // Auto-size each row to its tallest cell (needs the elements in the DOM) — once per distinct grid row.
+    requestAnimationFrame(() => {
+      const seen = new Set();
+      grid.querySelectorAll('.df-table-modal__cell').forEach(ta => { if (!seen.has(ta.style.gridRow)) { seen.add(ta.style.gridRow); matchRowHeights(ta); } });
+    });
+  }
+
+  rebuild();
 }
 
 function renderLineProps(cell) {
@@ -2373,8 +2716,10 @@ function makeFieldCheckToggle(checked, title, extraClass, onChange) {
 }
 
 function openFieldEditorModal(cell, onClose) {
-  // Remove any existing modal
-  document.getElementById('field-editor-modal')?.remove();
+  // Remove any existing modal — through its own close() (stashed on the node) so trapFocus's document-level
+  // keydown listener is released rather than orphaned.
+  const staleField = document.getElementById('field-editor-modal');
+  if (staleField?.__dfClose) staleField.__dfClose(); else staleField?.remove();
 
   // buildModal owns the scaffold + focus-trap + focus-restore + backdrop/✕/Escape
   // close. The bespoke borderless ✕ (closeClass + closeHtml) and footer scoping
@@ -2919,20 +3264,36 @@ function renderGanttTaskProps(cell) {
       cell.set('progress', Math.max(0, Math.min(100, v)));
     }, { min: 0, max: 100 });
   }
-  // Only show assignee input if showAssignee is enabled
+  // Only show assignee input if showAssignee is enabled. Autocompletes from the assignees already used in THIS
+  // diagram (issue 5) via a native <datalist>, so populating people is a couple of keystrokes.
   if (cell.get('showAssignee') !== false) {
-    addText(content, 'Assignee', cell.get('assignee') || '', v => {
-      cell.set('assignee', v);
-      cell.attr('assigneeLabel/text', v);
-    });
+    const f = field(content, 'Assignee');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'df-properties__input';
+    input.value = cell.get('assignee') || '';
+    input.placeholder = 'Assignee';
+    const others = [...new Set((cell.graph?.getElements() || [])
+      .filter(e => e.get('type') === 'sf.GanttTask' && e.id !== cell.id)
+      .map(e => (e.get('assignee') || '').trim()).filter(Boolean))].sort();
+    if (others.length) {
+      const dl = document.createElement('datalist');
+      dl.id = 'df-assignee-suggestions';
+      others.forEach((a) => { const o = document.createElement('option'); o.value = a; dl.appendChild(o); });
+      f.appendChild(dl);
+      input.setAttribute('list', dl.id);
+    }
+    input.addEventListener('input', asUndoBatch(() => { cell.set('assignee', input.value); cell.attr('assigneeLabel/text', input.value); }));
+    f.appendChild(input);
   }
 
   // Schedule — the DATES drive the bar's position + width on the timeline (gantt-scale): editing a date moves the bar
   // to its column. A bar with no dates stays where it's dragged (back-compat). Bind a task to a timeline by dropping
   // it onto one (or by having a single timeline in the diagram).
   const schedule = section(bodyEl, 'Schedule');
-  addDate(schedule, 'Start Date', cell.get('startDate') || '', v => cell.set('startDate', v));
-  addDate(schedule, 'End Date', cell.get('endDate') || '', v => cell.set('endDate', v));
+  const startHandle = addDate(schedule, 'Start Date', cell.get('startDate') || '', v => cell.set('startDate', v));
+  const endHandle = addDate(schedule, 'End Date', cell.get('endDate') || '', v => cell.set('endDate', v));
+  bindLiveGanttDates(cell, [{ prop: 'startDate', handle: startHandle }, { prop: 'endDate', handle: endHandle }]);   // item 1: reflect drag/resize live (on mouse-up)
 
   // Appearance — canonical: Fill → Border → typography → custom features
   const appearance = section(bodyEl, 'Appearance');
@@ -2950,6 +3311,7 @@ function renderGanttTaskProps(cell) {
   }, { defaultValue: '#FFFFFF' });
   addColor(appearance, 'Completion bar', cell.attr('progressBar/fill') || '#1D73C9', v => {
     cell.attr('progressBar/fill', v);
+    cell.set('colorManual', true);   // manual colour → stops following the group (issue 6)
   }, { defaultValue: '#1D73C9' });
 
   // Size & Order
@@ -2975,7 +3337,7 @@ function renderGanttMilestoneProps(cell) {
     cell.attr('label/text', v);
     titleEl.textContent = v || '';
   });
-  addDate(content, 'Date', cell.get('milestoneDate') || '', v => cell.set('milestoneDate', v));
+  bindLiveGanttDates(cell, [{ prop: 'milestoneDate', handle: addDate(content, 'Date', cell.get('milestoneDate') || '', v => cell.set('milestoneDate', v)) }]);   // item 1: live on drag
 
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
@@ -3000,6 +3362,8 @@ function renderGanttMarkerProps(cell) {
     cell.attr('label/text', v);
     titleEl.textContent = v || '';
   });
+  // Phase 6: a date snaps the triangle to that column (data-first, like a milestone). Blank = free manual position.
+  bindLiveGanttDates(cell, [{ prop: 'markerDate', handle: addDate(content, 'Date', cell.get('markerDate') || '', v => cell.set('markerDate', v)) }]);   // item 1: live on drag
 
   // Direction toggle
   const dirRow = document.createElement('div');
@@ -3009,27 +3373,35 @@ function renderGanttMarkerProps(cell) {
   const upBtn = document.createElement('button');
   upBtn.className = 'df-properties__btn df-properties__btn--order';
   upBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="8,2 14,14 2,14"/></svg> Point Up`;
-  upBtn.style.opacity = isDown ? '0.5' : '1';
+
+  const downBtn = document.createElement('button');
+  downBtn.className = 'df-properties__btn df-properties__btn--order';
+  downBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="2,2 14,2 8,14"/></svg> Point Down`;
+
+  // Issue 4: the ACTIVE direction follows the primary brand colour (blue in light, red in dark) — the SVG triangle
+  // inherits via currentColor, so the selected button + its arrow read as brand; the inactive one stays muted.
+  const applyDirStyle = (down) => {
+    upBtn.style.color = down ? '' : 'var(--color-primary)';
+    upBtn.style.borderColor = down ? '' : 'var(--color-primary)';
+    upBtn.style.opacity = down ? '0.55' : '1';
+    downBtn.style.color = down ? 'var(--color-primary)' : '';
+    downBtn.style.borderColor = down ? 'var(--color-primary)' : '';
+    downBtn.style.opacity = down ? '1' : '0.55';
+  };
+  applyDirStyle(isDown);
   upBtn.addEventListener('click', () => {
     cell.set('pointDown', false);
     cell.attr('body/refPoints', '0,1 0.5,0 1,1');
     cell.attr('label/y', 'calc(h + 4)');
     cell.attr('label/textVerticalAnchor', 'top');
-    upBtn.style.opacity = '1';
-    downBtn.style.opacity = '0.5';
+    applyDirStyle(false);
   });
-
-  const downBtn = document.createElement('button');
-  downBtn.className = 'df-properties__btn df-properties__btn--order';
-  downBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><polygon points="2,2 14,2 8,14"/></svg> Point Down`;
-  downBtn.style.opacity = isDown ? '1' : '0.5';
   downBtn.addEventListener('click', () => {
     cell.set('pointDown', true);
     cell.attr('body/refPoints', '0,0 1,0 0.5,1');
     cell.attr('label/y', -4);
     cell.attr('label/textVerticalAnchor', 'bottom');
-    upBtn.style.opacity = '0.5';
-    downBtn.style.opacity = '1';
+    applyDirStyle(true);
   });
 
   dirRow.appendChild(upBtn);
@@ -3125,6 +3497,9 @@ function renderGanttTimelineProps(cell) {
     showProperties(cell);
   });
 
+  // Phase 6: Today line — a date draws a full-height dashed line at that column (blank = no line).
+  addDate(content, 'Today line', cell.get('todayDate') || '', v => cell.set('todayDate', v));
+
   // Periods — number input with non-editable unit suffix
   addNumberWithSuffix(content, 'Periods', cell.get('numPeriods') || 12, periodLabel, v => {
     const clamped = Math.max(2, Math.min(104, v));
@@ -3177,6 +3552,17 @@ function renderGanttGroupProps(cell) {
     titleEl.textContent = v || '';
   });
 
+  // Phase 6: link this summary bar to a timeline GROUP → it auto-spans that group's tasks (x+width derived).
+  const tl = ganttTimelineFor(cell);
+  const groups = (tl && tl.get('groups')) || [];
+  const linkedId = cell.get('groupId') || '';
+  const opts = [{ value: '', label: 'None (manual width)' }, ...groups.map(g => ({ value: String(g.id), label: g.label || 'Group' }))];
+  addSelect(content, 'Spans group', linkedId, opts, v => {
+    cell.set('groupId', v || null);
+    if (v) applyGanttGroupGeometry(cell);   // snap to the group's span immediately
+    showProperties(cell);                   // re-render (the Width control hides when linked)
+  });
+
   // Appearance
   const appearance = section(bodyEl, 'Appearance');
   addColor(appearance, 'Bar color', cell.attr('body/fill') || '#2A2D32', v => {
@@ -3186,9 +3572,9 @@ function renderGanttGroupProps(cell) {
   }, { defaultValue: '#2A2D32' });
   addColor(appearance, 'Label color', cell.attr('label/fill'), v => cell.attr('label/fill', v));
 
-  // Size & Order
+  // Size & Order — Width is manual only when UNLINKED; a linked group's width spans its tasks (derived).
   const size = section(bodyEl, 'Size & Order');
-  addNumber(size, 'Width', cell.size().width, w => cell.resize(w, cell.size().height));
+  if (!cell.get('groupId')) addNumber(size, 'Width', cell.size().width, w => cell.resize(w, cell.size().height));
   addOrderButtons(size, cell);
 
   // Delete
@@ -3803,6 +4189,14 @@ export function setLinkEndpoints(cell, sourceKey, targetKey) {
 // The 5-value transform picklist, shared so single + multi stay in lockstep.
 const MAPPING_TYPES = ['Standard', 'Formula', 'Streaming Transform', 'Batch Transform', 'Calculated Insight'];
 
+// Gantt dependency types (Phase 3): which ends of the predecessor/successor bars the relationship ties.
+const GANTT_DEP_TYPE_OPTS = [
+  { value: 'FS', label: 'Finish → Start (FS)' },
+  { value: 'SS', label: 'Start → Start (SS)' },
+  { value: 'FF', label: 'Finish → Finish (FF)' },
+  { value: 'SF', label: 'Start → Finish (SF)' },
+];
+
 // Connection type for a field→field link: mapping ↔ relationship. Swaps `linkKind` and the
 // whole router/connector/marker style. No history batch and no panel re-render — the caller
 // owns both (it must re-render to disclose/hide the mapping fields).
@@ -3921,6 +4315,14 @@ function renderLinkProps(cell) {
         });
       }
     }
+  }
+
+  // Gantt dependency (Phase 3): the depType (FS/SS/FF/SF) + lag (days) ARE the data the Table view and a
+  // future critical-path read. `depType` defaults to FS when unset; `lag` defaults to 0 (negative = lead).
+  if (cell.prop('linkKind') === 'ganttDep') {
+    const depSec = section(bodyEl, 'Dependency');
+    addSelect(depSec, 'Type', cell.prop('depType') || 'FS', GANTT_DEP_TYPE_OPTS, v => cell.prop('depType', v));
+    addNumber(depSec, 'Lag (days)', cell.prop('lag') ?? 0, v => cell.prop('lag', Math.round(v || 0)));
   }
 
   // Appearance
@@ -4764,6 +5166,16 @@ function addDate(parent, label, value, onChange) {
   wrap.appendChild(display);
   wrap.appendChild(calBtn);
   f.appendChild(wrap);
+
+  // Live setter — push a new ISO value into the field WITHOUT firing onChange (used to reflect a model change made
+  // elsewhere, e.g. a drag/resize updating the dates). Never clobbers a value the user is actively typing.
+  return {
+    set(isoVal) {
+      if (document.activeElement === display) return;
+      display.value = toDisplay(isoVal || '');
+      picker.value = isoVal || '';
+    },
+  };
 }
 
 function addTextarea(parent, label, value, onChange, opts) {
@@ -5381,148 +5793,240 @@ function addNumberWithSuffix(parent, label, value, suffix, onChange) {
 }
 
 function renderTimelineTaskEditor(parent, cell) {
+  // Phase 4.6: bars + groups[] are the ONLY model — every timeline reaches here with bars (fresh seed / stencil
+  // drop) or gets migrated to bars on load, and an empty timeline still gets the +Task / +Group buttons. The
+  // legacy tasks[] editor is gone.
+  renderBarTaskEditor(parent, cell);
+}
+
+// Phase 4.4/4.5b.2: CRUD the BAR cells (sf.GanttTask) + the timeline's groups[] — both are the source of truth.
+// The editor list mirrors the unified ganttRowLayout (group headers interleaved with their bars), so the panel
+// (the 4.2 subscription) and the editor agree. A bar is dragged onto a group header to JOIN it; deleting a group
+// ORPHANS its bars to ungrouped (never deletes the user's scheduled cells). Group reordering is deferred.
+function renderBarTaskEditor(parent, cell) {
   const listEl = document.createElement('div');
   listEl.className = 'df-timeline-task-list';
 
-  // Drag state
-  let dragIdx = null;
+  // Drop a dragged BAR (its index in timelineBars, carried in the drag data) onto this group → set its groupId.
+  function assignBarToGroup(fromIdx, groupId) {
+    const bars = timelineBars(cell);
+    const moved = bars[Number(fromIdx)];
+    if (!moved || (moved.get('groupId') || null) === (groupId || null)) return;
+    history.startBatch();
+    try { moved.set('groupId', groupId); resequenceGanttOrders(cell); } finally { history.endBatch(); }
+    rebuild();
+  }
 
-  function rebuild() {
-    listEl.innerHTML = '';
-    const currentTasks = cell.get('tasks') || [];
+  // Issue 5: reorder a GROUP (drag it by its handle) — insert it before `beforeGroupId` (null = the end) and renumber
+  // every group's `order`; its tasks follow because the layout sorts groups by order.
+  function reorderGroup(fromId, beforeGroupId) {
+    if (!fromId || fromId === beforeGroupId) return;
+    let gs = (cell.get('groups') || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const fromIdx = gs.findIndex(g => g.id === fromId);
+    if (fromIdx < 0) return;
+    const [moved] = gs.splice(fromIdx, 1);
+    let to = beforeGroupId ? gs.findIndex(g => g.id === beforeGroupId) : gs.length;
+    if (to < 0) to = gs.length;
+    gs.splice(to, 0, moved);
+    gs = gs.map((g, idx) => ({ ...g, order: idx }));
+    history.startBatch();
+    try { cell.set('groups', gs); resequenceGanttOrders(cell); } finally { history.endBatch(); }
+    rebuild();
+  }
 
-    currentTasks.forEach((task, i) => {
-      const row = document.createElement('div');
-      const isTask = task.type !== 'group';
-      row.className = 'df-timeline-task-row'
-        + (isTask ? ' df-timeline-task-row--task' : '')
-        + (!isTask ? ' df-timeline-task-row--group' : '');
-      row.dataset.index = i;
+  // A drag handle that carries `dragData` (a bar index, or "group:<id>"); shared by group + bar rows.
+  const DRAG_SVG = '<svg viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
+  function makeDragHandle(dragData, row) {
+    const h = document.createElement('span');
+    h.className = 'df-timeline-task-drag';
+    h.innerHTML = DRAG_SVG;
+    h.draggable = true;
+    h.addEventListener('dragstart', (evt) => { evt.dataTransfer.effectAllowed = 'move'; evt.dataTransfer.setData('text/plain', dragData); row.style.opacity = '0.4'; });
+    h.addEventListener('dragend', () => { row.style.opacity = ''; listEl.querySelectorAll('.df-timeline-task-row--drag-over').forEach(r => r.classList.remove('df-timeline-task-row--drag-over')); });
+    return h;
+  }
 
-      // Drag handle
-      const dragHandle = document.createElement('span');
-      dragHandle.className = 'df-timeline-task-drag';
-      dragHandle.innerHTML = '<svg viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
-      dragHandle.draggable = true;
-      dragHandle.addEventListener('dragstart', (evt) => {
-        dragIdx = i;
-        evt.dataTransfer.effectAllowed = 'move';
-        evt.dataTransfer.setData('text/plain', String(i));
-        row.style.opacity = '0.4';
-      });
-      dragHandle.addEventListener('dragend', () => {
-        dragIdx = null;
-        row.style.opacity = '';
-        listEl.querySelectorAll('.df-timeline-task-row--drag-over').forEach(r => r.classList.remove('df-timeline-task-row--drag-over'));
-      });
-      row.appendChild(dragHandle);
+  function renderGroupRow(group) {
+    const row = document.createElement('div');
+    row.className = 'df-timeline-task-row df-timeline-task-row--group';
 
-      // Drop target on the row itself
-      row.addEventListener('dragover', (evt) => {
-        evt.preventDefault();
-        evt.dataTransfer.dropEffect = 'move';
-        row.classList.add('df-timeline-task-row--drag-over');
-      });
-      row.addEventListener('dragleave', () => {
-        row.classList.remove('df-timeline-task-row--drag-over');
-      });
-      row.addEventListener('drop', (evt) => {
-        evt.preventDefault();
-        row.classList.remove('df-timeline-task-row--drag-over');
-        const fromIdx = parseInt(evt.dataTransfer.getData('text/plain'), 10);
-        const toIdx = i;
-        if (isNaN(fromIdx) || fromIdx === toIdx) return;
-        const updated = [...cell.get('tasks')];
-        const [moved] = updated.splice(fromIdx, 1);
-        // If a task is dropped onto/after a group, assign it to that group
-        if (moved.type === 'task') {
-          const target = updated[Math.min(toIdx, updated.length - 1)];
-          if (target?.type === 'group') {
-            moved.groupId = target.id;
-          } else if (target?.groupId) {
-            moved.groupId = target.groupId;
-          }
-        }
-        updated.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
-        cell.set('tasks', updated);
-        rebuild();
-      });
-
-      // Color indicator
-      const colorBtn = document.createElement('input');
-      colorBtn.type = 'color';
-      colorBtn.className = 'df-timeline-task-color';
-      colorBtn.value = toHex(task.color || '#1D73C9');
-      colorBtn.addEventListener('input', () => {
-        const updated = [...cell.get('tasks')];
-        updated[i] = { ...updated[i], color: colorBtn.value };
-        cell.set('tasks', updated);
-      });
-      row.appendChild(colorBtn);
-
-      // Label input
-      const labelInput = document.createElement('input');
-      labelInput.type = 'text';
-      labelInput.className = 'df-properties__input df-timeline-task-label';
-      labelInput.value = task.label || '';
-      labelInput.placeholder = task.type === 'group' ? 'Group name' : 'Task name';
-      labelInput.addEventListener('input', () => {
-        const updated = [...cell.get('tasks')];
-        updated[i] = { ...updated[i], label: labelInput.value };
-        cell.set('tasks', updated);
-      });
-      row.appendChild(labelInput);
-
-      // Delete button
-      const delBtn = document.createElement('button');
-      delBtn.className = 'df-field-delete';
-      delBtn.textContent = '×';
-      delBtn.title = 'Remove';
-      delBtn.addEventListener('click', () => {
-        const updated = [...cell.get('tasks')];
-        // If deleting a group, also remove its children
-        if (task.type === 'group') {
-          const filtered = updated.filter((t, idx) => idx !== i && t.groupId !== task.id);
-          cell.set('tasks', filtered);
-        } else {
-          updated.splice(i, 1);
-          cell.set('tasks', updated);
-        }
-        rebuild();
-      });
-      row.appendChild(delBtn);
-
-      listEl.appendChild(row);
+    // A bar dropped onto the group header joins the group; a GROUP dropped here reorders before this group.
+    row.addEventListener('dragover', (evt) => { evt.preventDefault(); evt.dataTransfer.dropEffect = 'move'; row.classList.add('df-timeline-task-row--drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('df-timeline-task-row--drag-over'));
+    row.addEventListener('drop', (evt) => {
+      evt.preventDefault();
+      row.classList.remove('df-timeline-task-row--drag-over');
+      const data = evt.dataTransfer.getData('text/plain');
+      if (data.startsWith('group:')) reorderGroup(data.slice(6), group.id);
+      else if (data !== '') assignBarToGroup(data, group.id);
     });
 
-    // Add buttons
-    const btnRow = document.createElement('div');
-    btnRow.className = 'df-timeline-task-actions';
+    // Drag handle → reorder this group among the groups (issue 5).
+    row.appendChild(makeDragHandle('group:' + group.id, row));
 
-    const addGroupBtn = document.createElement('button');
-    addGroupBtn.className = 'df-properties__btn df-properties__btn--add-field';
-    addGroupBtn.textContent = '+ Group';
-    addGroupBtn.addEventListener('click', () => {
-      const updated = [...cell.get('tasks')];
-      const id = 'g' + Date.now();
-      updated.push({ id, type: 'group', label: 'New Group', color: '#5B5FC7' });
-      cell.set('tasks', updated);
+    // Colour → groups[i].color (immutable rewrite; the panel header indicator reads it).
+    const colorBtn = document.createElement('input');
+    colorBtn.type = 'color';
+    colorBtn.className = 'df-timeline-task-color';
+    colorBtn.value = toHex(group.color || '#5B5FC7');
+    colorBtn.addEventListener('input', asUndoBatch(() => {
+      const gs = (cell.get('groups') || []).map(g => g.id === group.id ? { ...g, color: colorBtn.value } : g);
+      cell.set('groups', gs);
+    }));
+    row.appendChild(colorBtn);
+
+    // Label → groups[i].label.
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'df-properties__input df-timeline-task-label';
+    labelInput.value = group.label || '';
+    labelInput.placeholder = 'Group name';
+    labelInput.addEventListener('input', asUndoBatch(() => {
+      const gs = (cell.get('groups') || []).map(g => g.id === group.id ? { ...g, label: labelInput.value } : g);
+      cell.set('groups', gs);
+    }));
+    row.appendChild(labelInput);
+
+    // Delete → ORPHAN the group's bars to ungrouped (keep the scheduled cells), then drop the group.
+    const delBtn = document.createElement('button');
+    delBtn.className = 'df-field-delete';
+    delBtn.textContent = '×';
+    delBtn.title = 'Remove group (keeps its tasks)';
+    delBtn.addEventListener('click', () => {
+      history.startBatch();
+      try {
+        timelineBars(cell).filter(b => b.get('groupId') === group.id).forEach(b => b.set('groupId', null));
+        cell.set('groups', (cell.get('groups') || []).filter(g => g.id !== group.id));
+        resequenceGanttOrders(cell);
+      } finally { history.endBatch(); }
+      rebuild();
+    });
+    row.appendChild(delBtn);
+
+    listEl.appendChild(row);
+  }
+
+  function renderBarRow(bar, i) {
+    const row = document.createElement('div');
+    row.className = 'df-timeline-task-row df-timeline-task-row--task';
+    row.dataset.index = i;
+
+    // Drag handle → reorder among bars (rewrite `order` + re-layout); the drag data is the bar index.
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'df-timeline-task-drag';
+    dragHandle.innerHTML = '<svg viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
+    dragHandle.draggable = true;
+    dragHandle.addEventListener('dragstart', (evt) => {
+      evt.dataTransfer.effectAllowed = 'move';
+      evt.dataTransfer.setData('text/plain', String(i));
+      row.style.opacity = '0.4';
+    });
+    dragHandle.addEventListener('dragend', () => {
+      row.style.opacity = '';
+      listEl.querySelectorAll('.df-timeline-task-row--drag-over').forEach(r => r.classList.remove('df-timeline-task-row--drag-over'));
+    });
+    row.appendChild(dragHandle);
+
+    row.addEventListener('dragover', (evt) => { evt.preventDefault(); evt.dataTransfer.dropEffect = 'move'; row.classList.add('df-timeline-task-row--drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('df-timeline-task-row--drag-over'));
+    row.addEventListener('drop', (evt) => {
+      evt.preventDefault();
+      row.classList.remove('df-timeline-task-row--drag-over');
+      const data = evt.dataTransfer.getData('text/plain');
+      if (data.startsWith('group:')) { reorderGroup(data.slice(6), bar.get('groupId') || null); return; }   // group → before this task's group
+      const fromIdx = parseInt(data, 10);
+      const toIdx = i;
+      if (isNaN(fromIdx) || fromIdx === toIdx) return;
+      const ordered = timelineBars(cell);
+      const [moved] = ordered.splice(fromIdx, 1);
+      ordered.splice(toIdx > fromIdx ? toIdx : toIdx + 1, 0, moved);   // insert AFTER the drop target (matches the below-indicator)
+      history.startBatch();
+      try {
+        ordered.forEach((b, idx) => { if (b.get('order') !== idx) b.set('order', idx); });
+        ordered.forEach(b => applyGanttGeometry(b, cell));
+      } finally { history.endBatch(); }
       rebuild();
     });
 
+    // Colour → the bar's progress fill (the panel row dot reads the same attr).
+    const colorBtn = document.createElement('input');
+    colorBtn.type = 'color';
+    colorBtn.className = 'df-timeline-task-color';
+    colorBtn.value = toHex(bar.attr('progressBar/fill') || '#1D73C9');
+    colorBtn.addEventListener('input', asUndoBatch(() => { bar.attr('progressBar/fill', colorBtn.value); bar.set('colorManual', true); }));
+    row.appendChild(colorBtn);
+
+    // Label → taskLabel + the rendered on-bar text. Don't rebuild on input (keeps focus while typing).
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'df-properties__input df-timeline-task-label';
+    labelInput.value = bar.get('taskLabel') || bar.attr('label/text') || '';
+    labelInput.placeholder = 'Task name';
+    labelInput.addEventListener('input', asUndoBatch(() => { bar.set('taskLabel', labelInput.value); bar.attr('label/text', labelInput.value); }));
+    row.appendChild(labelInput);
+
+    // Delete → remove the bar CELL + close the order gap.
+    const delBtn = document.createElement('button');
+    delBtn.className = 'df-field-delete';
+    delBtn.textContent = '×';
+    delBtn.title = 'Remove';
+    delBtn.addEventListener('click', () => {
+      history.startBatch();
+      try { graph.removeCells([bar]); resequenceGanttOrders(cell); } finally { history.endBatch(); }
+      rebuild();
+    });
+    row.appendChild(delBtn);
+
+    listEl.appendChild(row);
+  }
+
+  function rebuild() {
+    listEl.innerHTML = '';
+    // Mirror the unified layout: group headers interleaved with their bars (bar rows carry their bar index).
+    let barIdx = 0;
+    ganttRowLayout(cell).forEach((lr) => {
+      if (lr.kind === 'group') {
+        const group = (cell.get('groups') || []).find(g => g.id === lr.id);
+        if (group) renderGroupRow(group);
+      } else {
+        renderBarRow(lr.bar, barIdx++);
+      }
+    });
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'df-timeline-task-actions';
+
+    // + Group → append a group header to groups[]. Bars are dragged onto it to join.
+    const addGroupBtn = document.createElement('button');
+    addGroupBtn.className = 'df-properties__btn df-properties__btn--add-field';
+    addGroupBtn.textContent = '+ Group';
+    addGroupBtn.addEventListener('click', asUndoBatch(() => {
+      const gs = [...(cell.get('groups') || [])];
+      gs.push({ id: 'g' + Date.now() + '_' + gs.length, label: 'New Group', color: '#5B5FC7', order: gs.length });
+      cell.set('groups', gs);
+      rebuild();
+    }));
+    btnRow.appendChild(addGroupBtn);
+
+    // + Task → a dated bar (next order, start → +7 days), embedded in the timeline. One undo.
     const addTaskBtn = document.createElement('button');
     addTaskBtn.className = 'df-properties__btn df-properties__btn--add-field';
     addTaskBtn.textContent = '+ Task';
     addTaskBtn.addEventListener('click', () => {
-      const updated = [...cell.get('tasks')];
-      const lastGroup = [...updated].reverse().find(t => t.type === 'group');
-      const id = 't' + Date.now();
-      updated.push({ id, type: 'task', label: 'New Task', groupId: lastGroup?.id || null, color: '#1D73C9' });
-      cell.set('tasks', updated);
+      const order = timelineBars(cell).length;
+      const pad = (n) => String(n).padStart(2, '0');
+      const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const startStr = cell.get('startDate') || isoOf(new Date());
+      const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
+      history.startBatch();
+      try {
+        const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: isoOf(ed), attrs: { label: { text: 'New Task' } } });
+        graph.addCell(bar);
+        cell.embed(bar);
+        if (!applyGanttGeometry(bar, cell)) bar.position(cell.position().x + (cell.get('taskListWidth') || 200), orderToY(cell, order), { gantt: true });
+      } finally { history.endBatch(); }
       rebuild();
     });
-
-    btnRow.appendChild(addGroupBtn);
     btnRow.appendChild(addTaskBtn);
     listEl.appendChild(btnRow);
   }
@@ -5908,6 +6412,7 @@ export function convertToContainer(cell) {
   history.startBatch();   // add + reconnect + remove = ONE undo step
   try {
     graph.addCell(container);
+    updateContainerHeaderLayout(container);   // a node-without-icon → container flushes its title left
     preserveParentEmbedding(cell, container);
     reconnectLinks(connections, container.id);
     cell.remove();
@@ -6050,10 +6555,17 @@ function toHex(color) {
     const [, r, g, b] = color.match(/^(.)(.)(.)/);
     return `#${r}${r}${g}${g}${b}${b}`;
   }
-  // CSS variable, rgb()/rgba(), named color — resolve via canvas. Canvas returns a
-  // #rrggbb for opaque colours but an `rgba(r, g, b, a)` string when alpha < 1 — pull
-  // the channels and drop alpha rather than falling through to #000000 (which made a
-  // translucent fill, e.g. a Zone/Layer tint, read as black in the picker).
+  // A CSS custom property `var(--x)` is NOT resolved by canvas fillStyle — resolve it against the live cascade
+  // FIRST, so a theme-var default (e.g. a label's `var(--text-primary)`) shows its real colour in the picker
+  // instead of falling through to #000000 (the black-swatch bug on Legend / Pill / Text label colour fields).
+  const varRef = /^var\(\s*(--[\w-]+)/.exec(color);
+  if (varRef) {
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varRef[1]).trim();
+    if (resolved) color = resolved;
+  }
+  // rgb()/rgba(), named color — resolve via canvas. Canvas returns a #rrggbb for opaque colours but an
+  // `rgba(r, g, b, a)` string when alpha < 1 — pull the channels and drop alpha rather than falling through to
+  // #000000 (which made a translucent fill, e.g. a Zone/Layer tint, read as black in the picker).
   try {
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.fillStyle = color;

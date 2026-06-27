@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.17.2.11';
+const CACHE_VERSION = '1.18.0.5';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -23,6 +23,8 @@ const PRECACHE_URLS = [
   // cache name changes on each version bump).
   './privacy.html',
   './terms.html',
+  './support.html',
+  './assets/support.js',   // support.html's runtime email-obfuscation script (no ?v= — refreshed by cache name)
   // App CSS
   `./css/variables.css?v=${CACHE_VERSION}`,
   `./css/theme.css?v=${CACHE_VERSION}`,
@@ -64,6 +66,7 @@ const PRECACHE_URLS = [
   `./js/persistence.js?v=${CACHE_VERSION}`,
   `./js/persistence/context.js?v=${CACHE_VERSION}`,
   `./js/persistence/df-format.js?v=${CACHE_VERSION}`,
+  `./js/persistence/diagram-schema.js?v=${CACHE_VERSION}`,
   `./js/persistence/image-export.js?v=${CACHE_VERSION}`,
   `./js/persistence/share-orchestration.js?v=${CACHE_VERSION}`,
   `./js/persistence/versioning.js?v=${CACHE_VERSION}`,

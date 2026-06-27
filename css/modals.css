@@ -1642,6 +1642,93 @@
   padding: 6px 14px;
 }
 
+/* ── Edit-in-Table overlay for the df.Table generic shape ─────── */
+.df-table-modal__dialog { width: 680px; }
+
+/* Toolbar: Display-style "Highlight first row / first column" checkboxes + a markdown hint. */
+.df-table-modal__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  padding-bottom: var(--spacing-sm);
+}
+.df-table-modal__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.df-table-modal__check span { cursor: pointer; }
+.df-table-modal__hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  padding-bottom: var(--spacing-md);
+}
+
+/* Grid: [row-× | data cols | +Column strip] × [col-× row | data rows | +Row strip]. */
+.df-table-modal__grid2 {
+  display: grid;
+  gap: 3px;
+  align-items: stretch;
+}
+.df-table-modal__cell {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 28px;
+  resize: none;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.df-table-modal__cell.is-bold { font-weight: 700; }
+
+.df-table-modal__del-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.df-table-modal__del-btn:hover:not(:disabled) { color: var(--brand-red, #DA4E55); }
+.df-table-modal__del-btn:disabled { opacity: 0.25; cursor: default; }
+
+/* + Row / + Column add strips: dashed, fill their grid span, brand-blue on hover. */
+.df-table-modal__strip {
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.df-table-modal__strip:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--bg-elevated); }
+.df-table-modal__addcol { writing-mode: vertical-rl; }   /* vertical label in the narrow full-height column */
+
+/* Footer: Cancel on the left, Save on the right. */
+.df-table-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* ── Mobile modal touch targets ──────────────────────────────── */
 @media (max-width: 768px) {
   .df-modal__btn,

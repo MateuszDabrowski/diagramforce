@@ -120,10 +120,26 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Ctrl+C — Copy
-  if (mod && key === 'c') {
+  // Ctrl/Cmd+Shift+C — Copy as a TRANSPARENT PNG (the transparent variant of the Cmd+C image copy). Also does the
+  // in-memory internal copy; toasts (not silent) since it's a deliberate variant.
+  if (mod && shiftKey && key === 'c') {
+    if (modules.selection.getCount() === 0) return;
     evt.preventDefault();
     modules.clipboard.copy();
+    modules.selection.copySelectionAsPng?.({ transparent: true });
+    return;
+  }
+
+  // Ctrl/Cmd+C — Copy. Overloaded (Lucid-style): copy the selected elements INTERNALLY (in-memory, so internal
+  // paste is unchanged) AND drop a PNG of them on the OS clipboard, so the same shortcut pastes back into the app OR
+  // pastes as an image into Slack / docs / chat. With NOTHING selected on the canvas we fall through to the browser
+  // so a plain TEXT selection still copies natively (the input/textarea/contenteditable case already returned at the
+  // top of this handler). The PNG write is best-effort + SILENT (no toast on every copy).
+  if (mod && !shiftKey && key === 'c') {
+    if (modules.selection.getCount() === 0) return;
+    evt.preventDefault();
+    modules.clipboard.copy();                                  // internal element copy (in-memory)
+    modules.selection.copySelectionAsPng?.({ silent: true });  // + PNG to the OS clipboard (best-effort)
     return;
   }
 

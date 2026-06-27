@@ -2,9 +2,9 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.17.2.11';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.2.11';
-import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.17.2.11';
+import { parseMarkdown } from './markdown.js?v=1.18.0.5';
+import { fieldFocus } from './canvas/focus-state.js?v=1.18.0.5';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, applyGanttMarkerGeometry, applyGanttGroupGeometry, ganttGroupSummary, dateToLocalX, layoutTimelineTasks, ganttRowLayout, ganttTimelineFor, ganttSummaryLaneH, recolorGroupTasks, GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H } from './canvas/gantt-layout.js?v=1.18.0.5';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -706,6 +706,345 @@ export function register() {
       },
     }
   );
+
+  // --- Legend ---
+  // A single legend KEY: a fillable rounded "squircle" swatch with a label beside it. Drop several to explain
+  // each colour a diagram uses (one item per colour, so each carries its own Shape state). The SWATCH is the
+  // user-fillable colour AND the Shape-state target (its border is painted by applyShapeState via the
+  // SHAPE_STATE_TARGET map in properties.js); the full-bounds `body` is transparent and only carries selection.
+  // AUTO-WIDTHS to its label text.
+  joint.dia.Element.define(
+    'df.Legend',
+    {
+      size: { width: 120, height: 28 },
+      z: 2400,
+      attrs: {
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)', height: 'calc(h)',
+          rx: 6, ry: 6,
+          fill: 'transparent', stroke: 'none',
+        },
+        swatch: {
+          x: 2, y: 'calc(0.5 * h - 9)',
+          width: 18, height: 18,
+          rx: 5, ry: 5,
+          fill: '#1D73C9', stroke: 'none',
+        },
+        label: {
+          x: 28, y: 'calc(0.5 * h)',
+          textAnchor: 'start', textVerticalAnchor: 'middle',
+          fontSize: 14, fontWeight: '600',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-primary)', text: 'Label',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'rect', selector: 'swatch' },
+        { tagName: 'text', selector: 'label' },
+      ],
+      // Auto-width to the label at the MODEL level (char-width estimate, ~0.6em/char) — runs at construction
+      // (before any render) and on every label edit, so the width can't be lost to the async render cycle a
+      // view-side resize would. The swatch + gap is a fixed 28px lead; height stays as the user set it.
+      initialize() {
+        joint.dia.Element.prototype.initialize.apply(this, arguments);
+        // Back-compat: the Shape-state border now paints on the `swatch` (the visible squircle), not the
+        // transparent full-bounds `body`. Move a stroke an older Legend stashed on `body` over to the swatch.
+        const bs = this.attr('body/stroke');
+        if (bs && bs !== 'none') {
+          this.attr({
+            swatch: { stroke: bs, strokeWidth: this.attr('body/strokeWidth'), strokeDasharray: this.attr('body/strokeDasharray') },
+            body: { stroke: 'none', strokeWidth: null, strokeDasharray: null },
+          }, { silent: true });
+        }
+        // Refit ONLY when the label text / font size changed — NOT on every attr edit. Binding the whole
+        // change:attrs (the label lives in attrs) would otherwise snap a user-set Width back to the label on a
+        // Fill / Label-colour / Shape-state edit too. (A label edit still re-fits, matching the Pill convention.)
+        this.on('change:attrs', () => {
+          const pl = (this.previous('attrs') || {}).label || {};
+          const nl = (this.get('attrs') || {}).label || {};
+          if (pl.text !== nl.text || pl.fontSize !== nl.fontSize) this._fitWidth();
+        });
+        this._fitWidth();
+      },
+      _fitWidth() {
+        // A user-set width STICKS (manualWidth): the Width control + a resize-handle drag set it, and "Auto
+        // size" clears it. So a label / font-size edit no longer snaps a deliberately-sized legend back.
+        if (this.get('manualWidth')) return;
+        const txt = String(this.attr('label/text') ?? '');
+        const fs = this.attr('label/fontSize') || 14;
+        const lead = 28;   // swatch (x:2 + 18) + an 8px gap before the label
+        const w = Math.max(48, lead + Math.round(txt.length * fs * 0.6) + 10);
+        const h = this.size().height || 28;
+        if (Math.abs(this.size().width - w) > 0.5) this.resize(w, h);
+      },
+    }
+  );
+
+  // --- Table ---
+  // A minimal grid: a 2D `rows` array (array of row arrays of cell strings). Each cell renders MARKDOWN and grows
+  // to fit MULTI-LINE content (like the node description), so rows have variable height. Optional `tableLabel`
+  // renders above the grid, and `highlightFirstRow` / `highlightFirstCol` tint + bold the leading row / column.
+  // The transparent `body` rect is the selection + Shape-state frame; the visible table (border, fill, grid lines,
+  // markdown cells) is drawn by df.TableView, which MEASURES wrapped content and resizes the model (Note pattern).
+  const TABLE_MIN_ROW_H = 28;  // min px per row (one short line)
+  const TABLE_MIN_COL_W = 48;  // a column can't be squeezed below this — the model floors width to cols × it
+  joint.dia.Element.define(
+    'df.Table',
+    {
+      size: { width: 330, height: 90 },
+      z: 2300,
+      rows: [
+        ['Column 1', 'Column 2', 'Column 3'],
+        ['', '', ''],
+        ['', '', ''],
+      ],
+      tableLabel: '',
+      highlightFirstRow: true,
+      highlightFirstCol: false,
+      fontSize: 13,
+      tableFill: 'var(--node-bg)',
+      tableBorder: 'var(--node-border)',   // the rename "Grid & Border": also tints the inner grid lines
+      tableTextColor: '',                  // '' → var(--text-primary); applies to cell text + the label
+      attrs: {
+        // Transparent full-bounds frame: carries selection + the shared Shape-state border. The visible table
+        // (fill/border/grid) is drawn by the view from tableFill/tableBorder.
+        body: {
+          x: 0, y: 0,
+          width: 'calc(w)', height: 'calc(h)',
+          rx: 4, ry: 4,
+          fill: 'transparent', stroke: 'none',
+        },
+      },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+      ],
+      // The MODEL only normalises `rows` to a rectangle + floors the WIDTH (cols × min) — HEIGHT is owned by the
+      // view, which measures wrapped markdown (the only place the rendered height is known), like sf.Note.
+      initialize() {
+        joint.dia.Element.prototype.initialize.apply(this, arguments);
+        // Back-compat: a pre-rework table used `headerRow` + painted the table on `body`. Fold those into the new
+        // props once, and free `body` to be the transparent Shape-state frame.
+        if (this.has('headerRow')) { this.set('highlightFirstRow', !!this.get('headerRow'), { silent: true }); this.unset('headerRow', { silent: true }); }
+        const bf = this.attr('body/fill');
+        if (bf && bf !== 'transparent') {
+          if (this.get('tableFill') == null) this.set('tableFill', bf, { silent: true });
+          this.attr('body/fill', 'transparent', { silent: true });
+        }
+        const bs = this.attr('body/stroke');
+        if (bs && bs !== 'none' && !this.get('borderStyle')) {   // no active Shape-state: body/stroke IS the border
+          if (this.get('tableBorder') == null) this.set('tableBorder', bs, { silent: true });
+          this.attr('body/stroke', 'none', { silent: true });
+        } else if (this.get('borderStyle')) {
+          // Active Shape-state border: the user's real border is stashed in _origBorder. Promote it to tableBorder
+          // and neutralise _origBorder so clearing the state later restores the transparent frame, not the old colour.
+          const orig = this.get('_origBorder');
+          if (orig && orig.stroke && orig.stroke !== 'none') {
+            if (this.get('tableBorder') == null) this.set('tableBorder', orig.stroke, { silent: true });
+            this.set('_origBorder', { stroke: 'none', strokeWidth: null, strokeDasharray: null }, { silent: true });
+          }
+        }
+        this.on('change:rows change:size', () => this._normalize());
+        this._normalize();
+      },
+      _normalize() {
+        if (this._fitting) return;
+        this._fitting = true;
+        try {
+          let rows = this.get('rows') || [];
+          // Rectangle-normalise (cols = widest row): ragged JSON / LLM input otherwise clips longer rows + desyncs
+          // the editor grid. Pad short rows + coerce non-arrays; write back only when it actually changed.
+          const cols = Math.max(1, ...rows.map(r => (Array.isArray(r) ? r.length : 0)), 1);
+          const padded = rows.map(r => { const rr = Array.isArray(r) ? r.slice() : []; while (rr.length < cols) rr.push(''); return rr; });
+          if (JSON.stringify(padded) !== JSON.stringify(rows)) this.set('rows', padded);
+          const w = Math.max(this.size().width, cols * TABLE_MIN_COL_W);
+          if (Math.abs(this.size().width - w) > 0.5) this.resize(w, this.size().height);
+        } finally { this._fitting = false; }
+      },
+    }
+  );
+
+  // Custom view for Table — draws the visible table (border rect, highlights, grid lines) in a <g> and renders
+  // each cell as a MARKDOWN foreignObject (ensureMarkdownFO) that wraps + grows. It MEASURES each cell's content
+  // scrollHeight to compute per-row heights, lays the cells out, and resizes the MODEL to the measured total
+  // (the Note model-vs-view auto-height pattern: measure in the view, resize the model, _fitting-guarded; a
+  // 0 scrollHeight = FO not laid out yet → retry next frame, never cache).
+  joint.shapes.df.TableView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      // Marker class so the CSS selection-stroke rules can SKIP df.Table: it draws its own border + shows resize
+      // corners, so the red outline on its transparent Shape-state body / view border is redundant (and the
+      // `:first-child` rule made it flicker with the label). Corners alone signal selection; a Shape-state border
+      // (on `body`) stays visible because the selection override no longer hides it.
+      this.el.classList.add('df-table-el');
+      this.listenTo(this.model,
+        'change:rows change:size change:tableLabel change:highlightFirstRow change:highlightFirstCol change:fontSize change:tableFill change:tableBorder change:tableTextColor',
+        () => this._renderTable());
+      // Hover cross-highlight: a delegated handler (one listener for the whole table) tints the hovered cell's
+      // row + column. Cheap — just toggles opacity + repositions two cached rects; no re-render.
+      this.el.addEventListener('pointermove', (e) => this._tableHover(e));
+      this.el.addEventListener('pointerleave', () => this._tableHoverOff());
+    },
+    _tableHover(e) {
+      const g = this._geom, row = this._hoverRow, col = this._hoverCol;
+      if (!g || !row || !col || !this.paper) return;
+      // The cell FOs are pointer-events:none (clicks pass through to JointJS), so the pointer target is never a
+      // cell — resolve the hovered row/column from the POINTER POSITION in the element's local coords instead.
+      const p = this.paper.clientToLocalPoint({ x: e.clientX, y: e.clientY });
+      const pos = this.model.position();
+      const lx = p.x - pos.x, ly = p.y - pos.y;
+      let r = -1;
+      for (let i = 0; i < g.rowY.length; i++) { if (ly >= g.rowY[i] && ly < g.rowY[i] + g.rowH[i]) { r = i; break; } }
+      const c = Math.floor(lx / g.colW);
+      if (r < 0 || c < 0 || c >= g.cols || lx < 0 || lx > g.width) { this._tableHoverOff(); return; }
+      row.setAttribute('y', String(g.rowY[r])); row.setAttribute('height', String(g.rowH[r])); row.setAttribute('opacity', '0.1');
+      col.setAttribute('x', String(Math.round(c * g.colW))); col.setAttribute('width', String(Math.round(g.colW))); col.setAttribute('opacity', '0.1');
+    },
+    _tableHoverOff() {
+      if (this._hoverRow) this._hoverRow.setAttribute('opacity', '0');
+      if (this._hoverCol) this._hoverCol.setAttribute('opacity', '0');
+    },
+    update() {
+      joint.dia.ElementView.prototype.update.apply(this, arguments);
+      this._renderTable();
+    },
+    _renderTable() {
+      const model = this.model;
+      const ns = SVG_NS_SHAPES;
+      const old = this.el.querySelector(':scope > g.df-table-g');
+      if (old) old.remove();
+
+      const rows = model.get('rows') || [];
+      if (!rows.length) {
+        this.el.querySelectorAll(':scope > foreignObject[data-md^="cell-"]').forEach(fo => fo.remove());
+        return;
+      }
+      const fontSize = Math.max(6, Number(model.get('fontSize')) || 13);
+      const labelText = String(model.get('tableLabel') || '');
+      const hlRow = !!model.get('highlightFirstRow');
+      const hlCol = !!model.get('highlightFirstCol');
+      // Colours are interpolated into SVG attrs + a CSS string → sanitise to the same safe set as icon colours.
+      const safeColor = (c, fb) => { const s = String(c || '').replace(/[^a-zA-Z0-9#(),.\s%-]/g, '').trim(); return s || fb; };
+      const tableFill = safeColor(model.get('tableFill'), 'var(--node-bg)');
+      const tableBorder = safeColor(model.get('tableBorder'), 'var(--node-border)');
+      const textColor = safeColor(model.get('tableTextColor'), 'var(--text-primary)');
+      const cols = Math.max(1, ...rows.map(r => (Array.isArray(r) ? r.length : 0)), 1);
+      const { width } = model.size();
+      const colW = width / cols;
+      const labelFont = fontSize + 2;   // the label reads one notch larger than the cells
+      const labelH = labelText ? Math.round(labelFont + 12) : 0;
+      const PAD_X = 6, PAD_Y = 5;
+      const minRowH = Math.max(TABLE_MIN_ROW_H, fontSize + 14);
+
+      // 1. Render + MEASURE every cell's markdown to derive per-row heights.
+      const cellCss = (bold) => `width:100%;height:auto;box-sizing:border-box;font-size:${fontSize}px;`
+        + `font-weight:${bold ? 700 : 400};font-family:system-ui,-apple-system,sans-serif;color:${textColor};`
+        + `line-height:1.3;white-space:pre-wrap;word-break:break-word;overflow:hidden;`;
+      const usedKeys = new Set();
+      const rowH = [];
+      let needsRetry = false;
+      for (let r = 0; r < rows.length; r++) {
+        let maxH = minRowH;
+        for (let c = 0; c < cols; c++) {
+          const key = `cell-${r}-${c}`;
+          usedKeys.add(key);
+          const text = String(rows[r]?.[c] ?? '');
+          const bold = (hlRow && r === 0) || (hlCol && c === 0);
+          ensureMarkdownFO(this, key, text, {
+            x: Math.round(c * colW + PAD_X), y: 0, width: Math.max(0, colW - PAD_X * 2), height: 4000,
+            css: cellCss(bold),
+          });
+          const content = this.el.querySelector(`:scope > foreignObject[data-md="${key}"] [data-md-content]`);
+          const sh = content ? content.scrollHeight : 0;
+          if (text && !sh) needsRetry = true;   // non-empty cell not laid out yet
+          maxH = Math.max(maxH, sh + PAD_Y * 2);
+        }
+        rowH.push(Math.round(maxH));
+      }
+      // Drop foreignObjects for cells that no longer exist (rows/cols shrank).
+      this.el.querySelectorAll(':scope > foreignObject[data-md^="cell-"]').forEach(fo => { if (!usedKeys.has(fo.getAttribute('data-md'))) fo.remove(); });
+
+      // 2. Cumulative row Y + final cell positions.
+      const rowY = []; let acc = labelH;
+      for (let r = 0; r < rows.length; r++) { rowY.push(acc); acc += rowH[r]; }
+      const tableH = acc - labelH;
+      const totalH = labelH + tableH;
+      for (let r = 0; r < rows.length; r++) {
+        for (let c = 0; c < cols; c++) {
+          const fo = this.el.querySelector(`:scope > foreignObject[data-md="cell-${r}-${c}"]`);
+          if (!fo) continue;
+          fo.setAttribute('y', String(rowY[r] + PAD_Y));
+          fo.setAttribute('height', String(Math.max(0, rowH[r] - PAD_Y * 2)));
+        }
+      }
+
+      // 3. Draw the table chrome (label, border rect, highlight tints, grid lines) UNDER the cell FOs.
+      const g = document.createElementNS(ns, 'g');
+      g.setAttribute('class', 'df-table-g');
+      g.setAttribute('pointer-events', 'none');
+      const rect = (x, y, w, h, fill, stroke, rx) => {
+        const el = document.createElementNS(ns, 'rect');
+        el.setAttribute('x', String(x)); el.setAttribute('y', String(y));
+        el.setAttribute('width', String(Math.max(0, w))); el.setAttribute('height', String(Math.max(0, h)));
+        if (rx) { el.setAttribute('rx', String(rx)); el.setAttribute('ry', String(rx)); }
+        el.setAttribute('fill', fill || 'none');
+        if (stroke) { el.setAttribute('stroke', stroke); el.setAttribute('stroke-width', '1'); }
+        return el;
+      };
+      const line = (x1, y1, x2, y2, strong) => {
+        const el = document.createElementNS(ns, 'line');
+        el.setAttribute('x1', String(x1)); el.setAttribute('y1', String(y1));
+        el.setAttribute('x2', String(x2)); el.setAttribute('y2', String(y2));
+        el.setAttribute('stroke', tableBorder); el.setAttribute('stroke-opacity', strong ? '0.9' : '0.5');   // grid follows the border colour
+        return el;
+      };
+      if (labelText) {
+        const lt = document.createElementNS(ns, 'text');
+        lt.setAttribute('x', '1'); lt.setAttribute('y', String(Math.round(labelH - 7)));
+        lt.setAttribute('font-size', String(labelFont)); lt.setAttribute('font-weight', '600');
+        lt.setAttribute('font-family', 'system-ui, -apple-system, sans-serif'); lt.setAttribute('fill', textColor);
+        lt.textContent = labelText;
+        g.appendChild(lt);
+      }
+      g.appendChild(rect(0, labelH, width, tableH, tableFill, tableBorder, 4));
+      if (hlRow) g.appendChild(rect(1, labelH + 1, width - 2, rowH[0] - 1, 'var(--bg-elevated)'));
+      if (hlCol) g.appendChild(rect(1, labelH + 1, colW - 1, tableH - 2, 'var(--bg-elevated)'));
+      for (let c = 1; c < cols; c++) { const x = Math.round(c * colW); g.appendChild(line(x, labelH, x, labelH + tableH, hlCol && c === 1)); }
+      for (let r = 1; r < rows.length; r++) { const y = Math.round(rowY[r]); g.appendChild(line(0, y, width, y, hlRow && r === 1)); }
+      // Hover cross-highlight: a row + column tint, positioned + shown by the delegated pointer handler (initialize).
+      // Drawn last in the chrome <g> (under the cell FOs) so the text stays readable on top.
+      this._hoverRow = rect(0, labelH, width, 0, 'var(--selection-color)', null, 0); this._hoverRow.setAttribute('opacity', '0'); this._hoverRow.setAttribute('class', 'df-table-hl-row'); g.appendChild(this._hoverRow);
+      this._hoverCol = rect(0, labelH, 0, tableH, 'var(--selection-color)', null, 0); this._hoverCol.setAttribute('opacity', '0'); this._hoverCol.setAttribute('class', 'df-table-hl-col'); g.appendChild(this._hoverCol);
+      this._geom = { rowY: rowY.slice(), rowH: rowH.slice(), colW, labelH, tableH, width, cols };
+      // Insert the chrome <g> BEFORE the first cell FO so the markdown text paints on top of the fill/tints.
+      this.el.insertBefore(g, this.el.querySelector(':scope > foreignObject[data-md^="cell-"]'));
+
+      // 4. Resize the model to the measured content height — but ONLY when the CONTENT or WIDTH changed (a fit
+      //    key), so a manual height drag (same rows/width/font) is respected instead of snapping back (mirrors
+      //    sf.Note's `_lastFitKey`). A 0-measurement (FOs not laid out on the first render) retries next frame —
+      //    bounded + mounted-gated so a torn-down (deleted) or permanently-0 (display:none) view can't spin forever.
+      if (!needsRetry) {
+        this._mdRetryCount = 0;
+        // Include the label: adding / removing / resizing it changes labelH (totalH), so it MUST re-fit the model
+        // height — else the resize corners + the selection bounds lag at the pre-label size (the reported bug).
+        const fitKey = width + '|' + fontSize + '|' + JSON.stringify(labelText) + '|' + JSON.stringify(rows);
+        const cur = model.size();
+        if (fitKey !== this._lastFitKey && Math.abs(cur.height - totalH) > 0.5 && !model._fitting) {
+          model._fitting = true;
+          try { model.resize(width, totalH); } finally { model._fitting = false; }
+        }
+        this._lastFitKey = fitKey;
+      } else if (!this._mdRetry && this.el && this.el.parentNode && (this._mdRetryCount = (this._mdRetryCount || 0) + 1) <= 8) {
+        this._mdRetry = true;
+        requestAnimationFrame(() => { this._mdRetry = false; this._renderTable(); });
+      }
+    },
+  });
 
   // --- Line ---
   // A decorative line element — horizontal by default, resizable.
@@ -2474,6 +2813,7 @@ export function register() {
       startDate: '',
       endDate: '',
       assignee: '',
+      groupId: null,          // 4.5b: id of the timeline group this bar belongs to, or null = ungrouped
       attrs: {
         body: {
           width: 'calc(w)',
@@ -2563,6 +2903,16 @@ export function register() {
       this.listenTo(this.model, 'change:assignee change:showAssignee change:showProgress', () => this._updateDisplay());
       // Dates are the source of truth: editing start/end re-derives the bar's x + width on the timeline (gantt-scale).
       this.listenTo(this.model, 'change:startDate change:endDate', () => applyGanttGeometry(this.model));
+      // Issue 6: a task's bar colour follows its GROUP — when it joins/changes a group (drop / drag / editor), recolour
+      // its progress bar to the group's colour, UNLESS the user set a colour manually (`colorManual`). Fires only on a
+      // groupId CHANGE (not initial load), so saved per-task colours are preserved.
+      this.listenTo(this.model, 'change:groupId', () => {
+        if (this.model.get('colorManual')) return;
+        const tl = ganttTimelineFor(this.model);
+        const gid = this.model.get('groupId');
+        const grp = gid && tl && (tl.get('groups') || []).find((g) => g.id === gid);
+        if (grp && grp.color) this.model.attr('progressBar/fill', grp.color);
+      });
     },
     update() {
       joint.dia.ElementView.prototype.update.apply(this, arguments);
@@ -2654,6 +3004,16 @@ export function register() {
           fill: 'var(--text-primary)',
           text: 'Milestone',
         },
+        dateLabel: {   // ALWAYS-on date caption below the diamond (like the Day Marker)
+          x: 'calc(0.5 * w)',
+          y: 'calc(h + 4)',
+          textAnchor: 'middle',
+          textVerticalAnchor: 'top',
+          fontSize: 10,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-secondary)',
+          text: '',
+        },
       },
       ports: {
         groups: {
@@ -2678,19 +3038,46 @@ export function register() {
       markup: [
         { tagName: 'polygon', selector: 'body' },
         { tagName: 'text', selector: 'label' },
+        { tagName: 'text', selector: 'dateLabel' },
       ],
     }
   );
 
+  // Custom view for GanttMilestone — `milestoneDate` is the source of truth, mirroring GanttTaskView for bars:
+  // editing the date (panel / JSON / programmatic) slides the diamond to that column instead of being a silent
+  // no-op. X derives from the date; Y stays where the user placed it (see applyGanttMilestoneGeometry). The
+  // diamond ALWAYS shows its date as a caption (issue 9), like the Day Marker.
+  joint.shapes.sf.GanttMilestoneView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      this.model.attr('dateLabel/text', fmtGanttDate(this.model.get('milestoneDate')), { silent: true });
+      this.listenTo(this.model, 'change:milestoneDate', () => {
+        applyGanttMilestoneGeometry(this.model);
+        this.model.attr('dateLabel/text', fmtGanttDate(this.model.get('milestoneDate')));
+      });
+    },
+  });
+
+  // Short, locale-stable date caption for a Gantt marker ("24 Jun"). Empty for an unset/invalid date.
+  const _GANTT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtGanttDate(iso) {
+    if (!iso || typeof iso !== 'string') return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return '';
+    const mon = _GANTT_MONTHS[Number(m[2]) - 1];
+    return mon ? `${Number(m[3])} ${mon}` : '';
+  }
+
   // --- GanttMarker ---
-  // Upward-pointing triangle that marks the current point in time on a Gantt chart.
-  // Can be embedded in a GanttTimeline like a milestone.
+  // Upward-pointing triangle that marks a day on a Gantt chart (not necessarily today).
+  // Can be embedded in a GanttTimeline like a milestone; shows its date as a caption.
   joint.dia.Element.define(
     'sf.GanttMarker',
     {
       size: { width: 20, height: 16 },
       z: 2000,
       pointDown: false,
+      markerDate: '',   // Phase 6: when set, the triangle's x derives from this date (mirrors a milestone)
       attrs: {
         body: {
           refPoints: '0,1 0.5,0 1,1',
@@ -2706,7 +3093,18 @@ export function register() {
           fontSize: 10,
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: 'var(--text-primary)',
-          text: 'Today',
+          text: 'Day',
+        },
+        // A small date caption below the label (the view fills it from markerDate).
+        dateLabel: {
+          x: 'calc(0.5 * w)',
+          y: 'calc(h + 17)',
+          textAnchor: 'middle',
+          textVerticalAnchor: 'top',
+          fontSize: 9,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--text-secondary)',
+          text: '',
         },
       },
       ports: {
@@ -2732,9 +3130,21 @@ export function register() {
       markup: [
         { tagName: 'polygon', selector: 'body' },
         { tagName: 'text', selector: 'label' },
+        { tagName: 'text', selector: 'dateLabel' },
       ],
     }
   );
+
+  // Custom view for GanttMarker — like GanttMilestoneView, `markerDate` (when set) is the source of truth:
+  // editing the date slides the triangle to that column. The date also shows as a caption under the label.
+  joint.shapes.sf.GanttMarkerView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      const sync = () => { applyGanttMarkerGeometry(this.model); this.model.attr('dateLabel/text', fmtGanttDate(this.model.get('markerDate'))); };
+      this.listenTo(this.model, 'change:markerDate', sync);
+      this.model.attr('dateLabel/text', fmtGanttDate(this.model.get('markerDate')), { silent: true });
+    },
+  });
 
   // --- GanttTimeline ---
   // Auto-calculated week/month header. Renders a two-row header:
@@ -2747,9 +3157,11 @@ export function register() {
       z: 1000,
       startDate: '',          // YYYY-MM-DD format
       endDate: '',            // YYYY-MM-DD format (auto-calculated or manual)
+      todayDate: '',          // Phase 6: YYYY-MM-DD — draws a full-height "today" line at this date's column
       viewMode: 'week',       // 'day', 'week' or 'month'
       numPeriods: 12,         // number of columns to show
-      tasks: [],              // array of { id, type:'group'|'task', label, groupId?, color? }
+      tasks: [],              // LEGACY (pre-4.5b): array of { id, type:'group'|'task', label, groupId?, color? }
+      groups: [],             // 4.5b: [{ id, label, color, order }] group header rows; bars reference one via groupId
       taskListWidth: 200,     // width of the left task list panel
       rowHeight: 48,          // height per task row (tall enough for embedded elements)
       timelineTitle: 'Tasks',      // replaces the hardcoded "Tasks" header
@@ -2757,6 +3169,8 @@ export function register() {
       weekStartDay: 1,             // first day of week (week-view column split): 1=Mon, 0=Sun, 6=Sat
       showWeekNumber: false,       // week view: label columns "W23" instead of the week start date
       weekendStartDay: 6,          // first weekend day (day-view shading): 6=Sat (Sat–Sun) or 5=Fri (Fri–Sat)
+      showProjectSummary: false,   // Phase 6: a read-only overview lane at the top — every group summary bar +
+                                   // milestone + day marker condensed into one row (Display menu toggle)
       attrs: {
         body: {
           width: 'calc(w)',
@@ -2804,7 +3218,27 @@ export function register() {
     initialize() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
       // Re-draw the ruler AND re-position dated task bars whenever the axis changes (the bars track the timeline).
-      this.listenTo(this.model, 'change:startDate change:endDate change:viewMode change:numPeriods change:size change:tasks change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay', () => { this._renderColumns(); layoutTimelineTasks(this.model); });
+      this.listenTo(this.model, 'change:startDate change:endDate change:todayDate change:viewMode change:numPeriods change:size change:tasks change:groups change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay change:showProjectSummary', () => { this._renderColumns(); layoutTimelineTasks(this.model); });
+      // Issue 7: a group's colour change must reach its bars — the per-task `change:groupId` listener can't see a
+      // `change:groups` edit (recolour in the group editor / properties), so recolour all non-manual bars here.
+      this.listenTo(this.model, 'change:groups', () => recolorGroupTasks(this.model));
+      // Phase 4.2: the left panel is DERIVED from the bars, so re-render it when a GanttTask bar is added /
+      // removed / moved / resized / relabelled. rAF-debounced; _renderColumns only touches this view's columns
+      // group + silent attrs (no graph mutation), so there is no redraw loop.
+      this._panelRaf = false;
+      const reRenderPanel = () => {
+        if (this._panelRaf) return;
+        this._panelRaf = true;
+        requestAnimationFrame(() => { this._panelRaf = false; this._renderColumns(); });
+      };
+      if (this.model.graph) {
+        this.listenTo(this.model.graph, 'add remove change:position change:size change:taskLabel change:groupId change:markerDate change:milestoneDate change:progress change:startDate change:endDate', (cell) => {
+          const ct = cell?.get?.('type');
+          // Re-draw on a task change (panel rows + group summary bars react to dates/progress) OR a marker/
+          // milestone change (the event lines + glyph columns + the Timeline Summary lane).
+          if (ct === 'sf.GanttTask' || ct === 'sf.GanttMarker' || ct === 'sf.GanttMilestone') reRenderPanel();
+        });
+      }
     },
     update() {
       joint.dia.ElementView.prototype.update.apply(this, arguments);
@@ -2823,18 +3257,33 @@ export function register() {
       const weekStartDay = ((Number(model.get('weekStartDay') ?? 1) % 7) + 7) % 7; // 0..6
       const showWeekNumber = model.get('showWeekNumber') === true;
       const weekendStartDay = ((Number(model.get('weekendStartDay') ?? 6) % 7) + 7) % 7; // 6=Sat / 5=Fri
-      const tasks = model.get('tasks') || [];
-      const taskListWidth = tasks.length ? (model.get('taskListWidth') || 200) : 0;
+      // Phase 4.6: the left panel derives PURELY from the unified bar+group layout (group headers interleaved with
+      // their bars) — the bars own the record. A legacy tasks[]-only timeline can't reach here: migrateGanttTimeline
+      // converts it to bars on load, the stencil drop seeds bars, and a fresh Gantt seeds bars.
+      const layout = ganttRowLayout(model);
+      const rowCount = layout.length;
+      const taskListWidth = rowCount ? (model.get('taskListWidth') || 200) : 0;
       const rowHeight = Math.max(model.get('rowHeight') || 48, 48);
       const dateH = 48;            // total height for the two date rows
       const topH = dateH / 2;      // top date row height
       const botH = dateH / 2;      // bottom date row height
-      const phaseRowH = 40;        // space below dates for phase/group elements
-      const headerH = dateH + phaseRowH;
+      // Timeline Summary overview lane (Display toggle). When ON it REPLACES the band below the dates with a lane
+      // that has one SUBROW per group + a marker subrow (grows with the group count). When OFF the band is the 40px
+      // phase row ONLY if there's a description; otherwise it collapses to 0 (no empty gap). headerH matches
+      // ganttHeaderH so bars + panel stay aligned.
+      const summaryOn = model.get('showProjectSummary');
+      const summaryH = summaryOn ? ganttSummaryLaneH(model) : 0;
+      const hasDesc = !!(model.get('timelineDescription') || '').trim();
+      const phaseRowH = summaryOn ? 0 : (hasDesc ? 40 : 0);
+      const headerH = dateH + phaseRowH + summaryH;
 
-      // Auto-resize height to fit tasks
-      const visibleTasks = this._getVisibleTasks();
-      const totalHeight = tasks.length ? headerH + Math.max(visibleTasks.length, 1) * rowHeight : headerH;
+      // Unified row list. Each layout row (group header OR bar) sits at the DETERMINISTIC slot
+      // `headerH + rowIndex*rowHeight` — the SAME index the geometry uses for the bar's Y — so the panel and the
+      // bars can never disagree (and a mid-drag bar no longer jolts the panel). `rowY` is timeline-local top.
+      const rows = layout.map(r => ({ type: r.kind === 'group' ? 'group' : 'task', label: r.label, color: r.color, groupId: r.groupId, rowY: headerH + r.rowIndex * rowHeight }));
+
+      // Auto-resize height to fit the rows (lowest row bottom, min one row below the header).
+      const totalHeight = rows.length ? Math.max(headerH + rowHeight, ...rows.map(r => r.rowY + rowHeight)) : headerH;
       const { width } = model.size();
       if (model.size().height !== totalHeight) {
         model.resize(width, totalHeight, { silent: true });
@@ -2935,7 +3384,7 @@ export function register() {
         monthSpans.forEach((ms, i) => {
           const spanW = ms.endX - ms.startX;
           if (i % 2 === 1) colGroup.appendChild(mkRect(ms.startX, 0, spanW, topH, 'var(--stencil-item-hover)'));
-          if (ms.startX > oX) colGroup.appendChild(mkLine(ms.startX, 0, ms.startX, headerH, '0.5'));
+          if (ms.startX > oX) colGroup.appendChild(mkLine(ms.startX, 0, ms.startX, height, '0.5'));
           colGroup.appendChild(mkText(ms.startX + spanW / 2, topH / 2, `${MONTHS_SHORT[ms.month]} ${ms.year}`, '11', '700', 'var(--text-primary)'));
         });
 
@@ -2949,7 +3398,7 @@ export function register() {
 
         // Draw day labels (bottom row)
         days.forEach((day, i) => {
-          if (i > 0) colGroup.appendChild(mkLine(day.x, topH, day.x, headerH, '0.3'));
+          if (i > 0) colGroup.appendChild(mkLine(day.x, topH, day.x, height, '0.3'));
           const label = colW > 40 ? `${DAYS_SHORT[day.date.getDay()]} ${day.date.getDate()}`
             : colW > 28 ? `${DAYS_SHORT[day.date.getDay()].charAt(0)} ${day.date.getDate()}`
             : String(day.date.getDate());
@@ -2991,14 +3440,14 @@ export function register() {
         monthSpans.forEach((ms, i) => {
           const spanW = ms.endX - ms.startX;
           if (i % 2 === 1) colGroup.appendChild(mkRect(ms.startX, 0, spanW, topH, 'var(--stencil-item-hover)'));
-          if (ms.startX > oX) colGroup.appendChild(mkLine(ms.startX, 0, ms.startX, headerH, '0.5'));
+          if (ms.startX > oX) colGroup.appendChild(mkLine(ms.startX, 0, ms.startX, height, '0.5'));
           colGroup.appendChild(mkText(ms.startX + spanW / 2, topH / 2, `${MONTHS_SHORT[ms.month]} ${ms.year}`, '11', '700', 'var(--text-primary)'));
         });
 
         // Draw week labels (bottom row)
         weeks.forEach((w, i) => {
           if (i % 2 === 1) colGroup.appendChild(mkRect(w.x, topH, colW, botH, 'var(--stencil-item-hover)'));
-          if (i > 0) colGroup.appendChild(mkLine(w.x, topH, w.x, headerH, '0.3'));
+          if (i > 0) colGroup.appendChild(mkLine(w.x, topH, w.x, height, '0.3'));
           const wkLabel = showWeekNumber
             ? `W${weekNumberFor(w.start)}`
             : `${w.start.getDate()} ${MONTHS_SHORT[w.start.getMonth()]}`;
@@ -3029,25 +3478,25 @@ export function register() {
         yearSpans.forEach((ys, i) => {
           const spanW = ys.endX - ys.startX;
           if (i % 2 === 1) colGroup.appendChild(mkRect(ys.startX, 0, spanW, topH, 'var(--stencil-item-hover)'));
-          if (ys.startX > oX) colGroup.appendChild(mkLine(ys.startX, 0, ys.startX, headerH, '0.5'));
+          if (ys.startX > oX) colGroup.appendChild(mkLine(ys.startX, 0, ys.startX, height, '0.5'));
           colGroup.appendChild(mkText(ys.startX + spanW / 2, topH / 2, String(ys.year), '11', '700', 'var(--text-primary)'));
         });
 
         // Draw month labels (bottom row)
         months.forEach((m, i) => {
           if (i % 2 === 1) colGroup.appendChild(mkRect(m.x, topH, colW, botH, 'var(--stencil-item-hover)'));
-          if (i > 0) colGroup.appendChild(mkLine(m.x, topH, m.x, headerH, '0.3'));
+          if (i > 0) colGroup.appendChild(mkLine(m.x, topH, m.x, height, '0.3'));
           colGroup.appendChild(mkText(m.x + colW / 2, topH + botH / 2, MONTHS_SHORT[m.month], '10', '500', 'var(--text-secondary)'));
         });
       }
 
-      // Bottom border line below dates when no task rows
-      if (tasks.length === 0) {
+      // Bottom border line below dates when there are no rows (empty timeline)
+      if (rows.length === 0) {
         colGroup.appendChild(mkLine(0, dateH, width, dateH, '0.5'));
       }
 
       // ── Task list panel (left side) ──
-      if (tasks.length > 0) {
+      if (rows.length > 0) {
         // Task list background
         colGroup.appendChild(mkRect(0, 0, taskListWidth, height, 'var(--bg-surface-raised)'));
         // Divider between task list and timeline
@@ -3077,9 +3526,74 @@ export function register() {
         colGroup.appendChild(mkLine(taskListWidth, dateH, width, dateH, '0.3')); // dates/phase separator (timeline area only)
         colGroup.appendChild(mkLine(0, headerH, width, headerH, '0.5'));      // header/task-rows separator
 
+        // ── Project Summary overview lane ──────────────────────────────────────────────────────────────────
+        // A READ-ONLY condensation of the whole plan into ONE row: every group summary bar, milestone diamond,
+        // and day-marker triangle for this timeline, drawn at their date columns. For a big Gantt it's a single
+        // glance at the shape of the project. Purely derived SVG (no cells) → never selectable / draggable.
+        if (summaryH) {
+          const bandTop = dateH + phaseRowH;            // sits below the dates, above the first task row
+          const groupsArr = (model.get('groups')) || [];
+          colGroup.appendChild(mkRect(oX, bandTop, width - oX, summaryH, 'var(--stencil-item-hover)'));
+          colGroup.appendChild(mkLine(0, bandTop, width, bandTop, '0.4'));   // separator above the lane
+          const sumLabel = document.createElementNS(SVG_NS, 'text');
+          sumLabel.setAttribute('x', '12'); sumLabel.setAttribute('y', String(bandTop + summaryH / 2));
+          sumLabel.setAttribute('text-anchor', 'start'); sumLabel.setAttribute('dominant-baseline', 'central');
+          sumLabel.setAttribute('font-size', '10'); sumLabel.setAttribute('font-weight', '700');
+          sumLabel.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+          sumLabel.setAttribute('fill', 'var(--text-secondary)'); sumLabel.setAttribute('pointer-events', 'none');
+          sumLabel.textContent = 'Timeline Summary'; colGroup.appendChild(sumLabel);
+          const inGrid = (lx) => lx != null && lx >= oX - 0.5 && lx <= width + 0.5;
+          const mkGlyph = (d, fill) => { const p = document.createElementNS(SVG_NS, 'path'); p.setAttribute('d', d); p.setAttribute('fill', fill); p.setAttribute('pointer-events', 'none'); return p; };
+          // Milestones (amber diamond) + day markers (red triangle) share the TOP subrow (issue 3) — events read as the
+          // headline of the summary, with the group spans stacked beneath them.
+          const my = bandTop + 9;
+          const g = model.graph;
+          if (g) {
+            for (const e of g.getElements()) {
+              const t = e.get('type');
+              if (t !== 'sf.GanttMilestone' && t !== 'sf.GanttMarker') continue;
+              if (ganttTimelineFor(e) !== model) continue;
+              const mx = dateToLocalX(model, t === 'sf.GanttMilestone' ? e.get('milestoneDate') : e.get('markerDate'));
+              if (!inGrid(mx)) continue;
+              if (t === 'sf.GanttMilestone') colGroup.appendChild(mkGlyph(`M ${mx} ${my - 6} L ${mx + 6} ${my} L ${mx} ${my + 6} L ${mx - 6} ${my} Z`, 'var(--brand-amber, #F6B355)'));
+              else colGroup.appendChild(mkGlyph(`M ${mx - 6} ${my + 6} L ${mx + 6} ${my + 6} L ${mx} ${my - 6} Z`, 'var(--brand-red, #DA4E55)'));
+              const lbl = e.attr('label/text');
+              if (lbl) colGroup.appendChild(mkText(mx, my + 14, lbl, '9', '500', 'var(--text-secondary)'));   // issue 10: lane label
+            }
+          }
+          // Each GROUP gets its OWN SUBROW (issue 2) below the marker row, so overlapping group spans never collide — a
+          // read-only copy of its derived span + progress (`ganttGroupSummary`, the same source as the group rows).
+          const gBase = bandTop + GANTT_SUMMARY_MARKER_H;
+          groupsArr.forEach((grp, gi) => {
+            const sum = ganttGroupSummary(model, grp.id);
+            if (!sum) return;
+            const x0 = Math.max(sum.x0, oX), x1 = Math.min(sum.x1, width);
+            if (x1 <= x0) return;
+            const gy = gBase + gi * GANTT_SUMMARY_GROUP_H + GANTT_SUMMARY_GROUP_H / 2;
+            const col = grp.color || 'var(--gantt-phase-fill, #2A2D32)';
+            const track = mkRect(x0, gy - 4, x1 - x0, 8, col);
+            track.setAttribute('rx', '2'); track.setAttribute('opacity', '0.25'); colGroup.appendChild(track);
+            const fillW = Math.round((x1 - x0) * sum.progress / 100);
+            if (fillW > 0) { const fill = mkRect(x0, gy - 4, fillW, 8, col); fill.setAttribute('rx', '2'); colGroup.appendChild(fill); }
+            // Group NAME at the bar's left edge (item 1) — OUTLINED (theme text fill + canvas-bg stroke via
+            // paint-order) so it stays legible on any fill, in either theme, whether the bar is empty or completed.
+            if (grp.label) {
+              const t = document.createElementNS(SVG_NS, 'text');
+              t.setAttribute('x', String(x0 + 5)); t.setAttribute('y', String(gy));
+              t.setAttribute('text-anchor', 'start'); t.setAttribute('dominant-baseline', 'central');
+              t.setAttribute('font-size', '9'); t.setAttribute('font-weight', '700');
+              t.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+              t.setAttribute('fill', 'var(--text-primary)'); t.setAttribute('stroke', 'var(--bg-canvas, #1A1A1A)');
+              t.setAttribute('stroke-width', '2.5'); t.setAttribute('paint-order', 'stroke');
+              t.setAttribute('pointer-events', 'none'); t.textContent = grp.label;
+              colGroup.appendChild(t);
+            }
+          });
+        }
+
         // Row backgrounds + alternating stripes for timeline area
-        visibleTasks.forEach((task, i) => {
-          const rowY = headerH + i * rowHeight;
+        rows.forEach((task, i) => {
+          const rowY = task.rowY;
           // Alternating row stripe across full width
           if (i % 2 === 1) colGroup.appendChild(mkRect(0, rowY, width, rowHeight, 'var(--stencil-item-hover)'));
           // Separator line
@@ -3111,6 +3625,24 @@ export function register() {
             groupLabel.setAttribute('pointer-events', 'none');
             groupLabel.textContent = task.label || 'Group';
             colGroup.appendChild(groupLabel);
+
+            // Auto summary/progress bar (Phase 6, item 5): the group row draws a bar spanning all its tasks
+            // (min start → max end), filled by the duration-weighted % done, group-coloured — no separate shape
+            // needed. Derived live from the member bars' dates/progress.
+            const sum = ganttGroupSummary(model, task.groupId);
+            if (sum) {
+              const bx0 = Math.max(sum.x0, taskListWidth);
+              const bx1 = Math.min(sum.x1, width);
+              if (bx1 > bx0) {
+                const barH = 10, by = rowY + rowHeight / 2 - barH / 2;
+                const col = task.color || 'var(--gantt-phase-fill, #2A2D32)';
+                const track = mkRect(bx0, by, bx1 - bx0, barH, col);
+                track.setAttribute('rx', '3'); track.setAttribute('opacity', '0.22'); colGroup.appendChild(track);
+                const fillW = Math.round((bx1 - bx0) * sum.progress / 100);
+                if (fillW > 0) { const fill = mkRect(bx0, by, fillW, barH, col); fill.setAttribute('rx', '3'); colGroup.appendChild(fill); }
+                if (bx1 + 34 < width) colGroup.appendChild(mkText(bx1 + 18, rowY + rowHeight / 2, `${sum.progress}%`, '10', '600', 'var(--text-secondary)'));
+              }
+            }
           } else {
             // Task row: indented text with optional color dot
             const indent = task.groupId ? 32 : 12;
@@ -3140,6 +3672,27 @@ export function register() {
           }
         });
       }
+
+      // ── Event lines: the timeline's today line + a dotted FULL-HEIGHT line at each marker / milestone, so an
+      //    event reads across the whole timeline (down through the bars), not just where its glyph sits. ──
+      const evtLine = (lx, color, dash) => {
+        if (lx == null || lx < taskListWidth - 0.5 || lx > width + 0.5) return;
+        const ln = document.createElementNS(SVG_NS, 'line');
+        ln.setAttribute('x1', lx); ln.setAttribute('y1', 0); ln.setAttribute('x2', lx); ln.setAttribute('y2', height);
+        ln.setAttribute('stroke', color); ln.setAttribute('stroke-width', '1.5');
+        ln.setAttribute('stroke-dasharray', dash); ln.setAttribute('stroke-opacity', '0.8');
+        ln.setAttribute('pointer-events', 'none');
+        colGroup.appendChild(ln);
+      };
+      if (model.get('todayDate')) evtLine(dateToLocalX(model, model.get('todayDate')), 'var(--brand-red, #DA4E55)', '4 3');
+      const graph = model.graph;
+      if (graph) {
+        for (const e of graph.getElements()) {
+          const t = e.get('type');
+          if (t === 'sf.GanttMarker') { if (ganttTimelineFor(e) === model) evtLine(dateToLocalX(model, e.get('markerDate')), 'var(--brand-red, #DA4E55)', '2 3'); }
+          else if (t === 'sf.GanttMilestone') { if (ganttTimelineFor(e) === model) evtLine(dateToLocalX(model, e.get('milestoneDate')), 'var(--brand-amber, #F6B355)', '2 3'); }
+        }
+      }
     },
   });
 
@@ -3151,6 +3704,7 @@ export function register() {
     {
       size: { width: 360, height: 24 },
       z: 1000,
+      groupId: null,   // Phase 6: when set to a timeline group's id, x+width AUTO-SPAN that group's tasks
       attrs: {
         body: {
           width: 'calc(w)',
@@ -3210,6 +3764,24 @@ export function register() {
       ],
     }
   );
+
+  // Custom view for GanttGroup — when `groupId` links it to a timeline group, x+width AUTO-SPAN that group's
+  // tasks. Re-derives on any member's dates/membership change, on add/remove, and snaps x/width back after a
+  // user drag/resize that ISN'T our own {gantt:true} layout move (so it reads as x-locked but Y-free, like a
+  // derived bar). An UNLINKED group (no groupId) is freely manual (back-compat).
+  joint.shapes.sf.GanttGroupView = joint.dia.ElementView.extend({
+    initialize() {
+      joint.dia.ElementView.prototype.initialize.apply(this, arguments);
+      const reSpan = () => { if (this.model.get('groupId')) applyGanttGroupGeometry(this.model); };
+      this.listenTo(this.model, 'change:groupId', reSpan);
+      this.listenTo(this.model, 'change:position change:size', (m, val, opt) => { if (!(opt && opt.gantt)) reSpan(); });
+      if (this.model.graph) {
+        this.listenTo(this.model.graph, 'add remove change:startDate change:endDate change:groupId', (cell) => {
+          if (cell && cell.get && cell.get('type') === 'sf.GanttTask') reSpan();
+        });
+      }
+    },
+  });
 
   // --- OrgPerson ---
   // Person card for organisation diagrams. Displays name, position, and optional

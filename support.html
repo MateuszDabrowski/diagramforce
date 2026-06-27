@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
+  <title>Support - Diagramforce</title>
+  <meta name="description" content="Get help with Diagramforce: the in-app guide, how to report a bug on GitHub, and how to reach me by email or LinkedIn.">
+  <!-- Keep this page OUT of search engines: reachable only via a direct link (e.g. the Google Workspace Marketplace
+       listing), so spammers/scrapers can't find it in search. NOT blocked in robots.txt - crawlers must be allowed
+       to FETCH the page to read this directive (a robots.txt Disallow would both advertise the path and hide it). -->
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="googlebot" content="noindex, nofollow, noarchive">
+  <link rel="icon" href="assets/favicon.png">
+  <style>
+    :root {
+      --bg: #ffffff; --bg-soft: #f6f8fa; --card: #ffffff;
+      --text: #1a1d21; --muted: #5b6470; --border: #e2e6ea;
+      --link: #1D73C9; --accent: #1D73C9; --accent-soft: #eaf2fb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a1a; --bg-soft: #202124; --card: #232427;
+        --text: #ececec; --muted: #a8aeb6; --border: #34363a;
+        --link: #6cb0f0; --accent: #DA4E55; --accent-soft: #2a2122;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.62; font-size: 16px;
+    }
+    a { color: var(--link); }
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: var(--bg-soft); position: sticky; top: 0; z-index: 1;
+    }
+    .topbar img { width: 30px; height: 30px; border-radius: 6px; }
+    .topbar .name { font-weight: 700; letter-spacing: .01em; }
+    .topbar .spacer { flex: 1; }
+    .topbar a.back { font-size: 14px; text-decoration: none; font-weight: 600; }
+    .topbar a.back:hover { text-decoration: underline; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 24px 72px; }
+    h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+    .updated { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+    h2 { font-size: 19px; margin: 34px 0 8px; }
+    p { margin: 10px 0; }
+    .muted { color: var(--muted); }
+    .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0 4px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 11px 18px; border-radius: 9px; font-weight: 600; font-size: 15px;
+      text-decoration: none; border: 1px solid var(--border); cursor: pointer;
+    }
+    .btn svg { flex: none; }
+    .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn--primary:hover { filter: brightness(1.07); }
+    .btn--secondary { background: var(--card); color: var(--text); }
+    .btn--secondary:hover { background: var(--bg-soft); }
+    /* Brand blue (#1D73C9), fixed across light + dark so the LinkedIn button reads as the primary contact. */
+    .btn--linkedin { background: #1D73C9; border-color: #1D73C9; color: #fff; }
+    .btn--linkedin:hover { filter: brightness(1.07); }
+    footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+    footer a { font-weight: 600; }
+    @media (max-width: 560px) { h1 { font-size: 26px; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <img src="assets/logo.png" alt="">
+    <span class="name">Diagramforce</span>
+    <span class="spacer"></span>
+    <a class="back" href="./">← Back to the app</a>
+  </header>
+
+  <main>
+    <h1>Support</h1>
+    <p class="updated">Last updated: 23 June 2026</p>
+    <p>Diagramforce is a free, browser-based tool with no account and no backend.</p>
+
+    <h2>Help inside the app</h2>
+    <p>Click the <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg><strong>Help</strong> button in the toolbar for a guided walkthrough of the canvas, stencils, sharing, and Google Drive, and hover any control for a tooltip. The <a href="https://github.com/MateuszDabrowski/diagramforce" target="_blank" rel="noopener">project page on GitHub</a> lists features and known limitations.</p>
+
+    <h2>Reporting a bug</h2>
+    <p>The best place to report a bug is the <a href="https://github.com/MateuszDabrowski/diagramforce/issues" target="_blank" rel="noopener">GitHub issues</a> tracker - open an issue with what you did, what you expected, and what actually happened, plus a screenshot if it is visual. Please do not paste confidential diagrams; describe the problem, or reproduce it with a small, non-sensitive example.</p>
+
+    <h2 id="contact">Contact</h2>
+    <p>For other topics contact me on LinkedIn or via Email.</p>
+    <div class="btns">
+      <a class="btn btn--linkedin" href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.76-2.05 4.02 0 4.76 2.65 4.76 6.1V21h-4v-5.4c0-1.29-.02-2.95-1.8-2.95-1.8 0-2.07 1.4-2.07 2.85V21H9z"/></svg>
+        LinkedIn
+      </a>
+      <a id="df-support-email" class="btn btn--secondary" rel="nofollow">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        Email
+      </a>
+    </div>
+    <noscript><p class="muted">Email: support_diagramforce at mateuszdabrowski dot pl</p></noscript>
+  </main>
+
+  <footer>
+    <p>See also the <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Use</a> · <a href="./">Back to Diagramforce</a></p>
+  </footer>
+  <!-- Renders the support address + a prefilled mailto at runtime so the address never appears in source (anti-harvest). -->
+  <script src="assets/support.js"></script>
+</body>
+</html>

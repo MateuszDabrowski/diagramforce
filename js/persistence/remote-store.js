@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.17.2.11';
-import { pctx } from './context.js?v=1.17.2.11';
-import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.17.2.11';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.17.2.11';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.17.2.11';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.18.0.5';
+import { pctx } from './context.js?v=1.18.0.5';
+import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.18.0.5';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.18.0.5';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.18.0.5';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -42,18 +42,42 @@ const GOOGLE_CONFIG = {
   // ONLY from this site and buys at most this project's free quota — it exposes no user data. The OAuth client
   // *secret* is NOT part of the GIS token flow and is deliberately NOT stored here. (Setup: Drive-Setup.md.)
   //
-  // ONLY the prod creds are embedded. There is deliberately NO localhost/dev key in the shipped code: for local
-  // Drive testing, seed your OWN per browser (see the dev fallback below). The E2E suite seeds a placeholder config.
+  // ONLY the prod creds are embedded. There is deliberately NO localhost/dev key in the shipped code. For local
+  // Drive testing the creds come from a GITIGNORED `dev/dev-config.json` (loaded by ensureDriveConfig below) so they
+  // work on localhost without being committed/shipped; fall back to per-browser localStorage. E2E seeds a placeholder.
   'diagramforce.mateuszdabrowski.pl': {
     clientId: '873718407054-pag1jhjql4f96l7u8vsv195uvadppfuf.apps.googleusercontent.com',
     apiKey: 'AIzaSyC56ShCUdPEll_aaMs0JjqDnOCBUWkS3wQ',
   },
 };
+
+// Dev creds loaded once from the gitignored dev/dev-config.json (localhost convenience). Held in memory only.
+let _devConfig = null;
+let _devConfigLoaded = false;
+/** Load localhost dev Drive creds from the GITIGNORED `dev/dev-config.json` so `localhost` works WITHOUT per-browser
+ *  localStorage seeding - while the file is never committed (gitignored) so it can't reach production. No-op on the
+ *  prod origin (embedded creds) and when localStorage already has creds (E2E / manual). Idempotent. A missing file
+ *  (prod, a fork, or a dev who never set it up) is FINE: a `fetch()` to a 404 is silent (unlike a <script>/import,
+ *  it logs no console error), so Drive simply stays gated off. Call ONCE at startup, BEFORE the Drive UI reads
+ *  isDriveConfigured(). See dev/dev-config.example.json. */
+export async function ensureDriveConfig() {
+  if (_devConfigLoaded) return;
+  _devConfigLoaded = true;
+  if (GOOGLE_CONFIG[location.hostname]?.clientId) return;   // prod: embedded creds, no file needed
+  if (localStorage.getItem('df.gdrive.clientId')) return;   // already seeded (E2E placeholder / manual)
+  try {
+    const res = await fetch('dev/dev-config.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const c = await res.json();
+    if (c && c.clientId && c.apiKey) _devConfig = { clientId: String(c.clientId), apiKey: String(c.apiKey) };
+  } catch { /* file absent / blocked — leave Drive gated off */ }
+}
+
 function googleConfig() {
   const fixed = GOOGLE_CONFIG[location.hostname];
   if (fixed && fixed.clientId) return fixed;
-  // Any non-prod origin (localhost / 127.0.0.1 / a fork) has NO embedded creds — seed your own dev key once per
-  // browser: localStorage.setItem('df.gdrive.clientId', '…'); localStorage.setItem('df.gdrive.apiKey', '…')
+  if (_devConfig) return _devConfig;   // gitignored dev/dev-config.json (loaded by ensureDriveConfig)
+  // Final fallback — a dev key seeded per browser: localStorage.setItem('df.gdrive.clientId', '…'); …('…apiKey…', '…')
   return {
     clientId: localStorage.getItem('df.gdrive.clientId') || '',
     apiKey:   localStorage.getItem('df.gdrive.apiKey')   || '',
@@ -132,6 +156,9 @@ function getToken({ prompt = '' } = {}) {
       // Start the recurring upstream poll now we're connected - so shared-file changes surface even while idle, not
       // only after the next local edit/save (idempotent; cleared on disconnect).
       startUpstreamPoll();
+      // Catch-up save: flush whatever accumulated while the token was lapsed. Universal (every re-auth path), and
+      // coalesced with the explicit signIn()/enableAutosync() sweeps so it never double-runs.
+      scheduleCatchUpSave();
       resolve(_accessToken);
     };
     _tokenClient.requestAccessToken({ prompt });
@@ -544,24 +571,47 @@ export async function reconcileTabDriveLinks() {
 
 /** Sync EVERY open diagram to Drive (the promise is "all diagrams", not just the active
  *  one). Skips empty tabs so blank drafts don't clutter the Drive folder. Returns count. */
+// Coalesce overlapping sweeps into ONE. The sign-in catch-up (scheduleCatchUpSave), the cadence tick, and the
+// explicit signIn()/enableAutosync() sweeps can all fire close together (a re-auth's callback + the caller that
+// awaits a sweep); without this they'd run concurrent passes, racing the per-tab doSaves. A skipped overlap just
+// returns the in-flight promise — the next cadence tick / edit re-sweeps anything that lands mid-flight.
+let _syncAllInFlight = null;
 async function syncAllDiagrams() {
-  if (!_driveReconcileDone) { _driveReconcileDone = true; await reconcileDriveLinks(); }
-  // Adopt existing same-named Drive files for any tab whose link is stale/missing BEFORE the sweep, so a
-  // re-save updates the real file instead of spawning a duplicate (and the chips read honestly afterwards).
-  await reconcileTabDriveLinks();
-  const tabs = pctx.getAllTabs ? pctx.getAllTabs() : [];
-  let n = 0;
-  for (const tab of tabs) {
-    const data = dataForTab(tab);
-    if (!data.graph || !(data.graph.cells && data.graph.cells.length)) continue;   // skip empty
-    await doSave(tab.id, { interactive: false, data });
-    n++;
-  }
-  // Item 6 — proactive upstream-change detection (shared-source / shared copies / direct-edit). Metadata-only, no
-  // writes; extracted into pollUpstreamAll so the recurring idle poll (startUpstreamPoll) runs the SAME checks even
-  // when the user is just viewing (the autosave tick only fires after a local edit).
-  await pollUpstreamAll();
-  return n;
+  if (_syncAllInFlight) return _syncAllInFlight;
+  _syncAllInFlight = (async () => {
+    if (!_driveReconcileDone) { _driveReconcileDone = true; await reconcileDriveLinks(); }
+    // Adopt existing same-named Drive files for any tab whose link is stale/missing BEFORE the sweep, so a
+    // re-save updates the real file instead of spawning a duplicate (and the chips read honestly afterwards).
+    await reconcileTabDriveLinks();
+    const tabs = pctx.getAllTabs ? pctx.getAllTabs() : [];
+    let n = 0;
+    for (const tab of tabs) {
+      const data = dataForTab(tab);
+      if (!data.graph || !(data.graph.cells && data.graph.cells.length)) continue;   // skip empty
+      await doSave(tab.id, { interactive: false, data });
+      n++;
+    }
+    // Item 6 — proactive upstream-change detection (shared-source / shared copies / direct-edit). Metadata-only, no
+    // writes; extracted into pollUpstreamAll so the recurring idle poll (startUpstreamPoll) runs the SAME checks even
+    // when the user is just viewing (the autosave tick only fires after a local edit).
+    await pollUpstreamAll();
+    return n;
+  })();
+  try { return await _syncAllInFlight; } finally { _syncAllInFlight = null; }
+}
+
+// A successful sign-in / re-auth flushes whatever accumulated while the token was lapsed — the user's
+// expectation ("I signed back in, save my changes"). Hooked into the LOW-LEVEL token callback so it fires for
+// EVERY path (the explicit signIn button AND a silent re-auth mid-save/share), not just signIn(). Deferred so the
+// caller that prompted the re-auth (e.g. an in-flight doSave) settles first; syncAllDiagrams coalesces, so this
+// never doubles up with the explicit signIn()/enableAutosync() sweeps.
+let _catchUpTimer = null;
+function scheduleCatchUpSave() {
+  if (_catchUpTimer || !tokenValid()) return;
+  _catchUpTimer = setTimeout(() => {
+    _catchUpTimer = null;
+    void syncAllDiagrams().catch((err) => console.error('Diagramforce: sign-in catch-up sync failed:', err));
+  }, 0);
 }
 
 /**

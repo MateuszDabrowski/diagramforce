@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.17.2.11';
-import { escHtml } from './util.js?v=1.17.2.11';
+import { trapFocus } from './feedback.js?v=1.18.0.5';
+import { escHtml } from './util.js?v=1.18.0.5';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -121,6 +121,11 @@ const TYPE_STEP = {
     target: '#btn-map-bridge', placement: 'below',
     title: "The 'Map' Transition Bridge",
     body: 'Moving from schema to integration? This clones your structural model straight into a new Data Mapping tab, wrapping your tables in a default Source layer so you can immediately wire up pipelines.',
+  },
+  gantt: {
+    target: '#view-switch-group', placement: 'below',
+    title: 'Diagram vs. Table Views',
+    body: 'One plan, two views. Flip between the visual timeline and a project-plan table - edit task names, dates, progress, assignees, groups, and dependencies inline, and add, reorder, or delete tasks right in the spreadsheet.',
   },
 };
 

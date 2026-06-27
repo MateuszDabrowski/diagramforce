@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.17.2.11';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.17.2.11';
-import { nodeContrastText } from '../util.js?v=1.17.2.11';
-import { getIconDataUri } from '../icons.js?v=1.17.2.11';
-import { applyGanttGeometry, backfillGanttDates } from './gantt-layout.js?v=1.17.2.11';
+import { cctx } from './context.js?v=1.18.0.5';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.18.0.5';
+import { nodeContrastText } from '../util.js?v=1.18.0.5';
+import { getIconDataUri } from '../icons.js?v=1.18.0.5';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.18.0.5';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -80,6 +80,33 @@ export function migrateLinks() {
       // Ensure the mapping-type token label exists (older saves predate it; the badge
       // defaults to 'S' for an unset/Standard type). Idempotent — rebuilds in place.
       cctx.syncMappingTypeBadge?.(link);
+    }
+
+    // Gantt dependency link (Phase 3): a `ganttDep` link authored minimally (just `linkKind` + endpoints,
+    // e.g. LLM JSON) gets the full slate-arrow style + sfManhattan router on load, so authoring needs only
+    // the kind + endpoints (+ optional depType/lag). Idempotent — a fully-styled saved dep is left alone.
+    if (link.prop('linkKind') === 'ganttDep') {
+      const stroke = '#F6B355';   // brand amber — heal a legacy slate dep to the new colour too
+      const sm = link.attr('line/sourceMarker');
+      const tm = link.attr('line/targetMarker');
+      // Heal the colour + the "one" tick source marker (item 2 — older deps had a plain stub source).
+      if (!tm || tm.d !== 'M 0 -6 L -14 0 L 0 6 z' || link.attr('line/stroke') !== stroke || !sm || sm.d !== 'M 0 -7 L 0 7') {
+        link.removeAttr('line/targetMarker');
+        link.attr('line/stroke', stroke);
+        if (link.attr('line/strokeWidth') == null) link.attr('line/strokeWidth', 1.5);
+        link.attr('line/sourceMarker', { type: 'path', d: 'M 0 -7 L 0 7', fill: 'none', stroke, 'stroke-width': 1.5 });
+        link.attr('line/targetMarker', { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' });
+      }
+      // Orthogonal dependency elbow (heal a legacy sfManhattan / bézier dep too → the standard Gantt step look).
+      if (link.connector()?.name !== 'sfGanttDepConnector') { link.router('normal'); link.connector('sfGanttDepConnector'); }
+      // Anchor at the PORT with no outward offset → endpoints land on the bars' edge midpoints (item 2).
+      if (link.prop('source/connectionPoint')?.name !== 'anchor' || link.prop('target/connectionPoint')?.args) {
+        link.prop('source/connectionPoint', { name: 'anchor' });
+        link.prop('target/connectionPoint', { name: 'anchor' });
+      }
+      // Render BELOW the bars (z 1900 = Z_GANTT_DEP) so a crossing tucks behind them; heal legacy deps saved in the
+      // link tier (3000+). The load guard suppresses the z-tier listeners, so this set sticks.
+      if ((link.get('z') ?? 0) >= 3000) link.set('z', 1900);
     }
 
     // Rebuild the Architecture connection-frequency overlay from its prop. A JSON/LLM
@@ -337,8 +364,36 @@ export function updateDataObjectHeaderLayout(cell) {
   }
 }
 
+// Optional header icon for a Container. The same icon-present / icon-absent layout switch as
+// updateDataObjectHeaderLayout (and updateSimpleNodeLayout): with an icon, keep the 24px glyph at
+// x:12 and the title clear of it at x:44; WITHOUT an icon, collapse the glyph and flush the title to
+// x:12 (aligned with the description) so no empty whitespace is reserved where the icon would sit.
+// Called on icon-pick (properties.js), stencil drop (stencil.js), and load (migrateNodes, AFTER
+// migrateContainer so a legacy top-bar migration can't re-indent an icon-less container back to 44).
+export function updateContainerHeaderLayout(cell) {
+  if (cell.get('type') !== 'sf.Container') return;
+  const hasIcon = !!cell.attr('headerIcon/href');
+  if (hasIcon) {
+    cell.attr({
+      headerIcon: { x: 12, y: 9, width: 24, height: 24 },
+      headerLabel: { x: 44 },
+    });
+  } else {
+    cell.attr({
+      headerIcon: { width: 0, height: 0 },
+      headerLabel: { x: 12 },
+    });
+  }
+}
+
 export function migrateNodes() {
   const { graph, refreshAllIconHrefs } = cctx;
+  // Phase 4.5: convert legacy tasks[]-only Gantt timelines into real bars BEFORE the per-element pass. The new
+  // dated bars appear in the snapshot below and re-run applyGanttGeometry idempotently (no move). No-op for a
+  // timeline that already has bars (idempotent) or is group-bearing (kept on the legacy path).
+  for (const tl of graph.getElements()) {
+    if (tl.get('type') === 'sf.GanttTimeline') migrateGanttTimeline(tl);
+  }
   for (const el of graph.getElements()) {
     if (el.get('type') === 'sf.SimpleNode' && !el.get('iconMode')) {
       updateSimpleNodeLayout(el);
@@ -406,6 +461,9 @@ export function migrateNodes() {
     // Migrate Container from old left-accent to new top-bar accent
     if (el.get('type') === 'sf.Container') {
       migrateContainer(el);
+      // AFTER migrateContainer (which writes headerLabel x:44 for legacy top-bar migration): flush an
+      // icon-less container's title to x:12 so older saves stop reserving empty icon whitespace. Idempotent.
+      updateContainerHeaderLayout(el);
     }
     // Migrate SequenceFragment: condition used to sit beside the title tab at
     // (x=72, y=14); it now sits below the tab at (x=8, y=34) on its own line.
@@ -475,9 +533,36 @@ export function migrateNodes() {
     //   v1.17.2 (Phase 2): a DATELESS bar (old, pre-dates diagram) is BACK-FILLED with dates derived from its
     //     current pixels - so it becomes real schedule data for the Table view / LLM, WITHOUT moving on screen.
     if (el.get('type') === 'sf.GanttTask') {
+      // The BAR text is `attrs/label/text`; the panel/table use the `taskLabel` prop. The editor keeps them in
+      // sync, but an LLM/JSON author commonly sets only `taskLabel` - so the bar would render the default "Task".
+      // Fill the bar label from taskLabel when the author left it at the default (never clobber a real bar label).
+      const tlbl = el.get('taskLabel');
+      const cur = el.attr('label/text');
+      if (tlbl && tlbl !== 'Task' && (!cur || cur === 'Task')) el.attr('label/text', tlbl);
       if (el.get('startDate') && el.get('endDate')) applyGanttGeometry(el);
       else backfillGanttDates(el);
     }
+    // Milestones follow the same date-first rule (Phase B1): a DATED diamond is positioned from its date; a
+    // DATELESS (legacy) one is back-filled with the date its current x implies — gaining data without moving.
+    if (el.get('type') === 'sf.GanttMilestone') {
+      if (el.get('milestoneDate')) applyGanttMilestoneGeometry(el);
+      else { const d = deriveGanttMilestoneDate(el); if (d) el.set('milestoneDate', d); }
+    }
+    // Phase 6: a dated marker snaps to its column; a legacy dateless marker back-fills markerDate from its pixels.
+    if (el.get('type') === 'sf.GanttMarker') {
+      if (el.get('markerDate')) applyGanttMarkerGeometry(el);
+      else { const d = deriveGanttMarkerDate(el); if (d) el.set('markerDate', d); }
+    }
+    // Phase 6: a GROUP-LINKED summary bar spans its tasks on load (an unlinked one keeps its manual pixels).
+    if (el.get('type') === 'sf.GanttGroup' && el.get('groupId')) applyGanttGroupGeometry(el);
+  }
+  // Heal orderless bars: a GanttTask with no `order` (stencil drops carry none; legacy diagrams predate it) keeps
+  // its manual Y while the panel rows it by `order` — so it paints in the wrong row vs its label (the "dragging
+  // scrambles / bars don't match labels" report). Back-fill `order` from each timeline's current visual (Y) order,
+  // then re-lay-out so every bar snaps to its panel row. Per-timeline, after the per-element geometry above.
+  for (const tl of graph.getElements()) {
+    if (tl.get('type') !== 'sf.GanttTimeline') continue;
+    if (backfillGanttOrders(tl)) layoutTimelineTasks(tl);
   }
   // Regenerate icon data URIs so all icons use current normalized viewBoxes
   refreshAllIconHrefs();

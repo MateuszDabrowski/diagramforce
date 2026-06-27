@@ -153,10 +153,18 @@ function getTabbables(rootEl) {
  *   // …on close…
  *   release();
  */
+// A stack of active focus traps. Only the TOPMOST trap handles Escape / Tab, so a nested modal (e.g. the
+// column-delete confirm opened OVER the Edit-Table overlay) dismisses ITSELF on Escape without also closing the
+// modal beneath it (which would revert the whole edit session). Without this, both capture-phase document
+// listeners fire and the outer trap — registered first — closes first.
+const _trapStack = [];
 export function trapFocus(rootEl, opts = {}) {
   if (!rootEl) return () => {};
   const onEscape = opts.onEscape;
+  const token = {};
+  _trapStack.push(token);
   const onKeydown = (evt) => {
+    if (_trapStack[_trapStack.length - 1] !== token) return;   // not the top modal → let the top one handle it
     if (evt.key === 'Escape' && onEscape) {
       evt.preventDefault();
       onEscape();
@@ -188,7 +196,11 @@ export function trapFocus(rootEl, opts = {}) {
   };
   // Capture phase so the trap runs before any inner handlers can swallow Tab.
   document.addEventListener('keydown', onKeydown, true);
-  return () => document.removeEventListener('keydown', onKeydown, true);
+  return () => {
+    const i = _trapStack.indexOf(token);
+    if (i >= 0) _trapStack.splice(i, 1);
+    document.removeEventListener('keydown', onKeydown, true);
+  };
 }
 
 // ── Generic modal scaffold ────────────────────────────────────────

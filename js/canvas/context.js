@@ -18,6 +18,9 @@ export const cctx = {
   isConnectorGroupingEnabled: null,     // () => bool        — read by the router (display-flag, wired at module-eval)
   refreshAllIconHrefs: null,            // () => void        — re-resolve every icon href after a theme/viewBox change (wired in init(); read by migration.js)
   syncMappingTypeBadge: null,           // (link) => void    — rebuild a mapping link's type-code token label (wired in init(); read by migration.js on load)
+  showGanttDateChip: null,              // (bar, startISO, endISO) => void — draw the live start-end date chip above a gantt bar (wired in init(); read by selection.js resize)
+  clearGanttDateChip: null,             // () => void        — clear the gantt drag/resize overlay layer
+  showGanttGroupInsertBar: null,        // (tl, localY) => void — draw the amber phase-insert bar (wired in init(); read by stencil.js dragover)
 
   // ── Viewport (Slice 6) — wired by registerViewportControls(cctx) ──
   getZoom: null,              // () => number    — live zoom scale (screen-space math)

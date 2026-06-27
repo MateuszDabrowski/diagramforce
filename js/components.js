@@ -1,8 +1,9 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.17.2.11';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.17.2.11';
+import { getIconDataUri } from './icons.js?v=1.18.0.5';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.18.0.5';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './canvas/gantt-layout.js?v=1.18.0.5';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO
@@ -58,6 +59,10 @@ export const SVG = {
   line:       '<line x1="2" y1="10" x2="18" y2="10" stroke-width="2" stroke-linecap="round"/>',
   image:      '<rect x="2" y="3" width="16" height="14" rx="2"/><circle cx="6.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/><path d="M3 16l4-5 3 3 3-4 4 5"/>',
   pill:       '<rect x="5" y="5" width="10" height="10" rx="5"/><text x="10" y="10.2" font-size="7" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">1</text>',
+  // legend — a filled swatch + a text bar beside it (one colour key)
+  legend:     '<rect x="3" y="6.5" width="7" height="7" rx="2" fill="currentColor" stroke="none"/><rect x="12" y="8" width="6" height="2" rx="1" fill="currentColor" stroke="none"/><rect x="12" y="12" width="4" height="1.6" rx="0.8" fill="currentColor" stroke="none"/>',
+  // table — a 3×3 grid outline (header row implied by the heavier top band)
+  table:      '<rect x="2.5" y="3.5" width="15" height="13" rx="1.5"/><line x1="2.5" y1="7.5" x2="17.5" y2="7.5"/><line x1="2.5" y1="12" x2="17.5" y2="12"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5"/><line x1="12.5" y1="3.5" x2="12.5" y2="16.5"/>',
   // linkIcon — external-link glyph (SVG Repo "External_Link"), translated to crop
   // the 24×24 source into the 20×20 viewBox and with the arrow head pulled one
   // unit toward the shape centre (M19 5 instead of M20 4).
@@ -124,6 +129,8 @@ const GENERIC_SHAPES = [
   { type: 'sf.Link',        label: 'Link',       url: 'https://', stencilSvg: SVG.link },
   { type: 'sf.Image',       label: 'Image',      stencilSvg: SVG.image, customDrop: 'image' },
   { type: 'df.Pill',        label: 'Pill',       stencilSvg: SVG.pill  },
+  { type: 'df.Legend',      label: 'Legend',     stencilSvg: SVG.legend },
+  { type: 'df.Table',       label: 'Table',      stencilSvg: SVG.table  },
 ];
 
 export const COMPONENT_CATEGORIES = [
@@ -422,6 +429,27 @@ const ganttSVG = {
   timeline:  '<rect x="1" y="3" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1"/><line x1="7" y1="3" x2="7" y2="9" stroke="currentColor" stroke-width="0.5"/><line x1="13" y1="3" x2="13" y2="9" stroke="currentColor" stroke-width="0.5"/><rect x="1" y="9" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1"/><line x1="4" y1="9" x2="4" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="7" y1="9" x2="7" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="10" y1="9" x2="10" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="13" y1="9" x2="13" y2="15" stroke="currentColor" stroke-width="0.3"/><line x1="16" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="0.3"/>',
 };
 
+// ── Unified project starter library (Round G item 11) ─────────────────────────────────────────────────────────
+// ONE canonical source for the five universally-recognized delivery phases - each with its brand colour, a few
+// canonical tasks, and the milestone that gates it. The stencil Project Phases / Tasks / Milestones categories AND
+// the default timeline seed are BOTH derived from this list, so the names + colours a user sees on first drop can
+// never drift from what they pull off the palette. (Designed by the multi-lens gantt-project-library workflow.)
+// `keyTask` = the single must-have task for each phase, used to seed a fresh timeline with ALL phases + one task each.
+export const GANTT_PROJECT_LIBRARY = [
+  { name: 'Discovery',  color: '#1D73C9', keyTask: 'Requirements gathering',   tasks: ['Stakeholder interviews', 'Requirements gathering', 'Process mapping', 'Scope definition'],         milestones: ['Requirements Sign-Off'] },
+  { name: 'Design',     color: '#7C5CBF', keyTask: 'Solution architecture',    tasks: ['Solution architecture', 'Data model design', 'UX wireframes', 'Design review'],                     milestones: ['Design Sign-Off'] },
+  { name: 'Build',      color: '#2A9D8F', keyTask: 'Custom development',       tasks: ['Environment setup', 'Core configuration', 'Custom development', 'Integrations', 'Code review'],      milestones: ['Code Complete'] },
+  { name: 'Testing',    color: '#E97628', keyTask: 'User acceptance testing',  tasks: ['System testing', 'Integration testing', 'User acceptance testing', 'Defect fixes'],                 milestones: ['UAT Sign-Off'] },
+  { name: 'Deployment', color: '#DA4E55', keyTask: 'Production deployment',    tasks: ['Release planning', 'Data migration', 'Production deployment', 'User training', 'Hypercare support'], milestones: ['Go Live'] },
+];
+
+const GANTT_PHASE_STENCILS = GANTT_PROJECT_LIBRARY.map(p =>
+  ({ type: 'sf.GanttGroup', label: p.name, stencilSvg: ganttSVG.group, phaseLabel: p.name, phaseColor: p.color }));
+const GANTT_TASK_STENCILS = GANTT_PROJECT_LIBRARY.flatMap(p => p.tasks.map(t =>
+  ({ type: 'sf.GanttTask', label: t, stencilSvg: ganttSVG.task, taskLabel: t, progress: 0, barColor: p.color })));
+const GANTT_MILESTONE_STENCILS = GANTT_PROJECT_LIBRARY.flatMap(p => p.milestones.map(m =>
+  ({ type: 'sf.GanttMilestone', label: m, stencilSvg: ganttSVG.milestone })));
+
 export const GANTT_CATEGORIES = [
   {
     id: 'gantt-elements',
@@ -430,49 +458,16 @@ export const GANTT_CATEGORIES = [
       { type: 'sf.GanttTimeline',  label: 'Day Timeline',    stencilSvg: ganttSVG.timeline, viewMode: 'day', numPeriods: 14 },
       { type: 'sf.GanttTimeline',  label: 'Week Timeline',   stencilSvg: ganttSVG.timeline, viewMode: 'week', numPeriods: 12 },
       { type: 'sf.GanttTimeline',  label: 'Month Timeline',  stencilSvg: ganttSVG.timeline, viewMode: 'month', numPeriods: 12 },
-      { type: 'sf.GanttTask',      label: 'Task',            stencilSvg: ganttSVG.task,
-        taskLabel: 'Task', progress: 0, barColor: '#1D73C9' },
-      { type: 'sf.GanttTask',      label: 'In-Progress Task', stencilSvg: ganttSVG.task,
-        taskLabel: 'In-Progress Task', progress: 50, barColor: '#1D73C9' },
-      { type: 'sf.GanttTask',      label: 'Completed Task',  stencilSvg: ganttSVG.task,
-        taskLabel: 'Completed Task', progress: 100, barColor: '#2A9D8F' },
+      // Item 10: a generic Phase above Task — drops as a blank timeline group (phaseLabel, no preset colour).
+      { type: 'sf.GanttGroup',     label: 'Phase',           stencilSvg: ganttSVG.group, phaseLabel: 'Phase' },
+      { type: 'sf.GanttTask',      label: 'Task',            stencilSvg: ganttSVG.task, taskLabel: 'Task', progress: 0, barColor: '#1D73C9' },
       { type: 'sf.GanttMilestone', label: 'Milestone',       stencilSvg: ganttSVG.milestone },
-      { type: 'sf.GanttMarker',    label: 'Today Marker',    stencilSvg: ganttSVG.marker },
-      { type: 'sf.GanttGroup',     label: 'Phase / Group',   stencilSvg: ganttSVG.group },
+      { type: 'sf.GanttMarker',    label: 'Day Marker',      stencilSvg: ganttSVG.marker },
     ],
   },
-  {
-    id: 'gantt-phases',
-    label: 'Project Phases',
-    components: [
-      { type: 'sf.GanttGroup', label: 'Planning',      stencilSvg: ganttSVG.group, phaseLabel: 'Planning' },
-      { type: 'sf.GanttGroup', label: 'Development',   stencilSvg: ganttSVG.group, phaseLabel: 'Development' },
-      { type: 'sf.GanttGroup', label: 'Testing',       stencilSvg: ganttSVG.group, phaseLabel: 'Testing' },
-      { type: 'sf.GanttGroup', label: 'Deployment',    stencilSvg: ganttSVG.group, phaseLabel: 'Deployment' },
-      { type: 'sf.GanttGroup', label: 'Go Live',       stencilSvg: ganttSVG.group, phaseLabel: 'Go Live' },
-    ],
-  },
-  {
-    id: 'gantt-salesforce',
-    label: 'Project Tasks',
-    components: [
-      { type: 'sf.GanttTask', label: 'Discovery & Requirements',  stencilSvg: ganttSVG.task, taskLabel: 'Discovery & Requirements', progress: 0, barColor: '#5B5FC7' },
-      { type: 'sf.GanttTask', label: 'Solution Design',           stencilSvg: ganttSVG.task, taskLabel: 'Solution Design', progress: 0, barColor: '#5B5FC7' },
-      { type: 'sf.GanttTask', label: 'Data Model Config',         stencilSvg: ganttSVG.task, taskLabel: 'Data Model Config', progress: 0, barColor: '#1D73C9' },
-      { type: 'sf.GanttTask', label: 'Flow / Automation Build',   stencilSvg: ganttSVG.task, taskLabel: 'Flow / Automation Build', progress: 0, barColor: '#1D73C9' },
-      { type: 'sf.GanttTask', label: 'Lightning Page Build',      stencilSvg: ganttSVG.task, taskLabel: 'Lightning Page Build', progress: 0, barColor: '#1D73C9' },
-      { type: 'sf.GanttTask', label: 'Integration Development',   stencilSvg: ganttSVG.task, taskLabel: 'Integration Development', progress: 0, barColor: '#2A9D8F' },
-      { type: 'sf.GanttTask', label: 'Data Migration',            stencilSvg: ganttSVG.task, taskLabel: 'Data Migration', progress: 0, barColor: '#2A9D8F' },
-      { type: 'sf.GanttTask', label: 'UAT / QA Testing',          stencilSvg: ganttSVG.task, taskLabel: 'UAT / QA Testing', progress: 0, barColor: '#E97628' },
-      { type: 'sf.GanttTask', label: 'Training & Enablement',     stencilSvg: ganttSVG.task, taskLabel: 'Training & Enablement', progress: 0, barColor: '#E97628' },
-      { type: 'sf.GanttTask', label: 'Change Set Deployment',     stencilSvg: ganttSVG.task, taskLabel: 'Change Set Deployment', progress: 0, barColor: '#DA4E55' },
-      { type: 'sf.GanttTask', label: 'Post-Go-Live Support',      stencilSvg: ganttSVG.task, taskLabel: 'Post-Go-Live Support', progress: 0, barColor: '#DA4E55' },
-      { type: 'sf.GanttMilestone', label: 'Project Kickoff',      stencilSvg: ganttSVG.milestone },
-      { type: 'sf.GanttMilestone', label: 'Design Sign-Off',      stencilSvg: ganttSVG.milestone },
-      { type: 'sf.GanttMilestone', label: 'UAT Complete',          stencilSvg: ganttSVG.milestone },
-      { type: 'sf.GanttMilestone', label: 'Go Live',               stencilSvg: ganttSVG.milestone },
-    ],
-  },
+  { id: 'gantt-phases',     label: 'Project Phases',     components: GANTT_PHASE_STENCILS },
+  { id: 'gantt-tasks',      label: 'Project Tasks',      components: GANTT_TASK_STENCILS },      // item 9: tasks only
+  { id: 'gantt-milestones', label: 'Project Milestones', components: GANTT_MILESTONE_STENCILS }, // item 9: milestones split out
   {
     id: 'gantt-generic',
     label: 'Generic Shapes',
@@ -1058,6 +1053,112 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+// Phase 4.1: build a fully-populated Gantt for a fresh Gantt diagram — a `sf.GanttTimeline` PLUS real dated,
+// draggable `sf.GanttTask` bars (the schedule), so creating a Gantt shows an editable plan immediately instead of
+// a blank canvas. Returns { timeline, bars }; the CALLER adds them, embeds each bar in the timeline, and positions
+// each via applyGanttGeometry (x/width from the dates). Phase 4.6: the timeline carries NO `tasks[]` — the bars own
+// the record and the left panel derives from them (slice 4.2). Each bar's Y aligns to its row: HEADER_H (88 =
+// dateH 48 + phaseRow 40) + i*rowHeight, +BAR_DY (8) to centre the 32-tall bar in the 48-tall row — kept in sync
+// with GanttTimelineView._renderColumns (shapes.js).
+export function createGanttTimelineSeed({ x = 40, y = 40 } = {}) {
+  const today = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const plus = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
+  const numPeriods = 12, taskListWidth = 200, rowHeight = 48;
+  // The default plan is the FULL unified GANTT_PROJECT_LIBRARY: ALL phases, each with its single must-have task
+  // (`keyTask`), sequenced across the timeline - so a fresh Gantt opens on a complete, recognizable project skeleton
+  // the user fills in, using the SAME phase + task names + colours the stencil offers (no drift). NO seeded progress
+  // (clean slate, all 0%). Each phase also gets its GATE MILESTONE on the task's row, plus a "Today" Day Marker.
+  // The axis starts a week BEFORE today (TL_START) so the today marker sits a column in, not clipped at the edge.
+  const slug = (name) => 'g-' + name.toLowerCase().replace(/\s+/g, '-');
+  const TL_START = -7;   // days before today the axis begins
+  const PLAN = [{ from: 0, to: 14 }, { from: 14, to: 28 }, { from: 28, to: 56 }, { from: 56, to: 70 }, { from: 70, to: 84 }];   // phase windows (days from axis start)
+  const groups = GANTT_PROJECT_LIBRARY.map((p, i) => ({ id: slug(p.name), label: p.name, color: p.color, order: i }));
+  const timeline = new joint.shapes.sf.GanttTimeline({
+    position: { x, y },
+    startDate: iso(plus(TL_START)),
+    endDate: iso(plus(TL_START + numPeriods * 7)),
+    viewMode: 'week',
+    numPeriods, taskListWidth, rowHeight, groups,
+    showProjectSummary: true,   // Timeline Summary lane ON by default for a fresh Gantt diagram
+  });
+  const bars = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttTask({
+    position: { x: x + taskListWidth, y: y + GANTT_HEADER_H + i * rowHeight + GANTT_BAR_DY },
+    order: i,                              // Phase 4.3: the row slot — applyGanttGeometry derives the Y from it
+    groupId: slug(p.name),
+    taskLabel: p.keyTask,
+    attrs: { label: { text: p.keyTask }, progressBar: { fill: p.color } },   // task bar follows its group colour; no progress = 0%
+    startDate: iso(plus(TL_START + PLAN[i].from)),
+    endDate: iso(plus(TL_START + PLAN[i].to)),
+  }));
+  // Gate milestone per phase, on its task's row (task i sits at unified rowIndex 2i+1 - a group header before each
+  // task); orderToY gives the bar-top Y so we centre the diamond on it. layoutTimelineTasks sets the X from the date.
+  const milestones = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttMilestone({
+    position: { x: x + taskListWidth, y: Math.round(orderToY(timeline, 2 * i + 1) + 4) },
+    milestoneDate: iso(plus(TL_START + PLAN[i].to)),
+    attrs: { label: { text: p.milestones[0] } },
+  }));
+  const marker = new joint.shapes.sf.GanttMarker({
+    position: { x: x + taskListWidth, y: Math.round(orderToY(timeline, 1) + 8) },
+    markerDate: iso(today),
+    attrs: { label: { text: 'Today' } },
+  });
+  return { timeline, bars, milestones, marker };
+}
+
+// Phase 4.6: a few starter `sf.GanttTask` bars for an EXISTING timeline (e.g. a stencil drop), dated across its
+// axis so the spans stay proportional whatever the view mode. The caller adds + embeds + positions each via
+// applyGanttGeometry. Keeps the stencil drop on the unified bar model — no `tasks[]`-only timelines are created.
+export function createGanttBarsFor(timeline) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const vm = timeline.get('viewMode') || 'week';
+  const todayIso = iso(new Date());
+  // Shift the axis start back ONE view-period so a "Today" Day Marker at today sits a column in, not clipped at the
+  // panel edge (mirrors the fresh-diagram seed's week-earlier start).
+  const origStart = new Date((timeline.get('startDate') || todayIso) + 'T00:00:00');
+  const shifted = new Date(origStart);
+  if (vm === 'day') shifted.setDate(origStart.getDate() - 1);
+  else if (vm === 'month') shifted.setMonth(origStart.getMonth() - 1);
+  else shifted.setDate(origStart.getDate() - 7);
+  timeline.set('startDate', iso(shifted));
+  const at = (units) => {                  // units are periods of the current view, from the (shifted) axis start
+    const d = new Date(shifted);
+    if (vm === 'day') d.setDate(shifted.getDate() + units);
+    else if (vm === 'month') d.setMonth(shifted.getMonth() + units);
+    else d.setDate(shifted.getDate() + units * 7);
+    return iso(d);
+  };
+  // Same FULL unified library as the fresh-diagram seed: ALL phases, each with its single must-have task (`keyTask`),
+  // sequenced across the axis - so a dropped timeline shows the SAME phases + tasks + colours the stencil offers. NO
+  // seeded progress (clean slate). Plus each phase's gate milestone (on its task row) and a "Today" Day Marker.
+  const slug = (name) => 'g-' + name.toLowerCase().replace(/\s+/g, '-');
+  const groups = GANTT_PROJECT_LIBRARY.map((p, i) => ({ id: slug(p.name), label: p.name, color: p.color, order: i }));
+  timeline.set('groups', groups);
+  const PLAN = [{ from: 1, to: 3 }, { from: 3, to: 5 }, { from: 5, to: 8 }, { from: 8, to: 10 }, { from: 10, to: 12 }];   // periods from the shifted start (today = period 1)
+  const px = timeline.position().x + (timeline.get('taskListWidth') || 200);
+  const bars = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttTask({
+    order: i,
+    groupId: slug(p.name),
+    taskLabel: p.keyTask,
+    attrs: { label: { text: p.keyTask }, progressBar: { fill: p.color } },   // task bar follows its group colour; 0%
+    startDate: at(PLAN[i].from),
+    endDate: at(PLAN[i].to),
+  }));
+  const milestones = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttMilestone({
+    position: { x: px, y: Math.round(orderToY(timeline, 2 * i + 1) + 4) },   // on the phase's task row (see seed)
+    milestoneDate: at(PLAN[i].to),
+    attrs: { label: { text: p.milestones[0] } },
+  }));
+  const marker = new joint.shapes.sf.GanttMarker({
+    position: { x: px, y: Math.round(orderToY(timeline, 1) + 8) },
+    markerDate: todayIso,
+    attrs: { label: { text: 'Today' } },
+  });
+  return { bars, milestones, marker };
+}
+
 export function createElementFromComponent(component, position = { x: 100, y: 100 }) {
   const { type, label, iconName, bg, accentColor, subtitle } = component;
 
@@ -1113,6 +1214,12 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
 
     case 'df.Pill':
       return new joint.shapes.df.Pill({ position });
+
+    case 'df.Legend':
+      return new joint.shapes.df.Legend({ position, attrs: { label: { text: label || 'Label' } } });
+
+    case 'df.Table':
+      return new joint.shapes.df.Table({ position });
 
     case 'sf.Link': {
       const color = '#1D73C9';
@@ -1382,14 +1489,20 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
     case 'sf.GanttMarker':
       return new joint.shapes.sf.GanttMarker({
         position,
-        attrs: { label: { text: label || 'Today' } },
+        attrs: { label: { text: 'Day' } },   // generic (not "Today") — it marks any day; the user renames it
       });
 
-    case 'sf.GanttGroup':
-      return new joint.shapes.sf.GanttGroup({
+    case 'sf.GanttGroup': {
+      // `phaseLabel` (the Project Phase stencils) is carried onto the element as a PROP so the drop handler can
+      // tell a Phase (→ adds a timeline group) from a plain "Summary Bar" GanttGroup (→ a floating bar).
+      const gg = new joint.shapes.sf.GanttGroup({
         position,
         attrs: { label: { text: component.phaseLabel || label || 'Phase' } },
       });
+      if (component.phaseLabel) gg.set('phaseLabel', component.phaseLabel);
+      if (component.phaseColor) gg.set('phaseColor', component.phaseColor);   // item 11: the drop seeds the group's colour from this
+      return gg;
+    }
 
     case 'sf.GanttTimeline': {
       // Default to today's date; auto-calculate end date
@@ -1405,16 +1518,15 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
       else if (mode === 'week') endD.setDate(endD.getDate() + periods * 7);
       else endD.setMonth(endD.getMonth() + periods);
       const endDate = endD.toISOString().slice(0, 10);
+      // Phase 4.6: NO tasks[] — the stencil drop handler seeds real dated bars (createGanttBarsFor) so a
+      // dropped timeline lands on the unified bar model, exactly like creating a fresh Gantt diagram.
       return new joint.shapes.sf.GanttTimeline({
         position,
         startDate,
         endDate,
         viewMode: mode,
         numPeriods: periods,
-        tasks: [
-          { id: 'g1', type: 'group', label: 'Phase 1', color: '#1D73C9' },
-          { id: 't1', type: 'task', label: 'Task 1', groupId: 'g1', color: '#1D73C9' },
-        ],
+        showProjectSummary: true,   // Timeline Summary lane ON by default for a freshly dropped timeline
       });
     }
 

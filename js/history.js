@@ -14,6 +14,11 @@ let currentBatch = null;
 // the Data Mapping table edit session, where undo/redo mid-edit would mutate the
 // graph out from under the open draft (the table holds an unapplied working copy).
 let locked = false;
+// While SUPPRESSED, recording is muted entirely: pushCommand no-ops (no undo entry, no redo-stack clear). Used
+// by a LIVE edit session (the Edit-in-Table overlay) that writes to the graph for canvas preview but wants the
+// whole session to land as ONE explicit recordCommand on Save (and nothing on Cancel). Distinct from `locked`,
+// which only blocks undo/redo PLAYBACK — it does NOT mute recording, so it can't suppress live edits on its own.
+let suppressed = false;
 // While a diagram is being LOADED (graph.fromJSON + the post-load migrateLinks/migrateNodes/refreshAllIconHrefs
 // normalisations, which fire per-cell change events), recording must be OFF: those are not user edits, so they
 // must not land on the undo stack or mark the tab dirty. canvas.isLoadingJSON is wired in here via setLoadingGuard
@@ -52,7 +57,8 @@ const _clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
 // explicitly by the reorder buttons via recordCommand instead, so the auto-assignment
 // on every drop/drag isn't logged as undo noise); `parent`/`embeds` (embedding — see
 // note in GOTCHAS); and the Gantt Display-menu view prefs `weekStartDay` /
-// `showWeekNumber` / `weekendStartDay` (intentionally non-undoable preferences).
+// `showWeekNumber` / `weekendStartDay` / `showProjectSummary` (intentionally
+// non-undoable preferences — persisted as model props, just not on the undo stack).
 const CONTENT_PROPS = [
   // DataObject
   'objectName', 'category', 'headerColor',
@@ -66,13 +72,22 @@ const CONTENT_PROPS = [
   // BPMN type switches (also repaint via attrs; the type prop itself must restore too)
   'eventType', 'gatewayType', 'taskType', 'poolDirection',
   // Gantt content
-  'taskLabel', 'assignee', 'progress', 'barColor', 'milestoneDate', 'pointDown',
-  'startDate', 'endDate', 'numPeriods', 'timelineTitle', 'timelineDescription', 'userTextColor',
+  'taskLabel', 'assignee', 'progress', 'barColor', 'colorManual', 'milestoneDate', 'markerDate', 'pointDown',
+  'startDate', 'endDate', 'todayDate', 'numPeriods', 'timelineTitle', 'timelineDescription', 'userTextColor',
   // Sequence
   'participantRole', 'lifelinePortCount', 'showBottomLabel', 'showLifeline',
   'fragmentType', 'fragmentLabel', 'condition', 'elseCondition',
   // Architecture link + Link element + bracket annotation + Gantt structure
-  'connectionFrequency', 'fontColor', 'url', 'bracketSide', 'tasks',
+  // (`groupId` = a bar's group membership; `order` = its row slot; `groups` = the timeline's group headers —
+  //  all set only by explicit reorder / regroup / add-task ops, so they belong in undo, unlike auto-assigned `z`)
+  'connectionFrequency', 'fontColor', 'url', 'bracketSide', 'tasks', 'groupId', 'order', 'groups',
+  // Generic df.* shapes: Table grid (rows + caption + per-row/col highlight + font size + fill/border), edited
+  // via the Edit-in-Table overlay + the property panel. (headerRow kept for back-compat undo of legacy tables.)
+  'rows', 'headerRow', 'tableLabel', 'highlightFirstRow', 'highlightFirstCol', 'fontSize', 'tableFill', 'tableBorder', 'tableTextColor',
+  // df.Legend: a user-pinned width (set by the Width control / a resize, cleared by Auto size) — undoable.
+  'manualWidth',
+  // Gantt dependency link (Phase 3): typed predecessor relationship props (linkKind has its own handler)
+  'depType', 'lag',
 ];
 
 function schedulePendingDragCommit() {
@@ -546,6 +561,7 @@ export function recordCommand(undo, redo) {
 }
 
 function pushCommand(cmd) {
+  if (suppressed) return;   // muted session (Edit-in-Table live edits) — no entry, redo stack preserved
   if (isBatching && currentBatch !== null) {
     currentBatch.push(cmd);
     return;
@@ -821,6 +837,7 @@ export function canRedo() { return !locked && redoStack.length > 0; }
 // Lock / unlock undo+redo. notifyChange() fires so the toolbar refreshes the
 // button disabled-state immediately (it reads canUndo()/canRedo()).
 export function setLocked(v) { locked = !!v; notifyChange(); }
+export function setSuppressed(v) { suppressed = !!v; }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }

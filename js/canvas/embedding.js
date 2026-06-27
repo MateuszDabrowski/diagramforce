@@ -12,7 +12,7 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.17.2.11';
+import { cctx } from './context.js?v=1.18.0.5';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -247,6 +247,28 @@ export function findEmbeddingParent(elementView) {
     }
     return resolved;
   }
+  // A GanttTask's ONLY valid parent is its GanttTimeline. JointJS honours frontParentOnly (default TRUE) → it
+  // considers only the LAST/front candidate; findModelsInArea returns the higher-z sibling BAR last, so without
+  // this the front candidate is an invalid sibling task and JointJS UNEMBEDS the dragged bar (it drops out of
+  // timelineBars → its panel row vanishes and the layout scrambles — the "dragging hides tasks" bug). Resolve
+  // candidates to the timeline(s) the bar overlaps so the front candidate is always the timeline → it stays
+  // embedded while reordering/re-dating. Dropped clear of every timeline → [] (unembed; the single-timeline
+  // binding rule in ganttTimelineFor still keeps it bound).
+  if (childType === 'sf.GanttTask') {
+    const timelines = [];
+    const seen = new Set();
+    for (const el of candidates) {
+      let tl = null;
+      if (el.get('type') === 'sf.GanttTimeline') tl = el;
+      else {
+        const pid = el.get('parent');
+        const p = pid && graph.getCell(pid);
+        if (p && p.get('type') === 'sf.GanttTimeline') tl = p;
+      }
+      if (tl && !seen.has(tl.id)) { seen.add(tl.id); timelines.push(tl); }
+    }
+    return timelines;
+  }
   // Capture halo: if the element doesn't overlap any container-like parent that
   // can hold it, fall back to the inflated catch region so a drop just outside
   // the border still embeds. Purely additive — a real overlap still wins.
@@ -267,6 +289,16 @@ const PARENT_FIT_MIN_HEIGHT = 48;
 // …or below this width — keeps the header label (e.g. "Container") from
 // overflowing when the right edge hugs a very narrow child.
 const PARENT_FIT_MIN_WIDTH = 120;
+
+// The min width a parent needs so its non-wrapping header TITLE (the Container's left-anchored `headerLabel`)
+// stays fully visible — measured from the LIVE view's text bbox. Returns 0 for a centred / wrapping title (a
+// centred label's bbox is width-dependent → circular; a wrapping one ellipsizes and never overflows) and when
+// the view isn't rendered yet. `pad` matches the fit's edge padding so the title isn't flush to the border.
+function headerLabelMinWidth(parent, paper, pad) {
+  const el = paper?.findViewByModel?.(parent)?.el?.querySelector('[joint-selector="headerLabel"], [joint-selector="label"]');
+  if (!el || el.getAttribute('text-anchor') !== 'start' || typeof el.getBBox !== 'function') return 0;
+  try { const bb = el.getBBox(); return (bb && bb.width) ? Math.ceil(bb.x + bb.width + pad) : 0; } catch { return 0; }
+}
 
 function fitParentToChildren(parent) {
   const { graph, paper } = cctx;
@@ -352,7 +384,9 @@ function fitParentToChildren(parent) {
   const leftInset = parent.get('type') === 'sf.BpmnPool' ? POOL_HEADER_W + PARENT_FIT_PADDING : PARENT_FIT_PADDING;
   const newLeft = minLeft - leftInset;                 // hug left (grow AND shrink)
   const rightEdge = maxRight + PARENT_FIT_PADDING;      // hug right (grow AND shrink)
-  const targetWidth = Math.max(PARENT_FIT_MIN_WIDTH, rightEdge - newLeft);
+  // Floor the width to the header title's rendered right edge so auto-fit keeps a long, non-wrapping title (the
+  // Container's `headerLabel`) fully visible instead of clipping it — the reported "Financial Services Cloud" bug.
+  const targetWidth = Math.max(PARENT_FIT_MIN_WIDTH, headerLabelMinWidth(parent, paper, PARENT_FIT_PADDING), rightEdge - newLeft);
   const targetHeight = Math.max(PARENT_FIT_MIN_HEIGHT, (maxBottom + PARENT_FIT_PADDING) - parentPos.y);
   const movedLeft = Math.abs(parentPos.x - newLeft) > 0.5;
   if (!movedLeft && Math.abs(parentSize.width - targetWidth) < 1 && Math.abs(parentSize.height - targetHeight) < 1) return;
@@ -449,7 +483,7 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
   return {
     x: newLeft,
     y: pp.y,
-    width: Math.max(PARENT_FIT_MIN_WIDTH, rightEdge - newLeft),
+    width: Math.max(PARENT_FIT_MIN_WIDTH, headerLabelMinWidth(parent, paper, pad), rightEdge - newLeft),   // keep the title visible (matches fitParentToChildren)
     height: Math.max(PARENT_FIT_MIN_HEIGHT, (maxBottom + pad) - pp.y),
   };
 }

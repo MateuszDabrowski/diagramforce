@@ -5,7 +5,7 @@
 // weekStartDay; month → 1st-of-month; day → unchanged). A task bar's absolute x is therefore
 //   timeline.x + taskListWidth + periodsFromOrigin(date) * colW
 // and xToDate is the inverse (for drag write-back). `t` is a plain props bag pulled from the timeline MODEL
-//   { x, width, taskListWidth, numPeriods, viewMode, startDate, weekStartDay, tasksLen }
+//   { x, width, taskListWidth, numPeriods, viewMode, startDate, weekStartDay, tasksLen, barCount }
 // so these functions stay pure (no JointJS, no Date.now) and testable. They return null when geometry can't be
 // derived (no/invalid startDate) — the caller then falls back to the bar's manual pixel position (back-compat).
 
@@ -13,9 +13,12 @@ const DAY_MS = 86400000;
 const wrap7 = (n) => ((Number(n) % 7) + 7) % 7;
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
 
-/** Width (px) of the left task-list panel — 0 when the timeline has no rows (matches the view). */
+/** Width (px) of the left task-list panel — 0 only when the timeline has NO rows AND NO bars (matches the
+ *  view). Phase 4.0: the axis origin is the UNION of label rows (`tasksLen`) and dated bars (`barCount`), so a
+ *  bars-only timeline (no `tasks[]`) still reserves the panel. No change for existing diagrams (rows present). */
 export function leftOffset(t) {
-  return (t.tasksLen > 0) ? (t.taskListWidth || 200) : 0;
+  const rows = Math.max(t.tasksLen || 0, t.barCount || 0);
+  return rows > 0 ? (t.taskListWidth || 200) : 0;
 }
 
 /** Pixels per period column. */
@@ -83,5 +86,22 @@ export function xToDate(t, x) {
     d.setMonth(d.getMonth() + whole);
     d.setDate(Math.round((cols - whole) * daysInMonth(d.getFullYear(), d.getMonth())) + 1);
   }
+  return toISO(d);
+}
+
+// Phase 5 (Table view): pure whole-day arithmetic on YYYY-MM-DD strings, parsed at LOCAL midnight (the
+// gantt-layout ISO idiom) so there's no UTC off-by-one. `durationDays` = end − start in days (a bar's span);
+// `addDaysISO` = start + N days, the inverse used when the table edits Duration.
+export function durationDays(startISO, endISO) {
+  if (!startISO || !endISO) return null;
+  const s = new Date(startISO + 'T00:00:00'), e = new Date(endISO + 'T00:00:00');
+  if (isNaN(s) || isNaN(e)) return null;
+  return Math.round((e - s) / 86400000);
+}
+export function addDaysISO(startISO, days) {
+  if (!startISO) return startISO;
+  const d = new Date(startISO + 'T00:00:00');
+  if (isNaN(d)) return startISO;
+  d.setDate(d.getDate() + Math.round(Number(days) || 0));
   return toISO(d);
 }

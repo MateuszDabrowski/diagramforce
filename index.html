@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/theme.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/layout.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/stencil.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/properties.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/tabs.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/canvas.css?v=1.17.2.11">
-  <link rel="stylesheet" href="css/modals.css?v=1.17.2.11">
+  <link rel="stylesheet" href="css/variables.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/theme.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/layout.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/stencil.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/properties.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/tabs.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/canvas.css?v=1.18.0.5">
+  <link rel="stylesheet" href="css/modals.css?v=1.18.0.5">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -227,10 +227,6 @@
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12" stroke-linecap="round"/><rect x="9.5" y="7" width="4.5" height="6.5" fill="currentColor" stroke="none" opacity="0.35"/></svg>
                 <span id="gantt-weekend-start-label">Weekend Starts: Saturday</span>
               </button>
-              <button id="btn-gantt-week-number" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Label week columns with the week number (W23) instead of the week's start date">
-                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Week Numbers
-              </button>
               <button id="btn-gantt-assignee" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Task Assignees
@@ -238,6 +234,10 @@
               <button id="btn-gantt-progress" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Task Progress (%)
+              </button>
+              <button id="btn-gantt-project-summary" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Show a read-only overview row at the top of each timeline condensing every group summary bar, milestone and day marker into one lane">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Timeline Summary
               </button>
             </div>
           </div>
@@ -607,9 +607,9 @@
                first-time visitor / crawler sees. The accessible copies live in the About modal (this splash is
                aria-hidden); pointer-events:auto re-enables clicks since the ghost itself is pointer-events:none. -->
           <div class="df-canvas-empty__legal">
-            <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+            <a href="privacy.html" target="_blank" rel="noopener nofollow">Privacy Policy</a>
             <span aria-hidden="true">·</span>
-            <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>
+            <a href="terms.html" target="_blank" rel="noopener nofollow">Terms of Use</a>
           </div>
         </div>
         <div id="mapping-table-view" class="df-table-view" hidden aria-label="Field mapping table"></div>
@@ -670,9 +670,11 @@
           <a href="https://www.linkedin.com/in/mateusz-dabrowski-pl/" target="_blank" rel="noopener" class="df-about__link">Feedback</a>
         </div>
         <div class="df-about__meta">
-          <a href="privacy.html" target="_blank" rel="noopener" class="df-about__link">Privacy Policy</a>
+          <a href="support.html" target="_blank" rel="noopener nofollow" class="df-about__link">Support</a>
           <span class="df-about__separator">·</span>
-          <a href="terms.html" target="_blank" rel="noopener" class="df-about__link">Terms of Use</a>
+          <a href="privacy.html" target="_blank" rel="noopener nofollow" class="df-about__link">Privacy Policy</a>
+          <span class="df-about__separator">·</span>
+          <a href="terms.html" target="_blank" rel="noopener nofollow" class="df-about__link">Terms of Use</a>
         </div>
         <div class="df-about__meta df-about__meta--license">
           <span class="df-about__license-text">Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" class="df-about__link">CC BY-NC-SA 4.0</a></span>
@@ -695,8 +697,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.17.2.11"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.17.2.11"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.17.2.11"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.18.0.5"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.18.0.5"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.18.0.5"></script>
 </body>
 </html>

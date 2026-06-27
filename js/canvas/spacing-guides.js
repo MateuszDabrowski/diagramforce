@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.17.2.11';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.17.2.11';
+import { cctx } from './context.js?v=1.18.0.5';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.18.0.5';
 
 // ── Tolerances ──────────────────────────────────────────────────────
 const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)
@@ -298,6 +298,9 @@ export function registerSpacingGuides(cctx) {
   paper.on('element:pointermove', (cellView) => {
     clearGuides();
     const movedEl = cellView.model;
+    // Gantt bars / milestones / markers do their OWN column + row snapping (canvas.js gantt drag) — alignment
+    // guides here would fight that snap and add noise, so skip every Gantt shape.
+    if (/^sf\.Gantt/.test(movedEl.get('type') || '')) return;
     // Guides are computed/drawn for everyone (so distance helpers show inside a Layer and
     // between Layer zones). The position SNAP is suppressed for ordinary containers whose
     // children shouldn't be tugged — but NOT for Layer/group shapes (Zones, Pools…): for

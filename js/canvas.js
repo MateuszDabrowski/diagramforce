@@ -1,48 +1,48 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.17.2.11';
-import { registerSfRouter } from './canvas/router.js?v=1.17.2.11';
+import { cctx } from './canvas/context.js?v=1.18.0.5';
+import { registerSfRouter } from './canvas/router.js?v=1.18.0.5';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.17.2.11';
+export { autoLayout, applyDataMappingLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.18.0.5';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, migrateNodes } from './canvas/migration.js?v=1.17.2.11';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, migrateNodes } from './canvas/migration.js?v=1.18.0.5';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.17.2.11';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.17.2.11';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.18.0.5';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.18.0.5';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.17.2.11';
-export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.17.2.11';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.18.0.5';
+export { zoomIn, zoomOut, fitContent, toggleGrid, refreshGrid, getViewport, setViewport } from './canvas/viewport.js?v=1.18.0.5';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported (called in init());
 // startLineStyleOverlays + the mobile pair were public exports, so re-export them
 // to keep canvas.js's export boundary stable (app.js / properties.js import them).
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.17.2.11';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.17.2.11';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.18.0.5';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.18.0.5';
 export { startLineStyleOverlays };
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.17.2.11';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.18.0.5';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.17.2.11';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.18.0.5';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.17.2.11';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.18.0.5';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.17.2.11';
+import { canEmbed, findEmbeddingParent, registerEmbedding } from './canvas/embedding.js?v=1.18.0.5';
 export { canEmbed };
-import { deriveGanttDates } from './canvas/gantt-layout.js?v=1.17.2.11';
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.17.2.11';
+import { deriveGanttDates, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.18.0.5';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.18.0.5';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -95,6 +95,63 @@ joint.connectors.sfMappingConnector = function (sourcePoint, targetPoint, route)
   const h = Math.max(30, Math.abs(t2.x - s2.x) * 0.5);
   const c1x = s2.x + sDir * h, c2x = t2.x + tDir * h;
   return `M ${s.x} ${s.y} L ${s2.x} ${s2.y} C ${c1x} ${s2.y} ${c2x} ${t2.y} ${t2.x} ${t2.y} L ${t.x} ${t.y}`;
+};
+
+// Round an orthogonal point list into a path with `r`-radius corners (quadratic joins), deduping coincident points.
+function roundedOrthoPath(rawPts, r) {
+  const pts = [];
+  for (const p of rawPts) {
+    const last = pts[pts.length - 1];
+    if (!last || Math.abs(last.x - p.x) > 0.5 || Math.abs(last.y - p.y) > 0.5) pts.push(p);
+  }
+  if (pts.length < 2) return pts.length ? `M ${pts[0].x} ${pts[0].y}` : '';
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i], prev = pts[i - 1], next = pts[i + 1];
+    const len1 = Math.hypot(p.x - prev.x, p.y - prev.y), len2 = Math.hypot(next.x - p.x, next.y - p.y);
+    const rr = Math.min(r, len1 / 2, len2 / 2);
+    const a = { x: p.x + (prev.x - p.x) / (len1 || 1) * rr, y: p.y + (prev.y - p.y) / (len1 || 1) * rr };
+    const b = { x: p.x + (next.x - p.x) / (len2 || 1) * rr, y: p.y + (next.y - p.y) / (len2 || 1) * rr };
+    d += ` L ${a.x} ${a.y} Q ${p.x} ${p.y} ${b.x} ${b.y}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + ` L ${last.x} ${last.y}`;
+}
+
+// Connector for Gantt DEPENDENCIES: a classic orthogonal "elbow" step with rounded corners (the MS-Project / standard
+// Gantt dependency look), NOT a generic bézier arrow. It exits the predecessor's port on a short stub, steps to the
+// successor's row, and enters the successor's port on a short stub. When the successor OVERLAPS the predecessor (it
+// starts before the predecessor's right edge + stubs - frequent in real plans) it WRAPS between the two rows instead
+// of diving back through the bars. Reads the ports off the link (defaults: source-right → target-left, FS).
+joint.connectors.sfGanttDepConnector = function (sourcePoint, targetPoint, route, opt, linkView) {
+  const sp = String(linkView?.model?.get('source')?.port || '');
+  const tp = String(linkView?.model?.get('target')?.port || '');
+  const sDir = sp.includes('left') ? -1 : 1;     // exit in the source port's facing direction (default right)
+  const tDir = tp.includes('right') ? 1 : -1;    // approach the target from its facing side (default left)
+  // Pin the endpoints to the bar's edge midpoint (lands on the port whether bound to a port or the body). The TARGET
+  // is pulled ARROW px OUTWARD (away from the bar) so the 14px arrowhead's TIP lands AT the edge, not 14px deep
+  // inside. Live-draw fallback: the resolved connection points when a view isn't available yet.
+  const ARROW = 13;
+  const bboxOf = (view) => { const m = view?.model; return (m && typeof m.getBBox === 'function') ? m.getBBox() : null; };
+  const sb = bboxOf(linkView?.sourceView);
+  const tb = bboxOf(linkView?.targetView);
+  const s = sb ? { x: sDir > 0 ? sb.x + sb.width : sb.x, y: sb.y + sb.height / 2 } : sourcePoint;
+  const t = tb ? { x: (tDir > 0 ? tb.x + tb.width : tb.x) + tDir * ARROW, y: tb.y + tb.height / 2 } : targetPoint;
+  const STUB = 14;
+  const A = { x: s.x + sDir * STUB, y: s.y };     // source exit stub
+  const D = { x: t.x + tDir * STUB, y: t.y };     // target entry stub
+  const pts = [s, A];
+  // Route the long horizontal along the SOURCE task's NEAR border (top if the target is above it, bottom if below)
+  // plus a small gap, then a SINGLE vertical jump to the target row. So the horizontal hugs the source row's own gap
+  // and never floats at the midpoint between rows - where, for tasks that aren't directly stacked, it would overlay
+  // the bars in between. (The vertical jump is a thin line; only the horizontal run was overlaying elements.)
+  const dir = Math.sign(t.y - s.y);   // +1 = target below, -1 = above, 0 = same row
+  if (dir !== 0 && sb) {
+    const borderY = dir > 0 ? sb.y + sb.height + 6 : sb.y - 6;
+    pts.push({ x: A.x, y: borderY }, { x: D.x, y: borderY });
+  }
+  pts.push(D, t);
+  return roundedOrthoPath(pts, 6);
 };
 
 export function applyMappingLinkStyle(link) {
@@ -285,6 +342,28 @@ export function applyRelationshipLinkStyle(link) {
   link.removeProp('target/connectionPoint');
 }
 
+// A Gantt dependency link (Phase 3): a brand-amber arrow INTO the successor bar. Clear markers first (attrs
+// merge). The target arrow carries NO explicit fill/stroke so it auto-inherits the line colour + auto-trims the
+// line (CLAUDE.md "Link Markers").
+export function applyGanttDepLinkStyle(link) {
+  const stroke = '#F6B355';   // brand amber
+  link.removeAttr('line/sourceMarker');
+  link.removeAttr('line/targetMarker');
+  link.attr('line/stroke', stroke);
+  link.attr('line/strokeWidth', 1.5);
+  // Source = a "one" tick (a single perpendicular bar, ER one-notation) so the START reads as a dependency origin,
+  // not a plain line end (item 2). Target = the solid arrowhead into the successor.
+  link.attr('line/sourceMarker', { type: 'path', d: 'M 0 -7 L 0 7', fill: 'none', stroke, 'stroke-width': 1.5 });
+  link.attr('line/targetMarker', { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' });
+  link.router('normal');                       // straight points → the connector owns the elbow geometry
+  link.connector('sfGanttDepConnector');       // the standard Gantt orthogonal dependency elbow (wraps on overlap)
+  link.set('z', Z_GANTT_DEP);                  // render BELOW the bars so a crossing tucks behind them, not over
+  // Anchor at the PORT with NO outward offset so the endpoints sit EXACTLY on the bars' edge midpoints (item 2);
+  // the connector itself re-pins to the edge midpoint, so this just keeps JointJS from routing to the bbox edge.
+  link.prop('source/connectionPoint', { name: 'anchor' });
+  link.prop('target/connectionPoint', { name: 'anchor' });
+}
+
 
 // ── Object-relationship (ER) link visibility — the Data Mapping "Object Relationships"
 // Display toggle. A pure VIEW filter (never persisted, never mutates the model): hides
@@ -361,6 +440,9 @@ export const Z_BASE = {
 };
 export const Z_TIER_SPAN = 499;   // 500 slots per tier (0–499 relative to base)
 export const Z_LINK_BASE  = 3000;
+// Gantt dependency links render BELOW the task bars (2000 tier) but above the timeline grid (1000), so a connector
+// crossing a row tucks BEHIND the bars instead of overlaying them. Exempt from the normal link tier (3000+).
+export const Z_GANTT_DEP  = 1900;
 
 // Plain-language tier names used by the property-panel reorder controls.
 // One source of truth so per-renderer call sites don't have to memorise the
@@ -497,6 +579,8 @@ export function init() {
     if (_isLoadingJSON) return;
 
     if (cell.isLink()) {
+      // Gantt dependency links sit BELOW the bars (e.g. a pasted dep) — keep them out of the link tier.
+      if (cell.prop('linkKind') === 'ganttDep') { cell.set('z', Z_GANTT_DEP); return; }
       // Always push new links to the top of the link tier
       const maxLinkZ = graph.getLinks()
         .filter(l => l !== cell)
@@ -527,6 +611,8 @@ export function init() {
   graph.on('change:z', (cell) => {
     if (_isLoadingJSON) return;
     if (cell.isLink()) {
+      // Gantt dependency links deliberately sit below the bar tier — don't yank them back into the link tier.
+      if (cell.prop('linkKind') === 'ganttDep') return;
       const z = cell.get('z');
       if (z >= Z_LINK_BASE) return; // already in link tier
       // Restore previous z if it was valid, otherwise assign top of link tier
@@ -619,6 +705,22 @@ export function init() {
         return link;
       }
 
+      // Gantt dependency preview — dragging from a task bar's port draws the SAME amber stub-free bézier the link
+      // becomes on connect (applyGanttDepLinkStyle), instead of flashing the grey orthogonal sfManhattan route with
+      // boxy loops (the "incorrect routing during connector drag" report). The connector handles the floating
+      // target (no target port yet → approaches from the left), so the preview tracks the cursor cleanly.
+      if (cellView?.model?.get('type') === 'sf.GanttTask') {
+        const stroke = '#F6B355';   // brand amber — matches applyGanttDepLinkStyle
+        const link = new joint.shapes.standard.Link({ z: 0 });
+        link.attr('line/stroke', stroke);
+        link.attr('line/strokeWidth', 1.5);
+        link.attr('line/targetMarker', { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' });
+        link.attr('line/sourceMarker', { type: 'path', d: 'M 0 -7 L 0 7', fill: 'none', stroke, 'stroke-width': 1.5 });   // "one" tick (item 2)
+        link.router('normal');
+        link.connector('sfGanttDepConnector');
+        return link;
+      }
+
       // Relationship preview (grey, orthogonal sfManhattan — the custom router).
       return new joint.shapes.standard.Link({
         z: 0,  // 0 triggers the 'add' listener to place it in the link tier (30 000+)
@@ -700,10 +802,26 @@ export function init() {
     const link = linkView.model;
     const src = link.get('source');
     const tgt = link.get('target');
-    if (!src?.id || !tgt?.id || !src.port || !tgt.port) return;
+    if (!src?.id || !tgt?.id) return;
     const srcCell = graph.getCell(src.id);
     const tgtCell = graph.getCell(tgt.id);
     if (!srcCell || !tgtCell) return;
+    // Gantt dependency: ANY link drawn between two GanttTask bars is a predecessor relationship — the source of
+    // truth for the Table view's Dependencies column. Ports are OPTIONAL here (snapLinks can drop onto the bar
+    // without a port), unlike the ER / mapping / sequence classifiers below which key off the specific port. So
+    // just connecting two tasks IS a dependency. The `linkKind !== 'ganttDep'` guard alone protects a re-anchor
+    // (an existing dep is already tagged → skip + don't re-style) — do NOT also gate on a `previous(target)` id:
+    // when bars are EMBEDDED, snapLinks pre-sets the target during the drag, so that read is a false re-anchor
+    // and would skip tagging a brand-new dependency (the reported "connector doesn't become a dependency" bug).
+    if (srcCell.get('type') === 'sf.GanttTask' && tgtCell.get('type') === 'sf.GanttTask') {
+      if (link.prop('linkKind') !== 'ganttDep') {
+        link.prop('linkKind', 'ganttDep');
+        applyGanttDepLinkStyle(link);
+      }
+      return;
+    }
+    // The remaining classifiers (mapping / ER / sequence) all key off the specific port → require both.
+    if (!src.port || !tgt.port) return;
     // Data Cloud mapping link: a field→field link drawn while mapping mode is on
     // becomes a source→DMO mapping (distinct from a PK→FK ER relationship). The
     // properties panel can reclassify it afterwards.
@@ -836,31 +954,147 @@ export function init() {
     }
   });
 
-  // Gantt drag write-back (Phase 2): dragging or resizing a task bar re-DATES it - dates stay the source of truth.
-  // Grabbing a bar snapshots EVERY bar's geometry (so a multi-select bar drag re-dates all of them); on pointerup we
-  // derive new start/end from the pixels (xToDate) of each bar that MOVED and set them. The view's
-  // change:startDate/change:endDate listener then snaps each bar to its exact column. It all lands in the drag's
-  // single history merge (same idle window) -> one undo; a click that didn't move is a no-op (never spuriously
-  // re-dates). Bars not bound to a resolvable timeline (deriveGanttDates -> null) are skipped.
-  let _ganttDragSnap = null;
+  // Gantt drag (Phase 2 + the v1.17.3 reorder redesign): dates stay the source of truth, and dragging is a
+  // reorder-with-drop-line, not a free move. Grabbing a bar snapshots EVERY bar's geometry (so a multi-select bar
+  // drag still re-dates all of them). While dragging a SINGLE task: its Y is LOCKED to its row (the row "stays
+  // put", item 1), its X SNAPS to the nearest column live (item 3), and a horizontal DROP LINE shows the slot it
+  // will land in (item 2). On drop the bar reorders into that slot — group-aware, so dropping it into another
+  // group's region reassigns its group — and re-dates from the snapped X. Milestones/markers snap their centre to
+  // a column live too (Y stays the manual row). It all lands in the drag's single history merge → one undo.
+  let _ganttDragSnap = null, _ganttDragId = null, _ganttDrop = null;
+  const _GANTT_DRAGGABLE = new Set(['sf.GanttTask', 'sf.GanttMilestone', 'sf.GanttMarker']);
+  const SVG_NS_DROP = 'http://www.w3.org/2000/svg';
+  let _ganttDropLayer = null;
+  const ganttDropLayer = () => {
+    if (!_ganttDropLayer || !_ganttDropLayer.parentNode) {
+      _ganttDropLayer = document.createElementNS(SVG_NS_DROP, 'g');
+      _ganttDropLayer.setAttribute('class', 'df-gantt-droplines');
+      (paper.svg.querySelector('.joint-layers') || paper.svg).appendChild(_ganttDropLayer);
+    }
+    return _ganttDropLayer;
+  };
+  const clearGanttDropLine = () => { if (_ganttDropLayer) _ganttDropLayer.innerHTML = ''; };
+  const _GD_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fmtGD = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${+m[3]} ${_GD_MON[+m[2] - 1]}` : ''; };
+  const drawGanttDropLine = (tl, lineLocalY) => {   // caller clears the layer first
+    const layer = ganttDropLayer();
+    const x = tl.position().x, y = tl.position().y + lineLocalY, w = tl.size().width;
+    const line = document.createElementNS(SVG_NS_DROP, 'line');
+    line.setAttribute('x1', x); line.setAttribute('y1', y);
+    line.setAttribute('x2', x + w); line.setAttribute('y2', y);
+    line.setAttribute('stroke', 'var(--brand-amber, #F6B355)');
+    line.setAttribute('stroke-width', 2); line.setAttribute('pointer-events', 'none');
+    layer.appendChild(line);
+    const dot = document.createElementNS(SVG_NS_DROP, 'circle');
+    dot.setAttribute('cx', x + 4); dot.setAttribute('cy', y); dot.setAttribute('r', 3.5);
+    dot.setAttribute('fill', 'var(--brand-amber, #F6B355)'); dot.setAttribute('pointer-events', 'none');
+    layer.appendChild(dot);
+  };
+  // Issue 8: while dragging a task, show its current start - end dates in a chip above the bar.
+  const drawGanttDragDates = (bar, start, end) => {
+    const layer = ganttDropLayer();
+    const cx = bar.position().x + bar.size().width / 2, ty = bar.position().y - 8;
+    const text = `${fmtGD(start)} – ${fmtGD(end)}`;
+    const t = document.createElementNS(SVG_NS_DROP, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', ty);
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '11'); t.setAttribute('font-weight', '600');
+    t.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+    t.setAttribute('fill', 'var(--brand-amber, #F6B355)'); t.setAttribute('pointer-events', 'none');
+    t.textContent = text; layer.appendChild(t);
+  };
+  // Issue 1: expose the date chip so a RESIZE (handled in selection.js, outside this paper-drag flow) can show the
+  // same live start - end chip a drag does. The chip layer is shared; clear-then-draw keeps a single chip on screen.
+  cctx.showGanttDateChip = (bar, start, end) => { clearGanttDropLine(); if (bar) drawGanttDragDates(bar, start, end); };
+  cctx.clearGanttDateChip = () => clearGanttDropLine();
+  // Issue 6: a brand-amber insertion BAR previewing where a dragged Project Phase (thick) or Task (thin, item 3 -
+  // round H) will land (used by the stencil dragover, which sits outside this paper-drag flow). Shared layer; clear-then-draw.
+  cctx.showGanttGroupInsertBar = (tl, localY, thickness = 5) => {
+    clearGanttDropLine();
+    const layer = ganttDropLayer();
+    const x = tl.position().x, y = tl.position().y + localY, w = tl.size().width, h = thickness;
+    const bar = document.createElementNS(SVG_NS_DROP, 'rect');
+    bar.setAttribute('x', x); bar.setAttribute('y', y - h / 2); bar.setAttribute('width', w); bar.setAttribute('height', h);
+    bar.setAttribute('rx', h / 2); bar.setAttribute('fill', 'var(--brand-amber, #F6B355)'); bar.setAttribute('pointer-events', 'none');
+    layer.appendChild(bar);
+  };
+
   paper.on('element:pointerdown', (cellView) => {
-    if (cellView?.model?.get('type') !== 'sf.GanttTask') { _ganttDragSnap = null; return; }
+    const m = cellView?.model;
+    if (!_GANTT_DRAGGABLE.has(m?.get('type'))) { _ganttDragSnap = null; _ganttDragId = null; _ganttDrop = null; return; }
+    _ganttDragId = m.id; _ganttDrop = null;
     _ganttDragSnap = new Map();
     for (const e of graph.getElements()) {
-      if (e.get('type') === 'sf.GanttTask') _ganttDragSnap.set(e.id, { x: e.position().x, w: e.size().width });
+      if (_GANTT_DRAGGABLE.has(e.get('type'))) _ganttDragSnap.set(e.id, { x: e.position().x, y: e.position().y, w: e.size().width });
+    }
+  });
+  paper.on('element:pointermove', (cellView, evt, x, y) => {
+    const m = cellView?.model;
+    if (!_ganttDragSnap || !m || m.id !== _ganttDragId) return;
+    const type = m.get('type');
+    const tl = ganttTimelineFor(m);
+    if (!tl) return;
+    // A multi-select group drag (another bar moved too) keeps the old free-move behaviour — no lock / drop line.
+    let multi = false;
+    for (const [id, f] of _ganttDragSnap) { if (id === m.id) continue; const c = graph.getCell(id); if (c && (c.position().x !== f.x || c.position().y !== f.y)) { multi = true; break; } }
+    if (multi) { clearGanttDropLine(); _ganttDrop = null; return; }
+    clearGanttDropLine();
+    if (type === 'sf.GanttTask') {
+      const from = _ganttDragSnap.get(m.id);
+      const sx = snapGanttX(tl, m.position().x);                 // X snaps to a column
+      m.position(sx == null ? m.position().x : sx, from ? from.y : m.position().y, { gantt: true });   // Y locked to the row
+      const tgt = ganttDropTarget(tl, y, m);                     // drop slot from the pointer
+      _ganttDrop = tgt;
+      if (tgt) drawGanttDropLine(tl, tgt.lineLocalY);
+      const d = deriveGanttDates(m, tl);                         // live start - end dates above the bar (issue 8)
+      if (d) drawGanttDragDates(m, d.start, d.end);
+    } else {
+      // Milestone / day marker: snap the CENTRE to a column (X) AND to the nearest row centre (Y) — so it lines up
+      // on a task row instead of floating between rows.
+      const w = m.size().width, h = m.size().height;
+      const sx = snapGanttX(tl, m.position().x + w / 2);
+      const sy = snapGanttRowCentreY(tl, m.position().y + h / 2);
+      m.position(
+        sx == null ? m.position().x : Math.round(sx - w / 2),
+        sy == null ? m.position().y : Math.round(sy - h / 2),
+        { gantt: true },
+      );
     }
   });
   paper.on('element:pointerup', () => {
-    const snap = _ganttDragSnap;
-    _ganttDragSnap = null;
+    const snap = _ganttDragSnap, drop = _ganttDrop, dragId = _ganttDragId;
+    _ganttDragSnap = null; _ganttDrop = null; _ganttDragId = null;
+    clearGanttDropLine();
     if (!snap) return;
+    const reorderTLs = new Set();
+    const growTLs = new Set();
     for (const e of graph.getElements()) {
-      if (e.get('type') !== 'sf.GanttTask') continue;
+      const type = e.get('type');
+      if (!_GANTT_DRAGGABLE.has(type)) continue;
       const from = snap.get(e.id);
-      if (!from || (e.position().x === from.x && e.size().width === from.w)) continue;   // unmoved
-      const d = deriveGanttDates(e);
-      if (d) e.set({ startDate: d.start, endDate: d.end });   // view listener re-derives geometry → bar snaps to its date
+      if (!from) continue;
+      const grabbed = e.id === dragId;
+      const movedX = e.position().x !== from.x || e.size().width !== from.w;
+      const movedY = Math.abs(e.position().y - from.y) > 6;
+      if (movedX) { const tl = ganttTimelineFor(e); if (tl) growTLs.add(tl); }   // issue 5: may now run past the edge
+      if (type === 'sf.GanttMilestone') { if (movedX) { const d = deriveGanttMilestoneDate(e); if (d) e.set('milestoneDate', d); } continue; }
+      if (type === 'sf.GanttMarker') { if (movedX) { const d = deriveGanttMarkerDate(e); if (d) e.set('markerDate', d); } continue; }
+      // Task. Re-date from the (snapped) X when it moved horizontally.
+      if (movedX) { const d = deriveGanttDates(e); if (d) e.set({ startDate: d.start, endDate: d.end }); }
+      // The grabbed task reorders into its DROP slot (group-aware): reassign its group + park it at the drop Y so
+      // resequenceGanttOrders sorts it there. Other bars (multi-select) keep the Y-based reorder.
+      if (grabbed && drop && drop.moved && e.get('order') != null) {
+        const tl = ganttTimelineFor(e);
+        if (tl) {
+          if ((e.get('groupId') || null) !== (drop.groupId || null)) e.set('groupId', drop.groupId || null);
+          e.position(e.position().x, drop.dropY, { gantt: true });
+          reorderTLs.add(tl);
+        }
+      } else if (!grabbed && movedY && e.get('order') != null) {
+        const tl = ganttTimelineFor(e); if (tl) reorderTLs.add(tl);
+      }
     }
+    for (const tl of reorderTLs) resequenceGanttOrders(tl);   // re-sequence order from the dropped Y + snap each bar
+    for (const tl of growTLs) growTimelineToFitDates(tl);     // issue 5: grow any timeline whose element now runs past its right edge
   });
 
   // Slice 12 (finale): mount the embedding auto-fit graph triggers

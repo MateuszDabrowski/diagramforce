@@ -1,10 +1,12 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.17.2.11';
-import * as history from './history.js?v=1.17.2.11';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.17.2.11';
-import { fieldFocus } from './canvas/focus-state.js?v=1.17.2.11';
+import * as clipboard from './clipboard.js?v=1.18.0.5';
+import * as history from './history.js?v=1.18.0.5';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.18.0.5';
+import { fieldFocus } from './canvas/focus-state.js?v=1.18.0.5';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.18.0.5';
+import { cctx } from './canvas/context.js?v=1.18.0.5';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -30,6 +32,9 @@ function addResizeHandles(view) {
   // their starting width is 12, so the minimum should be the same (not 80).
   const minW = (type === 'sf.SequenceActivation') ? 12 : 80;
   const minH = (type === 'sf.GanttTask' || type === 'sf.GanttMilestone') ? 24 : (type === 'sf.GanttGroup') ? 16 : 40;
+  // df.Table height is content-owned (df.TableView measures wrapped markdown + resizes the model), so a table
+  // resize is WIDTH-only — see the height/y lock in onMove. Corners show a horizontal cursor to signal it.
+  const horizontalOnly = (type === 'df.Table' || type === 'sf.GanttTask');   // gantt bars resize WIDTH only (the row is fixed)
 
   const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   const handleSize = coarsePointer ? 20 : 12;
@@ -37,6 +42,7 @@ function addResizeHandles(view) {
 
   RESIZE_CORNERS.forEach(({ cx, cy, cursor }) => {
     const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'df-resize-handle');   // tagged so image export (PNG/SVG/GIF) strips this selection chrome
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('width', String(handleSize));
     rect.setAttribute('height', String(handleSize));
@@ -46,7 +52,7 @@ function addResizeHandles(view) {
     rect.setAttribute('stroke', 'white');
     rect.setAttribute('stroke-width', '1.5');
     rect.setAttribute('rx', '2');
-    rect.style.cursor = cursor;
+    rect.style.cursor = horizontalOnly ? 'ew-resize' : cursor;
     g.appendChild(rect);
     view.el.appendChild(g);
     view._sfHandles.push({ g, cx, cy });
@@ -144,8 +150,38 @@ function addResizeHandles(view) {
           if (cy === 0) newY = origPos.y + (origS - s);
         }
 
+        // Width-only for content-owned heights (df.Table) + Gantt bars: keep height + y put so the view's height
+        // re-fit can't strand the table a few px lower after a top-corner drag. x still tracks a left-corner drag.
+        if (horizontalOnly) { newH = origSz.height; newY = origPos.y; }
+
+        // Gantt task: snap the resized EDGE to a day column live (just like dragging snaps the bar). The right edge
+        // snaps when a right corner is dragged; the left edge (with the right fixed) when a left corner is dragged.
+        if (type === 'sf.GanttTask') {
+          const tl = ganttTimelineFor(model);
+          if (tl) {
+            if (cx === 1) {
+              const r = snapGanttX(tl, newX + newW);
+              if (r != null) newW = Math.max(minW, r - newX);
+            } else if (cx === 0) {
+              const rightFixed = origPos.x + origSz.width;
+              const l = snapGanttX(tl, newX);
+              if (l != null && l <= rightFixed - minW) { newX = l; newW = rightFixed - newX; }
+            }
+          }
+        }
+
+        // A df.Legend resize is a deliberate width → stop it auto-fitting back to the label (sticks until
+        // "Auto size"). Set once at the start of the drag.
+        if (type === 'df.Legend' && !model.get('manualWidth')) model.set('manualWidth', true);
+
         model.position(newX, newY);
         model.resize(newW, newH);
+        // Issue 1: show the live start - end date chip above the bar while resizing, exactly like a drag does.
+        if (type === 'sf.GanttTask') {
+          const tl = ganttTimelineFor(model);
+          const d = tl && deriveGanttDates(model, tl);
+          if (d) cctx.showGanttDateChip?.(model, d.start, d.end);
+        }
         if (model.get('iconMode')) {
           const r = newW / 2;
           model.attr('body/rx', r);
@@ -189,6 +225,18 @@ function addResizeHandles(view) {
         document.removeEventListener('pointerup', onUp);
         guideH.remove();
         guideV.remove();
+        // Gantt task resize → re-DATE from the new pixels. The canvas drag write-back can't see a handle resize
+        // (the handle's pointerdown stops propagation, so paper's element:pointerup never fires for it), so do
+        // it here. Dates are the source of truth → the GanttTaskView then re-snaps the bar to its columns.
+        const grownTLs = new Set();
+        for (const m of [model, ...peers.map(p => p.model)]) {
+          if (m.get('type') === 'sf.GanttTask') {
+            const d = deriveGanttDates(m); if (d) m.set({ startDate: d.start, endDate: d.end });
+            const tl = ganttTimelineFor(m); if (tl) grownTLs.add(tl);
+          }
+        }
+        cctx.clearGanttDateChip?.();                 // issue 1: remove the resize date chip
+        grownTLs.forEach(tl => growTimelineToFitDates(tl));   // issue 5: extend the timeline if a bar now runs past its edge
         // Close the batch started in onDown — the whole drag is one undo step.
         history.endBatch();
       };
@@ -199,11 +247,15 @@ function addResizeHandles(view) {
     g.addEventListener('pointerdown', onDown);
   });
 
-  // Position handles and keep them updated on model changes
+  // Position handles and keep them updated on model changes. The tiny Gantt point shapes (milestone diamond / day
+  // marker triangle) get the handles pushed a margin OUTSIDE their bbox so they don't cover the glyph + its labels.
+  const mType = model.get('type');
+  const margin = (mType === 'sf.GanttMilestone' || mType === 'sf.GanttMarker') ? 14 : 0;
+  const along = (frac, size) => frac === 0 ? -margin : frac === 1 ? size + margin : frac * size;
   const updatePositions = () => {
     const { width, height } = model.size();
     view._sfHandles?.forEach(({ g, cx, cy }) =>
-      g.setAttribute('transform', `translate(${cx * width},${cy * height})`)
+      g.setAttribute('transform', `translate(${along(cx, width)},${along(cy, height)})`)
     );
   };
   updatePositions();
@@ -945,6 +997,10 @@ function clearVisual() {
 function setupMultiDrag() {
   let draggedId = null;
   let lastPos = null;
+  // True only once a real (non-zero) drag move occurs. A pure Cmd/Ctrl+click arms draggedId (the
+  // just-toggled element is now in a >1 selection) but never moves — and selection alone must NEVER
+  // mutate embedding/geometry, so the pointerup embed/release logic below is gated on this.
+  let didMove = false;
   // Pre-drag top-left of each container the selection currently sits in, so a container the
   // group is dragged fully OUT of can be restored to its original position (a mid-drop fit may
   // otherwise nudge it toward the departing children before they're un-embedded).
@@ -962,6 +1018,7 @@ function setupMultiDrag() {
     const id = cellView.model.id;
     if (selectedIds.size > 1 && selectedIds.has(id)) {
       draggedId = id;
+      didMove = false;
       const pos = cellView.model.position();
       lastPos = { x: pos.x, y: pos.y };
       refreshDragGhostBBox();
@@ -983,6 +1040,7 @@ function setupMultiDrag() {
     const dx = pos.x - lastPos.x;
     const dy = pos.y - lastPos.y;
     if (dx === 0 && dy === 0) return;
+    didMove = true;
     lastPos = { x: pos.x, y: pos.y };
 
     // Collect all IDs that will be moved by JointJS embedding (children of dragged element)
@@ -1019,7 +1077,10 @@ function setupMultiDrag() {
     // under the pointer. If that element landed inside a container/zone/pool, pull the REST
     // of the selection into the SAME container too — so a group is captured in a single drag
     // instead of having to drop each element one by one.
-    if (draggedId && selectedIds.size > 1) {
+    // Only settle the group when the user ACTUALLY dragged. A Cmd/Ctrl+click that armed a group drag
+    // but never moved must not embed/release anything — otherwise Cmd+clicking an embedded child while
+    // another shape is selected silently pulls that shape into the child's container (selection ≠ move).
+    if (draggedId && didMove && selectedIds.size > 1) {
       const dragged = graph.getCell(draggedId);
       // The container the dragged element ended up in (JointJS embeds/un-embeds the
       // directly-dragged element via embeddingMode), or null if it landed on empty canvas.
@@ -1074,6 +1135,7 @@ function setupMultiDrag() {
     containerPosSnap.clear();
     draggedId = null;
     lastPos = null;
+    didMove = false;
   });
 }
 
@@ -1201,6 +1263,14 @@ function cancelLongPressMenu() {
 let _autoSizer = null;
 export function setAutoSizer(fn) { _autoSizer = fn; }
 
+// "Copy as PNG" — rasters the current selection to the OS clipboard (paste into Slack / docs / chat as an image).
+// Wired in app.js to persistence.copyCellsAsPng. Absent → the menu item is hidden.
+let _copyAsPng = null;
+export function setCopyAsPng(fn) { _copyAsPng = fn; }
+/** Copy the CURRENT selection to the OS clipboard as a PNG. `opts.silent` keeps it quiet (the Cmd+C overload path).
+ *  No-op when nothing copyable is selected. */
+export function copySelectionAsPng(opts) { _copyAsPng?.(getSelectedElements(), opts); }
+
 // Link endpoint quick-set handler, registered by app.js (properties.setLinkEndpoints). Sets a link's source +
 // target ER markers from a preset (→ / 1:1 / 1:M / M:1). A callback so selection.js doesn't import properties.js.
 let _endpointSetter = null;
@@ -1263,6 +1333,7 @@ const _ctxSvg = (inner) => `<svg width="14" height="14" viewBox="0 0 16 16" fill
 const CTX_ICON = {
   clone: _ctxSvg('<rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/>'),
   copy: _ctxSvg('<rect x="4" y="3" width="8" height="11" rx="1.5"/><path d="M6 3V1.8h4V3"/>'),
+  copyPng: _ctxSvg('<rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/><circle cx="5.5" cy="6.5" r="1"/><path d="M3 11.5l3-3 2 2 2.5-2.5 2.5 2.5"/>'),
   delete: _ctxSvg('<path d="M3 4h10M6 4V2.5A.5.5 0 016.5 2h3a.5.5 0 01.5.5V4M4.5 4l.5 9.5h6l.5-9.5M7 7v4M9 7v4"/>'),
   paste: _ctxSvg('<rect x="3" y="3" width="10" height="11" rx="1.5"/><path d="M6 3V1.8h4V3M5.5 8h5M5.5 11h3.5"/>'),
   selectAll: _ctxSvg('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke-dasharray="2.4 1.8"/>'),
@@ -1284,11 +1355,11 @@ const CTX_ICON = {
   convert: _ctxSvg('<path d="M1 4h11l-3-3M15 12H4l3 3"/>'),
   front: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v2H2zM4 6h8v2H4zM6 10h4v4H6z"/></svg>',
   back: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6 2h4v4H6zM4 8h8v2H4zM2 12h12v2H2z"/></svg>',
-  // Release contents: a (dashed) container with an arrow leaving it — un-embed all captured children.
+  // Release shapes: a (dashed) container with an arrow leaving it — un-embed all captured children.
   release: _ctxSvg('<rect x="2" y="3.5" width="7.5" height="9" rx="1.5" stroke-dasharray="2.2 1.6"/><path d="M8.5 8H14M11.5 5.5L14 8l-2.5 2.5"/>'),
 };
 
-/** Release contents: un-embed EVERY direct child of `parent` (they keep their positions) so the now-empty
+/** Release shapes: un-embed EVERY direct child of `parent` (they keep their positions) so the now-empty
  *  container can be deleted on its own — instead of dragging each captured element out first. One undo entry; the
  *  change:parent listener (embedding.js) then reverts the emptied container to its default footprint. */
 function releaseEmbeddedChildren(parent) {
@@ -1326,6 +1397,9 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
     menu.appendChild(b);
   };
   const addSep = () => { const s = document.createElement('div'); s.className = 'df-ctx-menu__sep'; menu.appendChild(s); };
+  // "Copy as PNG" — raster the current selection to the clipboard (paste into Slack/docs/chat as an image).
+  // Offered for any element selection (single or multi), never a bare link.
+  const addCopyPng = () => { if (_copyAsPng) addItem('Copy as PNG', () => _copyAsPng(getSelectedElements()), { icon: CTX_ICON.copyPng }); };
 
   if (model) {
     // Component-specific menu mirroring the properties-pane actions, with the SAME icons. Links: Clone / Reverse
@@ -1361,6 +1435,7 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
         addItem(a.label, a.handler, { icon: CTX_ICON[a.iconKey] || '' });
       }
       if (acts.length) addSep();
+      addCopyPng();
     } else {
       // Multi-select: the common whole-selection actions PLUS the per-shape actions that make sense uniformly
       // when EVERY selected element is the same type (clone-with-connectors variants, Convert, Order), each applied
@@ -1387,6 +1462,7 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
       }
       if (multiActs.length) addSep();
       addItem('Copy', () => clipboard.copy(), { icon: CTX_ICON.copy });
+      addCopyPng();
       if (_autoSizer) addItem('Auto size', () => autoSizeSelection(), { icon: CTX_ICON.autosize });
       if (_styleApi && !model.isLink()) {
         addSep();
@@ -1395,12 +1471,14 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
         if (_styleApi.has()) addItem('Paste style', () => _styleApi.paste(els), { icon: CTX_ICON.pasteStyle });
       }
     }
-    // Release contents: a container that captured children → un-embed them ALL at once (they keep their positions),
+    // Release shapes: a container that captured children → un-embed them ALL at once (they keep their positions),
     // so the now-empty container can be deleted on its own instead of dragging each captured element out first.
-    // Single element only, and only when it actually holds children.
+    // Single element only, and only when it actually holds children. The action loop above already adds a
+    // separator (`if (acts.length) addSep()`), so this item only needs ONE separator BELOW it (to set the danger
+    // Delete apart) — adding one above too would double the divider.
     if (!model.isLink() && selectedIds.size <= 1 && (model.getEmbeddedCells() || []).length) {
+      addItem('Release shapes', () => releaseEmbeddedChildren(model), { icon: CTX_ICON.release });
       addSep();
-      addItem('Release contents', () => releaseEmbeddedChildren(model), { icon: CTX_ICON.release });
     }
     addItem('Delete', () => {
       if (navigator.vibrate) navigator.vibrate(30);

@@ -38,9 +38,12 @@
   stroke: #1D73C9;
 }
 
-/* Selection highlight — applied via JS classList.add('selected') */
-.joint-element.selected .body,
-.joint-element.selected rect.body {
+/* Selection highlight — applied via JS classList.add('selected').
+   Exclude df.Table (.df-table-el): it draws its own border + shows resize corners, so the red outline on its
+   transparent Shape-state body / view border is redundant (and the :first-child rule below flickered it with the
+   label). Skipping the override also keeps a df.Table's Shape-state border visible while it's selected. */
+.joint-element.selected:not(.df-table-el) .body,
+.joint-element.selected:not(.df-table-el) rect.body {
   stroke: var(--selection-color) !important;
   stroke-width: 2 !important;
 }
@@ -49,7 +52,7 @@
    Exclude .do-badges-g — the DataObject Data-Cloud category pill is a hollow
    badge that must NOT pick up the selection stroke when the object is selected
    (the object's own body highlight comes from the .body rule above). */
-.joint-element.selected > g:not(.do-badges-g) > rect:first-child {
+.joint-element.selected:not(.df-table-el) > g:not(.do-badges-g) > rect:first-child {
   stroke: var(--selection-color) !important;
   stroke-width: 2 !important;
 }
@@ -169,8 +172,12 @@
  * set by stencil.js refreshDropHighlight) so it's independent of link-drag. It marks the
  * structured embedding parents (Gantt timeline, sequence participant/actor, RACI Task)
  * where the drop lands positionally (the free-form groupers use the dashed drop-ghost). */
-.joint-paper .df-drop-target .body,
-.joint-paper .df-drop-target rect {
+/* Outline ONLY the shape's outer body — NOT every inner rect. The Gantt timeline draws dozens of column/row
+   rects; the old `.df-drop-target rect` stroked them all, so the highlight read as a spotty amber grid instead
+   of one clean frame. */
+.joint-paper .df-drop-target [joint-selector="body"],
+.joint-paper .df-drop-target > .body,
+.joint-paper .df-drop-target > rect {
   stroke: var(--brand-amber) !important;
   stroke-width: 2px !important;
 }
@@ -559,8 +566,33 @@ foreignObject[data-md] del { text-decoration: line-through; }
 }
 .df-tbl__revert:hover { color: var(--brand-amber); background: color-mix(in srgb, var(--brand-amber) 16%, transparent); }
 .df-tbl__revert:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 1px; }
-/* The revcol is editable-adjacent chrome, not a read-only data cell — don't dim it. */
-.df-tbl--editing .df-tbl__table tbody td:not(.df-tbl__cell--edit):not(.df-tbl__revcol) { color: var(--text-muted); }
+/* The revcol + actcol are editable-adjacent chrome, not read-only data cells — don't dim them. */
+.df-tbl--editing .df-tbl__table tbody td:not(.df-tbl__cell--edit):not(.df-tbl__revcol):not(.df-tbl__actcol) { color: var(--text-muted); }
+
+/* Phase 5c: trailing per-row actions (drag-reorder handle + delete) + the "+ Add task" row. */
+.df-tbl__actcol { width: 54px; min-width: 54px; padding: 2px 4px; text-align: center; white-space: nowrap; }
+.df-tbl__act-drag { display: inline-flex; align-items: center; justify-content: center; padding: 2px; color: var(--text-muted); cursor: grab; vertical-align: middle; }
+.df-tbl__act-drag:active { cursor: grabbing; }
+.df-tbl__act-del { display: inline-flex; align-items: center; justify-content: center; padding: 3px; margin-left: 2px; background: none; border: none; border-radius: var(--border-radius-sm); color: var(--text-muted); cursor: pointer; vertical-align: middle; }
+.df-tbl__act-del:hover { color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 16%, transparent); }
+.df-tbl__act-del:focus-visible { outline: 2px solid var(--color-danger); outline-offset: 1px; }
+.df-tbl__row--dragging { opacity: 0.4; }
+.df-tbl__row--drag-over > td { box-shadow: inset 0 -2px 0 var(--brand-amber); }   /* indicator BELOW the row */
+.df-tbl__addrow td { padding: 6px 8px; text-align: left; background: none; }
+.df-tbl__add-task { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; font: inherit; font-size: 12px; background: none; border: 1px dashed var(--border-color); border-radius: var(--border-radius-sm); color: var(--text-secondary); cursor: pointer; }
+.df-tbl__add-task:hover { color: var(--brand-amber); border-color: var(--brand-amber); }
+.df-tbl__add-task:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 1px; }
+
+/* Phase 5c: the Dependencies cell button + the anchored predecessor-link editor. */
+.df-tbl__dep-edit { display: inline-flex; align-items: center; max-width: 100%; padding: 3px 8px; font: inherit; font-size: 12px; text-align: left; background: none; border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); color: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.df-tbl__dep-edit:hover { border-color: var(--brand-amber); }
+.df-tbl__dep-edit:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 1px; }
+.df-tbl__dep-edit--empty { color: var(--text-secondary); border-style: dashed; }
+.df-dep-editor__head { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.df-dep-editor { display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
+.df-dep-editor__empty { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.df-dep-editor__row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.df-dep-editor__add { align-self: flex-start; }
 
 .df-tbl__empty {
   text-align: center;

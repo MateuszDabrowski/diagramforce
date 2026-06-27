@@ -1191,7 +1191,7 @@
 }
 
 .df-timeline-task-row--drag-over {
-  box-shadow: 0 -2px 0 0 var(--color-primary);
+  box-shadow: 0 2px 0 0 var(--color-primary);   /* indicator BELOW the row — the dragged task lands under it */
 }
 
 .df-timeline-task-drag {
@@ -1423,3 +1423,52 @@
 .df-raci-picker__btn--active[data-raci="A"] { background: var(--brand-red); }
 .df-raci-picker__btn--active[data-raci="C"] { background: var(--brand-amber); }
 .df-raci-picker__btn--active[data-raci="I"] { background: #8A9099; }
+
+/* ── Shape State — vertical styled checkbox list (None / Added / Changed / Removed / Deferred) ───────── */
+.df-shapestate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.df-shapestate__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 5px var(--spacing-sm);
+  background: transparent;
+  border: 2px solid transparent;   /* 2px reserved so the selected dash/dotted border adds no layout shift */
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.df-shapestate__row:hover { background: var(--bg-hover, var(--border-color)); }
+/* The checkbox is an SVG box stroked in the state's own colour + dash (the example visual lives ON the border).
+   The white tick is hidden until the row is selected; the box fills with the state colour then. */
+.df-shapestate__check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.df-shapestate__tick { opacity: 0; }
+.df-shapestate__label { flex: 1 1 auto; }
+/* Selected: the dash EFFECT moves off the checkbox onto the WHOLE row — the row gets a border in the state's own
+   colour + matching dash style (solid / dotted / dashed) + a tint, while the checkbox goes solid-filled with a
+   tick. None (no colour override) falls back to the neutral primary so the default state still reads as chosen. */
+.df-shapestate__row.is-selected {
+  border-style: var(--df-shapestate-border-style, solid);
+  border-color: var(--df-shapestate-color, var(--color-primary));
+  background: color-mix(in srgb, var(--df-shapestate-color, var(--color-primary)) 12%, transparent);
+  color: var(--df-shapestate-color, var(--text-primary));
+}
+.df-shapestate__row.is-selected .df-shapestate__box {
+  fill: var(--df-shapestate-color, var(--color-primary));
+  stroke-dasharray: 0;   /* checkbox border goes solid when selected — the dash now lives on the row */
+}
+.df-shapestate__row.is-selected .df-shapestate__tick { opacity: 1; }

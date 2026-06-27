@@ -7,50 +7,20 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.17.2.11';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.17.2.11';
-import { normalizeDateSuffix } from '../util.js?v=1.17.2.11';
-import { escHtml } from '../util.js?v=1.17.2.11';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.17.2.11';
-import { pctx } from './context.js?v=1.17.2.11';
-import { slimForShare } from '../share-codec.js?v=1.17.2.11';
-
-// Maximum number of cells to accept from external sources (share URLs, JSON import)
-const MAX_CELL_COUNT = 2000;
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.18.0.5';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.18.0.5';
+import { normalizeDateSuffix } from '../util.js?v=1.18.0.5';
+import { escHtml } from '../util.js?v=1.18.0.5';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.18.0.5';
+import { pctx } from './context.js?v=1.18.0.5';
+import { slimForShare } from '../share-codec.js?v=1.18.0.5';
+// The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
+// and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
+// cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.18.0.5';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
-// S4 (v1.12.0) — allowlist of cell types the renderer accepts from untrusted
-// JSON (share URL, file import, paste-JSON). Anything outside this set is
-// dropped during sanitization. Mirrors the shapes registered in shapes.js
-// plus the JointJS standard link. If a new shape lands in shapes.js, add
-// its type here too — verified at audit time, but a runtime test on a
-// fresh codebase would be even safer.
-const ALLOWED_CELL_TYPES = new Set([
-  // Architecture
-  'sf.SimpleNode', 'sf.Container', 'sf.Zone', 'sf.TextLabel', 'sf.Note',
-  'sf.Annotation', 'sf.Image', 'sf.Link', 'sf.Line', 'sf.Task',
-  // BPMN / Process
-  'sf.BpmnEvent', 'sf.BpmnTask', 'sf.BpmnGateway', 'sf.BpmnSubprocess',
-  'sf.BpmnLoop', 'sf.BpmnPool', 'sf.BpmnDataObject',
-  // Flow
-  'sf.FlowProcess', 'sf.FlowDecision', 'sf.FlowTerminator', 'sf.FlowDatabase',
-  'sf.FlowDocument', 'sf.FlowIO', 'sf.FlowPredefined', 'sf.FlowOffPage',
-  // Data Model
-  'sf.DataObject',
-  // Org Chart
-  'sf.OrgPerson',
-  // Gantt
-  'sf.GanttTask', 'sf.GanttMilestone', 'sf.GanttMarker', 'sf.GanttTimeline',
-  'sf.GanttGroup',
-  // Sequence
-  'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation',
-  'sf.SequenceFragment',
-  // Generic (df.* — net-new shapes use the df namespace; legacy shapes keep sf.* for save back-compat)
-  'df.Pill',
-  // JointJS link
-  'standard.Link',
-]);
 
 export function sanitizeGraphJSON(graphData) {
   if (!graphData || !Array.isArray(graphData.cells)) return graphData;
@@ -67,6 +37,12 @@ export function sanitizeGraphJSON(graphData) {
       }
       // Remove event handler attributes (onclick, onload, etc.)
       if (/^on[a-z]/i.test(key)) { delete obj[key]; continue; }
+      // EXEMPT free-text content from URI-neutralisation: a df.Table `rows` grid and a label's `text` are
+      // rendered as SVG textContent (and via a link-less markdown parser) — NEVER dereferenced as a URL — so a
+      // cell/label that merely STARTS with "javascript:" must survive verbatim instead of being silently blanked
+      // on reload. We exempt by KEY (not by narrowing to href/src), so the conservative posture is unchanged for
+      // every real sink — url / href / xlink:href / src and any unknown attribute still get neutralised below.
+      if (key === 'rows' || key === 'text' || key === 'tableLabel') continue;
       const val = obj[key];
       // Neutralise script-bearing URIs (javascript:/vbscript:/data:text/html).
       // data:image/* is intentionally left intact — image cells rely on it.

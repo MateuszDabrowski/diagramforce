@@ -1,13 +1,14 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.17.2.11';
-import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.17.2.11';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.17.2.11';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.17.2.11';
-import { createElementFromComponent, SVG } from './components.js?v=1.17.2.11';
-import { getPalette } from './brand-palette.js?v=1.17.2.11';
-import { getAllIcons } from './icons.js?v=1.17.2.11';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.18.0.5';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.18.0.5';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.18.0.5';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.18.0.5';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.18.0.5';
+import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.0.5';
+import { getPalette } from './brand-palette.js?v=1.18.0.5';
+import { getAllIcons } from './icons.js?v=1.18.0.5';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -107,7 +108,26 @@ function createDiagramOfType(type, groupId = null) {
   const label = DIAGRAM_TYPES[type]?.short || 'Draft';
   const id = newTab(uniqueTabName(`${label} Draft`), type);
   if (groupId && getGroup(groupId)) setTabGroup(id, groupId);   // create directly inside a group
+  if (normalizeDiagramType(type) === 'gantt') seedFreshGantt();  // Phase 4.1: a fresh Gantt opens populated (timeline + dated bars)
   return id;
+}
+
+/** Phase 4.1: seed a freshly-created Gantt tab with a timeline + real dated, draggable bars so it opens as an
+ *  editable schedule, not a blank canvas. Added under the load guard (no dirty / no history — it's the starting
+ *  point), then saveCurrentTabState() populates the new tab's graphJSON (never empty - same guard the clone/import
+ *  fix uses). The bars embed in the timeline and derive their x/width from their dates via applyGanttGeometry. */
+function seedFreshGantt() {
+  const { timeline, bars, milestones = [], marker } = createGanttTimelineSeed();
+  canvasModule.setLoadingJSON(true);
+  try {
+    graph.addCell(timeline);
+    // Bars + gate milestones + the Today marker all embed in the timeline; layoutTimelineTasks positions every type
+    // (bars by order→Y + dates→X, milestones/markers by date→X with their seeded row Y) in one pass.
+    for (const c of [...bars, ...milestones, ...(marker ? [marker] : [])]) { graph.addCell(c); timeline.embed(c); }
+    layoutTimelineTasks(timeline);
+  } finally { canvasModule.setLoadingJSON(false); }
+  saveCurrentTabState();
+  requestAnimationFrame(() => canvasModule.fitContent());
 }
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
@@ -1858,13 +1878,18 @@ function openTabGroupMenu(anchorEl, tab) {
       saveCurrentTabState();   // flush the active tab's live graph before reading it
       persistenceModule.exportSelection({ tabIds: [tab.id] });
     }, { icon: 'download' }));
-    panel.appendChild(menuItem('Export diagram to PNG', () => {
-      // switchTab (NOT activateTab): on the ACTIVE tab it early-returns, so the LIVE canvas — including
-      // edits made since the last tab switch — rasterizes as-is. activateTab() has no same-tab guard and
-      // re-runs graph.fromJSON(tab.graphJSON), silently REVERTING the canvas to the stale stored snapshot
-      // (the autosave never writes tab.graphJSON back), which looked like "export changes the diagram".
+    // switchTab (NOT activateTab): on the ACTIVE tab it early-returns, so the LIVE canvas — including edits made
+    // since the last tab switch — rasterizes as-is. activateTab() has no same-tab guard and re-runs
+    // graph.fromJSON(tab.graphJSON), silently REVERTING the canvas to the stale stored snapshot. copyCellsAsPng
+    // copies the whole tab (all elements) to the OS clipboard; `deferToNextFrame` lets the just-switched views render
+    // before the raster (the clipboard write still registers inside this click gesture via the promise).
+    panel.appendChild(menuItem('Copy as PNG', () => {
       switchTab(tab.id);
-      requestAnimationFrame(() => persistenceModule.exportPNG(false));
+      persistenceModule.copyCellsAsPng(graph.getElements(), { deferToNextFrame: true });
+    }, { icon: 'image' }));
+    panel.appendChild(menuItem('Copy as PNG (transparent)', () => {
+      switchTab(tab.id);
+      persistenceModule.copyCellsAsPng(graph.getElements(), { deferToNextFrame: true, transparent: true });
     }, { icon: 'image' }));
     panel.appendChild(menuItem('Share diagram', () => {
       switchTab(tab.id);                   // same guard as PNG export: never fromJSON-revert the active tab to a stale snapshot before sharing

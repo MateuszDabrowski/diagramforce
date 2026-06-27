@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.17.2.11';
-import { buildModal } from './feedback.js?v=1.17.2.11';
+import { compareSemver } from './util.js?v=1.18.0.5';
+import { buildModal } from './feedback.js?v=1.18.0.5';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,18 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  {
+    version: '1.18.0',
+    title: "What's new in Diagramforce",
+    intro: 'This release makes Gantt a full diagram type, adds new shapes, and lets you Copy as PNG straight to your clipboard.',
+    highlights: [
+      { icon: 'event', text: '<strong>Improved Gantt Chart.</strong> A 5-phase sample plan where dates drive the bars (drag to reschedule or reorder rows), with coloured task groups, a Timeline Summary lane, dependency arrows, day markers, assignees, and an editable Table view.' },
+      { icon: 'apps', text: '<strong>New shapes.</strong> Table, Legend and Pill in every diagram type, a Highlight state for review/diff (added, changed, removed, deferred), and a reusable My Shapes palette.' },
+      { icon: 'image', text: '<strong>Copy as PNG.</strong> Right-click or Cmd+C copies the selection as an image to paste into Slack, docs or chat. Cmd+Shift+C copies it with a transparent background.' },
+      { icon: 'edit', text: '<strong>Right-click Actions.</strong> A canvas right-click menu with full per-shape and multi-select actions, plus copy/paste style, reverse or simplify a connector, one-click crow\'s-foot endings, release embedded shapes, and font size on any text.' },
+      { icon: 'einstein', text: '<strong>Better LLM JSON spec.</strong> A validator (npm run validate), a which-diagram-type guide, and verified examples for all seven types.' },
+    ],
+  },
   {
     version: '1.17.0',
     title: "What's new in Diagramforce",

@@ -1,14 +1,14 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.17.2.11';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.17.2.11';
-import { resizeDataObjectToFit } from './components.js?v=1.17.2.11';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.17.2.11';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.17.2.11';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.17.2.11';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.17.2.11';
-import { renderTemplateThumbnail } from './templates.js?v=1.17.2.11';
+import { diagramHasImage } from './image-component.js?v=1.18.0.5';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.18.0.5';
+import { resizeDataObjectToFit } from './components.js?v=1.18.0.5';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.18.0.5';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.18.0.5';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.18.0.5';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.18.0.5';
+import { renderTemplateThumbnail } from './templates.js?v=1.18.0.5';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -291,8 +291,7 @@ export function init(_modules) {
     updateGanttToggleLabels();
   });
 
-  // Gantt timeline week controls — apply to every GanttTimeline on the tab.
-  // First-day-of-week cycles Sun→Sat; week-number toggles "W23" vs the start-date label.
+  // Gantt timeline week controls — apply to every GanttTimeline on the tab. First-day-of-week cycles Sun→Sat.
   btn('btn-gantt-week-start').addEventListener('click', () => {
     const opts = [1, 0, 6]; // Monday (ISO 8601) → Sunday (Americas) → Saturday (MENA)
     const cur = ((Number(getGanttTimelineSetting('weekStartDay', 1)) % 7) + 7) % 7;
@@ -305,9 +304,10 @@ export function init(_modules) {
     applyToAllGanttTimelines('weekendStartDay', opts[(opts.indexOf(cur) + 1) % opts.length]);
     updateGanttToggleLabels();
   });
-  btn('btn-gantt-week-number').addEventListener('click', () => {
-    const cur = getGanttTimelineSetting('showWeekNumber', false) === true;
-    applyToAllGanttTimelines('showWeekNumber', !cur);
+  // Project Summary Row — a read-only overview lane at the top of every timeline.
+  btn('btn-gantt-project-summary').addEventListener('click', () => {
+    const cur = getGanttTimelineSetting('showProjectSummary', false) === true;
+    applyToAllGanttTimelines('showProjectSummary', !cur);
     updateGanttToggleLabels();
   });
 
@@ -2008,8 +2008,9 @@ function updateDisplayMenuVisibility() {
   // table never lingers showing another tab's data.
   const vsGroup = document.getElementById('view-switch-group');
   const vsSep = document.getElementById('view-switch-sep');
-  if (vsGroup) vsGroup.style.display = isDataObjectType ? '' : 'none';   // Data Mapping (lineage) + Data Model (schema)
-  if (vsSep) vsSep.style.display = isDataObjectType ? '' : 'none';
+  const hasTable = isDataObjectType || isGantt;   // Data Mapping (lineage) + Data Model (schema) + Gantt (plan)
+  if (vsGroup) vsGroup.style.display = hasTable ? '' : 'none';
+  if (vsSep) vsSep.style.display = hasTable ? '' : 'none';
   if (modules.tableView?.isActive?.()) setViewMode('diagram');
 
   // Map bridge button — shown only for Data Model (clones it into a new Data Mapping
@@ -2023,7 +2024,7 @@ function updateDisplayMenuVisibility() {
   // The desktop toolbar groups live in .df-toolbar__left, which is hidden on mobile,
   // so without these the Table view + Map bridge were unreachable on a phone.
   const hmbView = document.getElementById('hmb-view-toggle');
-  if (hmbView) hmbView.style.display = isDataMapping ? '' : 'none';
+  if (hmbView) hmbView.style.display = (isDataMapping || isGantt) ? '' : 'none';
   const hmbMap = document.getElementById('hmb-map');
   if (hmbMap) hmbMap.style.display = isDataModel ? '' : 'none';
 
@@ -2033,14 +2034,14 @@ function updateDisplayMenuVisibility() {
   const ganttProgress = document.getElementById('btn-gantt-progress');
   const ganttWeekStart = document.getElementById('btn-gantt-week-start');
   const ganttWeekendStart = document.getElementById('btn-gantt-weekend-start');
-  const ganttWeekNumber = document.getElementById('btn-gantt-week-number');
+  const ganttProjectSummary = document.getElementById('btn-gantt-project-summary');
   // Hide gantt separator always — auto-layout buttons (above) and gantt options are mutually exclusive
   if (ganttSep) ganttSep.style.display = 'none';
   if (ganttAssignee) ganttAssignee.style.display = isGantt ? '' : 'none';
   if (ganttProgress) ganttProgress.style.display = isGantt ? '' : 'none';
   if (ganttWeekStart) ganttWeekStart.style.display = isGantt ? '' : 'none';
   if (ganttWeekendStart) ganttWeekendStart.style.display = isGantt ? '' : 'none';
-  if (ganttWeekNumber) ganttWeekNumber.style.display = isGantt ? '' : 'none';
+  if (ganttProjectSummary) ganttProjectSummary.style.display = isGantt ? '' : 'none';
 
   // The four "canvas-behaviour" toggles at the top (Auto-Fit Containers, Distributed
   // Connectors, Crossing Bumps, Focus Dimming) are meaningless for a Gantt chart — it
@@ -2183,8 +2184,8 @@ function updateGanttToggleLabels() {
     ?.classList.toggle('is-checked', isDisplayFlagOn('showAssignee'));
   document.getElementById('btn-gantt-progress')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showProgress'));
-  document.getElementById('btn-gantt-week-number')
-    ?.classList.toggle('is-checked', getGanttTimelineSetting('showWeekNumber', false) === true);
+  document.getElementById('btn-gantt-project-summary')
+    ?.classList.toggle('is-checked', getGanttTimelineSetting('showProjectSummary', false) === true);
   const wsLabel = document.getElementById('gantt-week-start-label');
   if (wsLabel) {
     const wsd = ((Number(getGanttTimelineSetting('weekStartDay', 1)) % 7) + 7) % 7;

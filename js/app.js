@@ -1,27 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.17.2.11';
-import * as icons       from './icons.js?v=1.17.2.11';
-import { getAllStencilSvgs } from './components.js?v=1.17.2.11';
-import * as shapes      from './shapes.js?v=1.17.2.11';
-import * as canvas      from './canvas.js?v=1.17.2.11';
-import * as stencil     from './stencil.js?v=1.17.2.11';
-import * as selection   from './selection.js?v=1.17.2.11';
-import * as history     from './history.js?v=1.17.2.11';
-import * as clipboard   from './clipboard.js?v=1.17.2.11';
-import * as templates    from './templates.js?v=1.17.2.11';
-import * as keyboard    from './keyboard.js?v=1.17.2.11';
-import * as toolbar     from './toolbar.js?v=1.17.2.11';
-import * as properties  from './properties.js?v=1.17.2.11';
-import * as persistence from './persistence.js?v=1.17.2.11';
-import * as tabs        from './tabs.js?v=1.17.2.11';
-import * as mermaidImport from './mermaid-import.js?v=1.17.2.11';
-import * as tableView    from './table-view.js?v=1.17.2.11';
-import * as walkthrough  from './walkthrough.js?v=1.17.2.11';
-import * as whatsNew     from './whats-new.js?v=1.17.2.11';
-import * as a11y         from './a11y.js?v=1.17.2.11';
-import { seedDefaultPalette } from './brand-palette.js?v=1.17.2.11';
+import * as theme       from './theme.js?v=1.18.0.5';
+import * as icons       from './icons.js?v=1.18.0.5';
+import { getAllStencilSvgs } from './components.js?v=1.18.0.5';
+import * as shapes      from './shapes.js?v=1.18.0.5';
+import * as canvas      from './canvas.js?v=1.18.0.5';
+import * as stencil     from './stencil.js?v=1.18.0.5';
+import * as selection   from './selection.js?v=1.18.0.5';
+import * as history     from './history.js?v=1.18.0.5';
+import * as clipboard   from './clipboard.js?v=1.18.0.5';
+import * as templates    from './templates.js?v=1.18.0.5';
+import * as keyboard    from './keyboard.js?v=1.18.0.5';
+import * as toolbar     from './toolbar.js?v=1.18.0.5';
+import * as properties  from './properties.js?v=1.18.0.5';
+import * as persistence from './persistence.js?v=1.18.0.5';
+import * as tabs        from './tabs.js?v=1.18.0.5';
+import * as mermaidImport from './mermaid-import.js?v=1.18.0.5';
+import * as tableView    from './table-view.js?v=1.18.0.5';
+import * as walkthrough  from './walkthrough.js?v=1.18.0.5';
+import * as whatsNew     from './whats-new.js?v=1.18.0.5';
+import * as a11y         from './a11y.js?v=1.18.0.5';
+import { seedDefaultPalette } from './brand-palette.js?v=1.18.0.5';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -107,6 +107,10 @@ async function main() {
     walkthrough,
   };
 
+  // Load localhost dev Google-Drive creds (gitignored dev/dev-config.json) BEFORE the toolbar gates the Drive UI on
+  // isDriveConfigured() — so localhost shows Drive automatically, without committing creds. No-op on prod / no file.
+  await persistence.ensureDriveConfig();
+
   keyboard.init(moduleRefs);
   toolbar.init(moduleRefs);
 
@@ -125,6 +129,8 @@ async function main() {
   selection.setEndpointSetter(properties.setLinkEndpoints);
   // Copy/Paste style clipboard for the MULTI-select right-click menu (single-element uses the action provider).
   selection.setStyleApi({ copy: properties.copyCellStyle, has: properties.hasStyleClip, paste: properties.pasteCellStyle });
+  // "Copy as PNG" right-click action — rasters the selection to the OS clipboard (paste into Slack/docs as an image).
+  selection.setCopyAsPng(persistence.copyCellsAsPng);
 
   // --- Phase 5b: Canvas accessibility — narrate selection to assistive tech ---
   a11y.init({ graph, selection });

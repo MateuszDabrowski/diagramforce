@@ -11,12 +11,15 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.17.2.11';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.17.2.11';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.17.2.11';
-import { SF_FIELD_TYPES } from './properties.js?v=1.17.2.11';
-import { buildModal } from './feedback.js?v=1.17.2.11';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.17.2.11';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.0.5';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.18.0.5';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.18.0.5';
+import { SF_FIELD_TYPES } from './properties.js?v=1.18.0.5';
+import { buildModal } from './feedback.js?v=1.18.0.5';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.18.0.5';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.0.5';
+import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.18.0.5';
+import { applyGanttDepLinkStyle } from './canvas.js?v=1.18.0.5';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -32,6 +35,7 @@ let _rerenderTimer = null;
 // the toolbar to Diagram view first).
 let _mode = 'mapping';
 const isModelMode = () => _mode === 'model';
+const isGanttMode = () => _mode === 'gantt';   // Phase 5: a Gantt project-plan table (peer of the chart)
 
 // ── Inline FIELD-level edit session (Edit Fields → Save / Cancel) ──
 // A session holds an unapplied working COPY of every editable field (keyed objId::fid),
@@ -43,6 +47,8 @@ let _draft = null;         // Map(objId::fid -> { objId, fid, apiName, label, ty
 let _orig = null;          // frozen snapshot taken when the session opened (drives the diff + the changed-cell tint)
 let _linkDraft = null;     // Map(linkId -> { linkId, mappingType, expressionRule }) — editable mapping-link props
 let _linkOrig = null;      // frozen link-prop snapshot
+let _barDraft = null;      // Phase 5b: Map(barId -> { taskLabel, startDate, endDate, progress, assignee, _tlId })
+let _barOrig = null;       // frozen GanttTask-prop snapshot
 let _applying = false;     // true only while Save writes to the graph — suppresses the diagram-edit watcher
 let _guardOpen = false;    // a Save/Discard guard overlay is currently showing (don't stack a second)
 let _requestTableView = null;   // () => switch the toolbar back to Table view (wired by app.js, used by #5)
@@ -80,6 +86,29 @@ const EDIT_COLS = {
 // Drives the snapshot, the diff, and the apply. `required` + `deprecated` are compared as booleans.
 const EDIT_PROPS = ['apiName', 'label', 'type', 'sampleValues', 'keyType', 'required', 'length', 'deprecated'];
 const BOOL_PROPS = new Set(['required', 'deprecated']);
+
+// Phase 5b/5c: editable Gantt plan columns. Duration is DERIVED (end − start) — editing it rewrites endDate
+// (start + N days). Group is a drafted `<select>` (the timeline's groups[] + Ungrouped); a group change
+// re-slots the bar via resequenceGanttOrders on Save. Dependencies stay a draft-free LIVE editor (they are
+// ganttDep links, not a scalar prop — see the deps popover). The draft stores the primitive props +
+// groupId; `GANTT_EDIT_PROPS` drives the diff + apply.
+const GANTT_EDIT_COLS = {
+  name:     { kind: 'text',   prop: 'taskLabel' },
+  start:    { kind: 'date',   prop: 'startDate' },
+  end:      { kind: 'date',   prop: 'endDate' },
+  duration: { kind: 'number', prop: 'duration' },   // special: writes endDate
+  progress: { kind: 'number', prop: 'progress', min: 0, max: 100 },
+  assignee: { kind: 'text',   prop: 'assignee' },
+  group:    { kind: 'groupSelect', prop: 'groupId' },   // <select> of the timeline's groups[] + Ungrouped
+  dependencies: { kind: 'depEdit' },   // a button → the live predecessor-link editor (ganttDep links)
+};
+const GANTT_EDIT_PROPS = ['taskLabel', 'startDate', 'endDate', 'progress', 'assignee', 'groupId'];
+const barDirty = (d, o) => !!o && GANTT_EDIT_PROPS.some(p => (d[p] ?? '') !== (o[p] ?? ''));
+const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
+// Has this bar's draft COLUMN changed vs the snapshot? Duration is derived (end − start) → compare spans.
+const barColChanged = (d, o, prop) => prop === 'duration'
+  ? durationDays(d.startDate, d.endDate) !== durationDays(o.startDate, o.endDate)
+  : (d[prop] ?? '') !== (o[prop] ?? '');
 // Link props the session may write (mapping rows only).
 const LINK_PROPS = ['mappingType', 'expressionRule'];
 const linkDirty = (d, o) => !!o && LINK_PROPS.some(p => (d[p] ?? '') !== (o[p] ?? ''));
@@ -159,7 +188,24 @@ const MODEL_COLUMNS = [
   { key: 'srcSampleValues',   label: 'Sample Values',  section: 'mdl', sortable: true },
 ];
 const NO_DIVIDERS = new Set();
-const schemaOf = () => isModelMode() ? { cols: MODEL_COLUMNS, starts: NO_DIVIDERS } : { cols: VIS, starts: SECTION_STARTS };
+
+// ── Gantt project-plan schema table (Phase 5) ───────────────────────────────
+// One row per sf.GanttTask bar (in ganttRowLayout order, so grouped bars stay together), across every
+// timeline in the tab. Dates are the source of truth; Duration/Dependencies/Group are derived. Single
+// section, no dividers. Phase 5 is read-only (editing Start/End/Duration lands in 5b).
+const GANTT_COLUMNS = [
+  { key: 'name',         label: 'Name',         section: 'gantt', sortable: true },
+  { key: 'start',        label: 'Start',        section: 'gantt', sortable: true },
+  { key: 'end',          label: 'End',          section: 'gantt', sortable: true },
+  { key: 'duration',     label: 'Duration',     section: 'gantt', center: true },
+  { key: 'progress',     label: 'Progress',     section: 'gantt', center: true },
+  { key: 'assignee',     label: 'Assignee',     section: 'gantt', center: true },
+  { key: 'dependencies', label: 'Dependencies', section: 'gantt' },
+  { key: 'group',        label: 'Group',        section: 'gantt', sortable: true },
+];
+const schemaOf = () => isGanttMode() ? { cols: GANTT_COLUMNS, starts: NO_DIVIDERS }
+  : isModelMode() ? { cols: MODEL_COLUMNS, starts: NO_DIVIDERS }
+  : { cols: VIS, starts: SECTION_STARTS };
 
 // Inline SLDS-style glyphs (no sprite symbols for these — same inline-SVG
 // convention the toolbar buttons use).
@@ -169,6 +215,9 @@ const ICON_WARN = '<svg class="df-tbl__warn" viewBox="0 0 16 16" width="13" heig
 const ICON_PENCIL = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.4 2.3a1.3 1.3 0 0 1 1.8 0l.5.5a1.3 1.3 0 0 1 0 1.8L5.4 13.4l-3 .6.6-3z"/><path d="M10.3 3.4l2.3 2.3"/></svg>';
 // Counter-clockwise revert arrow (per-row "reset to original").
 const ICON_UNDO = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 1 1.5 3.5"/><path d="M3 4.5V8h3.5"/></svg>';
+// Trash (delete a task row) + a 6-dot drag handle (reorder), matching the timeline panel's editor.
+const ICON_TRASH = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10"/><path d="M5.5 4.5V3.2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.3"/><path d="M4.3 4.5l.6 8a1 1 0 0 0 1 .9h4.2a1 1 0 0 0 1-.9l.6-8"/><path d="M6.8 7v4M9.2 7v4"/></svg>';
+const ICON_DRAG = '<svg viewBox="0 0 10 14" width="10" height="14" fill="currentColor" aria-hidden="true"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
 
 export function init(modules) {
   graph = modules.graph;
@@ -180,6 +229,9 @@ export function init(modules) {
     // change:parent / change:embeds keep the Source/Target DATA LAYER columns live when an
     // object is dragged into or out of a mapping-layer zone (its parent container changes).
     graph.on('add remove reset change:source change:target change:fields change:attrs change:linkKind change:labels change:mappingType change:expressionRule change:parent change:embeds', scheduleRerender);
+    // Phase 5: keep the Gantt plan table live as bars/dependencies change on the canvas (dates, label,
+    // progress, assignee, order, group, a drawn/removed ganttDep link, the timeline's groups[]).
+    graph.on('change:startDate change:endDate change:taskLabel change:progress change:assignee change:order change:groupId change:depType change:lag change:groups', scheduleRerender);
     // (#9) While a table edit session is OPEN but the user has flipped to the diagram view to
     // reference it, a genuine SCHEMA edit there means two sources are mutating the same model —
     // pop the Save/Discard guard. A tighter event set than the live-refresh one above (no attrs/
@@ -208,7 +260,10 @@ export function show() {
   if (!container) return;
   // Pick the projection from the active diagram type (datamodel → per-field schema, else mapping lineage).
   // Stable while the table is up — a tab change resets the toolbar to Diagram view first.
-  if (!_editing) _mode = getActiveTabType?.() === 'datamodel' ? 'model' : 'mapping';
+  if (!_editing) {
+    const t = getActiveTabType?.();
+    _mode = t === 'gantt' ? 'gantt' : t === 'datamodel' ? 'model' : 'mapping';
+  }
   _active = true;
   render();                       // clean re-evaluation of the active graph cells
   container.hidden = false;
@@ -425,6 +480,38 @@ function buildModelData() {
   return { rows, mappingCount: 0, objectCount: objects.length, unmappedCount: 0, fieldCount: rows.length };
 }
 
+// Phase 5: project the Gantt plan — one row per sf.GanttTask bar across every timeline, in ganttRowLayout
+// order (grouped bars stay together). Dates are the source of truth; Duration / Dependencies / Group are
+// derived. Read-only in phase 5. `_barId`/`_tlId` are carried for the (5b) edit write-back + per-row keys.
+function buildGanttData() {
+  const timelines = graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
+  const labelOf = (id) => { const c = graph.getCell(id); return c ? (c.get('taskLabel') || c.attr('label/text') || 'Task') : id; };
+  const rows = [];
+  for (const tl of timelines) {
+    const groups = tl.get('groups') || [];
+    for (const lr of ganttRowLayout(tl)) {
+      if (lr.kind !== 'bar') continue;
+      const bar = lr.bar;
+      const start = bar.get('startDate') || '', end = bar.get('endDate') || '';
+      const dur = (start && end) ? durationDays(start, end) : null;
+      const deps = ganttDependencies(bar).map(d => labelOf(d.predecessorId)).join(', ');
+      const g = bar.get('groupId') ? groups.find(x => x.id === bar.get('groupId')) : null;
+      const prog = bar.get('progress');
+      rows.push({
+        _barId: bar.id, _tlId: tl.id,
+        name: bar.get('taskLabel') || bar.attr('label/text') || 'Task',
+        start, end,
+        duration: (dur != null) ? `${dur}d` : '',
+        progress: (prog != null && prog !== '') ? `${prog}%` : '',
+        assignee: bar.get('assignee') || '',
+        dependencies: deps || '—',
+        group: (g && g.label) || '—',
+      });
+    }
+  }
+  return { rows, taskCount: rows.length, timelineCount: timelines.length };
+}
+
 // Stable, case-insensitive sort by the active column (graph order when unsorted).
 function sortRows(rows) {
   if (!_sortKey) return rows;
@@ -444,15 +531,19 @@ function sortRows(rows) {
 export function render() {
   if (!container || !graph) return;
   const isModel = isModelMode();
+  const isGantt = isGanttMode();
   const { cols, starts } = schemaOf();
-  const built = isModel ? buildModelData() : buildData();
+  const built = isGantt ? buildGanttData() : isModel ? buildModelData() : buildData();
   const rows = sortRows(built.rows);
   _lastRows = rows;
-  const { mappingCount, objectCount, unmappedCount, fieldCount } = built;
+  const { mappingCount, objectCount, unmappedCount, fieldCount, taskCount } = built;
 
   const revHdr = _editing ? '<th rowspan="2" class="df-tbl__revcol" aria-label="Revert row"></th>' : '';
-  const tier1 = isModel
-    ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl">Data Model</th></tr>`
+  // Gantt edit mode gets a trailing per-row actions column (drag-reorder handle + delete).
+  const ganttEdit = isGantt && _editing;
+  const actHdr = ganttEdit ? '<th rowspan="2" class="df-tbl__actcol" aria-label="Row actions"></th>' : '';
+  const tier1 = (isModel || isGantt)
+    ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl">${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
     : `<tr class="df-tbl__sections">${revHdr}
         <th colspan="${SRC_COUNT}" class="df-tbl__sec df-tbl__sec--src">Data Sources</th>
         <th colspan="${MAP_COUNT}" class="df-tbl__sec df-tbl__sec--map">Data Mapping</th>
@@ -483,6 +574,41 @@ export function render() {
   // side has a real field on the row (so an unmapped row's empty target stays blank and no rows can be
   // conjured). Values come from the draft (the graph is untouched until Save). Returns null = not editable.
   const renderEditableCell = (key, r) => {
+    // Phase 5b: Gantt plan inputs (text / date / number) from the bar draft. Dependencies + Group aren't in
+    // GANTT_EDIT_COLS → null → read-only text. Duration shows the derived end−start span.
+    if (isGantt) {
+      const gec = GANTT_EDIT_COLS[key];
+      if (!gec) return null;
+      const d = r._barId && _barDraft?.get(r._barId);
+      if (!d) return null;
+      const bk = escHtml(String(r._barId));
+      if (gec.kind === 'date') {
+        return `<input type="date" class="df-tbl__input" data-bk="${bk}" data-bprop="${gec.prop}" value="${escHtml(String(d[gec.prop] ?? ''))}" />`;
+      }
+      if (gec.kind === 'number') {
+        const v = key === 'duration' ? durationDays(d.startDate, d.endDate) : d[gec.prop];
+        const val = (v == null || v === '') ? '' : escHtml(String(v));
+        const rng = `${gec.min != null ? ` min="${gec.min}"` : ''}${gec.max != null ? ` max="${gec.max}"` : ''}`;
+        return `<input type="number" class="df-tbl__input df-tbl__input--num" data-bk="${bk}" data-bprop="${gec.prop}" value="${val}"${rng} />`;
+      }
+      if (gec.kind === 'groupSelect') {
+        // Options = the bar's timeline's groups[] + an Ungrouped sentinel (value ''). No groups → read-only '—'.
+        const tl = r._tlId && graph.getCell(r._tlId);
+        const groups = (tl && tl.get('groups')) || [];
+        if (!groups.length) return null;
+        const cur = String(d.groupId ?? '');
+        const opts = `<option value=""${cur === '' ? ' selected' : ''}>Ungrouped</option>` +
+          groups.map(g => `<option value="${escHtml(String(g.id))}"${String(g.id) === cur ? ' selected' : ''}>${escHtml(String(g.label || 'Group'))}</option>`).join('');
+        return `<select class="df-tbl__input df-tbl__select" data-bk="${bk}" data-bprop="groupId">${opts}</select>`;
+      }
+      if (gec.kind === 'depEdit') {
+        // A button showing the current predecessor summary (or "+ Add"); opens the live ganttDep-link editor.
+        const has = r.dependencies && r.dependencies !== '—';
+        const lbl = has ? escHtml(String(r.dependencies)) : '+ Add';
+        return `<button type="button" class="df-tbl__dep-edit${has ? '' : ' df-tbl__dep-edit--empty'}" data-bar="${bk}" title="Edit dependencies">${lbl}</button>`;
+      }
+      return `<input type="text" class="df-tbl__input" data-bk="${bk}" data-bprop="${gec.prop}" value="${escHtml(String(d[gec.prop] ?? ''))}" />`;
+    }
     const ec = EDIT_COLS[key];
     if (!ec) return null;
     // Mapping-LEVEL cells (Mapping Type picklist + Expression text) — editable only on a mapped row.
@@ -530,6 +656,14 @@ export function render() {
   };
   // A cell shows the brand-amber "changed" tint when its draft value differs from the session snapshot.
   const cellChanged = (key, r) => {
+    if (isGantt) {
+      const gec = GANTT_EDIT_COLS[key];
+      if (!gec || gec.kind === 'depEdit') return false;   // deps aren't drafted → never a "changed" tint
+      const d = r._barId && _barDraft?.get(r._barId), o = r._barId && _barOrig?.get(r._barId);
+      if (!d || !o) return false;
+      if (key === 'duration') return durationDays(d.startDate, d.endDate) !== durationDays(o.startDate, o.endDate);
+      return (d[gec.prop] ?? '') !== (o[gec.prop] ?? '');
+    }
     const ec = EDIT_COLS[key];
     if (!ec) return false;
     if (ec.kind === 'linkSelect' || ec.kind === 'linkText') {
@@ -552,8 +686,18 @@ export function render() {
   // button in place via updateRowRevert().
   const revertCell = (r) => !_editing ? '' :
     `<td class="df-tbl__revcol" data-row="${escHtml(rowKeyOf(r))}">${rowChanged(r) ? revertBtnHtml(r) : ''}</td>`;
-  const body = rows.length
-    ? rows.map(r => `<tr${!isModel && !r._mapped ? ' class="df-tbl__row--unmapped"' : ''}>${revertCell(r)}${cols.map((c, i) => {
+  // Trailing per-row actions (gantt edit only): a drag-reorder handle + a delete button, keyed by bar id.
+  const actCell = (r) => !ganttEdit ? '' :
+    `<td class="df-tbl__actcol"><span class="df-tbl__act-drag" draggable="true" data-bar="${escHtml(String(r._barId))}" title="Drag to reorder" aria-label="Drag to reorder">${ICON_DRAG}</span><button type="button" class="df-tbl__act-del" data-bar="${escHtml(String(r._barId))}" title="Delete task" aria-label="Delete task">${ICON_TRASH}</button></td>`;
+  // "+ Add task" appends to the FIRST timeline (the flat table can't disambiguate); name it when there's >1 so
+  // the user knows where the task lands.
+  const tls = ganttEdit ? ganttTimelines() : [];
+  const addLabel = tls.length > 1 ? `+ Add task to ${escHtml(String(tls[0].get('timelineTitle') || 'Tasks'))}` : '+ Add task';
+  const addRowHtml = (ganttEdit && tls.length)
+    ? `<tr class="df-tbl__addrow"><td colspan="${cols.length + 2}"><button type="button" id="tbl-add-task" class="df-tbl__add-task">${addLabel}</button></td></tr>`
+    : '';
+  const body = (rows.length
+    ? rows.map(r => `<tr${ganttEdit ? ` data-bar="${escHtml(String(r._barId))}"` : ''}${!isModel && !isGantt && !r._mapped ? ' class="df-tbl__row--unmapped"' : ''}>${revertCell(r)}${cols.map((c, i) => {
         const div = starts.has(i) ? ' df-tbl__divider' : '';
         const center = c.center ? ' df-tbl__center' : '';
         const strike = isStruck(c.key, r) ? ' df-tbl__strike' : '';
@@ -563,39 +707,46 @@ export function render() {
           : '';
         const ctrl = _editing ? renderEditableCell(c.key, r) : null;
         if (ctrl !== null) {
-          const kind = EDIT_COLS[c.key].kind;
+          const kind = (isGantt ? GANTT_EDIT_COLS[c.key] : EDIT_COLS[c.key])?.kind;
           const checkbox = kind === 'key' || kind === 'nullable' || kind === 'bool';
+          const numCenter = isGantt && c.center;   // Duration / Progress / Assignee stay centred while editing
           const changed = cellChanged(c.key, r) ? ' df-tbl__cell--changed' : '';
-          return `<td class="${('df-tbl__cell--edit' + (checkbox ? ' df-tbl__center' : '') + div + changed).trim()}">${ctrl}${warn}</td>`;
+          return `<td class="${('df-tbl__cell--edit' + (checkbox || numCenter ? ' df-tbl__center' : '') + div + changed).trim()}">${ctrl}${warn}</td>`;
         }
         return `<td class="${(div + center + strike).trim()}">${cellHtml(c.key, r[c.key]) + warn}</td>`;
-      }).join('')}</tr>`).join('')
-    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0)}" class="df-tbl__empty">${isModel ? 'No fields yet - add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet - draw field-to-field links on the canvas, then return here.'}</td></tr>`;
+      }).join('')}${actCell(r)}</tr>`).join('')
+    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0) + (ganttEdit ? 1 : 0)}" class="df-tbl__empty">${isGantt ? (ganttEdit && ganttTimelines().length ? 'No tasks yet - use + Add task below.' : 'No tasks on this Gantt yet - add a timeline and tasks on the canvas, then return here.') : isModel ? 'No fields yet - add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet - draw field-to-field links on the canvas, then return here.'}</td></tr>`)
+    + addRowHtml;
 
   // In edit mode the note becomes a live unsaved-change tally; otherwise a mode-specific summary.
   const changeCount = _editing ? pendingChangeCount() : 0;
   const note = _editing
     ? `${changeCount} unsaved change${changeCount === 1 ? '' : 's'}`
-    : isModel
-      ? `${fieldCount} field${fieldCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}`
-      : `${mappingCount} mapping${mappingCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}` + (unmappedCount ? ` · ${unmappedCount} unmapped field${unmappedCount === 1 ? '' : 's'}` : '');
+    : isGantt
+      ? `${taskCount} task${taskCount === 1 ? '' : 's'}`
+      : isModel
+        ? `${fieldCount} field${fieldCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}`
+        : `${mappingCount} mapping${mappingCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}` + (unmappedCount ? ` · ${unmappedCount} unmapped field${unmappedCount === 1 ? '' : 's'}` : '');
   const toggleLabel = 'Show Unmapped Fields';   // static label; the checkbox tick shows on/off state
-  const csvLabel = isModel ? 'Export Schema to CSV' : 'Export Mapping to CSV';
+  const csvLabel = isGantt ? 'Export Plan to CSV' : isModel ? 'Export Schema to CSV' : 'Export Mapping to CSV';
 
   // Topbar — Edit mode: Cancel + Save. Model mode: Edit + CSV (no unmapped concept). Mapping mode:
   // Show-Unmapped (left) + Edit + CSV. The toggle/CSV/sort are withheld mid-edit (no row reshuffle).
-  const editBtn = `<button type="button" id="tbl-edit" class="df-tbl__csv df-tbl__push" title="Edit field-level values inline (typos, names, types, keys, sample values)">${ICON_PENCIL}<span>Edit Fields</span></button>`;
+  const editTitle = isGantt ? 'Edit the plan inline (name, start / end / duration, progress, assignee, group, dependencies) - add, delete and reorder tasks' : 'Edit field-level values inline (typos, names, types, keys, sample values)';
+  const editBtn = `<button type="button" id="tbl-edit" class="df-tbl__csv df-tbl__push" title="${escHtml(editTitle)}">${ICON_PENCIL}<span>${isGantt ? 'Edit Plan' : 'Edit Fields'}</span></button>`;
   const csvBtn = `<button type="button" id="tbl-csv" class="df-tbl__csv" title="Export the visible rows as a CSV file">${ICON_DOWNLOAD}<span>${escHtml(csvLabel)}</span></button>`;
   const topbarActions = _editing
     ? `<button type="button" id="tbl-edit-cancel" class="df-tbl__csv df-tbl__push">Cancel</button>
        <button type="button" id="tbl-edit-save" class="df-tbl__csv df-tbl__csv--primary">Save</button>`
-    : isModel
-      ? `${editBtn}${csvBtn}`
-      : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${editBtn}${csvBtn}`;
+    : isGantt
+      ? `${editBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + CSV)
+      : isModel
+        ? `${editBtn}${csvBtn}`
+        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${editBtn}${csvBtn}`;
 
   container.innerHTML = `<div class="df-tbl${_editing ? ' df-tbl--editing' : ''}">
       <div class="df-tbl__topbar">
-        <h2 class="df-tbl__title">${isModel ? 'Field Schema' : 'Field Mapping'}</h2>
+        <h2 class="df-tbl__title">${isGantt ? 'Project Plan' : isModel ? 'Field Schema' : 'Field Mapping'}</h2>
         <span class="df-tbl__note" id="tbl-note">${escHtml(note)}</span>
         ${topbarActions}
       </div>
@@ -610,6 +761,27 @@ export function render() {
     // Text + picklist: update the draft live and re-tint the cell in place — no re-render (keeps caret).
     container.querySelectorAll('.df-tbl__input[data-prop]').forEach(el => {
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => onFieldInput(el));
+    });
+    // Phase 5b: Gantt plan inputs — text/number/date live on 'input' (caret preserved); the Group <select>
+    // commits on 'change'. Start/End/Duration are interdependent; onBarInput syncs the sibling IN PLACE.
+    container.querySelectorAll('.df-tbl__input[data-bprop]').forEach(el => {
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => onBarInput(el));
+    });
+    // Phase 5c: Gantt structural ops (LIVE + undoable, separate from the Save/Cancel draft) — add / delete /
+    // drag-reorder. Each mutates the graph then re-syncs the draft + re-renders (see the live-ops block above).
+    container.querySelector('#tbl-add-task')?.addEventListener('click', () => addGanttTask(ganttTimelines()[0]?.id));
+    container.querySelectorAll('.df-tbl__act-del').forEach(btn =>
+      btn.addEventListener('click', () => deleteGanttBar(btn.dataset.bar)));
+    container.querySelectorAll('.df-tbl__dep-edit').forEach(btn =>
+      btn.addEventListener('click', () => openDepEditor(btn.dataset.bar, btn)));
+    container.querySelectorAll('.df-tbl__act-drag').forEach(h => {
+      h.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', h.dataset.bar); h.closest('tr')?.classList.add('df-tbl__row--dragging'); });
+      h.addEventListener('dragend', () => container.querySelectorAll('.df-tbl__row--dragging, .df-tbl__row--drag-over').forEach(r => r.classList.remove('df-tbl__row--dragging', 'df-tbl__row--drag-over')));
+    });
+    container.querySelectorAll('tr[data-bar]').forEach(tr => {
+      tr.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; tr.classList.add('df-tbl__row--drag-over'); });
+      tr.addEventListener('dragleave', () => tr.classList.remove('df-tbl__row--drag-over'));
+      tr.addEventListener('drop', (e) => { e.preventDefault(); tr.classList.remove('df-tbl__row--drag-over'); const from = e.dataTransfer.getData('text/plain'); if (from && from !== tr.dataset.bar) reorderGanttBar(from, tr.dataset.bar); });
     });
     // Mapping-level (link) Mapping Type / Expression inputs — same live-update path, keyed by link id.
     container.querySelectorAll('.df-tbl__input[data-lprop]').forEach(el => {
@@ -648,6 +820,10 @@ export function render() {
 // + a mutable `_draft`, lock undo/redo, and re-render into edit mode.
 function beginEdit() {
   if (_editing) return;
+  // Gantt: drop any active column sort on entering Edit Plan. Drag-reorder rewrites `order` against the natural
+  // ganttRowLayout sequence, so a sorted view (where visible order ≠ order sequence) would mis-slot the drop.
+  // Editing the plan inherently wants the true plan order (matches the timeline panel, which never sorts).
+  if (isGanttMode()) _sortKey = null;
   buildDraft();
   _editing = true;
   setLocked(true);    // (#7) undo/redo can't run mid-edit — the draft is the only pending change
@@ -661,6 +837,30 @@ function buildDraft() {
   _orig = new Map();
   _linkDraft = new Map();
   _linkOrig = new Map();
+  _barDraft = new Map();
+  _barOrig = new Map();
+  // Phase 5b: snapshot each Gantt bar's editable props once (keyed by bar id), then bail — gantt uses its
+  // own draft only. Duration is not stored (derived from start/end); progress kept as a number ('' = unset).
+  if (isGanttMode()) {
+    for (const r of _lastRows) {
+      if (!r._barId || _barDraft.has(r._barId)) continue;
+      const bar = graph.getCell(r._barId);
+      if (!bar) continue;
+      const prog = bar.get('progress');
+      const s = {
+        taskLabel: bar.get('taskLabel') || bar.attr('label/text') || '',
+        startDate: bar.get('startDate') || '',
+        endDate: bar.get('endDate') || '',
+        progress: (prog == null || prog === '') ? '' : Number(prog),
+        assignee: bar.get('assignee') || '',
+        groupId: bar.get('groupId') || null,
+        _tlId: r._tlId,
+      };
+      _barOrig.set(r._barId, { ...s });
+      _barDraft.set(r._barId, { ...s });
+    }
+    return;
+  }
   const snap = (objId, fid) => {
     if (!objId || !fid) return;
     const key = draftKeyOf(objId, fid);
@@ -690,6 +890,12 @@ const fieldDirty = (d, o) => !!o && EDIT_PROPS.some(p => (BOOL_PROPS.has(p) ? !!
 // Number of fields whose draft differs from the snapshot — counted per field (not per cell), so a
 // denormalised field or a coupled key+nullable flip still reads as a single changed field.
 function pendingChangeCount() {
+  if (isGanttMode()) {
+    if (!_barDraft || !_barOrig) return 0;
+    let n = 0;
+    for (const [id, d] of _barDraft) if (barDirty(d, _barOrig.get(id))) n++;
+    return n;
+  }
   if (!_draft || !_orig) return 0;
   let n = 0;
   for (const [key, d] of _draft) if (fieldDirty(d, _orig.get(key))) n++;
@@ -706,6 +912,8 @@ function endEditSession(commit) {
   _orig = null;
   _linkDraft = null;
   _linkOrig = null;
+  _barDraft = null;
+  _barOrig = null;
   setLocked(false);   // (#10) buttons live again — Save's batch (if any) is now the top undo entry
   if (_active) render();
 }
@@ -718,6 +926,7 @@ export function isEditing() { return _editing; }
 // back, grouped per object into ONE `fields` set, all inside a single undo batch (#10). Existing fields
 // only — nothing is added or removed. `_applying` suppresses the diagram-edit watcher (#9).
 function applyEdits() {
+  if (isGanttMode()) { applyGanttEdits(); return; }
   if (!graph || !_draft || !_orig) return;
   const byObj = new Map();   // objId -> Map(fid -> draftState)
   for (const [key, d] of _draft) {
@@ -757,6 +966,242 @@ function applyEdits() {
   }
 }
 
+// Phase 5b: commit the Gantt plan draft → graph. For every bar whose draft differs, write the five primitive
+// props back (label also mirrored to the on-bar text, assignee to its label) and re-derive geometry from the
+// new dates — all in ONE undo batch, with `_applying` suppressing the diagram-edit watcher.
+function applyGanttEdits() {
+  if (!graph || !_barDraft || !_barOrig) return;
+  const dirty = [...(_barDraft)].filter(([id, d]) => barDirty(d, _barOrig.get(id)));
+  if (!dirty.length) return;
+  _applying = true;
+  startBatch();
+  const regroup = new Set();   // timelines whose bar grouping changed → re-slot after the writes
+  try {
+    for (const [id, d] of dirty) {
+      const bar = graph.getCell(id);
+      if (!bar?.set) continue;
+      const o = _barOrig.get(id);
+      if (d.taskLabel !== o.taskLabel) { bar.set('taskLabel', d.taskLabel); bar.attr('label/text', d.taskLabel); }
+      if (d.startDate !== o.startDate) bar.set('startDate', d.startDate);
+      if (d.endDate !== o.endDate) bar.set('endDate', d.endDate);
+      if ((d.progress ?? '') !== (o.progress ?? '')) bar.set('progress', d.progress === '' ? 0 : clampInt(d.progress, 0, 100));
+      if (d.assignee !== o.assignee) { bar.set('assignee', d.assignee); bar.attr('assigneeLabel/text', d.assignee); }
+      const tl = (d._tlId && graph.getCell(d._tlId)) || ganttTimelineFor(bar);
+      if ((d.groupId ?? null) !== (o.groupId ?? null)) { bar.set('groupId', d.groupId || null); if (tl) regroup.add(tl.id); }
+      if (tl) applyGanttGeometry(bar, tl);   // x/width from the new dates (Y from order)
+    }
+    // A group change moves the bar into its group's section → renumber orders + re-layout that timeline.
+    for (const tlId of regroup) { const tl = graph.getCell(tlId); if (tl) resequenceGanttOrders(tl); }
+  } finally {
+    endBatch();
+    _applying = false;
+  }
+}
+
+// ── Live structural ops (Phase 5c) — Add / Delete / Reorder ─────────────────
+// Unlike the cell-value edits (which are drafted and committed on Save), these mutate the graph IMMEDIATELY,
+// each as its own undo entry, then re-sync the bar draft + re-render. Safe during a session: scheduleRerender
+// is inert while _editing, and onDiagramSchemaEdit early-returns while the table is _active, so neither races.
+
+// Every timeline in the active Gantt tab, and the default target for "+ Add task" (the first one — a Gantt
+// almost always has exactly one timeline; the flat table can't disambiguate more, so the first wins).
+const ganttTimelines = () => graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
+
+// Re-sync the bar draft to the LIVE graph after a structural op: drop drafts for removed bars, snapshot any
+// new bar (fresh orig === draft so it isn't falsely "changed"), and preserve every in-progress edit.
+function syncGanttDraft() {
+  if (!isGanttMode() || !_barDraft || !_barOrig) return;
+  const bars = graph.getElements().filter(e => e.get('type') === 'sf.GanttTask');
+  const live = new Set(bars.map(b => b.id));
+  for (const id of [..._barDraft.keys()]) if (!live.has(id)) { _barDraft.delete(id); _barOrig.delete(id); }
+  for (const bar of bars) {
+    if (_barDraft.has(bar.id)) {
+      // A structural op can mutate a DRAFTED prop on an existing bar (a cross-group drag-reorder sets groupId).
+      // Reconcile the baseline to the live value; follow it in the draft too ONLY if the user hadn't already
+      // edited that cell (so an in-progress Group pick isn't clobbered) — otherwise the select would show the
+      // stale group and a re-pick of it would Save as a no-op.
+      const o = _barOrig.get(bar.id), d = _barDraft.get(bar.id);
+      const liveGid = bar.get('groupId') || null;
+      if ((o.groupId ?? null) !== liveGid) {
+        if ((d.groupId ?? null) === (o.groupId ?? null)) d.groupId = liveGid;
+        o.groupId = liveGid;
+      }
+      continue;
+    }
+    const prog = bar.get('progress');
+    const s = {
+      taskLabel: bar.get('taskLabel') || bar.attr('label/text') || '',
+      startDate: bar.get('startDate') || '', endDate: bar.get('endDate') || '',
+      progress: (prog == null || prog === '') ? '' : Number(prog),
+      assignee: bar.get('assignee') || '', groupId: bar.get('groupId') || null,
+      _tlId: ganttTimelineFor(bar)?.id,
+    };
+    _barOrig.set(bar.id, { ...s });
+    _barDraft.set(bar.id, { ...s });
+  }
+}
+
+// + Add task → a dated bar (next order, start → +7 days) embedded in `tl`, mirroring the timeline panel's
+// "+ Task". Immediate + undoable; the new row is then editable inline.
+function addGanttTask(tlId) {
+  const tl = tlId && graph.getCell(tlId);
+  if (!tl) return;
+  const pad = (n) => String(n).padStart(2, '0');
+  const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const startStr = tl.get('startDate') || isoOf(new Date());
+  const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
+  const order = timelineBars(tl).length;
+  startBatch();
+  try {
+    const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: isoOf(ed), attrs: { label: { text: 'New Task' } } });
+    graph.addCell(bar);
+    tl.embed(bar);
+    if (!applyGanttGeometry(bar, tl)) bar.position(tl.position().x + (tl.get('taskListWidth') || 200), orderToY(tl, order), { gantt: true });
+  } finally { endBatch(); }
+  syncGanttDraft();
+  render();
+}
+
+// Delete a task row → remove the bar cell + close the order gap. Immediate + undoable (matches the panel).
+function deleteGanttBar(barId) {
+  const bar = barId && graph.getCell(barId);
+  if (!bar) return;
+  const tl = ganttTimelineFor(bar);
+  startBatch();
+  try { graph.removeCells([bar]); if (tl) resequenceGanttOrders(tl); } finally { endBatch(); }
+  syncGanttDraft();
+  render();
+}
+
+// Reorder: move the dragged bar to before `toBarId` (drop target), rewrite `order`, re-layout. Immediate +
+// undoable, mirroring the panel's drag-reorder (splice in timelineBars order, renumber, re-snap).
+function reorderGanttBar(fromBarId, toBarId) {
+  const moved = fromBarId && graph.getCell(fromBarId);
+  const target = toBarId && graph.getCell(toBarId);
+  if (!moved || !target || moved === target) return;
+  const tl = ganttTimelineFor(moved);
+  if (!tl || ganttTimelineFor(target) !== tl) return;   // only reorder within one timeline
+  const ordered = timelineBars(tl);
+  const fromIdx = ordered.indexOf(moved), toIdx = ordered.indexOf(target);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  const [m] = ordered.splice(fromIdx, 1);
+  ordered.splice(toIdx > fromIdx ? toIdx : toIdx + 1, 0, m);   // insert AFTER the drop target (matches the below-indicator)
+  startBatch();
+  try {
+    // A drop across groups also adopts the target's group (so the bar lands where it visually dropped).
+    if ((moved.get('groupId') || null) !== (target.get('groupId') || null)) moved.set('groupId', target.get('groupId') || null);
+    ordered.forEach((b, idx) => { if (b.get('order') !== idx) b.set('order', idx); });
+    // Derive Y FROM the new order (like the panel's reorder) — NOT resequenceGanttOrders, which would re-sort
+    // by current Y and undo the move (the bars haven't physically moved yet).
+    layoutTimelineTasks(tl);
+  } finally { endBatch(); }
+  syncGanttDraft();
+  render();
+}
+
+// ── Dependencies editor (Phase 5c) — predecessor ganttDep links ─────────────
+// A task's deps are inbound standard.Links tagged linkKind:'ganttDep' (depType FS/SS/FF/SF + lag), NOT a
+// scalar prop — so they're edited LIVE (each add/remove/change its own undo entry) in a small anchored editor,
+// not in the Save/Cancel draft. The deps cell shows the derived summary + opens this on click.
+const ganttDepLinks = (barId) => {
+  const bar = barId && graph.getCell(barId);
+  return bar ? graph.getConnectedLinks(bar, { inbound: true }).filter(l => l.prop('linkKind') === 'ganttDep') : [];
+};
+const ganttSiblingTasks = (barId) => {
+  const bar = barId && graph.getCell(barId);
+  const tl = bar && ganttTimelineFor(bar);
+  return tl ? timelineBars(tl).filter(b => b.id !== barId) : [];
+};
+const depBatch = (fn) => { startBatch(); try { fn(); } finally { endBatch(); } };
+
+function openDepEditor(barId, anchorEl) {
+  const bar = barId && graph.getCell(barId);
+  if (!bar) return;
+  const name = bar.get('taskLabel') || bar.attr('label/text') || 'Task';
+  const m = buildModal({
+    title: `Dependencies: ${name}`,
+    // Anchored modals hide the header, so the body carries its own heading; a Done button gives a clear close
+    // (Escape + clicking the scrim also close it).
+    bodyHtml: `<div class="df-dep-editor__head">Predecessors of <strong>${escHtml(String(name))}</strong></div><div class="df-dep-editor" id="df-dep-editor"></div>`,
+    footerHtml: '<button type="button" id="df-dep-done" class="df-tbl__csv df-tbl__csv--primary">Done</button>',
+    anchor: anchorEl, width: 380,
+    onClose: () => { if (_active && _editing) render(); },   // refresh the deps-cell summary behind the modal
+  });
+  renderDepList(m.body.querySelector('#df-dep-editor'), barId);
+  m.overlay.querySelector('#df-dep-done')?.addEventListener('click', m.close);
+}
+
+// (Re)draw the predecessor list into the editor host. Each control mutates the graph live, then re-draws.
+function renderDepList(host, barId) {
+  if (!host) return;
+  const links = ganttDepLinks(barId);
+  const siblings = ganttSiblingTasks(barId);
+  const nameOf = (id) => { const c = id && graph.getCell(id); return c ? (c.get('taskLabel') || c.attr('label/text') || 'Task') : String(id || ''); };
+  host.innerHTML = '';
+
+  if (!links.length) {
+    const p = document.createElement('p');
+    p.className = 'df-dep-editor__empty';
+    p.textContent = siblings.length ? 'No dependencies yet.' : 'No other tasks in this timeline to depend on.';
+    host.appendChild(p);
+  }
+
+  for (const link of links) {
+    const row = document.createElement('div');
+    row.className = 'df-dep-editor__row';
+    const curPred = link.get('source') && link.get('source').id;
+
+    const predSel = document.createElement('select');
+    predSel.className = 'df-properties__input df-dep-editor__pred';
+    predSel.title = 'Predecessor task';
+    // Candidates = siblings NOT already a predecessor via another link (so a repoint can't duplicate one),
+    // always keeping THIS link's own current source selectable.
+    const usedByOthers = new Set(links.filter(l => l !== link).map(l => l.get('source') && l.get('source').id));
+    // If the current predecessor isn't a sibling (a cross-timeline dep drawn on the canvas), surface it as a
+    // selected option so the select faithfully shows the real predecessor instead of auto-picking a wrong one.
+    if (curPred && !siblings.some(s => s.id === curPred)) {
+      const o = document.createElement('option');
+      o.value = curPred; o.textContent = `${nameOf(curPred)} (other timeline)`; o.selected = true;
+      predSel.appendChild(o);
+    }
+    for (const s of siblings) {
+      if (s.id !== curPred && usedByOthers.has(s.id)) continue;   // already used by another dependency
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = nameOf(s.id); if (s.id === curPred) o.selected = true;
+      predSel.appendChild(o);
+    }
+    // Repoint, then re-derive the whole editor (the Add button's availability + other rows' option sets change).
+    predSel.addEventListener('change', () => { depBatch(() => link.source({ id: predSel.value, port: 'port-right' })); renderDepList(host, barId); });
+    row.appendChild(predSel);
+
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'df-field-delete'; del.textContent = '×'; del.title = 'Remove dependency';
+    del.addEventListener('click', () => { depBatch(() => graph.removeCells([link])); renderDepList(host, barId); });
+    row.appendChild(del);
+
+    host.appendChild(row);
+  }
+
+  const usedPreds = new Set(links.map(l => l.get('source') && l.get('source').id));
+  const avail = siblings.filter(s => !usedPreds.has(s.id));
+  const add = document.createElement('button');
+  add.type = 'button'; add.className = 'df-properties__btn df-properties__btn--add-field df-dep-editor__add';
+  add.textContent = '+ Add dependency';
+  if (!avail.length) { add.disabled = true; add.title = siblings.length ? 'Every other task is already a predecessor' : 'No other tasks in this timeline'; }
+  add.addEventListener('click', () => {
+    const pred = avail[0];
+    if (!pred) return;
+    depBatch(() => {
+      const link = new joint.shapes.standard.Link({ source: { id: pred.id, port: 'port-right' }, target: { id: barId, port: 'port-left' } });
+      link.prop('linkKind', 'ganttDep');
+      graph.addCell(link);
+      applyGanttDepLinkStyle(link);
+    });
+    renderDepList(host, barId);
+  });
+  host.appendChild(add);
+}
+
 // ── Draft mutators (called from the in-cell controls) ───────────────────────
 
 // Text / picklist input → write the draft prop, re-tint the cell in place, refresh the change tally.
@@ -770,6 +1215,29 @@ function onFieldInput(el) {
     td.classList.toggle('df-tbl__cell--changed', !!o && (d[el.dataset.prop] ?? '') !== (o[el.dataset.prop] ?? ''));
   }
   updateRowRevert(el.closest('tr'));
+  refreshChangeCount();
+}
+
+// Phase 5b: a Gantt cell input → write the bar draft (live, no re-render → caret preserved). Start/End/Duration
+// are interdependent (Duration = End − Start; editing Duration rewrites End), so the sibling cell's value + tint
+// are synced IN PLACE. Name / Progress / Assignee just update their own cell.
+function onBarInput(el) {
+  const bk = el.dataset.bk, prop = el.dataset.bprop;
+  const d = _barDraft?.get(bk), o = _barOrig?.get(bk);
+  if (!d) return;
+  if (prop === 'duration') d.endDate = addDaysISO(d.startDate, Math.max(0, Math.round(Number(el.value) || 0)));
+  else if (prop === 'progress') d.progress = el.value === '' ? '' : clampInt(el.value, 0, 100);
+  else if (prop === 'groupId') d.groupId = el.value || null;   // '' = Ungrouped → null (matches the model)
+  else d[prop] = el.value;
+
+  const tr = el.closest('tr');
+  const sib = (bp) => [...(tr?.querySelectorAll('.df-tbl__input[data-bprop]') || [])].find(x => x.dataset.bk === bk && x.dataset.bprop === bp);
+  const retint = (input, p) => { const td = input?.closest('td'); if (td) td.classList.toggle('df-tbl__cell--changed', !!o && barColChanged(d, o, p)); };
+  // Keep the interdependent sibling consistent (value + tint), without a re-render.
+  if (prop === 'startDate' || prop === 'endDate') { const e = sib('duration'); if (e) { e.value = durationDays(d.startDate, d.endDate) ?? ''; retint(e, 'duration'); } }
+  else if (prop === 'duration') { const e = sib('endDate'); if (e) { e.value = d.endDate || ''; retint(e, 'endDate'); } }
+  retint(el, prop);
+  updateRowRevert(tr);
   refreshChangeCount();
 }
 
@@ -789,7 +1257,7 @@ function onLinkInput(el) {
 
 // ── Per-row revert (#4) ─────────────────────────────────────────────────────
 // A row's stable identity: its mapping link (mapped row) or its source field key (unmapped row).
-const rowKeyOf = (r) => r._mapped ? String(r._linkId || '') : draftKeyOf(r._srcObjId || '', r._srcFid || '');
+const rowKeyOf = (r) => isGanttMode() ? String(r._barId || '') : r._mapped ? String(r._linkId || '') : draftKeyOf(r._srcObjId || '', r._srcFid || '');
 const revertBtnHtml = (r) => `<button type="button" class="df-tbl__revert" data-row="${escHtml(rowKeyOf(r))}" title="Revert this row to its original values" aria-label="Revert row">${ICON_UNDO}</button>`;
 // Live-toggle a row's revert button after a text/select edit (those don't re-render, to keep the caret):
 // show it the moment the row becomes changed, drop it when it returns to pristine.
@@ -814,6 +1282,7 @@ const rowFieldKeys = (r) => {
 };
 // True when any of the row's field/link drafts differ from their snapshot.
 function rowChanged(r) {
+  if (isGanttMode()) { const d = r._barId && _barDraft?.get(r._barId); return !!d && barDirty(d, _barOrig?.get(r._barId)); }
   if (!_draft) return false;
   for (const k of rowFieldKeys(r)) { const d = _draft.get(k), o = _orig.get(k); if (d && o && fieldDirty(d, o)) return true; }
   if (r._linkId && _linkDraft) { const d = _linkDraft.get(r._linkId), o = _linkOrig.get(r._linkId); if (d && o && linkDirty(d, o)) return true; }
@@ -822,6 +1291,11 @@ function rowChanged(r) {
 // Reset just this row's field + link drafts back to their snapshots (a denormalised field reverts on
 // every row it appears in — they share one draft entry), then re-render.
 function revertRow(r) {
+  if (isGanttMode()) {
+    if (r._barId && _barDraft?.has(r._barId) && _barOrig?.has(r._barId)) _barDraft.set(r._barId, { ..._barOrig.get(r._barId) });
+    render();
+    return;
+  }
   if (!_draft) return;
   for (const k of rowFieldKeys(r)) if (_draft.has(k) && _orig.has(k)) _draft.set(k, { ..._orig.get(k) });
   if (r._linkId && _linkDraft?.has(r._linkId) && _linkOrig?.has(r._linkId)) _linkDraft.set(r._linkId, { ..._linkOrig.get(r._linkId) });
@@ -924,8 +1398,8 @@ function showEditGuard(mode, proceed) {
     onClose: () => { _guardOpen = false; },
   });
   body.textContent = mode === 'diagram'
-    ? `You have ${n} unsaved edit${plural} in the mapping table, and you just changed the diagram too. Save or discard your table edits (the diagram change stays), or undo the diagram change to keep editing the table.`
-    : `You have ${n} unsaved edit${plural} in the mapping table. Save them to the diagram or discard them before leaving this tab.`;
+    ? `You have ${n} unsaved edit${plural} in the table, and you just changed the diagram too. Save or discard your table edits (the diagram change stays), or undo the diagram change to keep editing the table.`
+    : `You have ${n} unsaved edit${plural} in the table. Save them to the diagram or discard them before leaving this tab.`;
   footer.querySelector('.df-tbl-guard__keep').addEventListener('click', () => {
     close();
     if (mode === 'diagram') { revertDiagramEdit(); _requestTableView?.(); }   // undo the diagram edit + go back to the table
@@ -947,15 +1421,15 @@ function toggleSort(key) {
 // CSV export of a row set. A BOM keeps Excel honest about UTF-8; display-only em-dashes
 // are stripped. The export uses the prefixed `csv` label (Source/Target …) since the flat
 // file loses the colour-coded section headers that disambiguate the short on-screen labels.
-function exportRowsCsv(rows) {
+function exportRowsCsv(rows, cols = COLUMNS, suffix = 'mapping') {
   const esc = v => {
     let s = String(v ?? '').trim();
     if (s === '—') s = '';
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const header = COLUMNS.map(c => esc(c.csv || c.label)).join(',');
-  const lines = (rows || []).map(r => COLUMNS.map(c => esc(r[c.key])).join(','));
-  downloadCsv('﻿' + [header, ...lines].join('\r\n'), 'mapping');
+  const header = cols.map(c => esc(c.csv || c.label)).join(',');
+  const lines = (rows || []).map(r => cols.map(c => esc(r[c.key])).join(','));
+  downloadCsv('﻿' + [header, ...lines].join('\r\n'), suffix);
 }
 
 // Download a ready-made CSV string as df_<tab>_<suffix>.csv.
@@ -974,7 +1448,8 @@ function downloadCsv(csv, suffix) {
 // In-view export button: the schema CSV in model mode (reuses data-export.js for an identical file),
 // otherwise exactly the mapping rows on screen (current sort + Show-Unmapped state).
 function exportCsv() {
-  if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph), 'schema');
+  if (isGanttMode()) exportRowsCsv(_lastRows, GANTT_COLUMNS, 'plan');
+  else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph), 'schema');
   else exportRowsCsv(_lastRows);
 }
 

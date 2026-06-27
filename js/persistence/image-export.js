@@ -5,9 +5,9 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.17.2.11';
-import { showToast, showError } from '../feedback.js?v=1.17.2.11';
-import { pctx } from './context.js?v=1.17.2.11';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.18.0.5';
+import { showToast, showError } from '../feedback.js?v=1.18.0.5';
+import { pctx } from './context.js?v=1.18.0.5';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -30,6 +30,112 @@ export function exportWEBP(transparent = false) {
 
 export function exportPNG(transparent = false) {
   return exportRaster(transparent, 'png');
+}
+
+/**
+ * Copy the given cells (a selection) to the OS clipboard as a PNG, so the user can paste the diagram straight into
+ * Slack / docs / chat as an image (the Lucidchart-style "copy as image"). RASTER only - vector/SVG clipboard types
+ * are not reliably read by other apps. Renders ONLY the selected cells (+ links whose both ends are selected),
+ * cropped to their bounding box, on a solid background (transparent reads badly on a themed surface).
+ *
+ * Uses the ClipboardItem(Promise<Blob>) pattern: the blob promise is handed to ClipboardItem and `clipboard.write`
+ * is called SYNCHRONOUSLY inside the user gesture (the context-menu click, or the Cmd+C keydown), so Safari keeps
+ * the gesture alive while the raster renders asynchronously. `silent` is the Cmd+C overload path (no toasts).
+ */
+export function copyCellsAsPng(cells, { silent = false, transparent = false, deferToNextFrame = false } = {}) {
+  const { graph } = pctx;
+  const selected = (cells || []).filter(Boolean);
+  const elementIds = new Set(selected.filter(c => c.isElement && c.isElement()).map(c => c.id));
+  // `silent` (the Cmd+C overload path) suppresses every toast/error: the in-memory internal copy is the primary
+  // action there, so the PNG is best-effort and must not nag on each copy or on a browser that blocks it.
+  if (elementIds.size === 0) { if (!silent) showError('Select at least one shape to copy as an image.'); return; }
+
+  // Render set: the selected cells + any link whose BOTH endpoints are selected (so connectors come along).
+  const idSet = new Set(selected.map(c => c.id));
+  const renderCells = [...selected];
+  for (const link of graph.getLinks()) {
+    if (idSet.has(link.id)) continue;
+    const s = link.get('source')?.id, t = link.get('target')?.id;
+    if (s && t && elementIds.has(s) && elementIds.has(t)) { renderCells.push(link); idSet.add(link.id); }
+  }
+
+  if (!navigator.clipboard?.write || typeof window.ClipboardItem === 'undefined') {
+    if (!silent) showError('This browser cannot copy images to the clipboard. Use Save ▸ PNG instead.');
+    return;
+  }
+
+  // Build the blob promise FIRST (kicks off the async raster), then write SYNCHRONOUSLY to preserve the gesture.
+  // deferToNextFrame waits one frame before rasterising - the tab-menu path switchTab()s first, so the switched
+  // tab's views need a frame to render; the write itself still registers inside the gesture via the promise.
+  const render = () => renderCellsToPngBlob(renderCells, idSet, transparent);
+  const blobPromise = deferToNextFrame
+    ? new Promise((res, rej) => requestAnimationFrame(() => render().then(res, rej)))
+    : render();
+  navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blobPromise })])
+    .then(() => { if (!silent) showToast(`Copied as PNG${transparent ? ' (transparent)' : ''} - paste it into Slack, docs or chat ✓`, 'success'); })
+    .catch((err) => { console.error('Copy as PNG failed:', err); if (!silent) showError('Could not copy the image to the clipboard.'); });
+}
+
+/** Render `renderCells` (cropped to their bbox) to a PNG Blob via the standalone-SVG pipeline. Returns a Promise so
+ *  it can be handed to ClipboardItem. Mirrors exportRaster's clone/inline/rasterize but keeps ONLY the cells in
+ *  `idSet` and resolves the blob instead of downloading. */
+function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
+  return new Promise((resolve, reject) => {
+    try {
+      const { graph, paper } = pctx;
+      const bbox = graph.getCellsBBox(renderCells);
+      if (!bbox || bbox.width === 0) { reject(new Error('Selection has no area.')); return; }
+
+      const padding = 24;
+      const exportW = bbox.width + padding * 2;
+      const exportH = bbox.height + padding * 2;
+
+      const svgClone = paper.svg.cloneNode(true);
+      svgClone.setAttribute('width', exportW);
+      svgClone.setAttribute('height', exportH);
+      svgClone.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${exportW} ${exportH}`);
+      // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
+      // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
+      svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
+      svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
+      // Keep only the selected cells (+ their connectors): drop every other [model-id] group from the crop.
+      svgClone.querySelectorAll('[model-id]').forEach(el => { if (!idSet.has(el.getAttribute('model-id'))) el.remove(); });
+
+      const spritesContainer = document.getElementById('slds-icons');
+      if (spritesContainer) {
+        const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defsEl.innerHTML = spritesContainer.innerHTML;
+        svgClone.insertBefore(defsEl, svgClone.firstChild);
+      }
+      replaceForeignObjects(svgClone);
+      resolveCssVars(svgClone);
+      applyLineStyleInline(svgClone, transparent);   // transparent → inline dasharray; opaque → bg-overlay (matches exportRaster)
+
+      const svgStr = new XMLSerializer().serializeToString(svgClone);
+      const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
+      const img = new Image();
+      img.onload = () => {
+        const scale = clampExportScale(exportW, exportH, 2);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(exportW * scale);
+        canvas.height = Math.round(exportH * scale);
+        const ctx = canvas.getContext('2d');
+        if (!transparent) {
+          const theme = document.documentElement.getAttribute('data-theme');
+          ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, exportW, exportH);
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(svgUrl);
+          blob ? resolve(blob) : reject(new Error('Could not encode PNG.'));
+        }, 'image/png');
+      };
+      img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(new Error('Image render failed.')); };
+      img.src = svgUrl;
+    } catch (err) { reject(err); }
+  });
 }
 
 /**
@@ -56,9 +162,10 @@ export function exportSVG(transparent = true) {
     svgClone.setAttribute('height', exportH);
     svgClone.setAttribute('viewBox', `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`);
 
-    const viewport = svgClone.querySelector('.joint-viewport');
-    if (viewport) viewport.removeAttribute('transform');
-    svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
+    // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
+    // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
+    svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
+    svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
 
     const spritesContainer = document.getElementById('slds-icons');
     if (spritesContainer) {
@@ -120,11 +227,12 @@ function exportRaster(transparent, format) {
     );
 
     // Remove the viewport transform (scale+translate used for pan/zoom)
-    const viewport = svgClone.querySelector('.joint-viewport');
-    if (viewport) viewport.removeAttribute('transform');
+    // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
+    // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
+    svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
 
     // Hide grid pattern and port circles for clean export
-    svgClone.querySelectorAll('pattern, .joint-port').forEach(el => el.remove());
+    svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
 
     // Inline the SLDS icon sprites so they render in the exported SVG
     const spritesContainer = document.getElementById('slds-icons');
@@ -260,9 +368,10 @@ export async function exportGIF(transparent = false) {
       svgClone.setAttribute('viewBox',
         `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`
       );
-      const viewport = svgClone.querySelector('.joint-viewport');
-      if (viewport) viewport.removeAttribute('transform');
-      svgClone.querySelectorAll('pattern, .joint-port, .df-flow-overlay').forEach(el => el.remove());
+      // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
+      // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
+      svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
+      svgClone.querySelectorAll('pattern, .joint-port, .df-flow-overlay, .df-resize-handle, .joint-tools').forEach(el => el.remove());
       const spritesContainer = document.getElementById('slds-icons');
       if (spritesContainer) {
         const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
