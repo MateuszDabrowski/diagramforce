@@ -1,27 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.18.1';
-import * as icons       from './icons.js?v=1.18.1';
-import { getAllStencilSvgs } from './components.js?v=1.18.1';
-import * as shapes      from './shapes.js?v=1.18.1';
-import * as canvas      from './canvas.js?v=1.18.1';
-import * as stencil     from './stencil.js?v=1.18.1';
-import * as selection   from './selection.js?v=1.18.1';
-import * as history     from './history.js?v=1.18.1';
-import * as clipboard   from './clipboard.js?v=1.18.1';
-import * as templates    from './templates.js?v=1.18.1';
-import * as keyboard    from './keyboard.js?v=1.18.1';
-import * as toolbar     from './toolbar.js?v=1.18.1';
-import * as properties  from './properties.js?v=1.18.1';
-import * as persistence from './persistence.js?v=1.18.1';
-import * as tabs        from './tabs.js?v=1.18.1';
-import * as mermaidImport from './mermaid-import.js?v=1.18.1';
-import * as tableView    from './table-view.js?v=1.18.1';
-import * as walkthrough  from './walkthrough.js?v=1.18.1';
-import * as whatsNew     from './whats-new.js?v=1.18.1';
-import * as a11y         from './a11y.js?v=1.18.1';
-import { seedDefaultPalette } from './brand-palette.js?v=1.18.1';
+import * as theme       from './theme.js?v=1.19.0.49';
+import * as icons       from './icons.js?v=1.19.0.49';
+import { getAllStencilSvgs } from './components.js?v=1.19.0.49';
+import * as shapes      from './shapes.js?v=1.19.0.49';
+import * as canvas      from './canvas.js?v=1.19.0.49';
+import * as stencil     from './stencil.js?v=1.19.0.49';
+import * as selection   from './selection.js?v=1.19.0.49';
+import * as history     from './history.js?v=1.19.0.49';
+import * as clipboard   from './clipboard.js?v=1.19.0.49';
+import * as templates    from './templates.js?v=1.19.0.49';
+import * as keyboard    from './keyboard.js?v=1.19.0.49';
+import * as toolbar     from './toolbar.js?v=1.19.0.49';
+import * as properties  from './properties.js?v=1.19.0.49';
+import * as persistence from './persistence.js?v=1.19.0.49';
+import * as tabs        from './tabs.js?v=1.19.0.49';
+import * as mermaidImport from './mermaid-import.js?v=1.19.0.49';
+import * as tableView    from './table-view.js?v=1.19.0.49';
+import * as walkthrough  from './walkthrough.js?v=1.19.0.49';
+import * as whatsNew     from './whats-new.js?v=1.19.0.49';
+import * as a11y         from './a11y.js?v=1.19.0.49';
+import { seedDefaultPalette } from './brand-palette.js?v=1.19.0.49';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -129,6 +129,8 @@ async function main() {
   selection.setEndpointSetter(properties.setLinkEndpoints);
   // Copy/Paste style clipboard for the MULTI-select right-click menu (single-element uses the action provider).
   selection.setStyleApi({ copy: properties.copyCellStyle, has: properties.hasStyleClip, paste: properties.pasteCellStyle });
+  // Change Review "Apply as Highlight States" bakes the diff via the same Shape-state setter (wired to avoid a cycle).
+  toolbar.setShapeStateApplier?.(properties.applyShapeState);
   // "Copy as PNG" right-click action — rasters the selection to the OS clipboard (paste into Slack/docs as an image).
   selection.setCopyAsPng(persistence.copyCellsAsPng);
 
@@ -152,6 +154,9 @@ async function main() {
 
   tabs.init(graph, paper, canvas, selection, history, persistence, stencil);
   tabs.setupAutoSave();
+  // Tab right-click "Compare" diffs the ACTIVE tab against the right-clicked one, in place (toolbar owns the
+  // review overlay + banner; tabs just supplies which tab is the baseline).
+  tabs.setCompareTabHandler?.(toolbar.compareActiveWithTab);
 
   // An open Data Mapping table edit session vetoes a tab switch until the user
   // resolves it (Save / Discard the unapplied field edits) — see table-view.guardLeave.

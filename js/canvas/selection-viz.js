@@ -2,25 +2,25 @@
 // (Phase 4, Slice 10).
 //
 // When a connector is hovered or selected (`.selected`, owned by selection.js),
-// this lifts it above overlapping links (SVG paint order), recolours its
-// arrowhead / ER markers to `--selection-color`, and tints any crossing-bump
-// arcs tagged with its id. A microtask sweep restores links that lose focus
-// without firing a link-level event (e.g. a blank-canvas click that clears
-// selection).
+// this lifts it above overlapping links (SVG paint order), draws a selection-
+// coloured HALO under its line + end markers + label (an additive cue that
+// renders in every engine, incl. WebKit — unlike a CSS drop-shadow filter), and
+// tints any crossing-bump arcs tagged with its id. A microtask sweep restores
+// links that lose focus without firing a link-level event (a blank-canvas click).
 //
 // Element selection (the `.selected` class + selection box) is owned by
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.18.1';
-import { getBumpLayer } from './crossing-bumps.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
+import { getBumpLayer } from './crossing-bumps.js?v=1.19.0.49';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)
-const linkMarkerOriginals = new Map();    // linkView → { saved, markerSwaps } — Map: the sweep iterates it
-const linkLabelOriginals = new Map();     // linkView → [{ el, orig }] — saved <text> fills for label tint
+const linkMarkerOriginals = new Map();    // linkView → { halo, haloMarkers, pathObserver } — the .df-link-halo underlay + marker clones + the line-`d` tracker; sweep iterates it
+const linkLabelOriginals = new Map();     // linkView → [{ el, stroke, sw, so, rx, ry }] — saved label bg-rect attrs (pill border)
 const _bumpsTinted = new Set();           // linkId set — which links have tinted bump arcs
-let focusMarkerCloneSeq = 0;              // unique id counter for cloned <marker> defs
+let haloMarkerSeq = 0;                     // unique id counter for the halo's recoloured <marker> clones
 const SELECTION_COLOR_FALLBACK = '#1D73C9';
 
 // ── Focus colour ────────────────────────────────────────────────────
@@ -30,23 +30,6 @@ const getSelectionColor = () => {
       .getPropertyValue('--selection-color').trim();
     return c || SELECTION_COLOR_FALLBACK;
   } catch { return SELECTION_COLOR_FALLBACK; }
-};
-const isPreservedFill = (val) => {
-  if (!val) return true;
-  const v = val.trim().toLowerCase();
-  return v === 'none' || v === 'transparent' || v.includes('bg-canvas');
-};
-const tintPath = (p, color, saved) => {
-  const origStroke = p.getAttribute('stroke');
-  const origFill = p.getAttribute('fill');
-  saved.push({ el: p, origStroke, origFill });
-  // Override stroke unconditionally — markers either have an explicit
-  // stroke we want to swap, or none (auto-inherit) in which case
-  // setting it makes the recolour explicit and visible.
-  p.setAttribute('stroke', color);
-  // Only override "real" fills — leave masking fills (none / bg) intact
-  // so the circular open-stroke markers keep their visual notch.
-  if (!isPreservedFill(origFill)) p.setAttribute('fill', color);
 };
 
 // ── Z-order: lift hovered/selected link above overlapping siblings ───
@@ -80,118 +63,88 @@ const restoreLinkOrder = (linkView) => {
   } catch { /* defensive — DOM in unexpected state */ }
 };
 
-// ── Marker tint: recolour source/target arrowheads + ER notation ─────
-// CSS recolours the line, but JointJS v4 renders sourceMarker/targetMarker as
-// inline <path> children (or shared <marker> defs) with explicit stroke/fill
-// that out-specify CSS. Snapshot + overwrite while focused, restore on unfocus.
-// Shared <marker> defs are cloned (fresh id) so the tint doesn't leak to
-// sibling links pointing at the same def.
+// ── Connector highlight: a selection-coloured HALO under the line ────
+// A focused link (hover/select) gets an ADDITIVE halo: a CLONE of the line painted UNDERNEATH with a wider,
+// semi-transparent selection-coloured stroke. The real line + its markers sit ON TOP, so they keep their real
+// colour (never a recolour — the masking the old scheme caused; see GOTCHAS §2.2a). Why a stroke, not a glow:
+// a CSS `filter: drop-shadow` looked right in Blink but Safari/WebKit does NOT PAINT CSS filters on SVG paths
+// (it applies the style, skips the paint), so the highlight VANISHED in Safari; an SVG `<filter>` made the line
+// disappear there. A wider stroke is plain SVG every engine renders (CR: "highlight doesn't work on Safari").
+// The halo also carries RECOLOURED, WIDENED clones of the end markers so the arrowhead / ER tip gets a haloed
+// outline. Preserve only EXPLICIT masking/open fills (so open ER tips stay open + a circle keeps its mask); a
+// null fill is a closed arrow that inherits the line colour, so it gets tinted.
+const isPreservedMarkerFill = (v) => v === 'none' || /transparent|bg-canvas/i.test(v || '');
 const tintLinkMarkers = (linkView) => {
   const el = linkView?.el;
   if (!el || linkMarkerOriginals.has(linkView)) return;
-  const color = getSelectionColor();
-  const saved = [];           // direct path tints (inline marker case)
-  const markerSwaps = [];     // { lineEl, attrName, origRef, cloneEl }
-
-  // (A) Inline marker paths — JointJS v4 may render
-  // sourceMarker/targetMarker as <path> children of the link group
-  // (with a joint-selector like "line"/"sourceMarker"). Those aren't
-  // shared between links so tinting them in place is safe.
-  el.querySelectorAll('path').forEach(p => {
-    const sel = p.getAttribute('joint-selector');
-    if (sel === 'wrapper' || sel === 'line') return;
-    tintPath(p, color, saved);
-  });
-  // (#7) Tint the LINE itself by attribute too. The `.joint-link:hover/.selected [joint-selector=line]`
-  // CSS only fires when the pointer is on the cells-layer line — hovering the link's LABEL (a separate
-  // layer) leaves the line grey. Setting the stroke directly (restored on blur) makes the WHOLE connector
-  // recolour whichever part is hovered. The CSS rule still wins harmlessly on a real line :hover.
-  const lineEl = el.querySelector('[joint-selector="line"]');
-  if (lineEl) tintPath(lineEl, color, saved);
-
-  // (B) <marker> defs — the shared-pool rendering path. Clone, tint
-  // the clone, swap the line's marker-start / marker-end ref.
   const line = el.querySelector('[joint-selector="line"]');
+  if (!line || !line.parentNode) { linkMarkerOriginals.set(linkView, { halo: null, haloMarkers: [] }); return; }
+  const color = getSelectionColor();
+  const w = parseFloat(line.getAttribute('stroke-width')) || parseFloat(getComputedStyle(line).strokeWidth) || 2;
+  const halo = line.cloneNode(false);
+  halo.removeAttribute('id');
+  halo.removeAttribute('joint-selector');   // MUST NOT be "line" — else [joint-selector=line] queries (+ JointJS) match the halo
+  halo.style.filter = '';
+  halo.setAttribute('class', 'df-link-halo');
+  halo.setAttribute('pointer-events', 'none');
+  halo.setAttribute('stroke', color);
+  halo.setAttribute('stroke-width', String(w + 6));
+  halo.setAttribute('stroke-opacity', '0.4');
+  halo.setAttribute('fill', 'none');
+  halo.setAttribute('stroke-linecap', 'butt');    // butt, NOT round: a round cap bulges ~half-width PAST the endpoint,
+  halo.setAttribute('stroke-linejoin', 'round');  // overflowing the end-marker halo + wrapping the band AROUND the end (CR)
+  halo.removeAttribute('stroke-dasharray');     // a dashed/dotted line still gets a SOLID halo
+
+  // END markers: an ARROW marker auto-inherits the line stroke (so the halo's own stroke already tints it), but
+  // an ER crow's-foot carries an EXPLICIT colour — a SHARED def renders grey on the halo, so the ends look
+  // un-highlighted (CR). Clone each referenced marker def, paint it the halo colour, and point the HALO at the
+  // clone, so the arrowhead / ER tip gets a haloed outline in EVERY case. We touch only the HALO's refs, never
+  // the live line's marker-end/start — so the retired "stuck arrowhead" bug (which swapped the live line) can't
+  // recur; the clones are removed with the halo in restoreLinkMarkers + the sweep.
+  const haloMarkers = [];
   const root = el.ownerSVGElement;
   const defs = root?.querySelector('defs');
-  if (line && root && defs) {
-    for (const attrName of ['marker-start', 'marker-end']) {
-      const ref = line.getAttribute(attrName);
-      if (!ref) continue;
-      const m = ref.match(/url\(#([^)]+)\)/);
-      if (!m) continue;
-      const origMarker = root.getElementById(m[1]);
-      if (!origMarker) continue;
-      const cloneId = `df-focus-marker-${++focusMarkerCloneSeq}`;
-      const cloneEl = origMarker.cloneNode(true);
-      cloneEl.setAttribute('id', cloneId);
-      cloneEl.querySelectorAll('path').forEach(p => {
-        const origFill = p.getAttribute('fill');
+  if (defs) {
+    for (const attr of ['marker-end', 'marker-start']) {
+      const m = (halo.getAttribute(attr) || '').match(/url\(#([^)]+)\)/);
+      const orig = m && root.getElementById(m[1]);
+      if (!orig) continue;
+      const clone = orig.cloneNode(true);
+      clone.setAttribute('id', `df-halo-marker-${++haloMarkerSeq}`);
+      clone.querySelectorAll('path').forEach((p) => {
+        const f = p.getAttribute('fill');
+        const sw = parseFloat(p.getAttribute('stroke-width')) || 2;
         p.setAttribute('stroke', color);
-        if (!isPreservedFill(origFill)) p.setAttribute('fill', color);
+        p.setAttribute('stroke-width', String(sw + 6));   // markers are userSpaceOnUse (fixed size), so a same-size
+        if (!isPreservedMarkerFill(f)) p.setAttribute('fill', color);   // clone hides UNDER the real marker — widen
+        p.setAttribute('opacity', '0.4');                                // the stroke (overflow visible) so it pokes out;
+        // +6 (NOT +4) so the end halo pokes the SAME ~3px as the body halo (w+6) — else the ending reads thinner.
       });
-      defs.appendChild(cloneEl);
-      markerSwaps.push({ lineEl: line, attrName, origRef: ref, cloneEl });
-      line.setAttribute(attrName, `url(#${cloneId})`);
+      defs.appendChild(clone);
+      halo.setAttribute(attr, `url(#${clone.id})`);
+      haloMarkers.push(clone);
     }
   }
+  line.parentNode.insertBefore(halo, line);     // earlier sibling = painted first = UNDER the line
 
-  linkMarkerOriginals.set(linkView, { saved, markerSwaps });
+  // Keep the halo GLUED to the line while the connector is dragged / re-routed: the halo is a STATIC clone, so
+  // without this it stays at the OLD path until drop (CR). A MutationObserver on the line's `d` copies each new
+  // path to the halo (its markers re-anchor to the path ends automatically) — render-timing-agnostic, fires
+  // exactly when JointJS rewrites `d`, and watches the LINE (never the halo) so it can't self-trigger.
+  let pathObserver = null;
+  try {
+    pathObserver = new MutationObserver(() => { halo.setAttribute('d', line.getAttribute('d') || ''); });
+    pathObserver.observe(line, { attributes: true, attributeFilter: ['d'] });
+  } catch { /* no MutationObserver - halo just won't live-track (still correct on re-select) */ }
+  linkMarkerOriginals.set(linkView, { halo, haloMarkers, pathObserver });
 };
 const restoreLinkMarkers = (linkView) => {
   const data = linkMarkerOriginals.get(linkView);
   if (!data) return;
   linkMarkerOriginals.delete(linkView);
-  const { saved, markerSwaps } = data;
-  saved.forEach(({ el, origStroke, origFill }) => {
-    if (origStroke == null) el.removeAttribute('stroke');
-    else el.setAttribute('stroke', origStroke);
-    if (origFill == null) el.removeAttribute('fill');
-    else el.setAttribute('fill', origFill);
-  });
-  // Re-resolve the LIVE line element. JointJS may have re-rendered the link (reroute, crossing-
-  // bump recompute, a position/size change on an endpoint) between tint and restore, which
-  // detaches the `lineEl` we captured at tint time. Restoring only that stale node leaves the
-  // *live* line still pointing at our tinted clone → the "stuck arrowhead colour" bug. Blink
-  // (Chrome/Vivaldi) re-renders more eagerly than WebKit, which is why it surfaced there and not
-  // in Safari. Reset whichever of the two nodes still references our clone.
-  const liveLine = linkView?.el?.querySelector('[joint-selector="line"]') || null;
-  markerSwaps.forEach(({ lineEl, attrName, origRef, cloneEl }) => {
-    // Only put origRef back where the line still points at OUR clone. If the user changed the
-    // marker style mid-focus (property picker), JointJS re-rendered the line with a fresh
-    // `url(#new-marker-id)`, so our origRef is stale there — leave it so we don't resurrect the
-    // pre-change marker. The clone is removed unconditionally; it has no further purpose.
-    for (const el of new Set([lineEl, liveLine])) {
-      if (el && (el.getAttribute(attrName) || '').includes(cloneEl.id)) {
-        el.setAttribute(attrName, origRef);
-      }
-    }
-    cloneEl.parentNode?.removeChild(cloneEl);
-  });
-};
-
-// Belt-and-braces cleanup for any focus-marker clone that escaped restore — e.g. a re-render
-// landed between tint and a mouseleave that never fired. Removes clones no line references; for
-// a clone a live line STILL points at (an actually-stuck tint), it first re-renders that link
-// from its model so the arrowhead reverts to the real marker, then drops the orphan. Runs in the
-// stale-tint sweep, so a stuck marker self-heals on the next canvas interaction.
-const cleanupOrphanFocusMarkers = () => {
-  const paper = cctx.paper;
-  const svg = paper?.svg || paper?.el?.querySelector('svg');
-  const defs = svg?.querySelector('defs');
-  if (!defs) return;
-  const owned = new Set();
-  for (const { markerSwaps } of linkMarkerOriginals.values())
-    for (const s of markerSwaps) owned.add(s.cloneEl.id);
-  defs.querySelectorAll('marker[id^="df-focus-marker-"]').forEach((clone) => {
-    if (owned.has(clone.id)) return;   // still backing an active tint — keep
-    svg.querySelectorAll(`[marker-start="url(#${clone.id})"],[marker-end="url(#${clone.id})"]`)
-      .forEach((lineEl) => {
-        const view = paper.findView?.(lineEl.closest('.joint-link'));
-        view?.update?.();   // re-render from the model → arrowhead reverts to its real marker
-      });
-    clone.remove();
-  });
+  data.pathObserver?.disconnect();   // stop tracking the line's `d` before the halo goes away
+  data.halo?.parentNode?.removeChild(data.halo);
+  data.haloMarkers?.forEach((mk) => mk.parentNode?.removeChild(mk));   // drop the recoloured marker clones too
 };
 
 // ── Bump tint: re-stroke crossing-bump arcs tagged with the link id ──
@@ -225,11 +178,13 @@ const restoreLinkBumps = (linkView) => {
   });
 };
 
-// ── Label tint: recolour the link's text labels (user label + frequency overlay) ──
-// Labels render in a SEPARATE joint-labels-layer <g> carrying the SAME model-id (labelsLayer:true), so
-// the `.joint-link:hover/.selected [joint-selector=line]` CSS that tints the line never reaches them.
-// Mirror the marker tint: snapshot each label's tintable attribute (<text> `fill`, frequency clock
-// <image> `href`) and overwrite with the --selection-color render while focused, restore on blur.
+// ── Label highlight: a selection-coloured PILL border around each label ──
+// Labels render in a SEPARATE joint-labels-layer <g> the line halo can't reach. Highlight each by wrapping its
+// background `rect` in a selection-coloured ROUNDED (pill) border — the label keeps its own colours + stays
+// READABLE (a stroked-text outline thickened the glyphs; CR: "wrap it in a blue pill-shaped border, more
+// readable"). Plain SVG `stroke` + `rx`/`ry` (pill = corner radius half the rect height), so it renders in every
+// engine incl. WebKit (a CSS `filter` glow didn't paint in Safari). Snapshot + restore the touched attrs. The
+// clock <image> rides inside the freq label's rect, so it sits inside the pill too.
 const tintLinkLabels = (linkView) => {
   if (!linkView || linkLabelOriginals.has(linkView)) return;
   const id = linkView.model?.id;
@@ -237,18 +192,18 @@ const tintLinkLabels = (linkView) => {
   if (id == null || !root) return;
   const color = getSelectionColor();
   const scope = `.joint-link[model-id="${CSS.escape(String(id))}"]`;
-  const saved = [];   // [{ el, attr, orig }] — uniform attr-swap, restored verbatim
-  root.querySelectorAll(`${scope} text`).forEach((t) => {
-    saved.push({ el: t, attr: 'fill', orig: t.getAttribute('fill') });
-    t.setAttribute('fill', color);
-  });
-  // (#8) The frequency clock is a baked data-URI <image>; recolour it by swapping `href` to a
-  // selection-colour render. Setting `href` overrides any original `xlink:href` (SVG2), so restoring
-  // a null orig simply drops our `href` and the untouched original shows through. No-op without the gen.
-  const clockUri = cctx.freqClockUri?.(color);
-  if (clockUri) root.querySelectorAll(`${scope} image`).forEach((img) => {
-    saved.push({ el: img, attr: 'href', orig: img.getAttribute('href') });
-    img.setAttribute('href', clockUri);
+  const saved = [];   // [{ el, stroke, sw, so, rx, ry }] — restored verbatim
+  root.querySelectorAll(`${scope} rect`).forEach((r) => {
+    let h = 0;
+    try { h = r.getBBox().height; } catch { /* not laid out yet */ }
+    const rad = String(h ? Math.round(h / 2) : 8);   // pill ends: corner radius = half the rect height
+    saved.push({ el: r, stroke: r.getAttribute('stroke'), sw: r.getAttribute('stroke-width'),
+      so: r.getAttribute('stroke-opacity'), rx: r.getAttribute('rx'), ry: r.getAttribute('ry') });
+    r.setAttribute('stroke', color);
+    r.setAttribute('stroke-width', '5');         // a soft BAND, not a crisp line — matches the body halo's weight
+    r.setAttribute('stroke-opacity', '0.4');     // SAME colour + opacity as the line/marker halo (CR: consistency)
+    r.setAttribute('rx', rad);
+    r.setAttribute('ry', rad);
   });
   if (saved.length) linkLabelOriginals.set(linkView, saved);
 };
@@ -256,9 +211,9 @@ const restoreLinkLabels = (linkView) => {
   const saved = linkLabelOriginals.get(linkView);
   if (!saved) return;
   linkLabelOriginals.delete(linkView);
-  saved.forEach(({ el, attr, orig }) => {
-    if (orig == null) el.removeAttribute(attr);
-    else el.setAttribute(attr, orig);
+  const put = (el, attr, v) => { if (v == null) el.removeAttribute(attr); else el.setAttribute(attr, v); };
+  saved.forEach(({ el, stroke, sw, so, rx, ry }) => {
+    put(el, 'stroke', stroke); put(el, 'stroke-width', sw); put(el, 'stroke-opacity', so); put(el, 'rx', rx); put(el, 'ry', ry);
   });
 };
 
@@ -297,8 +252,6 @@ const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
     const stillFocused = el && (el.classList.contains('selected') || el.matches(':hover'));
     if (!stillFocused) restoreLinkLabels(linkView);
   }
-  // Drop any focus-marker clone that slipped through restore (self-heals a stuck arrowhead).
-  cleanupOrphanFocusMarkers();
 });
 
 // ── Registration: bind the hover/focus listeners to the live paper/graph ─
@@ -311,8 +264,8 @@ export function registerSelectionViz(cctx) {
     tintLinkBumps(linkView);
     tintLinkLabels(linkView);
     // Moving fast across a dense fan of overlapping connectors DROPS some links' mouseleave (the
-    // pointer jumps off without the browser firing leave), stranding their tinted clone → the
-    // "stuck arrowhead colour" bug. Every enter also sweeps: any tinted link that's no longer
+    // pointer jumps off without the browser firing leave), stranding their glow filter. Every enter
+    // also sweeps: any glowed link that's no longer
     // :hover (and not selected) gets restored, so strays never accumulate as the pointer travels.
     // Keep the just-entered link — its :hover is briefly cleared by the bringLinkToFront reorder.
     sweepStaleMarkerTints(linkView);
@@ -337,12 +290,10 @@ export function registerSelectionViz(cctx) {
   paper.on('blank:pointerdown', sweepStaleMarkerTints);
   paper.on('element:pointerdown', sweepStaleMarkerTints);
 
-  // When attrs change on a currently-focused link (most commonly: the user
-  // changing source/target end style via the property picker while the link is
-  // selected), JointJS re-renders the line with a fresh marker URL. Our clone
-  // is now orphaned and the line shows the new (un-tinted) marker. Defer one
-  // microtask so JointJS finishes its re-render, then tear down our stale tint
-  // and re-tint against the freshly rendered markers.
+  // When attrs change on a currently-focused link (most commonly: the user changing source/target end style or
+  // colour via the property picker while the link is selected), JointJS re-renders the line/markers — the fresh
+  // elements don't carry our inline glow filter. Defer one microtask so JointJS finishes its re-render, then
+  // tear down our stale glow refs and re-glow against the freshly rendered elements.
   graph.on('change:attrs', (cell) => {
     if (!cell.isLink()) return;
     const linkView = paper.findViewByModel(cell);

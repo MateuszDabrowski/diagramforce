@@ -7,17 +7,17 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.18.1';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.18.1';
-import { normalizeDateSuffix } from '../util.js?v=1.18.1';
-import { escHtml } from '../util.js?v=1.18.1';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.18.1';
-import { pctx } from './context.js?v=1.18.1';
-import { slimForShare } from '../share-codec.js?v=1.18.1';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.19.0.49';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.19.0.49';
+import { normalizeDateSuffix } from '../util.js?v=1.19.0.49';
+import { escHtml } from '../util.js?v=1.19.0.49';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.19.0.49';
+import { pctx } from './context.js?v=1.19.0.49';
+import { slimForShare } from '../share-codec.js?v=1.19.0.49';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.18.1';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.19.0.49';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
@@ -86,6 +86,30 @@ export function sanitizeGraphJSON(graphData) {
       `Diagramforce: skipped ${droppedLinkIds.length} link(s) referencing a missing cell:`,
       droppedLinkIds,
     );
+  }
+  // S6 (v1.19.0) — strip a `parent` that references a cell which ISN'T present, and prune `embeds` of any
+  // missing child. An LLM / template author routinely sets a link or element `parent` to a SEMANTIC id
+  // ("zone-orchestration", "container-…") that never matches a real cell id. This is not cosmetic: JointJS's
+  // embed() reads the `parent` ATTRIBUTE. On a node drag, JointJS re-homes the node's connected LINKS to their
+  // endpoints' common ancestor (link.reparent → ancestor.embed(link)); a link whose `parent` attr is set but
+  // whose parent CELL is missing makes getParentCell() null, so reparent SKIPS the unembed yet still calls
+  // embed() — which throws "Embedding of already embedded cells is not allowed." That throw is UNCAUGHT on
+  // pointerup, wedging JointJS's drag state → the whole canvas freezes (no selection, no Cmd+A) until reload.
+  // Dropping the orphan parent makes the cell free and the reparent a clean no-op. (Reported: "moving a node
+  // over a container that is over a zone freezes" — the dragged node's link endpoints resolved to the real
+  // container as common ancestor, tripping the stale-parent reparent.)
+  const presentIds = new Set();
+  for (const c of graphData.cells) { if (c.id != null) presentIds.add(c.id); }
+  let strippedParents = 0;
+  for (const c of graphData.cells) {
+    if (c.parent != null && !presentIds.has(c.parent)) { delete c.parent; strippedParents++; }
+    if (Array.isArray(c.embeds)) {
+      const kept = c.embeds.filter((id) => presentIds.has(id));
+      if (kept.length !== c.embeds.length) c.embeds = kept;
+    }
+  }
+  if (strippedParents) {
+    console.warn(`Diagramforce: stripped ${strippedParents} dangling parent reference(s) (parent cell not found).`);
   }
   for (const cell of graphData.cells) { stripAttrs(cell); }
   return graphData;

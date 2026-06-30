@@ -7,13 +7,18 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.18.1';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.0.49';
+import { busTrunkXForLink } from './bus-routing.js?v=1.19.0.49';
 
 // ── Routing geometry constants ──
 const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
 const PAD = 16;   // clearance around obstacles (must be < STUB so stubs are outside padded zones)
 const CP_PERP_OFFSET = 16; // matches the original anchor offset — perpendicular stand-off from the cell edge to the visual line end
+const SNAP_STRAIGHT = 4; // collapse a near-collinear orthogonal link to DEAD-STRAIGHT when its two ends' cross-axis
+// coords differ by <= this (px). The few-px residual that barycentre/side-port centring leaves between a parent and a
+// near-aligned child (the visible connector "jog") is below this; staying <= CP_PERP_OFFSET(16) keeps the corrective
+// nub inside the perpendicular standoff, so the line reads straight with only a sub-pixel angle at the port.
 // Per-link channel allocation height (CR-5.3 v2). Each link end at a crowded
 // port gets its own channel, with this many pixels between adjacent channels —
 // distinct lines the eye reads as separate connections, not a "close parallel
@@ -148,6 +153,24 @@ export function orthoRoute(a, b, obstacles) {
 
   // Last resort: straight L (visible overlap, better than nothing)
   return [{ x: b.x, y: a.y }];
+}
+
+// Dead-straight snap. Given the two stub points + their exit directions, if they exit on directly OPPOSING
+// perpendicular sides (bottom<->top => should be one VERTICAL line; right<->left => one HORIZONTAL line) and their
+// cross-axis coords differ by <= SNAP_STRAIGHT px, return COPIES pulled onto a shared mid-axis so the link renders
+// dead-straight (no few-px jog). Otherwise returns plain copies, unchanged. Pure + exported for unit tests.
+// Non-opposing pairs (same side, or an L-by-design corner) are left alone, so this never flattens an intended bend;
+// and a field-/er-* link only snaps when it genuinely faces left<->right, where a shared y is correct ER alignment.
+export function snapStubsStraight(from, to, srcDir, tgtDir) {
+  const a = { ...from }, b = { ...to };
+  const vOpposed = (srcDir === 'bottom' && tgtDir === 'top') || (srcDir === 'top' && tgtDir === 'bottom');
+  const hOpposed = (srcDir === 'right' && tgtDir === 'left') || (srcDir === 'left' && tgtDir === 'right');
+  if (vOpposed && Math.abs(a.x - b.x) <= SNAP_STRAIGHT) {
+    const sx = Math.round((a.x + b.x) / 2); a.x = sx; b.x = sx;
+  } else if (hOpposed && Math.abs(a.y - b.y) <= SNAP_STRAIGHT) {
+    const sy = Math.round((a.y + b.y) / 2); a.y = sy; b.y = sy;
+  }
+  return { from: a, to: b };
 }
 
 // ── Router registration ──
@@ -619,8 +642,10 @@ export function registerSfRouter() {
       if (bb) obstacles.push({ x: bb.x, y: bb.y, width: bb.width, height: bb.height });
     }
 
-    const from = srcInfo.stub;
-    const to = tgtInfo.stub;
+    // Dead-straight snap (v1.19.0.28): pull a near-collinear opposing-side pair onto one shared axis so the link
+    // renders with ZERO jog. Only LOCAL stub copies are nudged - no cell moves, nothing persists, it re-runs every
+    // paint (self-heals after a drag). See snapStubsStraight.
+    const { from, to } = snapStubsStraight(srcInfo.stub, tgtInfo.stub, srcInfo.dir, tgtInfo.dir);
 
     // --- Trunk lead-out -----------------------------------------------
     // When a stub is shifted along the cell edge by a non-zero trunk offset,
@@ -743,6 +768,22 @@ export function registerSfRouter() {
         for (let i = 0; i < waypoints.length - 1; i++) {
           if (i > 0) route.push(waypoints[i]);
           route.push(...orthoRoute(waypoints[i], waypoints[i + 1], obstacles));
+        }
+        route.push(to);
+        return route;
+      }
+
+      // Global BUS routing (draft, flag-gated, ORTHOGONAL links only - mapping connectors never reach here).
+      // A hub-fan member rides a shared vertical trunk instead of fanning: [from -> (trunkX, from.y) ->
+      // (trunkX, to.y) -> to]. Reuses the manual-vertices path shape (orthoRoute between waypoints for obstacle
+      // safety). Returns null when off / not a hub member, so the normal path below is unchanged.
+      const _busTrunkX = _isSequenceSelfLoop ? null : busTrunkXForLink(gr, link);
+      if (_busTrunkX != null) {
+        const wps = [from, { x: _busTrunkX, y: from.y }, { x: _busTrunkX, y: to.y }, to];
+        const route = [from];
+        for (let i = 0; i < wps.length - 1; i++) {
+          if (i > 0) route.push(wps[i]);
+          route.push(...orthoRoute(wps[i], wps[i + 1], obstacles));
         }
         route.push(to);
         return route;

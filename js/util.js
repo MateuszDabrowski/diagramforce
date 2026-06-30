@@ -148,7 +148,7 @@ export function countDiagramShapes(cells) {
  *  Storage, Drive library, Export, Close-Tabs). Pure string; falls back to the architecture glyph. */
 export function getDiagramTypeIcon(type) {
   const icons = {
-    architecture: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/></svg>',
+    architecture: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0.5" y="1.5" width="5.5" height="4" rx="1"/><rect x="0.5" y="10.5" width="5.5" height="4" rx="1"/><rect x="10" y="6" width="5.5" height="4" rx="1"/><path d="M6 3.5 H8 V8 H10 M6 12.5 H8 V8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
     process: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7" y="5.5" width="5" height="5" rx="1"/><circle cx="3" cy="8" r="1"/><line x1="5.5" y1="8" x2="7" y2="8" stroke="currentColor" stroke-width="1.5"/></svg>',
     datamodel: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="1" width="6" height="3" rx="1"/><rect x="9" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="7" width="6" height="3" rx="1"/></svg>',
     datamapping: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.5" y="2" width="5" height="3" rx="1"/><rect x="10.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="10.5" y="2" width="5" height="3" rx="1"/><path d="M5.5 8 L10 8 M8.5 6.5 L10 8 L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 11 L10 11" stroke="currentColor" stroke-width="1" opacity="0.55"/></svg>',
@@ -275,18 +275,74 @@ function stableStringify(v) {
  *            objects that were removed (so a single-diagram preview can GHOST them; the two-card Review modal leaves
  *            them out, since each card's removed = the other card's `added`).
  */
+// STRUCTURAL, layout-independent diff (v1.19.0.30). Returns added/changed (CURRENT cell ids), removed (BASE
+// ids) + removedCells (BASE cell objects, for the ghost overlay). Two improvements over a naive id+whole-cell
+// compare: (1) LAYOUT is ignored - position / z / angle / link vertices never count as a change, so moving a
+// shape or re-laying-out (or shifting) the WHOLE diagram reads as "no change". (2) Shapes are matched ACROSS
+// the two diagrams even when their ids differ (two diagrams built independently from the same source have
+// content-equal cells with different ids): elements pair by id, then by layout-stripped content signature;
+// links then pair by their endpoints REMAPPED through that element correspondence. So the diff focuses on the
+// genuine content/structure delta, not the layout. (Was: id-only match + whole-cell stringify -> a shifted or
+// independently-built copy lit up every shape.)
 export function diffGraphs(base, current) {
   const cellsOf = (g) => (g && Array.isArray(g.cells) ? g.cells : []).filter((c) => c && c.id != null);
-  const mapA = new Map(cellsOf(base).map((c) => [c.id, c]));
-  const mapB = new Map(cellsOf(current).map((c) => [c.id, c]));
-  const added = new Set(), removed = new Set(), changed = new Set();
-  for (const [id, cb] of mapB) {
-    const ca = mapA.get(id);
-    if (!ca) added.add(id);
-    else if (stableStringify(ca) !== stableStringify(cb)) changed.add(id);
+  const baseCells = cellsOf(base), curCells = cellsOf(current);
+  const isLink = (c) => !!(c && (c.source || c.target));
+  // VIEW-STATE props - excluded from the diff ENTIRELY (a move, a collapse, a "key fields only" toggle is not a
+  // content change). My Templates also regenerates every cell id on capture/drop, so the per-cell `id` + the
+  // structural id-refs (`parent`/`embeds`, link `source`/`target`) are matched/canonicalised, never compared raw.
+  const VIEW = new Set(['position', 'z', 'angle', 'collapsed', 'keyFieldsOnly']);
+  const stripView = (c) => { const o = {}; for (const k in (c || {})) if (!VIEW.has(k)) o[k] = c[k]; return o; };
+  // Cross-id MATCH signature: VIEW + id/parent/embeds removed (a faithful clone has identical content, fresh ids).
+  const elemSig = (c) => { const o = stripView(c); delete o.id; delete o.parent; delete o.embeds; return stableStringify(o); };
+  // Looser identity key for an EDITED clone (content not byte-identical): type + its name/label.
+  const labelKey = (c) => { const a = c.attrs || {}; const t = String(c.objectName ?? a.headerLabel?.text ?? a.label?.text ?? a.text?.text ?? c.personName ?? c.tableLabel ?? '').trim(); return t ? `${c.type}|${t.toLowerCase()}` : null; };
+
+  const elemsA = baseCells.filter((c) => !isLink(c)), elemsB = curCells.filter((c) => !isLink(c));
+  const linksA = baseCells.filter(isLink), linksB = curCells.filter(isLink);
+  const corr = new Map();      // base id -> current id (the SAME shape across the two diagrams)
+  const matchedB = new Set();  // current ids already paired
+  const changed = new Set();
+  const remapId = (id) => (corr.has(id) ? corr.get(id) : id);
+  const elemBById = new Map(elemsB.map((c) => [c.id, c]));
+
+  // Pair still-unmatched A elements to still-unmatched B elements by a key fn (skips null keys + paired cells).
+  const pairBy = (keyFn) => {
+    const m = new Map();
+    for (const cb of elemsB) { if (matchedB.has(cb.id)) continue; const k = keyFn(cb); if (k == null) continue; if (!m.has(k)) m.set(k, []); m.get(k).push(cb); }
+    for (const ca of elemsA) { if (corr.has(ca.id)) continue; const k = keyFn(ca); if (k == null) continue; const bucket = m.get(k); if (bucket && bucket.length) { const cb = bucket.shift(); corr.set(ca.id, cb.id); matchedB.add(cb.id); } }
+  };
+  // Pass 1: by ID (same diagram, edited). Pass 2: by exact content signature (a faithful clone, regenerated ids).
+  // Pass 3: by loose name key (an EDITED clone - paired so the edit reads as one "changed", not add+remove).
+  for (const ca of elemsA) { const cb = elemBById.get(ca.id); if (cb) { corr.set(ca.id, cb.id); matchedB.add(cb.id); } }
+  pairBy(elemSig);
+  pairBy(labelKey);
+
+  // Element "changed": a matched pair that still differs once VIEW-state is stripped AND parent/embeds are
+  // canonicalised into the current id-space + order-normalised (so SAME containment via different child ids isn't
+  // a false change). A sig-matched pair is equal by construction; id-/label-matched pairs may genuinely differ.
+  for (const ca of elemsA) {
+    const bid = corr.get(ca.id); if (bid == null) continue;
+    const cb = elemBById.get(bid); if (!cb) continue;
+    const caCanon = stripView(ca); delete caCanon.id;
+    if (caCanon.parent != null) caCanon.parent = remapId(caCanon.parent);
+    if (Array.isArray(caCanon.embeds)) caCanon.embeds = caCanon.embeds.map(remapId).sort();
+    const cbCanon = stripView(cb); delete cbCanon.id;
+    if (Array.isArray(cbCanon.embeds)) cbCanon.embeds = cbCanon.embeds.slice().sort();
+    if (stableStringify(caCanon) !== stableStringify(cbCanon)) changed.add(bid);
   }
-  const removedCells = [];
-  for (const [id, ca] of mapA) if (!mapB.has(id)) { removed.add(id); removedCells.push(ca); }
+
+  // Links matched by ENDPOINTS - the cell id remapped through corr; the field-port fid is STABLE across a clone.
+  const endKey = (l, remap) => { const s = l.source || {}, t = l.target || {}; const sid = remap ? remapId(s.id) : s.id, tid = remap ? remapId(t.id) : t.id; return `${sid ?? ''}:${s.port || ''}>${tid ?? ''}:${t.port || ''}`; };
+  const linkSig = (l) => { const o = stripView(l); delete o.id; delete o.source; delete o.target; delete o.vertices; return stableStringify(o); };
+  const linkBByEnds = new Map();
+  for (const lb of linksB) { const k = endKey(lb, false); if (!linkBByEnds.has(k)) linkBByEnds.set(k, []); linkBByEnds.get(k).push(lb); }
+  for (const la of linksA) { const bucket = linkBByEnds.get(endKey(la, true)); if (bucket && bucket.length) { const lb = bucket.shift(); corr.set(la.id, lb.id); matchedB.add(lb.id); if (linkSig(la) !== linkSig(lb)) changed.add(lb.id); } }
+
+  // Leftovers: genuinely added (current, unpaired) / removed (base, unpaired).
+  const added = new Set(), removed = new Set(), removedCells = [];
+  for (const cb of curCells) if (!matchedB.has(cb.id)) added.add(cb.id);
+  for (const ca of baseCells) if (!corr.has(ca.id)) { removed.add(ca.id); removedCells.push(ca); }
   return { added, removed, changed, removedCells };
 }
 export function driveChipsHtml(t, { driveOn = false, browserOn = true, browserTitle, sharedFile = false, sharedFileTitle, onSharedDrive = false, hasMyDriveBackup = false, hideSharedCopies = false } = {}) {
@@ -474,4 +530,22 @@ export function mergeTemplatesWithTombstones({ localTemplates = [], localDeleted
   const changed = !sameSet(templates.map((t) => t && t.id), arr(localTemplates).map((t) => t && t.id))
     || !sameSet(deleted.map((d) => d.id), arr(localDeleted).map((d) => d && d.id));
   return { templates, deleted, incomingDeletions, changed };
+}
+
+/** Render a GitHub-Flavored-Markdown table from `headers` (string[]) + `rows` (cell[][]).
+ *  Cells are coerced to string; a pipe is escaped (`\|`) and newlines become `<br>` so a multi-line
+ *  cell stays inside one GFM row. A boolean coerces to ✓ / blank (nicer than "true"/"false" in docs).
+ *  An optional `title` is emitted as a `### ` heading above the table. Returns '' for no headers. */
+export function toMarkdownTable(headers, rows = [], title = '') {
+  const cols = Array.isArray(headers) ? headers : [];
+  if (!cols.length) return '';
+  const cell = (v) => {
+    if (typeof v === 'boolean') return v ? '✓' : '';
+    return String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>').trim();
+  };
+  const head = `| ${cols.map(cell).join(' | ')} |`;
+  const sep = `| ${cols.map(() => '---').join(' | ')} |`;
+  const body = (Array.isArray(rows) ? rows : []).map((r) => `| ${(Array.isArray(r) ? r : []).map(cell).join(' | ')} |`);
+  const table = [head, sep, ...body].join('\n');
+  return title ? `### ${cell(title)}\n\n${table}` : table;
 }

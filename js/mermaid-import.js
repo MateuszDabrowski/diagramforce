@@ -11,8 +11,8 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.18.1';
-import { showError, showToast } from './feedback.js?v=1.18.1';
+import { createElementFromComponent } from './components.js?v=1.19.0.49';
+import { showError, showToast } from './feedback.js?v=1.19.0.49';
 
 let modules = {};
 
@@ -173,6 +173,11 @@ export function snapLinksToPorts(graph, direction) {
     const src = link.getSourceElement?.();
     const tgt = link.getTargetElement?.();
     if (!src || !tgt) continue;
+    if (src === tgt) continue;   // leave self-loops + their routing untouched
+    // Stage B: auto-layout RE-ARRANGED the nodes, so any manual vertices from the OLD positions are now stale -
+    // they route the link down-and-around through empty space (the reported architecture tangle). Clear them so
+    // the link re-routes fresh on the new layout. Captured by recordPositionsBatch, so it undoes with the layout.
+    if ((link.get('vertices') || []).length) link.set('vertices', []);
     const sb = src.getBBox();
     const tb = tgt.getBBox();
     const dx = (tb.x + tb.width / 2) - (sb.x + sb.width / 2);

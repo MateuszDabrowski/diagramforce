@@ -11,15 +11,15 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.1';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.18.1';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.18.1';
-import { SF_FIELD_TYPES } from './properties.js?v=1.18.1';
-import { buildModal } from './feedback.js?v=1.18.1';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.18.1';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.1';
-import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.18.1';
-import { applyGanttDepLinkStyle } from './canvas.js?v=1.18.1';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.19.0.49';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.19.0.49';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.19.0.49';
+import { SF_FIELD_TYPES } from './properties.js?v=1.19.0.49';
+import { buildModal, showToast, showError } from './feedback.js?v=1.19.0.49';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.19.0.49';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.19.0.49';
+import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.19.0.49';
+import { applyGanttDepLinkStyle } from './canvas.js?v=1.19.0.49';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -211,6 +211,7 @@ const schemaOf = () => isGanttMode() ? { cols: GANTT_COLUMNS, starts: NO_DIVIDER
 // convention the toolbar buttons use).
 const ICON_DOWNLOAD = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8v8"/><path d="M4.8 6.6 8 9.8l3.2-3.2"/><path d="M2.4 11.4v1.3a1.1 1.1 0 0 0 1.1 1.1h9a1.1 1.1 0 0 0 1.1-1.1v-1.3"/></svg>';
 const ICON_CHECKBOX = '<svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_COPY = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.3"/><path d="M10.5 5.5V3.8a1.3 1.3 0 0 0-1.3-1.3H3.8a1.3 1.3 0 0 0-1.3 1.3v5.4a1.3 1.3 0 0 0 1.3 1.3h1.7"/></svg>';
 const ICON_WARN = '<svg class="df-tbl__warn" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M7.13 1.85 .9 12.9a1 1 0 0 0 .87 1.5h12.46a1 1 0 0 0 .87-1.5L8.87 1.85a1 1 0 0 0-1.74 0Z" fill="#FE9339"/><rect x="7.15" y="5.4" width="1.7" height="4.5" rx="0.85" fill="#412700"/><circle cx="8" cy="11.7" r="0.95" fill="#412700"/></svg>';
 const ICON_PENCIL = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.4 2.3a1.3 1.3 0 0 1 1.8 0l.5.5a1.3 1.3 0 0 1 0 1.8L5.4 13.4l-3 .6.6-3z"/><path d="M10.3 3.4l2.3 2.3"/></svg>';
 // Counter-clockwise revert arrow (per-row "reset to original").
@@ -735,14 +736,16 @@ export function render() {
   const editTitle = isGantt ? 'Edit the plan inline (name, start / end / duration, progress, assignee, group, dependencies) - add, delete and reorder tasks' : 'Edit field-level values inline (typos, names, types, keys, sample values)';
   const editBtn = `<button type="button" id="tbl-edit" class="df-tbl__csv df-tbl__push" title="${escHtml(editTitle)}">${ICON_PENCIL}<span>${isGantt ? 'Edit Plan' : 'Edit Fields'}</span></button>`;
   const csvBtn = `<button type="button" id="tbl-csv" class="df-tbl__csv" title="Export the visible rows as a CSV file">${ICON_DOWNLOAD}<span>${escHtml(csvLabel)}</span></button>`;
+  // Copy as Markdown — the visible table as a GFM table on the clipboard (Confluence / Jira / Notion / GitHub).
+  const mdBtn = `<button type="button" id="tbl-md" class="df-tbl__csv" title="Copy the visible table as a Markdown table - paste into Confluence, Jira, Notion or GitHub">${ICON_COPY}<span>Copy as Markdown</span></button>`;
   const topbarActions = _editing
     ? `<button type="button" id="tbl-edit-cancel" class="df-tbl__csv df-tbl__push">Cancel</button>
        <button type="button" id="tbl-edit-save" class="df-tbl__csv df-tbl__csv--primary">Save</button>`
     : isGantt
-      ? `${editBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + CSV)
+      ? `${editBtn}${mdBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + Copy MD + CSV)
       : isModel
-        ? `${editBtn}${csvBtn}`
-        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${editBtn}${csvBtn}`;
+        ? `${editBtn}${mdBtn}${csvBtn}`
+        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${editBtn}${mdBtn}${csvBtn}`;
 
   container.innerHTML = `<div class="df-tbl${_editing ? ' df-tbl--editing' : ''}">
       <div class="df-tbl__topbar">
@@ -805,6 +808,7 @@ export function render() {
     container.querySelector('#tbl-edit')?.addEventListener('click', beginEdit);
     container.querySelector('#tbl-show-unmapped')?.addEventListener('click', () => { _showUnmapped = !_showUnmapped; render(); });
     container.querySelector('#tbl-csv')?.addEventListener('click', exportCsv);
+    container.querySelector('#tbl-md')?.addEventListener('click', copyTableAsMarkdown);
     container.querySelectorAll('.df-tbl__th--sortable').forEach(th => {
       const key = th.getAttribute('data-sort');
       const go = () => toggleSort(key);
@@ -1451,6 +1455,22 @@ function exportCsv() {
   if (isGanttMode()) exportRowsCsv(_lastRows, GANTT_COLUMNS, 'plan');
   else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph), 'schema');
   else exportRowsCsv(_lastRows);
+}
+
+// Copy the VISIBLE table (current mode's columns + the rendered rows, in the current sort / Show-Unmapped
+// state) to the clipboard as a GitHub-Flavored-Markdown table - ready to paste into Confluence, Jira,
+// Notion or a GitHub comment. Mirrors the on-screen columns (schemaOf), not the wider CSV column set.
+function copyTableAsMarkdown() {
+  const { cols } = schemaOf();
+  const headers = cols.map((c) => c.label);
+  const rows = (_lastRows || []).map((r) => cols.map((c) => r[c.key]));
+  const title = isGanttMode() ? 'Project Plan' : isModelMode() ? 'Field Schema' : 'Field Mapping';
+  const md = toMarkdownTable(headers, rows, title);
+  if (!md) { showError('There is nothing to copy yet.'); return; }
+  if (!navigator.clipboard?.writeText) { showError('Clipboard copy is not available in this browser.'); return; }
+  navigator.clipboard.writeText(md)
+    .then(() => showToast('Copied as Markdown - paste into Confluence, Jira, Notion or GitHub ✓', 'success'))
+    .catch(() => showError('Could not copy to the clipboard.'));
 }
 
 // Save → Export to CSV entry (Data Mapping): build the lineage rows fresh from the graph so

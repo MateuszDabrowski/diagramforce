@@ -1,0 +1,2650 @@
+{
+  "version": 1,
+  "appVersion": "1.19.0",
+  "timestamp": 1782808044350,
+  "title": "MCE Email Data Views",
+  "diagramType": "datamodel",
+  "mappingMode": false,
+  "graph": {
+    "cells": [
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 314
+        },
+        "z": 2000,
+        "objectName": "_ListSubscribers",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "AddedBy",
+            "apiName": "AddedBy",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_addedby",
+            "required": true
+          },
+          {
+            "label": "AddMethod",
+            "apiName": "AddMethod",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_addmethod",
+            "required": true
+          },
+          {
+            "label": "CreatedDate",
+            "apiName": "CreatedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_createddate"
+          },
+          {
+            "label": "DateUnsubscribed",
+            "apiName": "DateUnsubscribed",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_dateunsubscribed"
+          },
+          {
+            "label": "EmailAddress",
+            "apiName": "EmailAddress",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_emailaddress"
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": false
+          },
+          {
+            "label": "ListName",
+            "apiName": "ListName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_listname"
+          },
+          {
+            "label": "ListType",
+            "apiName": "ListType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_listtype",
+            "required": true
+          },
+          {
+            "label": "Status",
+            "apiName": "Status",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_status"
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "SubscriberType",
+            "apiName": "SubscriberType",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fkwwxka0"
+          }
+        ],
+        "position": {
+          "x": 1568,
+          "y": -333
+        },
+        "id": "obj-lst",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "headerLabel": {
+            "text": "_ListSubscribers"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 864
+        },
+        "z": 2000,
+        "objectName": "_Job",
+        "headerColor": "#F6B355",
+        "fields": [
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "pk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "EmailID",
+            "apiName": "EmailID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_emailid"
+          },
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid"
+          },
+          {
+            "label": "AccountUserID",
+            "apiName": "AccountUserID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "f0t4pmz6"
+          },
+          {
+            "label": "FromName",
+            "apiName": "FromName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_fromname"
+          },
+          {
+            "label": "FromEmail",
+            "apiName": "FromEmail",
+            "type": "Email",
+            "keyType": null,
+            "fid": "f_fromemail"
+          },
+          {
+            "label": "SchedTime",
+            "apiName": "SchedTime",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_schedtime"
+          },
+          {
+            "label": "PickupTime",
+            "apiName": "PickupTime",
+            "type": "DateTime",
+            "keyType": null,
+            "length": "",
+            "fid": "f7of2hsf"
+          },
+          {
+            "label": "DeliveredTime",
+            "apiName": "DeliveredTime",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_deliveredtime"
+          },
+          {
+            "label": "EventID",
+            "apiName": "EventID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fdlkyxh7"
+          },
+          {
+            "label": "IsMultipart",
+            "apiName": "IsMultipart",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_ismultipart",
+            "required": true
+          },
+          {
+            "label": "JobType",
+            "apiName": "JobType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_jobtype"
+          },
+          {
+            "label": "JobStatus",
+            "apiName": "JobStatus",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_jobstatus"
+          },
+          {
+            "label": "ModifiedBy",
+            "apiName": "ModifiedBy",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "ffpx95cm"
+          },
+          {
+            "label": "ModifiedDate",
+            "apiName": "ModifiedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "length": "",
+            "fid": "flcs7jp5"
+          },
+          {
+            "label": "EmailName",
+            "apiName": "EmailName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_emailname"
+          },
+          {
+            "label": "EmailSubject",
+            "apiName": "EmailSubject",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_emailsubject"
+          },
+          {
+            "label": "IsWrapped",
+            "apiName": "IsWrapped",
+            "type": "Boolean",
+            "keyType": null,
+            "length": "",
+            "fid": "fhit6xu8",
+            "required": true
+          },
+          {
+            "label": "TestEmailAddr",
+            "apiName": "TestEmailAddr",
+            "type": "Email",
+            "keyType": null,
+            "length": "",
+            "fid": "fx5bfv07"
+          },
+          {
+            "label": "Category",
+            "apiName": "Category",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_category",
+            "required": true
+          },
+          {
+            "label": "BccEmail",
+            "apiName": "BccEmail",
+            "type": "Email",
+            "keyType": null,
+            "length": "",
+            "fid": "f2rqauzr"
+          },
+          {
+            "label": "OriginalSchedTime",
+            "apiName": "OriginalSchedTime",
+            "type": "DateTime",
+            "keyType": null,
+            "length": "",
+            "fid": "fx4rhjeg"
+          },
+          {
+            "label": "CreatedDate",
+            "apiName": "CreatedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_createddate",
+            "required": true
+          },
+          {
+            "label": "CharacterSet",
+            "apiName": "CharacterSet",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fbd3s9t1"
+          },
+          {
+            "label": "IPAddress",
+            "apiName": "IPAddress",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f7s8bq2l"
+          },
+          {
+            "label": "SalesforceTotalSubscriberCount",
+            "apiName": "SalesforceTotalSubscriberCount",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_salesforcetotalsubscribercount",
+            "required": true
+          },
+          {
+            "label": "SalesforceErrorSubscriberCount",
+            "apiName": "SalesforceErrorSubscriberCount",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fo3jzzft",
+            "required": true
+          },
+          {
+            "label": "SendType",
+            "apiName": "SendType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_sendtype",
+            "required": true
+          },
+          {
+            "label": "DynamicEmailSubject",
+            "apiName": "DynamicEmailSubject",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fce5oips"
+          },
+          {
+            "label": "SuppressTracking",
+            "apiName": "SuppressTracking",
+            "type": "Boolean",
+            "keyType": null,
+            "length": "",
+            "fid": "fo6ikzlo",
+            "required": true
+          },
+          {
+            "label": "SendClassificationType",
+            "apiName": "SendClassificationType",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f9avxs8m"
+          },
+          {
+            "label": "SendClassification",
+            "apiName": "SendClassification",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "ffc9iglq"
+          },
+          {
+            "label": "ResolveLinksWithCurrentData",
+            "apiName": "ResolveLinksWithCurrentData",
+            "type": "Boolean",
+            "keyType": null,
+            "length": "",
+            "fid": "flkuxz7o",
+            "required": true
+          },
+          {
+            "label": "EmailSendDefinition",
+            "apiName": "EmailSendDefinition",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f64521kx"
+          },
+          {
+            "label": "DeduplicateByEmail",
+            "apiName": "DeduplicateByEmail",
+            "type": "Boolean",
+            "keyType": null,
+            "length": "",
+            "fid": "frqswthg",
+            "required": true
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fwb7v4vx",
+            "required": false
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f6le7n1d"
+          }
+        ],
+        "position": {
+          "x": 880,
+          "y": -333
+        },
+        "id": "obj-job",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#F6B355"
+          },
+          "headerCover": {
+            "fill": "#F6B355"
+          },
+          "headerLabel": {
+            "text": "_Job"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 534
+        },
+        "z": 2000,
+        "objectName": "_Bounce",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fgj9ii40"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          },
+          {
+            "label": "BounceCategoryID",
+            "apiName": "BounceCategoryID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "f0gabij0",
+            "required": true
+          },
+          {
+            "label": "BounceCategory",
+            "apiName": "BounceCategory",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_bouncecategory"
+          },
+          {
+            "label": "BounceSubcategoryID",
+            "apiName": "BounceSubcategoryID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fs88m5il"
+          },
+          {
+            "label": "BounceSubcategory",
+            "apiName": "BounceSubcategory",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "faav55bo"
+          },
+          {
+            "label": "BounceTypeID",
+            "apiName": "BounceTypeID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fy8vvpbw",
+            "required": true
+          },
+          {
+            "label": "BounceType",
+            "apiName": "BounceType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_bouncetype"
+          },
+          {
+            "label": "SMTPBounceReason",
+            "apiName": "SMTPBounceReason",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_smtpbouncereason"
+          },
+          {
+            "label": "SMTPMessage",
+            "apiName": "SMTPMessage",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fdo0teff"
+          },
+          {
+            "label": "SMTPCode",
+            "apiName": "SMTPCode",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_smtpcode"
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f4od06h8"
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "frtvq9uy"
+          },
+          {
+            "label": "IsFalseBounce",
+            "apiName": "IsFalseBounce",
+            "type": "Boolean",
+            "keyType": null,
+            "length": "",
+            "fid": "f6b9b12e",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 536,
+          "y": -333
+        },
+        "id": "obj-bounce",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Bounce"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 314
+        },
+        "z": 2000,
+        "objectName": "_Open",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fi54tr72"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique"
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fes9vcr3",
+            "required": true
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fkx9vjf0",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 1224,
+          "y": 317
+        },
+        "id": "obj-open",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Open"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 380
+        },
+        "z": 2000,
+        "objectName": "_Click",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fz77ke0v"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          },
+          {
+            "label": "URL",
+            "apiName": "URL",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_url"
+          },
+          {
+            "label": "LinkName",
+            "apiName": "LinkName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_linkname"
+          },
+          {
+            "label": "LinkContent",
+            "apiName": "LinkContent",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_linkcontent"
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique",
+            "required": true
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "f1ixut7q"
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fexinpq0"
+          }
+        ],
+        "position": {
+          "x": 1224,
+          "y": 664
+        },
+        "id": "obj-click",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Click"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "_Unsubscribe",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "ff9efbw3"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 536,
+          "y": 237
+        },
+        "id": "obj-unsub",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Unsubscribe"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "_Complaint",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fy9icbey"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 536,
+          "y": 543
+        },
+        "id": "obj-compl",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Complaint"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 292
+        },
+        "z": 2000,
+        "objectName": "_Sent",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
+          },
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "length": "",
+            "fid": "fnq181tu"
+          },
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fl1lru8e"
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "length": "",
+            "fid": "fu6075q4"
+          }
+        ],
+        "position": {
+          "x": 1224,
+          "y": -8
+        },
+        "id": "obj-sent",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "header": {
+            "fill": "#5C6AC4"
+          },
+          "headerCover": {
+            "fill": "#5C6AC4"
+          },
+          "headerLabel": {
+            "text": "_Sent"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 160
+        },
+        "z": 2000,
+        "objectName": "_BusinessUnitUnsubscribes",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "BusinessUnitID",
+            "apiName": "BusinessUnitID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_businessunitid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "UnsubDateUTC",
+            "apiName": "UnsubDateUTC",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_unsubdateutc"
+          },
+          {
+            "label": "UnsubReason",
+            "apiName": "UnsubReason",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_unsubreason"
+          }
+        ],
+        "position": {
+          "x": 1568,
+          "y": 15
+        },
+        "id": "obj-buu",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "headerLabel": {
+            "text": "_BusinessUnitUnsubscribes"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 292
+        },
+        "z": 2000,
+        "objectName": "_Subscribers",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "pk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EmailAddress",
+            "apiName": "EmailAddress",
+            "type": "Email",
+            "keyType": null,
+            "fid": "f_emailaddress",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain"
+          },
+          {
+            "label": "DateJoined",
+            "apiName": "DateJoined",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_datejoined"
+          },
+          {
+            "label": "DateUnsubscribed",
+            "apiName": "DateUnsubscribed",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_dateunsubscribed"
+          },
+          {
+            "label": "DateUndeliverable",
+            "apiName": "DateUndeliverable",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_dateundeliverable"
+          },
+          {
+            "label": "BounceCount",
+            "apiName": "BounceCount",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_bouncecount",
+            "required": true
+          },
+          {
+            "label": "SubscriberType",
+            "apiName": "SubscriberType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscribertype",
+            "required": true
+          },
+          {
+            "label": "Status",
+            "apiName": "Status",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_status"
+          },
+          {
+            "label": "Locale",
+            "apiName": "Locale",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_locale"
+          }
+        ],
+        "position": {
+          "x": 1224,
+          "y": -333
+        },
+        "id": "obj-sub",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "headerLabel": {
+            "text": "_Subscribers"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 260,
+          "height": 72
+        },
+        "z": 2001,
+        "objectName": "_EnterpriseAttribute",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "_SubscriberID",
+            "apiName": "_SubscriberID",
+            "type": "Number",
+            "keyType": "pk",
+            "fid": "fex4pev5",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 1234,
+          "y": -460
+        },
+        "id": "878e3cd5-471b-430b-a6e0-d600530786d3",
+        "keyFieldsOnly": false,
+        "attrs": {
+          "headerLabel": {
+            "text": "_EnterpriseAttribute"
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "target": {
+          "id": "obj-sent",
+          "port": "field-left-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-sent-0",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "target": {
+          "id": "obj-open",
+          "port": "field-left-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-open-1",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "target": {
+          "id": "obj-click",
+          "port": "field-left-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-click-2",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-bounce",
+          "port": "field-right-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-bounce-3",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-compl",
+          "port": "field-right-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-compl-4",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-job",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-unsub",
+          "port": "field-right-f_jobid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-job-unsub-5",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#f6b355",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#f6b355",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-lst",
+          "port": "field-left-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-lst-12",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-buu",
+          "port": "field-left-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-buu-13",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sent",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-sent-6",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [],
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-open",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-open-7",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-click",
+          "port": "field-right-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-click-8",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-compl",
+          "magnet": "rect",
+          "port": "field-left-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-compl-10",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 504,
+            "y": -352
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-unsub",
+          "magnet": "rect",
+          "port": "field-left-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-unsub-11",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-bounce",
+          "magnet": "rect",
+          "port": "field-left-f_subscriberid"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-sub-bounce-9",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "var(--bg-canvas, #1A1A1A)",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-sub",
+          "magnet": "rect",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "878e3cd5-471b-430b-a6e0-d600530786d3",
+          "magnet": "rect",
+          "port": "field-left-fex4pev5"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "z": 3002,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "id": "6e91679f-70ff-4fba-844d-114b97f37efa",
+        "attrs": {
+          "line": {
+            "stroke": "#1d73c9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1d73c9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "viewport": {
+    "zoom": 0.7623575842132796,
+    "translate": {
+      "tx": -71.82164184392514,
+      "ty": 342.0210316839919
+    }
+  }
+}

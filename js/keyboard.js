@@ -32,7 +32,7 @@ const PC_TOKENS  = { Ctrl: 'Ctrl', Cmd: 'Ctrl', Meta: 'Ctrl', Alt: 'Alt', Option
  * Final glyphs on macOS are joined without a `+` separator (Apple HIG
  * convention: "⌘S", "⌘⇧Z"). Other platforms use plain "Ctrl+S".
  */
-function kbd(combo) {
+export function kbd(combo) {
   if (typeof combo !== 'string' || !combo) return '';
   const parts = combo.split('+').map(p => p.trim()).filter(Boolean);
   if (IS_MAC) {
@@ -40,6 +40,51 @@ function kbd(combo) {
   }
   return parts.map(p => PC_TOKENS[p] ?? p).join('+');
 }
+
+// ── Shortcut reference (Help → Keyboard shortcuts) ───────────────────
+// Single source of truth alongside the handlers above. Each item is [combo, description];
+// combos run through kbd() so they render ⌘-glyphs on macOS and Ctrl/Alt words elsewhere.
+// Keep in sync with handleKeydown when adding/changing a binding.
+export const SHORTCUT_GROUPS = [
+  { title: 'File', items: [
+    ['Ctrl+S', 'Save & Export'],
+    ['Ctrl+O', 'Load & Import'],
+    ['Ctrl+N', 'New diagram'],
+    ['Ctrl+W', 'Close current tab'],
+  ] },
+  { title: 'Edit', items: [
+    ['Ctrl+Z', 'Undo'],
+    ['Ctrl+Shift+Z', 'Redo'],
+    ['Ctrl+C', 'Copy (in-app + PNG to clipboard)'],
+    ['Ctrl+Shift+C', 'Copy as transparent PNG'],
+    ['Ctrl+V', 'Paste'],
+    ['Ctrl+D', 'Duplicate'],
+    ['Delete', 'Delete selection'],
+  ] },
+  { title: 'Select & move', items: [
+    ['Ctrl+A', 'Select all'],
+    ['Arrows', 'Nudge selection (4 px)'],
+    ['Shift+Arrows', 'Nudge selection (16 px)'],
+    ['Escape', 'Clear selection'],
+  ] },
+  { title: 'View', items: [
+    ['Ctrl+0', 'Fit to content'],
+    ['+', 'Zoom in'],
+    ['-', 'Zoom out'],
+  ] },
+];
+
+// Mouse interactions + right-click affordances. The modifier tokens run through kbd() so they show the
+// platform's real key - "⌘ + click" on macOS, "Ctrl + click" on Windows/Linux - instead of "Ctrl / Cmd".
+export const MOUSE_TIPS = [
+  [`${kbd('Ctrl')} + click`, 'Add or remove a shape from the selection'],
+  [`${kbd('Shift')} + drag`, 'Rubber-band select an area'],
+  ['Double-click a shape', 'Edit its label (or open its table/field editor)'],
+];
+export const RIGHT_CLICK_TIPS = [
+  ['a shape or tab', 'Quick actions'],
+  ['the Drive icon', 'Sync now or reconnect'],
+];
 
 /**
  * Rewrite every static `(Ctrl+…)` substring inside the toolbar tooltips at

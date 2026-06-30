@@ -1,13 +1,13 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.18.1';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.18.1';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.18.1';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.18.1';
-import * as stencilModule from './stencil.js?v=1.18.1';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.18.1';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.18.1';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.19.0.49';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.19.0.49';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.19.0.49';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.19.0.49';
+import * as stencilModule from './stencil.js?v=1.19.0.49';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.19.0.49';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.19.0.49';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -17,14 +17,14 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.18.1';
-import * as history from './history.js?v=1.18.1';
-import { startImageAddFlow } from './image-component.js?v=1.18.1';
-import { escHtml, sanitizeFilenamePart } from './util.js?v=1.18.1';
-import { getActiveTabName } from './tabs.js?v=1.18.1';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.18.1';
-import { newFid } from './shapes.js?v=1.18.1';
-import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './canvas/gantt-layout.js?v=1.18.1';
+} from './clipboard.js?v=1.19.0.49';
+import * as history from './history.js?v=1.19.0.49';
+import { startImageAddFlow } from './image-component.js?v=1.19.0.49';
+import { escHtml, sanitizeFilenamePart } from './util.js?v=1.19.0.49';
+import { getActiveTabName } from './tabs.js?v=1.19.0.49';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.19.0.49';
+import { newFid } from './shapes.js?v=1.19.0.49';
+import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './canvas/gantt-layout.js?v=1.19.0.49';
 
 /**
  * Wrap a callback so every mutation inside it (potentially many
@@ -509,6 +509,10 @@ export function init(_graph, _paper, _selection) {
     // df.Table cells are MARKDOWN, multi-line content (not a single label), so a double-click opens the staged
     // "Edit in Table" overlay rather than starting an inline label edit.
     if (cellView.model.get('type') === 'df.Table') { openTableEditorModal(cellView.model); return; }
+    // sf.DataObject mirrors that gesture: an object's "content" is its field schema, so a double-click opens its
+    // per-object "Edit in Table" field editor (openFieldEditorModal) instead of an inline header rename — exactly
+    // like df.Table above, NOT the whole-diagram Table view. `refresh` re-renders the inspector after it closes.
+    if (cellView.model.get('type') === 'sf.DataObject') { openFieldEditorModal(cellView.model, refresh); return; }
     startInlineEdit(cellView, evt);
   });
 
@@ -841,7 +845,8 @@ const SHAPE_STATE_OPTS = [
 const SHAPE_STATE_TARGET = { 'df.Legend': 'swatch' };
 const shapeStateSel = (cell) => SHAPE_STATE_TARGET[cell.get('type')] || 'body';
 
-function applyShapeState(cell, style) {
+// Exported so Change Review's "Apply as Highlight states" can bake a diff into real borderStyle props.
+export function applyShapeState(cell, style) {
   const sel = shapeStateSel(cell);
   const prev = cell.get('borderStyle') || 'standard';
   if (style === prev) return;
@@ -2940,6 +2945,15 @@ function openFieldEditorModal(cell, onClose) {
     cell.set('fields', updated);
     resizeDataObjectToFit(cell);
     rebuildModal();
+    // The "+ Add Field" button lives in the FOOTER (outside the scrolling body), so on a long list the new row
+    // appends at the BOTTOM of the body, below the fold — auto-scroll to reveal it + focus its API Name input to
+    // type into (CR). `preventScroll` on focus so it doesn't fight the smooth scroll into view.
+    const rows = bodyEl.querySelectorAll('.df-field-modal__row:not(.df-field-modal__row--header)');
+    const newRow = rows[rows.length - 1];
+    if (newRow) {
+      newRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      newRow.querySelector('input')?.focus({ preventScroll: true });
+    }
   });
 
   // Done closes; backdrop / ✕ / Escape are wired by buildModal.
@@ -4883,7 +4897,9 @@ export function buildCellActions(cell) {
   acts.push({ label: 'Clone', iconKey: 'clone', group: 'clone', handler: () => cloneCellPlain(cell) });
   if (countConnectors(cell) > 0) acts.push({ label: 'Clone with Connectors', iconKey: 'clone', group: 'clone', handler: () => cloneElementWithConnectors(cell, 'dangling') });
   if (countConnectedConnectors(cell) > 0) acts.push({ label: 'Clone with connected Connectors', iconKey: 'clone', group: 'clone', handler: () => cloneElementWithConnectors(cell, 'connected') });
-  acts.push({ label: 'Copy', iconKey: 'copy', group: 'clone', handler: () => clipboardCopy() });
+  // Copy in its OWN group ('copy') so a separator sits ABOVE it (apart from the Clone variants) and Copy as PNG
+  // can join it directly below (context-menu builder in selection.js appends Copy as PNG after this item).
+  acts.push({ label: 'Copy', iconKey: 'copy', group: 'copy', handler: () => clipboardCopy() });
 
   // Copy / Paste STYLE (colours) — its own group so it reads apart from the clipboard Copy above (#1).
   if (COLOR_SCHEMA[type]) {

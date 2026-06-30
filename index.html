@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.18.1">
-  <link rel="stylesheet" href="css/theme.css?v=1.18.1">
-  <link rel="stylesheet" href="css/layout.css?v=1.18.1">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.18.1">
-  <link rel="stylesheet" href="css/stencil.css?v=1.18.1">
-  <link rel="stylesheet" href="css/properties.css?v=1.18.1">
-  <link rel="stylesheet" href="css/tabs.css?v=1.18.1">
-  <link rel="stylesheet" href="css/canvas.css?v=1.18.1">
-  <link rel="stylesheet" href="css/modals.css?v=1.18.1">
+  <link rel="stylesheet" href="css/variables.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/theme.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/layout.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/stencil.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/properties.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/tabs.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/canvas.css?v=1.19.0.49">
+  <link rel="stylesheet" href="css/modals.css?v=1.19.0.49">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -139,7 +139,7 @@
           </div>
         </div>
         <div class="df-toolbar__dropdown" id="display-dropdown">
-            <button id="btn-display" class="df-toolbar__button" title="Display options">
+            <button id="btn-display" class="df-toolbar__button" title="View options">
               <!-- Eye icon split into two layers (v1.12.1): the outer almond +
                    iris ring stays `currentColor`; the inner pupil-hole gets a
                    transparent <circle> that lights up amber when the button
@@ -149,15 +149,24 @@
                 <path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
                 <circle class="df-display-icon__pupil" cx="8" cy="8" r="1.8" fill="transparent"/>
               </svg>
-              <span>Display</span>
+              <span>View</span>
               <svg class="df-toolbar__chevron" aria-hidden="true" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
             <div class="df-toolbar__menu">
+              <button id="btn-review-changes" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Tint what changed vs another open tab or a saved version - nothing is modified">
+                <svg class="df-toolbar__icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4h6M3 8h4M3 12h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3v8M12 3l-2 2M12 3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Compare with…
+              </button>
+              <div class="df-toolbar__menu-separator" role="separator"></div>
               <button id="btn-display-group-labels" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Show group names on tab-bar group pills (off = icon + count only)">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Tab Group Labels
               </button>
               <div class="df-toolbar__menu-separator" role="separator"></div>
+              <button id="btn-display-snap-grid" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle" title="Show the dot grid and snap shapes to it while dragging">
+                <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Snap to Grid
+              </button>
               <button id="btn-display-auto-size" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Auto-Fit Containers
@@ -207,6 +216,10 @@
               <button id="btn-auto-layout-v" class="df-toolbar__menu-item df-toolbar__menu-item--icon">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="1" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="5" y="6.5" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="5" y="12" width="6" height="3" rx="0.5" fill="currentColor" stroke="none"/><path d="M8 4v2.5M8 9.5v2.5"/></svg>
                 Vertical Auto Layout
+              </button>
+              <button id="btn-auto-layout-layered" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Experimental: ranks + barycentre alignment (children sit under their parents) - compare against the auto layouts above">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="6" y="1" width="4" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="1" y="12" width="4" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="6" y="12" width="4" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="11" y="12" width="4" height="3" rx="0.5" fill="currentColor" stroke="none"/><path d="M8 4v3M3 12V9h10v3M8 9v-2"/></svg>
+                <span id="auto-layout-layered-label">Layered Auto Layout (beta)</span>
               </button>
               <button id="btn-sequence-bottom-labels" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle">
                 <svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -271,24 +284,20 @@
         </div>
       </div>
 
-      <!-- Center: Grid + Zoom -->
+      <!-- Center: Zoom cluster (− % +) then a separator before Fit, so the zoom controls read as one group
+           and "fit to content" sits apart. (Grid toggle moved into the Display/View menu as "Snap to Grid".) -->
       <div class="df-toolbar__center">
-        <div class="df-toolbar__group">
-          <button id="btn-grid" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__button--active" title="Toggle grid" aria-label="Toggle grid">
-            <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M0 1a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V1zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V1zM0 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V7zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM0 13a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1v-2zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm6 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z"/>
-            </svg>
-          </button>
-        </div>
-        <div class="df-toolbar__separator"></div>
         <div class="df-toolbar__group">
           <button id="btn-zoom-out" class="df-toolbar__button df-toolbar__button--icon-only" title="Zoom out (-)" aria-label="Zoom out">
             <svg class="df-toolbar__icon" aria-hidden="true"><use href="#dash"></use></svg>
           </button>
-          <span id="zoom-level" class="df-toolbar__zoom-level">100%</span>
+          <button id="zoom-level" type="button" class="df-toolbar__zoom-level" title="Reset zoom to 100%" aria-label="Reset zoom to 100%">100%</button>
           <button id="btn-zoom-in" class="df-toolbar__button df-toolbar__button--icon-only" title="Zoom in (+)" aria-label="Zoom in">
             <svg class="df-toolbar__icon" aria-hidden="true"><use href="#add"></use></svg>
           </button>
+        </div>
+        <div class="df-toolbar__separator"></div>
+        <div class="df-toolbar__group">
           <button id="btn-zoom-fit" class="df-toolbar__button df-toolbar__button--icon-only" title="Fit to content (Ctrl+0)" aria-label="Fit to content">
             <svg class="df-toolbar__icon" aria-hidden="true"><use href="#expand"></use></svg>
           </button>
@@ -355,17 +364,33 @@
             </button>
           </div>
         </div>
-        <button id="btn-help" class="df-toolbar__button df-toolbar__button--icon-only" title="Diagramforce Guide" aria-label="Diagramforce Guide - start the walkthrough">
-          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
-            <text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text>
-          </svg>
-        </button>
-        <button id="btn-about" class="df-toolbar__button df-toolbar__button--icon-only" title="About Diagramforce" aria-label="About Diagramforce">
-          <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/>
-          </svg>
-        </button>
+        <div class="df-toolbar__dropdown" id="help-dropdown">
+          <button id="btn-help" class="df-toolbar__button df-toolbar__button--icon-only" title="Help" aria-label="Help" aria-haspopup="true">
+            <svg class="df-toolbar__icon" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+              <text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text>
+            </svg>
+          </button>
+          <div class="df-toolbar__menu">
+            <button id="btn-help-tour" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Replay the guided walkthrough">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M6 6.2a2 2 0 1 1 2.6 1.9c-.4.16-.6.46-.6.9v.4" stroke-linecap="round"/><circle cx="8" cy="11.4" r="0.7" fill="currentColor" stroke="none"/></svg>
+              Guided tour
+            </button>
+            <button id="btn-help-whatsnew" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="What changed in the latest release">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 6l8-3v10l-8-3V6z" stroke-linejoin="round"/><path d="M10 4.5l4-1.5v10l-4-1.5" stroke-linejoin="round"/></svg>
+              What's new
+            </button>
+            <button id="btn-help-shortcuts" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Keyboard shortcuts + right-click actions">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.2" y="3.5" width="13.6" height="9" rx="1.5"/><path d="M3.6 6.2h.01M6 6.2h.01M8.4 6.2h.01M10.8 6.2h.01M3.6 8.4h.01M6 8.4h.01M8.4 8.4h.01M10.8 8.4h.01M5 10.4h6" stroke-linecap="round"/></svg>
+              Keyboard shortcuts
+            </button>
+            <div class="df-toolbar__menu-separator" role="separator"></div>
+            <button id="btn-help-about" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="About Diagramforce">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
+              About Diagramforce
+            </button>
+          </div>
+        </div>
         <button id="btn-theme" class="df-toolbar__button df-toolbar__button--icon-only" title="Toggle theme" aria-label="Toggle theme">
           <svg class="df-toolbar__icon df-toolbar__icon--theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <!-- moon (dark mode indicator) -->
@@ -442,6 +467,10 @@
           <button class="df-toolbar__menu-item" data-action="walkthrough">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/><text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text></svg>
             Walkthrough
+          </button>
+          <button class="df-toolbar__menu-item" data-action="whatsnew">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6l8-3v10l-8-3V6z" stroke-linejoin="round"/><path d="M10 4.5l4-1.5v10l-4-1.5" stroke-linejoin="round"/></svg>
+            What's new
           </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
@@ -656,7 +685,7 @@
         <div class="df-about__info">
           <p>Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs.</p>
           <p>It supports architecture, data modeling and mapping, processes with BPMN, org charts, Gantt timelines, and UML sequence diagrams.</p>
-          <p>Everything runs in your browser - no sign-up and no Diagramforce server. Optionally connect your own Google Drive to auto-save, share diagrams, and browse version history; your work stays in your browser and your own Drive.</p>
+          <p>Everything runs in your browser - no sign-up and no Diagramforce server. Optionally connect your own Google Drive to auto-save, share diagrams, and browse version history; your work stays in your browser and your own Drive. Diagramforce is a verified <a href="https://workspace.google.com/marketplace/app/diagramforce/873718407054" target="_blank" rel="noopener">Google Workspace Marketplace app</a>.</p>
           <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
@@ -697,8 +726,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.18.1"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.18.1"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.18.1"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.19.0.49"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.19.0.49"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.19.0.49"></script>
 </body>
 </html>

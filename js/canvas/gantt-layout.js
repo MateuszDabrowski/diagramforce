@@ -3,7 +3,7 @@
 // table / LLM-authored JSON) and the bar moves to the right column. Shared by the shapes views (live edits +
 // timeline re-layout) and the load migration (migrateNodes). Back-compat: a task with no dates, or no resolvable
 // timeline, keeps its manual pixel position untouched.
-import { dateToX, spanWidth, xToDate } from './gantt-scale.js?v=1.18.1';
+import { dateToX, spanWidth, xToDate } from './gantt-scale.js?v=1.19.0.49';
 
 /** The timeline a task belongs to: its embed parent if that's a timeline, else the SINGLE timeline in the graph (so
  *  an LLM/table needn't set embedding when there's only one). Null when ambiguous (multiple, none) and not embedded. */

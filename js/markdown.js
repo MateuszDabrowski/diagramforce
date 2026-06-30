@@ -24,7 +24,7 @@
 // escHtml is the shared security primitive (js/util.js — itself dependency-free,
 // so this module gains no transitive deps). It runs FIRST in parseMarkdown so
 // user text can never inject markup.
-import { escHtml } from './util.js?v=1.18.1';
+import { escHtml } from './util.js?v=1.19.0.49';
 
 /**
  * Convert plain text with inline markdown markers to HTML. Safe for innerHTML.

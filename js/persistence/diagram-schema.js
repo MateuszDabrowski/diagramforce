@@ -114,6 +114,23 @@ export function validateDiagram(diagram) {
     }
   }
 
+  // Third pass: dangling `parent` / `embeds` (the loader STRIPS a parent whose cell isn't present). Not just
+  // cosmetic - a link/element with a parent attr pointing at a missing cell makes JointJS throw "Embedding of
+  // already embedded cells" on a node drag (the reparent skips the unembed but still embeds), FREEZING the canvas
+  // until reload. The loader now strips these, so this is a warning (the diagram still loads + works), but an
+  // author should fix the id so the intended grouping survives.
+  for (const c of cells) {
+    if (!c || typeof c !== 'object') continue;
+    if (c.parent != null && !ids.has(c.parent)) {
+      warnings.push(`Cell "${c.id ?? '?'}" has \`parent\` "${c.parent}" referencing a missing cell - the parent ref is STRIPPED on load (use a real cell id to keep the grouping).`);
+    }
+    if (Array.isArray(c.embeds)) {
+      for (const eid of c.embeds) {
+        if (!ids.has(eid)) warnings.push(`Cell "${c.id ?? '?'}" \`embeds\` a missing cell "${eid}" - pruned on load.`);
+      }
+    }
+  }
+
   return { errors, warnings };
 }
 

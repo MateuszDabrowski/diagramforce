@@ -210,6 +210,11 @@ function commitPendingDrag() {
 /** Public hook so callers (e.g. undo/redo) can force any pending drag merge to land first. */
 export function flushPendingDragCommit() { commitPendingDrag(); }
 
+/** True while an undo()/redo() is replaying commands. Listeners that MUTATE the model in response to graph
+ *  changes (e.g. the embedding auto-fit) must bail during a replay, or they clobber the exact state the
+ *  command restores — a restored position re-triggers the parent fit, which then over-rides the restored size. */
+export function isUndoRedoActive() { return isUndoRedoing; }
+
 export function init(_graph) {
   graph = _graph;
 
@@ -361,6 +366,7 @@ export function init(_graph) {
   // one undo command instead of one per pointer-move.
   graph.on('change:vertices', (cell) => {
     if (isUndoRedoing || loadingGuard?.()) return;
+    if (_suppressPositionTracking) return;   // recordPositionsBatch captures vertices itself (one undo step)
     const oldV = cell.previous('vertices') ?? [];
     const newV = cell.get('vertices') ?? [];
     if (JSON.stringify(oldV) === JSON.stringify(newV)) return;
@@ -637,7 +643,10 @@ export function redo() {
  * endpoints programmatically — auto-layout, alignment actions, anything
  * that should collapse N changes into a single undo step.
  */
-export function recordPositionsBatch(callback) {
+// `afterRestore` (optional) runs at the END of both undo AND redo of this batch — used by auto-layout to
+// re-fit the viewport so the camera follows the restored layout (otherwise undo restores positions but the
+// camera stays where the layout's fit left it, leaving the diagram off-screen until a manual Fit).
+export function recordPositionsBatch(callback, afterRestore = null) {
   // Land any pending interactive-drag merge first so its entry doesn't
   // get blended into the programmatic snapshot below.
   commitPendingDrag();
@@ -651,11 +660,13 @@ export function recordPositionsBatch(callback) {
     beforeSize.set(el.id, { ...el.size() });
   }
   const beforeEndpoints = new Map();
+  const beforeVertices = new Map();
   for (const link of graph.getLinks()) {
     beforeEndpoints.set(link.id, {
       source: JSON.parse(JSON.stringify(link.get('source') || {})),
       target: JSON.parse(JSON.stringify(link.get('target') || {})),
     });
+    beforeVertices.set(link.id, JSON.stringify(link.get('vertices') ?? []));
   }
 
   // Suppress the change:position handler's pendingChanges recording for
@@ -724,11 +735,27 @@ export function recordPositionsBatch(callback) {
     }
   }
 
+  // 3. Link vertex diffs — if the batch reroutes a link (e.g. re-porting changes its path), the vertices
+  //    change must ride in THIS one command. Without it the change:vertices listener (not suppressed during
+  //    the batch) committed a SEPARATE pending entry, so the layout took two undos (the leaked "one connector"
+  //    undo). Captured here + that listener now bails during the batch (single, coherent undo step).
+  for (const link of graph.getLinks()) {
+    const oldVStr = beforeVertices.get(link.id);
+    if (oldVStr == null) continue;
+    const newVStr = JSON.stringify(link.get('vertices') ?? []);
+    if (oldVStr === newVStr) continue;
+    const id = link.id;
+    const oldV = JSON.parse(oldVStr);
+    const newV = JSON.parse(newVStr);
+    undos.push(() => { const c = graph.getCell(id); if (c) c.set('vertices', oldV); });
+    redos.push(() => { const c = graph.getCell(id); if (c) c.set('vertices', newV); });
+  }
+
   if (undos.length === 0) return;
 
   pushCommand({
-    undo: () => { for (let i = undos.length - 1; i >= 0; i--) undos[i](); },
-    redo: () => { redos.forEach(fn => fn()); },
+    undo: () => { for (let i = undos.length - 1; i >= 0; i--) undos[i](); afterRestore?.(); },
+    redo: () => { redos.forEach(fn => fn()); afterRestore?.(); },
   });
 }
 

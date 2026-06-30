@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.18.1';
-import { escHtml } from './util.js?v=1.18.1';
+import { trapFocus } from './feedback.js?v=1.19.0.49';
+import { escHtml } from './util.js?v=1.19.0.49';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -28,6 +28,10 @@ const MOD_KEY = IS_MAC ? '⌘' : 'Ctrl';
 function renderBody(text) {
   const inline = (s) => {
     let h = escHtml(s);
+    // In-app action link: [label](#shortcuts) opens the Keyboard Shortcuts reference (handled by a
+    // delegated click listener in start()), NOT an external page. Must run BEFORE the generic link rule.
+    h = h.replace(/\[([^\]]+)\]\(#shortcuts\)/g, (m, label) =>
+      `<a href="#" data-tour-action="shortcuts">${label}</a>`);
     h = h.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) =>
       `<a href="${/^https?:\/\//i.test(url) ? url : '#'}" target="_blank" rel="noopener noreferrer">${label}</a>`);
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -77,8 +81,8 @@ const BASE_TOUR = [
   },
   {
     target: '#btn-display', placement: 'below-start',
-    title: 'Context-Aware Display',
-    body: 'The Display menu adapts to the active diagram type - auto-layout, focus dimming to trace connections, plus type-specific toggles (field labels & lengths, swimlane fit, participant labels, and more).',
+    title: 'Context-Aware View',
+    body: 'The View menu adapts to the active diagram type - auto-layout, focus dimming to trace connections, snap-to-grid, plus type-specific toggles (field labels & lengths, swimlane fit, participant labels, and more).',
   },
   {
     target: '#stencil-panel', placement: 'left',
@@ -105,7 +109,7 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Time to Build!',
-    body: 'Pro-tip for fast workflows:\n- Share [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) and [reference diagram](https://architect.salesforce.com/diagrams#reference-architecture-gallery) with your context to create first draft with LLM of your choice\n- {{mod}} + A to select all shapes, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nFind more [here](https://github.com/MateuszDabrowski/diagramforce/tree/main#keyboard-shortcuts).\n\nTime to build!',
+    body: 'Pro-tip for fast workflows:\n- Share [LLM Spec](https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md) and [reference diagram](https://architect.salesforce.com/diagrams#reference-architecture-gallery) with your context to create first draft with LLM of your choice\n- {{mod}} + A to select all shapes, or hold Shift and drag to marquee-select\n- {{mod}} + C / V to copy and paste\n- {{mod}} + Z reverts not-so-great decisions\nSee all keyboard shortcuts [here](#shortcuts).\n\nTime to build!',
   },
 ];
 
@@ -132,7 +136,8 @@ const TYPE_STEP = {
 // ── Init / public API ─────────────────────────────────────────────────────────
 export function init(_modules) {
   modules = _modules;
-  document.getElementById('btn-help')?.addEventListener('click', () => start());
+  // btn-help is now the Help-menu trigger (a dropdown); its "Guided tour" item starts the walkthrough.
+  document.getElementById('btn-help-tour')?.addEventListener('click', () => start());
 }
 
 export function isActive() { return !!activeTour; }
@@ -218,6 +223,16 @@ function runTour(steps) {
   els.back.addEventListener('click', () => go(-1));
   els.skip.addEventListener('click', end);
   els.closeBtn.addEventListener('click', end);
+  // In-app action links inside step copy (e.g. "Find more [here](#shortcuts)"): close the tour, then
+  // open the matching feature. Reuses the existing button wiring (no new module exports needed).
+  els.body.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-tour-action]');
+    if (!a) return;
+    e.preventDefault();
+    const action = a.getAttribute('data-tour-action');
+    end();
+    if (action === 'shortcuts') setTimeout(() => document.getElementById('btn-help-shortcuts')?.click(), 0);
+  });
   els.card.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }

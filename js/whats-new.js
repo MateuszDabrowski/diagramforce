@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.18.1';
-import { buildModal } from './feedback.js?v=1.18.1';
+import { compareSemver } from './util.js?v=1.19.0.49';
+import { buildModal } from './feedback.js?v=1.19.0.49';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,19 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  {
+    version: '1.19.0',
+    title: "What's new in Diagramforce",
+    intro: 'This release adds ready-made templates, a way to review what changed between versions, one-click Markdown tables, cleaner automatic layouts and quicker editing - plus smoother mobile.',
+    highlights: [
+      { icon: 'open_folder', text: '<strong>Start from a template.</strong> The New Diagram window has a Templates tab with ready-made starting points. Open one and it becomes your own editable diagram. It starts with Data 360 Contact Mapping and Marketing Cloud Email Data Views, with more to come.' },
+      { icon: 'check', text: '<strong>Compare with.</strong> Compare the current diagram with another open tab or a saved Google Drive version - what was added, changed or removed is tinted right on the canvas, without modifying anything. Apply it as Highlight States to keep the marks.' },
+      { icon: 'rows', text: '<strong>Copy a table as Markdown.</strong> In the Table view, Copy as Markdown puts the table on your clipboard, ready to paste into Confluence, Jira, Notion or GitHub.' },
+      { icon: 'layers', text: '<strong>Cleaner diagrams.</strong> Auto Layout now lines up children under their parents and straightens connectors for tidier Data Model, Architecture and Org charts - and when you save, any loose connectors (an end not attached to a shape) are flagged and framed on the canvas so you can fix them before you share.' },
+      { icon: 'edit', text: '<strong>Quicker editing.</strong> A new Help menu gathers the guided tour, keyboard shortcuts and About in one place; double-click a Data Object to edit its fields in a table; and a selected connector now highlights clearly in every browser, ends and labels included.' },
+      { icon: 'apps', text: '<strong>Smoother on mobile.</strong> The Table view bar stays reachable, long tab names no longer fill the screen, and Data Model diagrams can switch to the Table view on a phone.' },
+    ],
+  },
   {
     version: '1.18.0',
     title: "What's new in Diagramforce",

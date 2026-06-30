@@ -5,13 +5,13 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.18.1';
-import { diagramHasImage } from '../image-component.js?v=1.18.1';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.18.1';
-import { escHtml, sharePillHtml } from '../util.js?v=1.18.1';
-import { pctx } from './context.js?v=1.18.1';
-import { shareGlyphKind } from './drive-sync-logic.js?v=1.18.1';
-import { isDriveConfigured, isDriveConnected, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink } from './remote-store.js?v=1.18.1';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.0.49';
+import { diagramHasImage } from '../image-component.js?v=1.19.0.49';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.0.49';
+import { escHtml, sharePillHtml } from '../util.js?v=1.19.0.49';
+import { pctx } from './context.js?v=1.19.0.49';
+import { shareGlyphKind } from './drive-sync-logic.js?v=1.19.0.49';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink } from './remote-store.js?v=1.19.0.49';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -330,7 +330,10 @@ function showShareModal(url, opts = {}) {
 
   // images can't be URL-shared (too big) — but the Drive link still can (it stores the whole file).
   const isWarning = opts.reason === 'image';
-  const connected = isDriveConfigured() && isDriveConnected();
+  // Gate the Drive section on a LIVE token (isSignedIn), NOT isDriveConnected: a TIMED-OUT Drive (autosync on,
+  // token dead) is "connected" but can't actually use the controls, so it must read like disconnected — the
+  // unlock/Sign-in prompt, never the dead controls (and never an auto-popup; see GOTCHAS 2.7c).
+  const connected = isDriveConfigured() && isSignedIn();
   // Past this length, chat apps / email / QR codes start truncating the classic link.
   const LONG_URL_WARN = 8000;
   const tooLong = !isWarning && typeof url === 'string' && url.length > LONG_URL_WARN;
@@ -401,9 +404,10 @@ function showShareModal(url, opts = {}) {
         </div>
       </div>`
     : isDriveConfigured()
-      ? `<div class="df-share__unlock">
-          <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Sync to <strong>Google Drive</strong> to unlock a <strong>short, always-up-to-date</strong> link you can keep public, share with specific people, or limit to your organisation.</p>
-          <button type="button" class="df-modal__btn df-share__connect"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Connect Google Drive</button>
+      ? `<div class="df-share__section df-share__unlock">
+          <div class="df-share__label">Google Drive link</div>
+          <p style="margin:8px 0 14px;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Sign in to Google Drive to create a <strong>short, always-up-to-date</strong> share link (public, specific people, or your organisation), put an editable copy in a team <strong>Shared Drive</strong>, and manage who you've shared with.</p>
+          <div style="text-align:center"><button type="button" class="df-modal__btn df-modal__btn--accent df-share__connect">Sign in to Google Drive</button></div>
         </div>`
       : '';
 
@@ -443,13 +447,15 @@ function showShareModal(url, opts = {}) {
     btn.addEventListener('click', () => copyFrom(btn, body.querySelector(btn.dataset.copy === 'drive' ? '.df-share__gd-field' : '.df-share-modal__url')));
   });
 
-  // "Connect Google Drive" — sign in, then reopen the overlay (now connected → Drive section). Use innerHTML, not
-  // textContent, so the Drive glyph survives the connecting/error label swaps.
+  // "Sign in to Google Drive" — sign in, then reopen the overlay (now signed-in → the Drive controls render).
   body.querySelector('.df-share__connect')?.addEventListener('click', async (e) => {
-    const b = e.currentTarget; const glyph = '<svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>';
-    b.disabled = true; b.innerHTML = glyph + 'Connecting…';
+    const b = e.currentTarget;
+    b.disabled = true; b.textContent = 'Signing in…';
     try { await signIn(); close(); shareAsURL(); }
-    catch (err) { b.disabled = false; b.innerHTML = glyph + 'Connect Google Drive'; showError('Could not connect to Google Drive: ' + (err.message || 'unknown error')); }
+    catch (err) {
+      b.disabled = false; b.textContent = 'Sign in to Google Drive';
+      if (!/cancel/i.test(err?.message || '')) showError('Could not sign in to Google Drive: ' + (err.message || 'unknown error'));
+    }
   });
 
   // Drive section: access level (view/edit) + audience pill + Create + the shared-copies list.
@@ -698,8 +704,12 @@ function showShareModal(url, opts = {}) {
       }));
       };   // end paint
       paint([]);   // immediate: the local copies (Edit / Shared Drive) - no network wait
-      // then merge the live permissions.list grants (Edit / View / Shared-Drive members) when they resolve
-      if (listActiveShareGrants) listActiveShareGrants().then((g) => paint(g || [])).catch(() => {});
+      // then merge the live permissions.list grants (Edit / View / Shared-Drive members) when they resolve — but
+      // ONLY when a live token already exists. listActiveShareGrants → getToken would otherwise pop Google's
+      // account picker just from OPENING the Share Manager (a passive surface): a timed-out Drive must read like
+      // disconnected, never auto-popping. The local copies still render; the Drive action buttons sign in on the
+      // user's explicit click. (See GOTCHAS 2.7c.)
+      if (listActiveShareGrants && isSignedIn()) listActiveShareGrants().then((g) => paint(g || [])).catch(() => {});
     };
 
     accessOpts.forEach((opt) => opt.addEventListener('click', () => {

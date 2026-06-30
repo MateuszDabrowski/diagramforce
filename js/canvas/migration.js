@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.18.1';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.18.1';
-import { nodeContrastText } from '../util.js?v=1.18.1';
-import { getIconDataUri } from '../icons.js?v=1.18.1';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.19.0.49';
+import { nodeContrastText } from '../util.js?v=1.19.0.49';
+import { getIconDataUri } from '../icons.js?v=1.19.0.49';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.19.0.49';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -40,6 +40,25 @@ const LEGACY_DASH_REMAP = { '3 4': '0 6', '16 8 2 8': '16 8' };
 // ── Migrate link labels to use canvas-bg rect + connector-colored text ──
 export function migrateLinks() {
   const { graph, paper } = cctx;
+  // ── Strip DANGLING parent / embeds refs (v1.19.0) ──
+  // A cell (most often a LINK authored by an LLM or template) can carry a `parent` attribute pointing at a cell
+  // id that ISN'T in this graph (e.g. "zone-orchestration", "container-…"). JointJS's embed() reads that
+  // ATTRIBUTE: on a node drag it re-homes the node's connected links to their endpoints' common ancestor
+  // (link.reparent → ancestor.embed(link)); a link whose parent CELL is missing makes getParentCell() null, so
+  // reparent SKIPS the unembed yet still calls embed() → it throws "Embedding of already embedded cells is not
+  // allowed." UNCAUGHT on pointerup, that wedges JointJS's drag state → the canvas freezes (no selection, no
+  // Cmd+A) until reload (reported: "moving a node over a container that is over a zone freezes"). sanitizeGraphJSON
+  // strips these for the JSON load paths, but SESSION-RESTORE goes fromJSON→migrate WITHOUT sanitize, so we also
+  // clean the LIVE graph here — this runs on every load. Idempotent; load guard suppresses history/auto-fit.
+  for (const cell of graph.getCells()) {
+    const pid = cell.get('parent');
+    if (pid != null && !graph.getCell(pid)) cell.unset('parent');
+    const embeds = cell.get('embeds');
+    if (Array.isArray(embeds)) {
+      const kept = embeds.filter((id) => graph.getCell(id));
+      if (kept.length !== embeds.length) cell.set('embeds', kept);
+    }
+  }
   for (const link of graph.getLinks()) {
     // ── Re-key legacy positional field ports → stable fid ports ──
     // Pre-1.15.0 saves bound a DataObject link to the field's ARRAY INDEX

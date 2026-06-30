@@ -5,9 +5,9 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.18.1';
-import { showToast, showError } from '../feedback.js?v=1.18.1';
-import { pctx } from './context.js?v=1.18.1';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.19.0.49';
+import { showToast, showError } from '../feedback.js?v=1.19.0.49';
+import { pctx } from './context.js?v=1.19.0.49';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -73,7 +73,10 @@ export function copyCellsAsPng(cells, { silent = false, transparent = false, def
     : render();
   navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blobPromise })])
     .then(() => { if (!silent) showToast(`Copied as PNG${transparent ? ' (transparent)' : ''} - paste it into Slack, docs or chat ✓`, 'success'); })
-    .catch((err) => { console.error('Copy as PNG failed:', err); if (!silent) showError('Could not copy the image to the clipboard.'); });
+    // The Cmd+C overload (silent:true) is a best-effort BONUS on top of the internal copy, so a clipboard
+    // permission/focus denial there must stay quiet - no toast AND no console.error (it would pollute the
+    // console + trip the E2E zero-errors check). Only the explicit Copy-as-PNG action (silent:false) reports.
+    .catch((err) => { if (!silent) { console.error('Copy as PNG failed:', err); showError('Could not copy the image to the clipboard.'); } });
 }
 
 /** Render `renderCells` (cropped to their bbox) to a PNG Blob via the standalone-SVG pipeline. Returns a Promise so

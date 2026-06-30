@@ -8,8 +8,8 @@
 // them onto cctx in init(), then calls registerViewportControls(cctx) to attach
 // the listeners and expose `getZoom` + `fitContent` back onto cctx for the
 // sub-modules that need them (e.g. auto-layout.js calls cctx.fitContent()).
-import { cctx } from './context.js?v=1.18.1';
-import { centerX, centerY, clamp } from '../util/geometry.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
+import { centerX, centerY, clamp } from '../util/geometry.js?v=1.19.0.49';
 
 // ── Zoom + grid state ───────────────────────────────────────────────
 let currentZoom = 1;
@@ -43,6 +43,7 @@ function setZoom(zoom) {
 
 export function zoomIn() { setZoom(currentZoom + ZOOM_STEP); }
 export function zoomOut() { setZoom(currentZoom - ZOOM_STEP); }
+export function resetZoom() { setZoom(1); }   // clicking the zoom % snaps back to 100%
 
 export function fitContent() {
   const { graph, paper } = cctx;
@@ -77,6 +78,21 @@ export function fitContent() {
   updateZoomDisplay();
 }
 
+// Fit the viewport to a SPECIFIC model-space bbox (e.g. the loose connectors a pre-save check surfaced),
+// not the whole content. Caps zoom at 1.5 so a tiny target doesn't slam to max, and keeps currentZoom +
+// the % readout in sync (paper.scale alone would desync the zoom buttons).
+export function fitToCells(bbox) {
+  const { paper } = cctx;
+  if (!bbox || !bbox.width || !bbox.height) return;
+  const paperRect = paper.el.getBoundingClientRect();
+  const padding = 120;
+  const z = clamp(Math.min((paperRect.width - padding * 2) / bbox.width, (paperRect.height - padding * 2) / bbox.height, 1.5), ZOOM_MIN, ZOOM_MAX);
+  paper.scale(z, z);
+  paper.translate(paperRect.width / 2 - centerX(bbox) * z, paperRect.height / 2 - centerY(bbox) * z);
+  currentZoom = z;
+  updateZoomDisplay();
+}
+
 export function toggleGrid() {
   const { paper } = cctx;
   gridVisible = !gridVisible;
@@ -96,6 +112,8 @@ export function refreshGrid() {
     paper.setGrid({ name: 'dot', args: { color: getGridColor(), scaleFactor: 4 } });
   }
 }
+
+export function isGridVisible() { return gridVisible; }
 
 export function getViewport() {
   const { paper } = cctx;
@@ -293,4 +311,5 @@ export function registerViewportControls(cctx) {
   //    live scale; fitContent is called by auto-layout.js after a layout pass.
   cctx.getZoom = () => currentZoom;
   cctx.fitContent = fitContent;
+  cctx.fitToCells = fitToCells;   // used by diagram-check.js to frame the loose connectors it highlights
 }

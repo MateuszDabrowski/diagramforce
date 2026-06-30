@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.18.1';
+const CACHE_VERSION = '1.19.0.49';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -48,6 +48,7 @@ const PRECACHE_URLS = [
   `./js/canvas/auto-layout.js?v=${CACHE_VERSION}`,
   `./js/canvas/migration.js?v=${CACHE_VERSION}`,
   `./js/canvas/crossing-bumps.js?v=${CACHE_VERSION}`,
+  `./js/canvas/review-overlay.js?v=${CACHE_VERSION}`,
   `./js/canvas/viewport.js?v=${CACHE_VERSION}`,
   `./js/canvas/line-style.js?v=${CACHE_VERSION}`,
   `./js/canvas/mobile.js?v=${CACHE_VERSION}`,
@@ -63,6 +64,7 @@ const PRECACHE_URLS = [
   `./js/keyboard.js?v=${CACHE_VERSION}`,
   `./js/markdown.js?v=${CACHE_VERSION}`,
   `./js/mermaid-import.js?v=${CACHE_VERSION}`,
+  `./js/official-templates.js?v=${CACHE_VERSION}`,
   `./js/persistence.js?v=${CACHE_VERSION}`,
   `./js/persistence/context.js?v=${CACHE_VERSION}`,
   `./js/persistence/df-format.js?v=${CACHE_VERSION}`,
@@ -98,6 +100,10 @@ const PRECACHE_URLS = [
   './manifest.json',
   './assets/icon-192.png',
   './assets/icon-512.png',
+  // Official template library (official-templates.js fetches these same-origin; no ?v= — the
+  // versioned cache name busts them on every bump). Add a line here per new templates/*.json.
+  './templates/data360-contact-mapping.json',
+  './templates/mce-email-data-views.json',
 ];
 
 self.addEventListener('install', (event) => {

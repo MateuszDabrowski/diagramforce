@@ -315,6 +315,13 @@
   display: block;
 }
 
+/* Help menu sits at the far RIGHT of the toolbar — right-align its menu so it opens leftward and stays
+   on screen (the generic left:0 would run it off the right edge). */
+#help-dropdown .df-toolbar__menu {
+  left: auto;
+  right: 0;
+}
+
 /* Display dropdown — same button-merge as the storage managers (2.5): the open button takes the panel surface
    + drops its bottom seam (.df-toolbar__button--panel-open extended above), and the menu joins it — same
    --bg-surface, no 4px gap, squared top, with the top border resuming only PAST the button (--df-merge-w set
@@ -468,15 +475,30 @@
 [data-theme="light"] .df-icon-sun { display: inline; }
 [data-theme="light"] .df-icon-moon { display: none; }
 
+/* Zoom percentage: a button that resets zoom to 100% on click (v1.19.0). Reads as plain text until hovered,
+   then lights up with the SAME height / radius / hover as the icon-only toolbar buttons (just wider for the
+   text) so the hover shape + size match the - and + buttons either side of it. */
 .df-toolbar__zoom-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--text-secondary);
-  min-width: 40px;
-  text-align: center;
+  min-width: 44px;
+  min-height: 32px;
   user-select: none;
   font-variant-numeric: tabular-nums;
-  padding: 4px 2px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.df-toolbar__zoom-level:hover {
+  background: var(--toolbar-button-hover);
+  color: var(--color-primary);
 }
 
 .df-toolbar__menu-separator {
@@ -588,12 +610,11 @@
   .df-toolbar__left > .df-toolbar__dropdown,
   .df-toolbar__left > .df-toolbar__separator,
   .df-toolbar__center,
-  .df-toolbar__right > #btn-about,
   .df-toolbar__right > #btn-theme,
-  /* Help/Walkthrough lives in the hamburger on mobile (above About); hiding it here leaves a
-     clean 2 + 2 toolbar (hamburger + undo | fit + panel). Still in the DOM so the hamburger's
-     Walkthrough item can trigger it; desktop keeps the ? button (no hamburger there). */
-  .df-toolbar__right > #btn-help {
+  /* The Help menu (Guided tour / What's new / About) lives in the hamburger on mobile; hide the desktop
+     ? dropdown here. Still in the DOM so the hamburger items can trigger its actions; desktop keeps the
+     ? button (no hamburger there). About's old standalone icon is gone (folded into this menu). */
+  .df-toolbar__right > #help-dropdown {
     display: none !important;
   }
 

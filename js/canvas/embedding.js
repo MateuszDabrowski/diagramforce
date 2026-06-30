@@ -12,7 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
+import { isUndoRedoActive } from '../history.js?v=1.19.0.49';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -590,7 +591,7 @@ export function registerEmbedding(cctx) {
   // Trigger 1: a cell becomes embedded (or un-embedded). Fit both parents — the
   // new one (may grow) and the previous one (may shrink). Deferred during drag.
   graph.on('change:parent', (cell, newParentId) => {
-    if (cctx.isLoadingJSON) return;
+    if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
     if (!cell.isElement || !cell.isElement()) return;
     const prevParentId = cell.previous('parent');
     if (_dragActive) {
@@ -616,7 +617,7 @@ export function registerEmbedding(cctx) {
   // Trigger 2: an embedded child resizes (e.g. DataObject after key-fields-only
   // toggle, or any cell after manual resize). Fit the parent. Deferred during drag.
   graph.on('change:size', (cell) => {
-    if (cctx.isLoadingJSON) return;
+    if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
     const parentId = cell.get('parent');
     if (!parentId) return;
     if (_dragActive) { _pendingParents.add(parentId); return; }
@@ -628,7 +629,7 @@ export function registerEmbedding(cctx) {
   // but a user dragging the child within the parent should tighten/expand it,
   // ON DROP (deferred) rather than per-frame.
   graph.on('change:position', (cell) => {
-    if (cctx.isLoadingJSON) return;
+    if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
     const parentId = cell.get('parent');
     if (!parentId) return;
     if (_dragActive) { _pendingParents.add(parentId); return; }
@@ -639,7 +640,7 @@ export function registerEmbedding(cctx) {
   // surviving parent on the next tick — JointJS may still be cleaning up its
   // embeds-array when this fires. Not a drag, so always immediate.
   graph.on('remove', (cell) => {
-    if (cctx.isLoadingJSON) return;
+    if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
     const parentId = cell.get('parent') || cell.previous('parent');
     if (!parentId) return;
     const parent = graph.getCell(parentId);

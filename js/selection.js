@@ -1,12 +1,12 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as clipboard from './clipboard.js?v=1.18.1';
-import * as history from './history.js?v=1.18.1';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.18.1';
-import { fieldFocus } from './canvas/focus-state.js?v=1.18.1';
-import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.18.1';
-import { cctx } from './canvas/context.js?v=1.18.1';
+import * as clipboard from './clipboard.js?v=1.19.0.49';
+import * as history from './history.js?v=1.19.0.49';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.19.0.49';
+import { fieldFocus } from './canvas/focus-state.js?v=1.19.0.49';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from './canvas/gantt-layout.js?v=1.19.0.49';
+import { cctx } from './canvas/context.js?v=1.19.0.49';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -285,11 +285,11 @@ export function init(_graph, _paper) {
   graph.on('add remove reset change:source change:target', invalidateFieldGraph);
   graph.on('change:linkKind', invalidateFieldGraph);
 
-  // ── Field-hover flow trace (Data Mapping) ──────────────────────────────────
-  // Hovering a field row lights that field's lineage across layers (same engine as
-  // selecting a connector), transiently — moving off restores the selection's state.
-  // No-op for fields that don't participate in a mapping link (so it's inert in
-  // non-mapping diagrams). Suppressed while dragging.
+  // ── Field-hover flow trace (Data Mapping + Data Model) ─────────────────────
+  // Hovering a field row lights that field's lineage across connected tables (same engine as selecting a
+  // connector), transiently — moving off restores the selection's state. Works for any field-to-field link:
+  // Data Mapping mapping links AND Data Model field-to-field ER relationships. No-op for fields with no
+  // field-to-field link (so it's inert on header-anchored diagrams). Suppressed while dragging.
   let _hoverFieldKey = null;
   const fieldRowAt = (target) => {
     const row = target?.closest?.('.do-field-row');
@@ -635,11 +635,12 @@ function suspendDimmingForDrag() {
 }
 
 // ── Directed field-lineage engine (Data Mapping flow focus) ────────────────────
-// Model: a directed graph of FIELDS. node = "objId::fid"; edge = a mapping link from
-// source field (right port) → target field (left port). Data flows along edges
-// left→right across layers (Source → DLO → DMO → …). Tracing one direction only (never
-// reversing) is what keeps focus tight: from a field you follow its data forward and
-// back, but you don't fan sideways into siblings that merely share a downstream target.
+// Model: a directed graph of FIELDS. node = "objId::fid"; edge = any FIELD-TO-FIELD link from
+// source field (right port) → target field (left port) - a Data Mapping mapping link OR a Data Model
+// field-to-field ER relationship (so hovering a field traces "the same field across connected tables" in
+// BOTH diagram types). Data flows along edges left→right across layers (Source → DLO → DMO → …). Tracing one
+// direction only (never reversing) keeps focus tight: from a field you follow it forward and back, but you
+// don't fan sideways into siblings that merely share a downstream target.
 const _fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
   ? port.replace(/^field-(left|right)-/, '') : null;
 const _fieldKeyOfEp = ep => (ep && ep.id && _fidOfPort(ep.port)) ? `${ep.id}::${_fidOfPort(ep.port)}` : null;
@@ -651,7 +652,8 @@ function fieldGraph() {
   const fwd = new Map(), bwd = new Map(), links = [];
   const add = (m, k, v) => { let s = m.get(k); if (!s) m.set(k, s = new Set()); s.add(v); };
   for (const l of graph.getLinks()) {
-    if (l.prop('linkKind') !== 'mapping') continue;
+    // Any FIELD-TO-FIELD link qualifies (mapping OR Data Model ER) - the _fieldKeyOfEp guard below drops links
+    // that aren't field-anchored (header / er-* ports), so no linkKind filter is needed.
     const sk = _fieldKeyOfEp(l.get('source')), tk = _fieldKeyOfEp(l.get('target'));
     if (!sk || !tk) continue;
     add(fwd, sk, tk); add(bwd, tk, sk);
@@ -672,20 +674,45 @@ function traceDir(seedKeys, dir) {
   }
   return seen;
 }
+// Walk BOTH directions transitively (undirected) from the seeds: the whole CONNECTED COMPONENT of fields.
+function traceClosure(seedKeys) {
+  const g = fieldGraph();
+  const seen = new Set(seedKeys);
+  const queue = [...seedKeys];
+  while (queue.length) {
+    const k = queue.pop();
+    const f = g.fwd.get(k), b = g.bwd.get(k);
+    if (f) for (const n of f) if (!seen.has(n)) { seen.add(n); queue.push(n); }
+    if (b) for (const n of b) if (!seen.has(n)) { seen.add(n); queue.push(n); }
+  }
+  return seen;
+}
 // Compute the lineage field-set (+ which objects stay fully lit) for a flow selection/hover.
-// linkSeeds: connector(s) → upstream(source) + downstream(target). objectSeeds: both
-// directions from every field of the object (the object itself stays fully lit). hoverField:
-// both directions from a single hovered field. Returns null when nothing traced.
+// linkSeeds: connector(s) → upstream(source) + downstream(target). objectSeeds: from every field of the
+// object (the object itself stays fully lit). hoverField: from a single hovered field. Returns null when
+// nothing traced. MODE: Data Mapping (any link has linkKind 'mapping') traces the TIGHT directional lineage
+// (data flows one way; never fan sideways into siblings). Data Model (ER, no mapping links) traces the whole
+// undirected CONNECTED COMPONENT instead - so hovering a field lights every field it reaches across tables,
+// any number of hops both ways (a PK lights all its FKs and vice-versa). Per the user: "show all fields
+// connected, not limited to one jump".
 function computeFieldLineage({ linkSeeds = [], objectSeeds = [], hoverField = null }) {
   if (!fieldGraph().links.length && !objectSeeds.length) return null;
   const fields = new Set();
   const fullyLit = new Set();
-  const bothWays = (seedKeys) => { for (const k of traceDir(seedKeys, 'up')) fields.add(k); for (const k of traceDir(seedKeys, 'down')) fields.add(k); };
+  const closure = !graph.getLinks().some(l => l.prop('linkKind') === 'mapping');
+  const grow = (seedKeys) => {
+    if (closure) { for (const k of traceClosure(seedKeys)) fields.add(k); return; }
+    for (const k of traceDir(seedKeys, 'up')) fields.add(k);
+    for (const k of traceDir(seedKeys, 'down')) fields.add(k);
+  };
   for (const l of linkSeeds) {
     const sk = _fieldKeyOfEp(l.get('source')), tk = _fieldKeyOfEp(l.get('target'));
     if (!sk || !tk) continue;
-    for (const k of traceDir([sk], 'up')) fields.add(k);
-    for (const k of traceDir([tk], 'down')) fields.add(k);
+    if (closure) { for (const k of traceClosure([sk, tk])) fields.add(k); }
+    else {
+      for (const k of traceDir([sk], 'up')) fields.add(k);
+      for (const k of traceDir([tk], 'down')) fields.add(k);
+    }
     fields.add(sk); fields.add(tk);
   }
   for (const objId of objectSeeds) {
@@ -693,9 +720,9 @@ function computeFieldLineage({ linkSeeds = [], objectSeeds = [], hoverField = nu
     if (!cell || cell.get('type') !== 'sf.DataObject') continue;
     fullyLit.add(objId);
     const seedKeys = (cell.get('fields') || []).filter(f => f && f.fid).map(f => `${objId}::${f.fid}`);
-    if (seedKeys.length) bothWays(seedKeys);
+    if (seedKeys.length) grow(seedKeys);
   }
-  if (hoverField?.objId && hoverField?.fid) bothWays([`${hoverField.objId}::${hoverField.fid}`]);
+  if (hoverField?.objId && hoverField?.fid) grow([`${hoverField.objId}::${hoverField.fid}`]);
   return fields.size ? { fields, fullyLit } : null;
 }
 // Apply field-level flow focus: light lineage fields, dim the rest. Returns true if applied.
@@ -1409,6 +1436,7 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
     if (prev.length) {
       // Re-add the previously-selected cells alongside this one → a growing multi-select built by right-clicking.
       addItem('Add to selection', () => { prev.forEach((id) => addToSelection(id)); addToSelection(model.id); }, { icon: CTX_ICON.addSel });
+      addSep();   // set "Add to selection" apart from the per-shape actions below (#1)
     }
     if (model.isLink()) {
       addItem('Clone', () => clipboard.duplicate(), { icon: CTX_ICON.clone });
@@ -1433,9 +1461,9 @@ function showContextMenu(clientX, clientY, model, opts = {}) {
         if (lastGroup !== null && a.group !== lastGroup) addSep();
         lastGroup = a.group;
         addItem(a.label, a.handler, { icon: CTX_ICON[a.iconKey] || '' });
+        if (a.label === 'Copy') addCopyPng();   // Copy as PNG sits directly under Copy, in the same group (#3)
       }
       if (acts.length) addSep();
-      addCopyPng();
     } else {
       // Multi-select: the common whole-selection actions PLUS the per-shape actions that make sense uniformly
       // when EVERY selected element is the same type (clone-with-connectors variants, Convert, Order), each applied

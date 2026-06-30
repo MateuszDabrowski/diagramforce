@@ -3,14 +3,18 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.18.1';
+import { cctx } from './context.js?v=1.19.0.49';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
 // Groups (containers, zones, pools) are treated as single layout units —
 // their embedded children move with them and maintain relative positions.
-export function autoLayout(direction) {
+export function autoLayout(direction, opts = {}) {
   const { graph, paper, fitContent } = cctx;
+  // v2 "Layered" (opts.align==='barycenter'): same ranks + crossing-minimised order as the default,
+  // but the final COORDINATE step pulls each node toward its neighbours' barycentre so children sit
+  // under their parents (the default only centres each layer by order). Default path is unchanged.
+  const align = opts.align === 'barycenter' ? 'barycenter' : 'sequential';
   // Always frame the SETTLED layout. Refit group parents first (a BpmnPool reserves
   // its left header band; containers/zones hug their children) so their bounds are
   // real, fit once now, then once more on the next frame — embedding refits and
@@ -36,12 +40,39 @@ export function autoLayout(direction) {
     if (el.get('parent')) embeddedIds.add(el.id);
   });
 
-  // Top-level elements to lay out (not embedded children, not bare zones without embeds)
+  // PARKED ANNOTATIONS (Stage A): a free-floating Note / TextLabel / Legend / Image with NO connectors isn't part
+  // of the flow - ranking it into the layout drags it into the diagram and overlaps content (the reported bug).
+  // Pull these out of the layout and re-park them as a tidy right-hand margin AFTER the content settles. Only
+  // UNCONNECTED, top-level ones (an annotation wired to a node stays in the flow).
+  const ANNOTATION_TYPES = new Set(['sf.Note', 'sf.TextLabel', 'df.Legend', 'sf.Image']);
+  const connectedIds = new Set();
+  for (const l of links) { const s = l.get('source')?.id, t = l.get('target')?.id; if (s) connectedIds.add(s); if (t) connectedIds.add(t); }
+  const isParkable = (el) => ANNOTATION_TYPES.has(el.get('type')) && !el.get('parent') && !connectedIds.has(el.id);
+  const parkedAnnotations = elements.filter(isParkable);
+
+  // Top-level elements to lay out (not embedded children, not parked annotations)
   const layoutEls = elements.filter(el => {
     if (embeddedIds.has(el.id)) return false;
+    if (isParkable(el)) return false;
     return true;
   });
   if (layoutEls.length < 2) { fitAfterLayout(); return; }
+
+  // Park the unconnected annotations in the right margin, stacked top-to-bottom (preserving their order), clear
+  // of the laid-out content. Called AFTER content positions settle. Position changes are captured by the
+  // recordPositionsBatch wrapper in runAutoLayout, so this undoes with the rest of the auto-layout.
+  function parkAnnotations() {
+    if (!parkedAnnotations.length) return;
+    const bb = graph.getCellsBBox(layoutEls);
+    if (!bb) return;
+    const marginX = Math.round(bb.x + bb.width + grid * 6);
+    let y = Math.round(bb.y);
+    parkedAnnotations.slice().sort((a, b) => a.position().y - b.position().y).forEach((a) => {
+      const cur = a.position();
+      a.translate(marginX - cur.x, y - cur.y);
+      y += a.size().height + 32;
+    });
+  }
 
   // For each layout element, compute its effective size (including embedded children)
   const sizes = new Map();
@@ -403,7 +434,80 @@ export function autoLayout(direction) {
     }
 
     // --- Position layers using the optimized ordering ---
-    if (isHorizontal) {
+    if (align === 'barycenter') {
+      // v2 "Layered": keep the optimised ranks + order, but pull each node's CROSS-axis toward the
+      // barycentre of its linked neighbours (children sit under their parents), packed in order with a
+      // min gap so the order + non-overlap survive. Along-axis (the rank) is fixed per layer.
+      const crossSz = (id) => (isHorizontal ? sizes.get(id).h : sizes.get(id).w);
+      const alongSz = (id) => (isHorizontal ? sizes.get(id).w : sizes.get(id).h);
+      const crossGap = isHorizontal ? GAP_Y : GAP_X;
+      const alongGap = isHorizontal ? GAP_X : GAP_Y;
+      // Along-axis coord per layer = cumulative max extent of the previous layers.
+      const alongAt = new Map();
+      let aCur = 0;
+      for (const l of sortedLevels) {
+        alongAt.set(l, aCur);
+        let mx = 0; for (const id of layers.get(l)) mx = Math.max(mx, alongSz(id));
+        aCur += mx + alongGap;
+      }
+      // Seed cross positions sequentially by the optimised order.
+      const cross = new Map();
+      for (const l of sortedLevels) { let c = 0; for (const id of layers.get(l)) { cross.set(id, c); c += crossSz(id) + crossGap; } }
+      const neigh = (id) => { const r = []; for (const n of (adjOut.get(id) || [])) if (cross.has(n)) r.push(n); for (const n of (adjIn.get(id) || [])) if (cross.has(n)) r.push(n); return r; };
+      // Order-preserving pack toward the neighbour barycentre.
+      const packLayer = (layer) => {
+        let prevEnd = -Infinity;
+        for (const id of layer) {
+          const ns = neigh(id);
+          let want = ns.length ? ns.reduce((s, n) => s + cross.get(n) + crossSz(n) / 2, 0) / ns.length - crossSz(id) / 2 : cross.get(id);
+          if (prevEnd > -Infinity && want < prevEnd + crossGap) want = prevEnd + crossGap;
+          cross.set(id, want);
+          prevEnd = want + crossSz(id);
+        }
+      };
+      for (let sweep = 0; sweep < 8; sweep++) {
+        for (let i = 0; i < sortedLevels.length; i++) packLayer(layers.get(sortedLevels[i]));            // down
+        for (let i = sortedLevels.length - 1; i >= 0; i--) packLayer(layers.get(sortedLevels[i]));        // up
+      }
+      // Descendant sets (node + everything reachable via adjOut within this component), built bottom-up so a
+      // parent unions its children's sets. Longest-path leveling makes every adjOut edge go to a strictly
+      // higher level, so children are finalised before their parents in this deepest-first pass.
+      const descendants = new Map();
+      for (const id of ids) descendants.set(id, new Set([id]));
+      for (let li = sortedLevels.length - 1; li >= 0; li--) {
+        for (const id of layers.get(sortedLevels[li])) {
+          const set = descendants.get(id);
+          for (const ch of (adjOut.get(id) || [])) if (descendants.has(ch)) for (const d of descendants.get(ch)) set.add(d);
+        }
+      }
+      const shiftSubtree = (id, delta) => { if (!delta) return; for (const d of descendants.get(id)) cross.set(d, cross.get(d) + delta); };
+
+      // Straighten single-child SPINES (internal nodes too, not just leaves): a node whose parent has exactly
+      // ONE child should sit directly under/across that parent - a straight connector. Shift the node's WHOLE
+      // subtree by the same delta so the branch stays attached. Top-down so each parent is final before its
+      // child aligns; a MULTI-child parent is never moved, so its children keep the barycentre spread and the
+      // spine keeps running straight AFTER a split (Start->Process->Decision->...->Terminator stays a line).
+      for (const l of sortedLevels) {
+        for (const id of layers.get(l)) {
+          const parents = [...(adjIn.get(id) || [])].filter((p) => cross.has(p));
+          if (parents.length === 1 && [...(adjOut.get(parents[0]) || [])].filter((k) => cross.has(k)).length === 1) {
+            shiftSubtree(id, (cross.get(parents[0]) + crossSz(parents[0]) / 2 - crossSz(id) / 2) - cross.get(id));
+          }
+        }
+      }
+      // Re-clamp each layer in order to remove any overlaps the cascades introduced; shift a colliding node's
+      // whole subtree (so a straightened spine stays straight). Shallow->deep so parents settle before kids.
+      for (const l of sortedLevels) {
+        let prevEnd = -Infinity;
+        for (const id of layers.get(l)) {
+          if (prevEnd > -Infinity && cross.get(id) < prevEnd + crossGap) shiftSubtree(id, (prevEnd + crossGap) - cross.get(id));
+          prevEnd = cross.get(id) + crossSz(id);
+        }
+      }
+      for (const l of sortedLevels) for (const id of layers.get(l)) {
+        pos.set(id, isHorizontal ? { x: alongAt.get(l), y: cross.get(id) } : { x: cross.get(id), y: alongAt.get(l) });
+      }
+    } else if (isHorizontal) {
       let x = 0;
       for (const l of sortedLevels) {
         const col = layers.get(l);
@@ -512,8 +616,13 @@ export function autoLayout(direction) {
   layoutEls.forEach(el => {
     const p = pos.get(el.id);
     if (!p) return;
-    const newX = Math.round((p.x - globalMinX + PAD) / grid) * grid;
-    const newY = Math.round((p.y - globalMinY + PAD) / grid) * grid;
+    // Translate the whole layout to a grid-aligned origin (PAD) but keep EXACT relative positions - round to
+    // INTEGER, not to the grid. A per-node grid-snap (`round(x/grid)*grid`) rounds two centre-aligned nodes of
+    // DIFFERENT widths to DIFFERENT centres (e.g. a 120-wide Process at 384 and its aligned 60-wide child land on
+    // 384 and 416 -> centres 444 vs 446), which jogs an otherwise-straight connector. Integer rounding shifts both
+    // by the same fractional amount, so aligned centres stay aligned and the connector renders dead-straight.
+    const newX = Math.round(p.x - globalMinX + PAD);
+    const newY = Math.round(p.y - globalMinY + PAD);
     const oldPos = el.position();
     const dx = newX - oldPos.x;
     const dy = newY - oldPos.y;
@@ -521,6 +630,7 @@ export function autoLayout(direction) {
     el.translate(dx, dy);
   });
 
+  parkAnnotations();   // re-park unconnected Note/TextLabel/Legend/Image to the right margin (Stage A)
 
   fitAfterLayout();
 }

@@ -1138,6 +1138,66 @@
 .df-diff-key--add { --diff-key-color: #1D9E75; }
 .df-diff-key--chg { --diff-key-color: #BA7517; }
 .df-diff-key--del { --diff-key-color: #C23934; }
+
+/* ── Change Review (NBA-1, v1.19.0) — baseline picker + transient review banner ── */
+.df-review-picker__desc { margin: 0 0 14px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+.df-review-picker__h { margin: 14px 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.df-review-picker__h:first-of-type { margin-top: 0; }
+.df-review-picker__row {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  width: 100%; padding: 9px 12px; margin: 0 0 6px;
+  border: 1px solid var(--border-color); border-radius: 8px;
+  background: var(--bg-app); cursor: pointer; text-align: left; font-family: var(--font-family);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.df-review-picker__row:hover { border-color: var(--color-primary); background: var(--toolbar-button-hover); }
+.df-review-picker__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.df-review-picker__sub { font-size: 11px; color: var(--text-muted); }
+.df-review-picker__empty { margin: 8px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+/* The signed-out "Sign in to Google Drive" CTA sits right under its explainer line — give it breathing room
+   above and a roomier hit area than the default modal button (it's the primary action of that section). */
+.df-review-picker__signin { margin-top: 10px; padding: 7px 14px; }
+
+/* The transient review banner — a fixed pill bottom-centre over the canvas while a review is active. */
+.df-review-bar {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 2500;
+  display: flex; align-items: center; gap: 16px; padding: 9px 12px 9px 18px;
+  background: var(--bg-app); border: 1px solid var(--border-color); border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  font-family: var(--font-family); font-size: 13px; color: var(--text-primary);
+  max-width: calc(100vw - 32px);
+}
+.df-review-bar__title { white-space: nowrap; }
+.df-review-bar__title strong { font-weight: 700; }
+.df-review-bar__stats { display: flex; gap: 12px; }
+.df-review-bar__stat { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--text-secondary); }
+.df-review-bar__stat i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.df-review-bar__stat--add i { background: #2E9E5B; }
+.df-review-bar__stat--chg i { background: #E8881A; }
+.df-review-bar__stat--del i { background: #DA4E55; }
+.df-review-bar__exit { white-space: nowrap; }
+/* On a phone the bar drops the long title and keeps the stats + Exit compact. */
+@media (max-width: 768px) { .df-review-bar { gap: 10px; padding: 8px 10px 8px 14px; } .df-review-bar__title { display: none; } }
+
+/* ── Loose-connector pre-save warning (NBA #3, refocused) — banner inside the Save & Export manager ── */
+.df-save-mgr__loose { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; color: var(--text-primary); background: rgba(218, 78, 85, 0.12); border: 1px solid rgba(218, 78, 85, 0.45); }
+.df-save-mgr__loose-icon { flex: 0 0 auto; color: #DA4E55; display: inline-flex; }
+.df-save-mgr__loose-text { flex: 1 1 auto; }
+.df-save-mgr__loose-review { flex: 0 0 auto; }
+
+/* ── Keyboard shortcuts reference (Help → Keyboard shortcuts) ── */
+.df-shortcuts__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 28px; }
+.df-shortcuts__group { margin-bottom: 12px; }
+.df-shortcuts__group h3 { margin: 0 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.df-shortcuts__row { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; font-size: 13px; }
+/* Badge column HUGS its keys (no fixed width) so the description sits right next to it - a fixed column left a
+   big dead gap between badge and label. The description then takes the remaining width and wraps if needed. */
+.df-shortcuts__keys { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.df-shortcuts__keys--plain { flex: 0 0 150px; color: var(--text-primary); font-size: 12.5px; }   /* the Mouse / Right-click text rows keep a fixed column so their labels align */
+.df-shortcuts__desc { flex: 1 1 auto; min-width: 0; color: var(--text-secondary); line-height: 1.35; }
+.df-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 26px; padding: 0 8px; font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 5px; box-shadow: 0 1px 0 var(--border-color); }
+.df-kbd-sep { color: var(--text-muted); font-size: 12px; }
+@media (max-width: 600px) { .df-shortcuts__grid { grid-template-columns: 1fr; } }
 .df-history__preview-legend-since { margin-left: auto; font-style: italic; }
 /* Item #12: the preview FILLS the modal width with a viewport-proportional height (capped to 40vh so the
    Done footer stays reachable on short laptops); the diagram is fit-to-content inside. */

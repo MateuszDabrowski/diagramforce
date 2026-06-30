@@ -1,14 +1,16 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.18.1';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.18.1';
-import { resizeDataObjectToFit } from './components.js?v=1.18.1';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled } from './canvas.js?v=1.18.1';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.18.1';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.18.1';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.18.1';
-import { renderTemplateThumbnail } from './templates.js?v=1.18.1';
+import { diagramHasImage } from './image-component.js?v=1.19.0.49';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.0.49';
+import { resizeDataObjectToFit } from './components.js?v=1.19.0.49';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.0.49';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.19.0.49';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.0.49';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.19.0.49';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.0.49';
+import { showWhatsNewNow } from './whats-new.js?v=1.19.0.49';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.0.49';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -349,7 +351,7 @@ export function init(_modules) {
   // batches and produce a single undo collapsing both layouts. The new
   // helper snapshots positions before and after, builds one explicit
   // composite, and bypasses the merge entirely.
-  const runAutoLayout = (direction) => {
+  const runAutoLayout = (direction, opts) => {
     const type = modules.tabs.getActiveTabType?.();
     modules.history.recordPositionsBatch(() => {
       if (type === 'datamapping') {
@@ -357,40 +359,39 @@ export function init(_modules) {
         // zones. Mapping links are field-port anchored, so DON'T snap them to side ports.
         modules.canvas.applyDataMappingLayout();
       } else if (type === 'process') {
-        // BPMN pools / subprocesses / loops are embedding CONTAINERS. The mermaid
-        // hierarchicalLayout lays every element out as a flat flow node — it positions a
-        // container as a disconnected node while its children take their flow levels, so the
-        // children spill OUTSIDE the container (and the top-anchored auto-fit can't pull the
-        // frame back up). When the diagram uses containment, defer to the generic group-aware
-        // autoLayout: it treats each container as a rigid unit (children translate along, so
-        // they stay inside) and arranges the units + free nodes — and it's the undo-tested
-        // path. A flat process (no containers / embedding) keeps the nicer hierarchical flow.
-        const usesContainment = modules.graph.getElements().some(el => {
-          const t = el.get('type');
-          return t === 'sf.BpmnPool' || t === 'sf.BpmnSubprocess' || t === 'sf.BpmnLoop' || !!el.get('parent');
-        });
-        if (usesContainment) {
-          modules.canvas.autoLayout(direction);
-          try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
-        } else {
-          try {
-            modules.mermaidImport.hierarchicalLayout(modules.graph, null, direction);
-            modules.mermaidImport.snapLinksToPorts(modules.graph, direction);
-            requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
-          } catch (err) {
-            console.warn('Process hierarchical layout failed, falling back:', err);
-            modules.canvas.autoLayout(direction);
-          }
-        }
+        // Process uses the barycentre layered layout (now WITH full-spine straightening, auto-layout.js), in
+        // the chosen direction. Full-spine keeps a flow's SPINE straight - including the branch that CONTINUES
+        // after a split (Start->Process->Decision->...->Terminator reads as a line) - which is what Mermaid's
+        // hierarchical layout (the previous flat-flow path) could NOT do at single-child continuations.
+        // autoLayout also treats BPMN pools / subprocesses / loops as rigid container units (children translate
+        // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
+        modules.canvas.autoLayout(direction, { align: 'barycenter' });
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
       } else {
-        modules.canvas.autoLayout(direction);
+        modules.canvas.autoLayout(direction, opts);
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
       }
-    });
+    }, () => { try { modules.canvas.fitContent(); } catch {} });   // re-fit on undo/redo so the camera follows the layout
     document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
   btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
+  // v2 (experimental): Layered = vertical ranks + barycentre cross-alignment (children under parents).
+  // A second option to A/B compare against the current auto-layout until confirmed better.
+  btn('btn-auto-layout-layered')?.addEventListener('click', () => runAutoLayout('vertical', { align: 'barycenter' }));
+
+  // Help menu — consolidates the old standalone ? (guided tour) + i (about) icons + What's new into ONE
+  // dropdown. btn-help-tour is wired in walkthrough.js (start); the other two here.
+  setupDropdown('btn-help');
+  btn('btn-help-whatsnew')?.addEventListener('click', () => showWhatsNewNow());
+  btn('btn-help-shortcuts')?.addEventListener('click', () => openShortcutsModal());
+  btn('btn-help-about')?.addEventListener('click', () => showAboutModal());
+
+  // Change Review — close the Display menu, then open the baseline picker.
+  btn('btn-review-changes').addEventListener('click', () => {
+    document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
+    openReviewPicker();
+  });
 
   // Diagram | Table view switch (Data Mapping)
   btn('btn-view-diagram').addEventListener('click', () => setViewMode('diagram'));
@@ -446,11 +447,20 @@ export function init(_modules) {
   btn('btn-zoom-in').addEventListener('click', () => modules.canvas.zoomIn());
   btn('btn-zoom-out').addEventListener('click', () => modules.canvas.zoomOut());
   btn('btn-zoom-fit').addEventListener('click', () => modules.canvas.fitContent());
+  document.getElementById('zoom-level')?.addEventListener('click', () => modules.canvas.resetZoom?.());
 
   // Grid toggle
-  btn('btn-grid').addEventListener('click', (evt) => {
-    const on = modules.canvas.toggleGrid();
-    evt.currentTarget.classList.toggle('df-toolbar__button--active', on);
+  // Snap to Grid — moved out of the center toolbar into the Display menu (v1.19.0).
+  // Toggles the dot grid AND the drag-snap (paper gridSize 4 vs 1). Default ON.
+  const btnSnapGrid = document.getElementById('btn-display-snap-grid');
+  const refreshSnapGridLabel = () => {
+    btnSnapGrid?.classList.toggle('is-checked', isGridVisible());
+    _refreshDisplayDot();
+  };
+  refreshSnapGridLabel();
+  btnSnapGrid?.addEventListener('click', () => {
+    modules.canvas.toggleGrid();
+    refreshSnapGridLabel();
   });
 
   // Theme toggle
@@ -469,8 +479,7 @@ export function init(_modules) {
 
   // (The Load overlay is a buildModal instance now — it wires its own close/escape; no static-modal close here.)
 
-  // About modal
-  btn('btn-about').addEventListener('click', showAboutModal);
+  // About modal (opened from the Help menu's "About" item, wired above; this is the modal's own close button)
   btn('btn-close-about').addEventListener('click', hideAboutModal);
   btn('about-modal-overlay').addEventListener('click', hideAboutModal);
 
@@ -620,6 +629,26 @@ function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templat
   if (templatesSkipped) items.push(`${noun(templatesSkipped, 'template')} skipped - already in your stencil`);
   const lis = items.map(i => `<li>${i}</li>`).join('');
   return `<strong class="df-import-summary__head">${head}</strong><ul class="df-import-summary__list">${lis}</ul>`;
+}
+
+// Shared "Drive sign-in needed" affordance for PASSIVE Drive surfaces (Load → Drive tab, Version history). ONE
+// consistent look: an orange, centred "Sign in to Google Drive" button on its own line. Surfaces gate on
+// `isSignedIn()` (a pure token check — NO getToken, so it can't pop OR briefly flash Google's account picker;
+// see GOTCHAS 2.7c) and render this when there's no live token. The button is the ONLY place auth fires, and
+// only on the user's click; `onSignedIn` re-renders the surface once a token lands.
+function renderDriveSignIn(container, message, onSignedIn) {
+  if (!container) return;
+  container.innerHTML = `<div style="padding:26px 18px;color:var(--text-secondary)">`
+    + `<p style="margin:0 0 14px">${escHtml(message)}</p>`
+    + `<div style="text-align:center"><button type="button" class="df-modal__btn df-modal__btn--accent df-drive-signin__btn">Sign in to Google Drive</button></div></div>`;
+  const btn = container.querySelector('.df-drive-signin__btn');
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    try { await modules.persistence.signIn?.(); }
+    catch (e) { if (!/cancel/i.test(e?.message || '')) showError(e?.message || 'Google sign-in failed.'); }
+    if (modules.persistence.isSignedIn?.()) { onSignedIn?.(); return; }
+    btn.disabled = false; btn.textContent = 'Sign in to Google Drive';
+  });
 }
 
 // --- Load Manager (tabbed overlay: Browser / Google Drive / File / Paste) ---
@@ -969,6 +998,10 @@ function renderDriveLoadPane({ pane, footer, close }) {
 
   const render = async () => {
     status('Loading…');
+    // Passive surface → gate on a LIVE token (`isSignedIn` = tokenValid, a PURE check — no getToken, so it can't
+    // pop Google's picker OR briefly flash it). Not signed in (incl. a TIMED-OUT red Drive) → the shared explicit
+    // Sign-in, consistent with Version history / Compare; only the button click authenticates.
+    if (!p.isSignedIn?.()) { renderDriveSignIn(bodyBox, 'Sign in to Google Drive to see your saved diagrams.', render); return; }
     let files;
     try { files = await p.listMyDiagrams(); }
     catch {
@@ -1463,6 +1496,18 @@ function showSaveManagerModal() {
       ${driveOn && connected ? '<button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__shared" disabled><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>' : ''}
       <button class="df-modal__btn df-modal__btn--accent df-save-mgr__export-sel" style="margin-left:auto" disabled>Export Selected</button>`;
 
+  // Pre-save check (NBA #3, refocused): the explicit-save hub is the ONE right place to surface loose
+  // connectors (links not attached at both ends) - never on background autosync. Non-blocking: a banner with
+  // a "Review on canvas" action that highlights them; saving still works (loose ends may be intentional WIP).
+  const looseCount = (modules.canvas?.findLooseConnectors?.() || []).length;
+  const ALERT_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.8l6.5 11.4H1.5L8 1.8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.4v3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r="0.9" fill="currentColor"/></svg>';
+  const looseBanner = looseCount ? `
+      <div class="df-save-mgr__loose" role="alert">
+        <span class="df-save-mgr__loose-icon">${ALERT_SVG}</span>
+        <span class="df-save-mgr__loose-text">${looseCount} connector${looseCount === 1 ? " isn't" : "s aren't"} attached at both ends in this diagram.</span>
+        <button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__loose-review">Review on canvas</button>
+      </div>` : '';
+
   const { overlay, footer, close } = buildModal({
     title: 'Save & Export',
     className: 'df-save-manager-modal',
@@ -1471,7 +1516,7 @@ function showSaveManagerModal() {
     dialogClass: 'df-save-mgr__dialog', // 600px (wider — room for the per-row Export action)
     bodyClass: 'df-modal__row-list',
     footerClass: 'df-save-mgr__footer',
-    bodyHtml: `
+    bodyHtml: `${looseBanner}
       <p class="df-drive-save-modal__hint">Every open diagram is auto-saved to this browser${driveOn && autoSync ? ' and your <strong>Google Drive</strong>' : ''}.${driveOn ? (connected ? ` ${autoSync ? 'Add any to a team <strong>Shared Drive</strong>' : 'Save any to your <strong>Google Drive</strong> or a <strong>Shared Drive</strong>'}, or export a diagram from its row.` : ' Save any to your <strong>Google Drive</strong>, or export a diagram from its row.') : ' Export a diagram from its row.'}</p>
       <div class="df-modal__advisory df-save-mgr__backup">
         <span class="df-save-mgr__backup-text"></span>
@@ -1479,6 +1524,13 @@ function showSaveManagerModal() {
       </div>
       <div class="df-modal__list-box">${listInner}</div>`,
     footerHtml,
+  });
+
+  // "Review on canvas" — close the manager, highlight the loose connectors and frame them in view.
+  overlay.querySelector('.df-save-mgr__loose-review')?.addEventListener('click', () => {
+    close();
+    const n = modules.canvas?.highlightLooseConnectors?.() || 0;
+    if (n) showToast(`${n} loose connector${n === 1 ? '' : 's'} highlighted - reconnect or delete ${n === 1 ? 'it' : 'them'}.`, 'info');
   });
 
   // Full-backup affordance (moved here from the retired Export-to-JSON overlay). "Back up now" exports EVERYTHING
@@ -1768,6 +1820,7 @@ function showDriveHistoryModal() {
     const prevAttr = prev && prev.id ? ` data-prev-rev="${escHtml(prev.id)}"` : '';
     const eye = `<button class="df-history__preview df-history__iconbtn" data-rev="${escHtml(r.id)}"${prevAttr} title="Preview this version" aria-label="Preview this version">${EYE}</button>`;
     const trailing =
+      `<button class="df-modal__btn df-history__review" data-rev="${escHtml(r.id)}" title="Tint what changed between this version and the current diagram">Review</button>` +
       `<button class="df-modal__btn df-modal__btn--accent df-history__open" data-rev="${escHtml(r.id)}">Open</button>` +
       `<button class="df-modal__btn df-modal__btn--amber-outline df-history__restore" data-rev="${escHtml(r.id)}">Restore</button>` +
       `<button class="df-history__pin df-history__iconbtn${pinned ? ' is-pinned' : ''}" data-rev="${escHtml(r.id)}" data-keep="${pinned ? '1' : '0'}" title="${pinned ? 'Unpin (allow auto-cleanup)' : 'Pin (keep safe from auto-cleanup)'}" aria-label="${pinned ? 'Unpin' : 'Pin'}"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#${pinned ? 'pinned' : 'pin'}"></use></svg></button>`;
@@ -1838,6 +1891,13 @@ function showDriveHistoryModal() {
   };
 
   const render = async () => {
+    // Signed-out (token lapsed) but the tab is still Drive-linked: do NOT auto-call listRevisions, which would
+    // force an unsolicited Google sign-in overlay on open. Offer the SHARED explicit Sign-in (orange, centred -
+    // matching Load + Compare), never an auto-popup.
+    if (p.activeHasDriveFile?.() && !p.isSignedIn?.()) {
+      renderDriveSignIn(bodyBox, "Sign in to Google Drive to see this diagram's saved versions.", render);
+      return;
+    }
     status('Loading…');
     let revs;
     try { revs = await p.listRevisions(); }
@@ -1850,6 +1910,11 @@ function showDriveHistoryModal() {
     bodyBox.innerHTML = `<div class="df-modal__list-box">${revs.map((r, i) => rowHtml(r, revs[i + 1])).join('')}</div>`;
     bodyBox.querySelectorAll('.df-history__preview').forEach(btn => btn.addEventListener('click', () => togglePreview(btn)));
     bodyBox.querySelectorAll('.df-history__open').forEach(btn => btn.addEventListener('click', async () => { if (await p.viewRevision(btn.dataset.rev)) close(); }));
+    bodyBox.querySelectorAll('.df-history__review').forEach(btn => btn.addEventListener('click', async () => {
+      const when = formatRelativeTime(Date.parse((revs.find(r => r.id === btn.dataset.rev) || {}).modifiedTime)) || 'that version';
+      close();
+      await reviewAgainstRevision(btn.dataset.rev, when);
+    }));
     bodyBox.querySelectorAll('.df-history__restore').forEach(btn => btn.addEventListener('click', async () => {
       const ok = await confirmModal({ title: 'Restore this version?', message: 'This brings the selected version back as the current one. Your current version is not lost - it stays in this history list.', okLabel: 'Restore', cancelLabel: 'Cancel' });
       if (ok && await p.restoreRevision(btn.dataset.rev)) close();
@@ -1877,6 +1942,232 @@ function showDriveHistoryModal() {
   };
   render();
 }
+
+// ── Change Review (NBA-1, v1.19.0) — NON-DESTRUCTIVE diff visualisation ──────────────────────
+// Pick a baseline (a Drive revision of THIS diagram, or another open tab), diff it against the live
+// canvas, and tint Added / Changed / Removed via the transient review overlay (review-overlay.js).
+// No model mutation, no dirty flag, no history. One review at a time; Escape or the bar exits.
+
+function currentGraphJSON() {
+  return modules.graph ? modules.graph.toJSON() : { cells: [] };
+}
+
+let _reviewBanner = null;
+let _reviewKeyHandler = null;
+let _reviewDiff = null;          // the active review's diff, kept so "Apply" can bake it
+let _shapeStateApplier = null;   // properties.applyShapeState, wired by app.js (no module cycle)
+
+/** Wire the Shape-state setter (properties.applyShapeState) used by "Apply as Highlight states". */
+export function setShapeStateApplier(fn) { _shapeStateApplier = fn; }
+
+/** Bake the current review's diff into real borderStyle props (Added → green, Changed → amber), one
+ *  undoable batch, then exit. Removed elements are gone from the graph, so they can't be highlighted. */
+function applyReviewAsHighlights() {
+  const g = modules.graph;
+  if (!_reviewDiff || !_shapeStateApplier || !g) { modules.canvas?.exitReview?.(); return; }
+  const bake = (ids, style) => { for (const id of ids || []) { const c = g.getCell(id); if (c?.isElement?.()) _shapeStateApplier(c, style); } };
+  modules.history?.startBatch?.();
+  try { bake(_reviewDiff.added, 'bold'); bake(_reviewDiff.changed, 'dotted'); }
+  finally { modules.history?.endBatch?.(); }
+  modules.canvas?.exitReview?.();
+  showToast('Applied the changes as Highlight states - save to keep them ✓', 'success');
+}
+
+function removeReviewBanner() {
+  if (_reviewBanner) { _reviewBanner.remove(); _reviewBanner = null; }
+  if (_reviewKeyHandler) { document.removeEventListener('keydown', _reviewKeyHandler); _reviewKeyHandler = null; }
+}
+
+function showReviewBanner(label) {
+  removeReviewBanner();
+  const s = modules.canvas?.getReviewSummary?.() || { added: 0, changed: 0, removed: 0 };
+  const bar = document.createElement('div');
+  bar.className = 'df-review-bar';
+  bar.setAttribute('role', 'status');
+  const part = (cls, n, word) => (n ? `<span class="df-review-bar__stat df-review-bar__stat--${cls}"><i></i>${n} ${word}</span>` : '');
+  const stats = [part('add', s.added, 'added'), part('chg', s.changed, 'changed'), part('del', s.removed, 'removed')].filter(Boolean).join('');
+  // "Apply" bakes Added/Changed into borderStyle - only offer it when there's something to bake.
+  const canApply = !!_shapeStateApplier && (s.added + s.changed) > 0;
+  const applyBtn = canApply
+    ? '<button type="button" class="df-modal__btn df-modal__btn--accent df-review-bar__apply" title="Set the Added/Changed shapes’ Highlight State so the diff is saved with the diagram">Apply as Highlight States</button>'
+    : '';
+  bar.innerHTML =
+    `<span class="df-review-bar__title">Comparing with <strong>${escHtml(label || 'a baseline')}</strong></span>` +
+    `<span class="df-review-bar__stats">${stats || '<span class="df-review-bar__stat">No element-level changes</span>'}</span>` +
+    applyBtn +
+    `<button type="button" class="df-modal__btn df-review-bar__exit">Exit</button>`;
+  document.body.appendChild(bar);
+  bar.querySelector('.df-review-bar__apply')?.addEventListener('click', applyReviewAsHighlights);
+  bar.querySelector('.df-review-bar__exit').addEventListener('click', () => modules.canvas?.exitReview?.());
+  _reviewKeyHandler = (e) => { if (e.key === 'Escape') modules.canvas?.exitReview?.(); };
+  document.addEventListener('keydown', _reviewKeyHandler);
+  _reviewBanner = bar;
+}
+
+/** Diff a baseline {cells} graph against the live canvas and enter the review overlay. */
+function startReview(baselineGraph, label) {
+  if (!baselineGraph) { showError('Could not read that baseline.'); return; }
+  const diff = diffGraphs(baselineGraph, currentGraphJSON());
+  const started = modules.canvas?.enterReview?.(diff, () => { _reviewDiff = null; removeReviewBanner(); });
+  if (!started) { showError('Could not start the change review.'); return; }
+  _reviewDiff = diff;
+  showReviewBanner(label);
+}
+
+/** Jump straight to reviewing the current diagram against a specific Drive revision id. */
+async function reviewAgainstRevision(revId, label) {
+  const rev = await modules.persistence?.readRevision?.(revId);
+  if (!rev?.graph) { showError('Could not load that version.'); return; }
+  startReview(rev.graph, label);
+}
+
+/** The "Review changes…" picker — other open tabs + (if Drive-synced) this diagram's revisions. */
+async function openReviewPicker() {
+  if (modules.canvas?.isReviewing?.()) modules.canvas.exitReview();   // restart cleanly
+  const p = modules.persistence;
+  const t = modules.tabs;
+  const activeId = t?.getActiveTabId?.();
+  const otherTabs = (t?.getAllTabs?.() || []).filter((x) => x.id !== activeId);
+  const hasDriveFile = !!p?.activeHasDriveFile?.();
+  // Only AUTO-list Drive revisions when a valid token already exists (silent, no overlay). Listing them
+  // when signed-out would force getToken() -> an unsolicited Google sign-in overlay just from opening this
+  // picker, and closing that overlay was crashing the app. When signed-out we offer an EXPLICIT sign-in
+  // instead - the user opts in, nothing pops on its own.
+  const driveReady = hasDriveFile && !!p?.isSignedIn?.();
+
+  const { body, close } = buildModal({ title: 'Compare with…', width: '460px', className: 'df-review-picker' });
+  const desc = document.createElement('p');
+  desc.className = 'df-review-picker__desc';
+  desc.textContent = 'Compare the current diagram against a baseline. Added, changed and removed shapes are tinted on the canvas - nothing is modified.';
+  body.appendChild(desc);
+
+  const section = (titleText) => { const h = document.createElement('h3'); h.className = 'df-review-picker__h'; h.textContent = titleText; body.appendChild(h); };
+  // Baseline rows reuse the Save/Load storage-row table (storageRowHtml) for visual consistency + fuller
+  // detail (type icon, shape count, storage chips, edited date). The action lives on the trailing "Compare"
+  // button; the global mobile-disclosure handler (delegated on document) still works on these rows.
+  const driveOn = !!p?.isDriveConfigured?.();
+  const groupById = new Map((t?.getGroups?.() || []).map((g) => [g.id, g]));
+  const typeLabel = (type) => (t?.DIAGRAM_TYPES?.[type]?.short) || 'Architecture';
+  const activeType = (t?.getAllTabs?.() || []).find((x) => x.id === activeId)?.diagramType || '';
+  const COMPARE_BTN = '<button type="button" class="df-modal__btn df-modal__btn--accent df-review-pick__go" style="margin-left:auto">Compare</button>';
+  const addRow = (html, onClick) => {
+    const tmp = document.createElement('template');
+    tmp.innerHTML = html.trim();
+    const row = tmp.content.firstElementChild;
+    if (!row) return;
+    row.querySelector('.df-review-pick__go')?.addEventListener('click', onClick);
+    body.appendChild(row);
+  };
+  const simpleBtn = (label, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'df-modal__btn df-modal__btn--accent df-review-picker__signin';
+    b.textContent = label; b.addEventListener('click', onClick); body.appendChild(b);
+  };
+
+  let any = false;
+  if (otherTabs.length) {
+    any = true;
+    section('Another open tab');
+    otherTabs.forEach((tab) => {
+      const shapes = countDiagramShapes(t.getTabGraphJSON(tab.id)?.cells);
+      const src = tab.driveSharedSource;
+      const sharePill = (src && src.fileId && !isViewForkTab(tab)) ? sharePillHtml(src.canEdit === true, { sm: true }) : '';
+      const chips = driveChipsHtml(tab, { driveOn, onSharedDrive: !!tab.driveDriveId, hasMyDriveBackup: !!tab.driveHasMyDriveBackup });
+      const groupBadge = (t.groupBadgeHtml?.(tab.groupId ? groupById.get(tab.groupId) : null) || '');
+      const rel = formatRelativeTime(tab.lastModifiedAt || tab.lastSavedAt);
+      addRow(storageRowHtml({
+        diagramType: tab.diagramType, typeTitle: typeLabel(tab.diagramType), name: tab.name || 'Untitled',
+        groupBadge, count: shapes,
+        metaLeft: `<span class="df-save-mgr__chips">${chips}${sharePill}</span>`,
+        metaRight: rel ? `Edited ${rel}` : '',
+        trailing: COMPARE_BTN,
+      }), () => { const g = t.getTabGraphJSON(tab.id); close(); startReview(g, tab.name || 'another tab'); });
+    });
+  }
+
+  if (driveReady) {
+    section('A previous version (Drive)');
+    const loading = document.createElement('p');
+    loading.className = 'df-review-picker__sub'; loading.textContent = 'Loading version history…';
+    body.appendChild(loading);
+    let revs = null;
+    try { revs = await p.listRevisions(); } catch { /* handled below */ }
+    loading.remove();
+    if (!revs) { const e = document.createElement('p'); e.className = 'df-review-picker__sub'; e.textContent = 'Could not load version history.'; body.appendChild(e); }
+    else if (!revs.length) { const e = document.createElement('p'); e.className = 'df-review-picker__sub'; e.textContent = 'No saved versions yet.'; body.appendChild(e); }
+    else {
+      any = true;
+      revs.forEach((r) => {
+        const when = formatRelativeTime(Date.parse(r.modifiedTime)) || 'saved';   // revisions are past versions of THIS diagram → its type icon
+        addRow(storageRowHtml({
+          diagramType: activeType, typeTitle: typeLabel(activeType), name: when,
+          metaLeft: `<span class="df-modal__row-meta">${escHtml(r.sizeLabel || '')}${r.by ? ' · ' + escHtml(r.by) : ''}</span>`,
+          trailing: COMPARE_BTN,
+        }), async () => { close(); await reviewAgainstRevision(r.id, when); });
+      });
+    }
+  } else if (hasDriveFile) {
+    // Drive-linked tab, but signed out: offer an explicit sign-in (no auto-overlay). Re-open the picker
+    // once signed in so the saved versions appear.
+    any = true;
+    section('A previous version (Drive)');
+    const e = document.createElement('p');
+    e.className = 'df-review-picker__sub';
+    e.textContent = 'Sign in to Google Drive to compare against a saved version.';
+    body.appendChild(e);
+    simpleBtn('Sign in to Google Drive', async () => {
+      try { await p.signIn?.(); } catch { /* signIn surfaces its own toast on cancel/failure */ }
+      if (p?.isSignedIn?.()) { close(); openReviewPicker(); }
+    });
+  }
+
+  if (!any && !hasDriveFile) {
+    const e = document.createElement('p');
+    e.className = 'df-review-picker__empty';
+    e.textContent = 'Open another diagram in a second tab, or save this one to Google Drive, to compare against it.';
+    body.appendChild(e);
+  }
+}
+
+/**
+ * Compare the CURRENTLY ACTIVE tab against another tab IN PLACE - the diff overlay is drawn on the active
+ * canvas with `tab` as the baseline. Wired to the tab right-click "Compare" (tabs.js): the user stays on their
+ * open tab and right-clicks the one to compare against, so it must NOT switch tabs (the old behaviour switched
+ * to the right-clicked tab, then opened the picker). Right-clicking the active tab itself can't diff against
+ * itself, so we fall back to the picker so they can choose a baseline.
+ */
+export function compareActiveWithTab(tab) {
+  if (!tab) return;
+  const t = modules.tabs;
+  if (modules.canvas?.isReviewing?.()) modules.canvas.exitReview();   // restart cleanly if already reviewing
+  if (tab.id === t?.getActiveTabId?.()) { openReviewPicker(); return; }
+  const baseline = t?.getTabGraphJSON?.(tab.id);
+  if (!baseline) { showError('Could not read that diagram to compare against.'); return; }
+  startReview(baseline, tab.name || 'another tab');
+}
+
+// ── Keyboard shortcuts reference (Help → Keyboard shortcuts) ─────────────────
+// Renders SHORTCUT_GROUPS / MOUSE_TIPS / RIGHT_CLICK_TIPS (single source of truth in keyboard.js) as a modal.
+// Combos run through kbd() so macOS shows ⌘-glyphs and other platforms show Ctrl/Alt words.
+function openShortcutsModal() {
+  // kbd('+') would split to nothing (it splits on '+'); the +/- zoom keys are platform-neutral single keys.
+  const keyBadges = (combo) => {
+    if (combo === '+' || combo === '-') return `<kbd class="df-kbd">${escHtml(combo)}</kbd>`;
+    return kbd(combo).split('+').map((k) => `<kbd class="df-kbd">${escHtml(k)}</kbd>`).join('<span class="df-kbd-sep">+</span>');
+  };
+  const row = (combo, desc) => `<div class="df-shortcuts__row"><span class="df-shortcuts__keys">${keyBadges(combo)}</span><span class="df-shortcuts__desc">${escHtml(desc)}</span></div>`;
+  const plainRow = (k, d) => `<div class="df-shortcuts__row"><span class="df-shortcuts__keys df-shortcuts__keys--plain">${escHtml(k)}</span><span class="df-shortcuts__desc">${escHtml(d)}</span></div>`;
+  const group = (g) => `<div class="df-shortcuts__group"><h3>${escHtml(g.title)}</h3>${g.items.map(([c, d]) => row(c, d)).join('')}</div>`;
+  let bodyHtml = `<div class="df-shortcuts__grid">${SHORTCUT_GROUPS.map(group).join('')}</div>`;
+  bodyHtml += `<div class="df-shortcuts__group df-shortcuts__group--wide"><h3>Mouse</h3>${MOUSE_TIPS.map(([k, d]) => plainRow(k, d)).join('')}</div>`;
+  bodyHtml += `<div class="df-shortcuts__group df-shortcuts__group--wide"><h3>Right-click&hellip;</h3>${RIGHT_CLICK_TIPS.map(([k, d]) => plainRow(k, d)).join('')}</div>`;
+  const { footer, close } = buildModal({
+    title: 'Keyboard shortcuts', width: '480px', className: 'df-shortcuts-modal', bodyHtml,
+    footerHtml: '<button class="df-modal__btn df-modal__btn--accent df-shortcuts__done">Done</button>',
+  });
+  footer?.querySelector('.df-shortcuts__done')?.addEventListener('click', () => close());
+}
+
 // --- Shared modal helpers ---
 
 /** Wire up select-all checkbox + action button for any modal with row checkboxes.
@@ -2060,12 +2351,27 @@ function updateDisplayMenuVisibility() {
   // Hide auto-layout buttons for Gantt (timeline-driven) and Sequence
   // (positions are meaningful along the lifeline axes).
   const hideAutoLayout = isGantt || isSequence;
+  // Layered (barycentre) PROMOTION (v1.19.0): validated equal-or-better, and with full-spine straightening it
+  // now draws straight reporting/flow lines too - so for Data Model, Architecture AND Org it's the SOLE
+  // auto-layout: Horizontal/Vertical are hidden and Layered drops its "(beta)" tag, reading simply
+  // "Auto Layout". (The PoC toolbar Auto-Layout dropdown was removed - auto-layout lives only in this menu.)
+  // Org RE-PROMOTED (v1.19.0.27): the earlier weave was the fan-out gap bump sitting the chief too high (since
+  // removed in .26); with the default gap, barycentre routes the chief->pillar connectors cleanly (one
+  // distribution bar + clean drops), so Org joins the promoted set.
+  const layeredPromoted = isDataModel || type === 'architecture' || type === 'org';
   const autoH = document.getElementById('btn-auto-layout-h');
   const autoV = document.getElementById('btn-auto-layout-v');
-  if (autoH) autoH.style.display = hideAutoLayout ? 'none' : '';
+  if (autoH) autoH.style.display = (hideAutoLayout || layeredPromoted) ? 'none' : '';
   // Data Mapping flows left→right across layers, so only horizontal layout applies:
   // hide the vertical option and drop the "Horizontal" qualifier from the label.
-  if (autoV) autoV.style.display = (hideAutoLayout || isDataMapping) ? 'none' : '';
+  if (autoV) autoV.style.display = (hideAutoLayout || isDataMapping || layeredPromoted) ? 'none' : '';
+  // Layered shows wherever the generic auto-layout applies (NOT Data Mapping, which has its own lane layout,
+  // nor Gantt/Sequence). For the promoted types it's the SOLE option, relabelled "Auto Layout". For Process
+  // it's hidden because Horizontal/Vertical ARE its layout (Mermaid hierarchical) - no separate "Layered".
+  const autoLayered = document.getElementById('btn-auto-layout-layered');
+  if (autoLayered) autoLayered.style.display = (hideAutoLayout || isDataMapping || type === 'process') ? 'none' : '';
+  const layeredLabel = document.getElementById('auto-layout-layered-label');
+  if (layeredLabel) layeredLabel.textContent = layeredPromoted ? 'Auto Layout' : 'Layered Auto Layout (beta)';
   const hLabel = document.getElementById('auto-layout-h-label');
   if (hLabel) hLabel.textContent = isDataMapping ? 'Auto Layout' : 'Horizontal Auto Layout';
 
@@ -2220,6 +2526,8 @@ function refreshDisplayDotIndicator() {
   const btn = document.getElementById('btn-display');
   if (!btn) return;
   const nonDefault =
+    // Snap to Grid defaults ON — non-default = currently off.
+    isGridVisible() === false ||
     isAutoSizingEnabled() === false ||
     // Connector Grouping defaults ON now (canvas.js → isConnectorGroupingEnabled),
     // so the non-default state is "currently off".
@@ -2242,7 +2550,7 @@ function refreshDisplayDotIndicator() {
   // A6 (v1.12.0) — extend the tooltip when the dot is showing so the
   // amber indicator isn't conveyed by colour alone (WCAG 1.4.1). Strips
   // any prior suffix on every refresh so the base label stays clean.
-  const base = btn.getAttribute('data-base-title') || btn.getAttribute('title') || 'Display options';
+  const base = btn.getAttribute('data-base-title') || btn.getAttribute('title') || 'View options';
   if (!btn.hasAttribute('data-base-title')) btn.setAttribute('data-base-title', base);
   btn.setAttribute('title', nonDefault ? `${base} - some toggles active` : base);
 }
@@ -2383,10 +2691,13 @@ function setupHamburgerMenu() {
         if (modules.canvas.refreshIcons) modules.canvas.refreshIcons();
         break;
       case 'walkthrough':
-        document.getElementById('btn-help')?.click();
+        document.getElementById('btn-help-tour')?.click();
+        break;
+      case 'whatsnew':
+        showWhatsNewNow();
         break;
       case 'about':
-        document.getElementById('btn-about')?.click();
+        showAboutModal();
         break;
     }
   });

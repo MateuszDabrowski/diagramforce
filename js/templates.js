@@ -21,9 +21,9 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.18.1';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.18.1';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.18.1';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.19.0.49';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.19.0.49';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.19.0.49';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a

@@ -1,14 +1,15 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.18.1';
-import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.18.1';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.18.1';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.18.1';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.18.1';
-import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.18.1';
-import { getPalette } from './brand-palette.js?v=1.18.1';
-import { getAllIcons } from './icons.js?v=1.18.1';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave } from './persistence.js?v=1.19.0.49';
+import { escHtml, formatRelativeTime, countDiagramShapes, storageRowHtml, groupSelectHtml, tabInGroup, formatBytes, gaugeLevel, refreshSplitTableCounts, sharePillHtml, driveChipsHtml, isViewForkTab } from './util.js?v=1.19.0.49';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.19.0.49';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.19.0.49';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.19.0.49';
+import { applyGanttGeometry, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.19.0.49';
+import { getPalette } from './brand-palette.js?v=1.19.0.49';
+import { getAllIcons } from './icons.js?v=1.19.0.49';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.0.49';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -76,6 +77,10 @@ const onChangeCallbacks = [];
 // the supplied continuation once the user resolves (e.g. Save/Discard a table edit).
 let _switchGuard = null;
 export function setSwitchGuard(fn) { _switchGuard = fn; }
+// Set by app.js to toolbar.compareActiveWithTab — the tab right-click "Compare" diffs the ACTIVE tab against
+// the right-clicked one, in place (no tab switch).
+let _compareTabHandler = null;
+export function setCompareTabHandler(fn) { _compareTabHandler = fn; }
 
 // Diagram types
 export const DIAGRAM_TYPES = {
@@ -98,7 +103,10 @@ function diagramTypeIconMarkup(type) {
     case 'datamapping': return '<rect x="0.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><rect x="10.5" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="10.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><path d="M5.5 8 L10 8 M8.5 6.5 L10 8 L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 11 L10 11" stroke="currentColor" stroke-width="1" opacity="0.55"/>';
     case 'gantt':       return '<rect x="1" y="2" width="8" height="3" rx="1" fill="currentColor"/><rect x="4" y="7" width="9" height="3" rx="1" fill="currentColor" opacity="0.7"/><rect x="7" y="12" width="6" height="3" rx="1" fill="currentColor" opacity="0.5"/>';
     case 'org':         return '<rect x="5" y="1" width="6" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><rect x="9.5" y="10" width="6" height="4" rx="1" fill="currentColor" opacity="0.7"/><path d="M8 5v2H3.5V10M8 7h4.5V10" stroke="currentColor" stroke-width="1" fill="none"/>';
-    default:            return '<rect x="1" y="1" width="5" height="5" rx="1"/><rect x="10" y="1" width="5" height="5" rx="1"/><rect x="5.5" y="10" width="5" height="5" rx="1"/><path d="M3.5 6v2h9V6M8 8v2" stroke="currentColor" stroke-width="1" fill="none"/>';
+    // architecture (+ the unknown-type fallback): a merge-FLOW glyph - two components on the left feeding one on
+    // the right (systems + integrations), echoing the architecture empty-state. Distinct from the org chart's
+    // vertical 1-over-2 hierarchy.
+    default:            return '<rect x="0.5" y="1.5" width="5.5" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10.5" width="5.5" height="4" rx="1" fill="currentColor"/><rect x="10" y="6" width="5.5" height="4" rx="1" fill="currentColor"/><path d="M6 3.5 H8 V8 H10 M6 12.5 H8 V8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>';
   }
 }
 
@@ -306,16 +314,17 @@ function showNewDiagramModal(targetGroupId = null) {
       <div class="df-new-modal__tabs" role="tablist">
         <button class="df-new-modal__tab is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
         <button class="df-new-modal__tab" data-tab="open" role="tab" aria-selected="false">Load</button>
+        <button class="df-new-modal__tab" data-tab="templates" role="tab" aria-selected="false">Templates</button>
       </div>
       <div class="df-new-modal__panels">
       <div class="df-new-modal__panel" data-tab="create">
       <div class="df-new-modal__grid">
         <button class="df-new-modal__card" data-type="architecture">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
-            <rect x="4" y="4" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
-            <rect x="42" y="4" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
-            <rect x="23" y="30" width="18" height="14" rx="3" fill="var(--color-primary)" opacity="0.8"/>
-            <path d="M13 18v6h38V18M32 24v6" stroke="var(--text-muted)" stroke-width="1.5" fill="none"/>
+            <rect x="2" y="5" width="22" height="14" rx="3" fill="var(--color-primary)" opacity="0.85"/>
+            <rect x="2" y="29" width="22" height="14" rx="3" fill="var(--color-primary)" opacity="0.85"/>
+            <rect x="40" y="17" width="22" height="14" rx="3" fill="var(--color-primary)" opacity="0.85"/>
+            <path d="M24 12 H32 V24 H40 M24 36 H32 V24" fill="none" stroke="var(--color-primary)" stroke-width="2.4" stroke-linejoin="round"/>
           </svg>
           <span class="df-new-modal__card-title">Architecture</span>
           <span class="df-new-modal__card-desc">Map system architecture, integrations, and infrastructure landscape.</span>
@@ -447,6 +456,9 @@ function showNewDiagramModal(targetGroupId = null) {
         </button>
       </div>
       </div>
+      <div class="df-new-modal__panel" data-tab="templates" hidden>
+      <div class="df-new-modal__grid df-new-modal__grid--templates"></div>
+      </div>
       </div>
     </div>
   `;
@@ -494,6 +506,61 @@ function showNewDiagramModal(targetGroupId = null) {
       createDiagramOfType(card.dataset.type, targetGroupId);
     });
   });
+
+  // ── Templates tab — official, curated starting points (official-templates.js). Built AFTER the
+  // generic card wiring above so these cards get ONLY the open-as-new-tab handler below (not the
+  // create-blank handler, which would fire createDiagramOfType(undefined) on a card with no type). ──
+  const tmplMetas = getOfficialTemplates();
+  const tmplGrid = overlay.querySelector('.df-new-modal__grid--templates');
+  if (!tmplMetas.length) {
+    // No official templates → drop the tab + panel so an empty "Templates" view never shows.
+    overlay.querySelector('.df-new-modal__tab[data-tab="templates"]')?.remove();
+    overlay.querySelector('.df-new-modal__panel[data-tab="templates"]')?.remove();
+  } else if (tmplGrid) {
+    const typeShort = (t) => DIAGRAM_TYPES[normalizeDiagramType(t)]?.short || 'Diagram';
+    tmplMetas.forEach((meta) => {
+      const card = document.createElement('button');
+      card.className = 'df-new-modal__card df-new-modal__card--template';
+      card.dataset.templateId = meta.id;
+      const thumb = document.createElement('div');
+      thumb.className = 'df-new-modal__thumb';
+      thumb.innerHTML = '<span class="df-new-modal__thumb-loading" aria-hidden="true"></span>';
+      const badge = document.createElement('span');
+      badge.className = 'df-new-modal__card-badge';
+      badge.textContent = typeShort(meta.diagramType);
+      const title = document.createElement('span');
+      title.className = 'df-new-modal__card-title';
+      title.textContent = meta.name;
+      const desc = document.createElement('span');
+      desc.className = 'df-new-modal__card-desc';
+      desc.textContent = meta.description || '';
+      card.append(thumb, badge, title, desc);
+      tmplGrid.appendChild(card);
+
+      // Lazy thumbnail: fetch the cells (same-origin) + render a mini-paper. Best-effort - on
+      // failure the placeholder stays (the card still opens via the cached/fresh fetch on click).
+      renderOfficialThumbnail(meta.id).then((el) => {
+        if (el && card.isConnected) { thumb.innerHTML = ''; thumb.appendChild(el); }
+      }).catch(() => { /* keep the placeholder */ });
+
+      // Open → a fresh tab seeded with the template (you edit your copy; the official file is untouched).
+      card.addEventListener('click', async () => {
+        if (card.dataset.busy) return;            // guard a double-tap during the fetch
+        card.dataset.busy = '1';
+        const loaded = await loadOfficialTemplate(meta.id);
+        if (!loaded || !loaded.cells.length) {
+          showError('Could not open this template. Check your connection and try again.');
+          delete card.dataset.busy;
+          return;
+        }
+        overlay.remove();
+        // Deep-copy the cached cells so a repeat open (or fromJSON's reads) never mutates the cache.
+        const cells = JSON.parse(JSON.stringify(loaded.cells));
+        const id = importDiagramAsTab(meta.name, loaded.diagramType, { cells }, loaded.viewport, loaded.mappingMode, { fit: true });
+        if (targetGroupId && getGroup(targetGroupId)) setTabGroup(id, targetGroupId);
+      });
+    });
+  }
 
   // Only allow dismissal when at least one tab already exists
   const canDismiss = tabs.length > 0;
@@ -1858,6 +1925,8 @@ function openNewDiagramMenu(anchorEl) {
 // Clone glyph — the same line-art "duplicate" mark the canvas context menu + properties pane use (self-styled
 // inside the <g> so it renders regardless of the menu icon's CSS).
 const CLONE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/></g>';
+// Matches the toolbar "Compare with" icon (a list + a change arrow).
+const COMPARE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h6M3 8h4M3 12h7"/><path d="M12 3v8M12 3l-2 2M12 3l2 2"/></g>';
 
 // Right-click a tab → clone / export / share it, or assign it to a group (ungroup / create a new group).
 function openTabGroupMenu(anchorEl, tab) {
@@ -1872,6 +1941,13 @@ function openTabGroupMenu(anchorEl, tab) {
       importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode);
       saveTabs();
     }, { iconSvg: CLONE_GLYPH }));
+    // Compare — diff the ACTIVE tab against THIS (right-clicked) tab, in place: stay on the open diagram and see
+    // it tinted vs the one you right-clicked (the baseline). Does NOT switch tabs. Falls back to the picker if
+    // no handler is wired or you right-clicked the active tab itself (can't diff against itself).
+    panel.appendChild(menuItem('Compare', () => {
+      if (_compareTabHandler) _compareTabHandler(tab);
+      else { switchTab(tab.id); requestAnimationFrame(() => document.getElementById('btn-review-changes')?.click()); }
+    }, { iconSvg: COMPARE_GLYPH }));
     panel.appendChild(menuSep());
     // Per-diagram export / share actions.
     panel.appendChild(menuItem('Export diagram to JSON', () => {

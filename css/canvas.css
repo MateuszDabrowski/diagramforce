@@ -137,15 +137,12 @@
   transition: opacity 160ms ease-out;
 }
 
-/* Hover + selection focus — tint the line in --selection-color so the
- * focused connector reads clearly when it overlaps siblings. The
- * canvas.js focus-highlight handler pairs this with a DOM bring-to-front
- * (line lifted above other links in SVG paint order) AND a JS marker
- * tint so source/target endpoints recolour end-to-end with the line. */
-.joint-link:hover [joint-selector="line"],
-.joint-link.selected [joint-selector="line"] {
-  stroke: var(--selection-color) !important;
-}
+/* Hover + selection focus — the connector highlight is an ADDITIVE selection-coloured HALO drawn by
+ * selection-viz.js (a wider, semi-transparent CLONE of the line painted UNDERNEATH it). It is NOT a CSS
+ * `filter: drop-shadow`: that painted in Blink but Safari/WebKit silently skips CSS filters on SVG paths, so
+ * the highlight vanished there ("highlight doesn't work on Safari"). A wider stroke is plain SVG every engine
+ * renders; the real line keeps its own colour (no recolour-masking). Paired with a DOM bring-to-front in
+ * selection-viz.js (line lifted above siblings in SVG paint order). */
 
 /* Rubber-band selection rectangle */
 .df-selection-rect {

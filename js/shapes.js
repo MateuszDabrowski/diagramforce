@@ -2,9 +2,9 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.18.1';
-import { fieldFocus } from './canvas/focus-state.js?v=1.18.1';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, applyGanttMarkerGeometry, applyGanttGroupGeometry, ganttGroupSummary, dateToLocalX, layoutTimelineTasks, ganttRowLayout, ganttTimelineFor, ganttSummaryLaneH, recolorGroupTasks, GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H } from './canvas/gantt-layout.js?v=1.18.1';
+import { parseMarkdown } from './markdown.js?v=1.19.0.49';
+import { fieldFocus } from './canvas/focus-state.js?v=1.19.0.49';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, applyGanttMarkerGeometry, applyGanttGroupGeometry, ganttGroupSummary, dateToLocalX, layoutTimelineTasks, ganttRowLayout, ganttTimelineFor, ganttSummaryLaneH, recolorGroupTasks, GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H } from './canvas/gantt-layout.js?v=1.19.0.49';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -4059,9 +4059,31 @@ export function register() {
         .filter(d => d && d.value && String(d.value).trim() !== '')
         .map(d => ({ label: String(d.label ?? ''), value: String(d.value ?? '') }));
 
+      // Wrap each detail VALUE to the value-column width so long text shows in FULL (no ellipsis); the card
+      // then grows in height to fit. Width is forced to >= 280 below, so wrap against that final width.
+      const labelW = 52;   // value column starts at textX + labelW
+      const valMaxChars = Math.max(6, Math.floor((Math.max(m.size().width, 280) - textX - 10 - labelW) / 5.5));
+      const wrapValue = (text) => {
+        const words = String(text).split(/\s+/).filter(Boolean);
+        if (!words.length) return [''];
+        const lines = []; let line = '';
+        for (let w of words) {
+          while (w.length > valMaxChars) {                       // a single over-long token: hard-break it
+            if (line) { lines.push(line); line = ''; }
+            lines.push(w.slice(0, valMaxChars)); w = w.slice(valMaxChars);
+          }
+          const next = line ? line + ' ' + w : w;
+          if (next.length > valMaxChars && line) { lines.push(line); line = w; }
+          else line = next;
+        }
+        if (line) lines.push(line);
+        return lines.length ? lines : [''];
+      };
+      const detailWrapped = details.map(d => ({ label: d.label, value: d.value, lines: wrapValue(d.value) }));
+
       // Adapt height — auto-size based on content. Tag row, when present,
-      // sits at the very bottom and adds a fixed extra slice.
-      const detailH = details.length * 14;
+      // sits at the very bottom and adds a fixed extra slice. Each wrapped value line is 14px.
+      const detailH = detailWrapped.reduce((s, d) => s + d.lines.length, 0) * 14;
       const contentH = detailStartY + detailH + 10;
       const avatarBottom = avatarCy + avatarR + 8;
       const tagsExtraH = tags.length > 0 ? TAG_ROW_H : 0;
@@ -4163,7 +4185,8 @@ export function register() {
         }
       }
 
-      // Details — render with labels aligned, with ellipsis for overflow
+      // Details — labels aligned, values WRAP onto extra lines (computed above as detailWrapped) so nothing
+      // is truncated; the card height already accounts for the wrapped line count.
       const detailEl = this.el.querySelector('[joint-selector="detailsLabel"]');
       if (detailEl) {
         detailEl.textContent = '';
@@ -4171,27 +4194,24 @@ export function register() {
         detailEl.setAttribute('y', String(detailStartY));
         detailEl.setAttribute('dominant-baseline', 'hanging');
         detailEl.removeAttribute('display');
-        const maxValWidth = m.size().width - textX - 10;
-        const labelW = 52; // fixed tab stop for labels
-        if (details.length > 0) {
-          details.forEach((d, i) => {
-            // Label tspan (muted)
-            const labelSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            labelSpan.setAttribute('x', String(textX));
-            labelSpan.setAttribute('dy', i === 0 ? '0' : '14');
-            labelSpan.setAttribute('fill', 'var(--text-muted)');
-            labelSpan.textContent = d.label + ':';
-            detailEl.appendChild(labelSpan);
-            // Value tspan (slightly brighter)
+        detailWrapped.forEach((d, i) => {
+          // Label tspan (muted) — shares the value's FIRST line.
+          const labelSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+          labelSpan.setAttribute('x', String(textX));
+          labelSpan.setAttribute('dy', i === 0 ? '0' : '14');
+          labelSpan.setAttribute('fill', 'var(--text-muted)');
+          labelSpan.textContent = d.label + ':';
+          detailEl.appendChild(labelSpan);
+          // Value — one tspan per wrapped line; the first shares the label's line, the rest drop down 14px.
+          d.lines.forEach((ln, li) => {
             const valSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
             valSpan.setAttribute('x', String(textX + labelW));
+            valSpan.setAttribute('dy', li === 0 ? '0' : '14');
             valSpan.setAttribute('fill', 'var(--text-secondary)');
-            // Truncate long values with ellipsis
-            const maxChars = Math.floor((maxValWidth - labelW) / 5.5);
-            valSpan.textContent = d.value.length > maxChars && maxChars > 2 ? d.value.substring(0, maxChars - 1) + '…' : d.value;
+            valSpan.textContent = ln;
             detailEl.appendChild(valSpan);
           });
-        }
+        });
       }
 
       // ── Vacant state ────────────────────────────────────────
