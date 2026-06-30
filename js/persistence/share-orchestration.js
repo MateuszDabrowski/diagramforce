@@ -5,13 +5,13 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.0.49';
-import { diagramHasImage } from '../image-component.js?v=1.19.0.49';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.0.49';
-import { escHtml, sharePillHtml } from '../util.js?v=1.19.0.49';
-import { pctx } from './context.js?v=1.19.0.49';
-import { shareGlyphKind } from './drive-sync-logic.js?v=1.19.0.49';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink } from './remote-store.js?v=1.19.0.49';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.1.1';
+import { diagramHasImage } from '../image-component.js?v=1.19.1.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.1.1';
+import { escHtml, sharePillHtml } from '../util.js?v=1.19.1.1';
+import { pctx } from './context.js?v=1.19.1.1';
+import { shareGlyphKind } from './drive-sync-logic.js?v=1.19.1.1';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth } from './remote-store.js?v=1.19.1.1';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -171,6 +171,7 @@ export async function loadFromURL() {
     let st = null; try { st = JSON.parse(stateRaw); } catch { /* malformed → ignore, normal boot */ }
     const action = st && (st.action || 'open');
     if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) {
+      preloadDriveAuth();   // prime GIS NOW (Open-with launch) so the restricted-open modal's "Sign in & open" click isn't popup-blocked by first-load gesture loss
       // Drive "Multiple file support": open EVERY selected file as its own tab. Sequential so each
       // lands as a separate tab through the import pipeline; one failure doesn't abort the rest.
       // (Each loadDriveRef does anon read → Picker fallback → restricted-open modal — no gesture needed.)

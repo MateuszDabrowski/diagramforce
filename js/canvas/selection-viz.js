@@ -12,8 +12,8 @@
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.19.0.49';
-import { getBumpLayer } from './crossing-bumps.js?v=1.19.0.49';
+import { cctx } from './context.js?v=1.19.1.1';
+import { getBumpLayer } from './crossing-bumps.js?v=1.19.1.1';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)

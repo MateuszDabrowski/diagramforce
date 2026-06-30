@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.0.49';
-import { pctx } from './context.js?v=1.19.0.49';
-import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.19.0.49';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.19.0.49';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.19.0.49';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.1.1';
+import { pctx } from './context.js?v=1.19.1.1';
+import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.19.1.1';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.19.1.1';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.19.1.1';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -103,6 +103,16 @@ function loadScript(src) {
   });
   _scripts.set(src, p);
   return p;
+}
+
+// Prime the GIS SDK the moment a Drive sign-in becomes imminent (a Drive-intent UI opening). loadScript memoizes,
+// so by the time the user's CLICK reaches getToken the script is already cached → getToken's `loadScript(...).then`
+// resolves on a MICROTASK, which preserves the click's transient user-activation → the OAuth popup opens instead
+// of being blocked. Without this, the FIRST sign-in of a page awaits a fresh <script> load INSIDE the click handler
+// (a macrotask), the gesture is lost, and the popup is blocked (the Safari "first attempt fails, retry works"
+// symptom). Fire-and-forget, never throws, no-op when Drive isn't configured for this origin.
+export function preloadDriveAuth() {
+  try { if (isDriveConfigured()) loadScript(GIS_SRC).catch(() => {}); } catch { /* never block UI */ }
 }
 
 // ── auth: GIS token client (client-side, no secret). ~1h tokens, no refresh. ──
@@ -286,7 +296,8 @@ export function getDriveStatus() {
   const auto = isAutosyncOn();
   const s = driveByTab.get(activeTabId());
   // Auto-syncing but the ~1 h token has lapsed → show red "sign in" NOW (don't keep
-  // showing blue "synced" when the next save would actually fail). Manual mode needs no live token.
+  // showing blue "synced" when the next save would actually fail). Manual mode is handled at the 'synced' branch
+  // below (a conflict/refresh must still surface in manual mode, so this early return stays autosync-only).
   if (auto && !tokenValid()) return { state: 'error', showText: true, lastSavedAt: s?.lastSavedAt || 0 };
   let state = 'off';
   if (s && s.needsSignin) state = 'error';
@@ -294,14 +305,19 @@ export function getDriveStatus() {
   else if (s && ((s.sharedSource && s.sharedSource.upstreamChanged) || s.upstreamChanged)) state = 'refresh';   // the shared file changed upstream — pull available (item 6 + B2 direct-edit)
   else if (s && s.saving) state = 'saving';
   else if (s && s.dirty) state = 'pending';
-  else if (s && s.fileId) state = 'synced';
-  else if (auto) state = 'synced';        // auto on, nothing pending/saved yet → idle/ok
+  // A Drive-LINKED tab with NO live token reads "sign in to reconnect", NOT a misleading "Synced": the token is
+  // per-tab in memory, so a FRESH tab (a Drive "Open with" launch, or any new tab in the same browser) is signed
+  // OUT even when another tab is signed in, and Load + Version history already gate on the real token. Only this
+  // otherwise-CLEAN synced claim is corrected — conflict/refresh/saving/pending above are more actionable and
+  // still surface as themselves (the E2E covers them) (CR: fresh-tab false "Synced").
+  else if (s && s.fileId) state = tokenValid() ? 'synced' : 'error';
+  else if (auto) state = 'synced';        // auto on, nothing pending/saved yet → idle/ok (token guaranteed: the early return above caught auto + no token)
   // ANY tab saving (incl. a background tab during a multi-tab sweep) animates the navbar - the active-tab
   // check above only covers the active tab, so a sign-in/cadence sweep of OTHER tabs would never spin. The
   // global counter surfaces it as one continuous spin. Never mask the higher-priority error/conflict states.
   if (_savingCount > 0 && state !== 'error' && state !== 'conflict' && state !== 'refresh') state = 'saving';
   // Conflict + Refresh show their text even in manual mode — the user must act, an icon alone is too quiet.
-  return { state, showText: auto || state === 'conflict' || state === 'refresh', lastSavedAt: s?.lastSavedAt || 0 };
+  return { state, showText: auto || state === 'error' || state === 'conflict' || state === 'refresh', lastSavedAt: s?.lastSavedAt || 0 };
 }
 
 function persistState(id, s) {
@@ -2389,7 +2405,19 @@ export async function loadDriveRef(fileId) {
  *  the user signed in with an account that wasn't granted access). */
 async function openSharedFileAuthed(fileId) {
   try {
-    await getToken({ prompt: '' });
+    const token = await getToken({ prompt: '' });
+    // Ownership probe FIRST. A file the user OWNS (their own diagram opened via Drive "Open with", or a #gd= link
+    // to their own file) must link to its OWN id as the MASTER so saves UPDATE it in place. Routing an owned file
+    // through adoptSharedDiagram (the shared-SOURCE model) mis-modelled it as foreign → fork-on-edit → a fresh
+    // "duplicate" .dgf piling up in Drive on every open (CR, prod). importDriveFileById links an owned file as the
+    // master (assumeOwned skips its own probe since we just did it); a probe FAILURE or a genuinely NON-owned file
+    // falls through to the unchanged shared path below, so #gd= shares behave exactly as before.
+    let owned = false;
+    try { const meta = await fileOwnership(fileId, token); owned = meta.ownedByMe === true; } catch { owned = false; }
+    if (owned) {
+      if (!(await importDriveFileById(fileId, 'Diagram', token, { assumeOwned: true }))) showError("That file isn't a readable Diagramforce diagram.");
+      return;
+    }
     const data = await fetchGraphAuthed(fileId);
     if (!(await adoptSharedDiagram(data, fileId))) showError("That file isn't a readable Diagramforce diagram.");
   } catch (e) {
@@ -2422,6 +2450,7 @@ async function openSharedFileAuthed(fileId) {
  *  button provides the user gesture the sign-in popup needs, then opens THAT file (the link already has its id). */
 function showRestrictedOpenModal(fileId) {
   document.querySelector('.df-drive-open-modal')?.remove();
+  preloadDriveAuth();   // prime GIS while the user reads the modal so the "Sign in & open" click opens the popup (not blocked by first-load gesture loss)
   const { footer, close } = buildModal({
     title: 'Sign in to open this diagram',
     className: 'df-drive-open-modal',

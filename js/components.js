@@ -1,9 +1,9 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.19.0.49';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.19.0.49';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './canvas/gantt-layout.js?v=1.19.0.49';
+import { getIconDataUri } from './icons.js?v=1.19.1.1';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.19.1.1';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './canvas/gantt-layout.js?v=1.19.1.1';
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
  *  Each child element must carry its own fill/stroke — the wrapper SVG sets NO

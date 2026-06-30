@@ -1,16 +1,16 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.19.0.49';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.0.49';
-import { resizeDataObjectToFit } from './components.js?v=1.19.0.49';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.0.49';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.19.0.49';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.0.49';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.19.0.49';
-import { renderTemplateThumbnail } from './templates.js?v=1.19.0.49';
-import { showWhatsNewNow } from './whats-new.js?v=1.19.0.49';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.0.49';
+import { diagramHasImage } from './image-component.js?v=1.19.1.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.1.1';
+import { resizeDataObjectToFit } from './components.js?v=1.19.1.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.1.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, storageRowHtml, groupSelectHtml, tabInGroup, gaugeLevel, refreshSplitTableCounts, shareChipIconHtml, sharePillHtml, driveChipsHtml, isViewForkTab, diffGraphs } from './util.js?v=1.19.1.1';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.1.1';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.19.1.1';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.1.1';
+import { showWhatsNewNow } from './whats-new.js?v=1.19.1.1';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.1.1';
 
 let modules = {};
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
@@ -2863,7 +2863,7 @@ function syncStatusText(st, connected = false) {
   const rel = st.lastSavedAt ? formatRelativeTime(st.lastSavedAt) : null;
   switch (st.state) {
     case 'saving':   return 'Saving to Google Drive…';
-    case 'error':    return 'Google Drive sign-in expired.';
+    case 'error':    return 'Signed out of Google Drive - sign in to reconnect.';
     case 'conflict': return 'This diagram changed on Google Drive.';
     case 'refresh':  return 'The original shared file has new changes.';
     case 'pending':  return 'Unsaved changes - they will sync to Google Drive.';
@@ -3051,7 +3051,7 @@ function showSyncAbout() {
       <div style="text-align:center;margin:0 0 6px"><svg width="44" height="44" aria-hidden="true"><use href="#icon-gdrive"></use></svg></div>
 
       <h4 style="${head};margin-top:0">Purpose</h4>
-      <p style="margin:0">Back up and share your diagrams using <strong>your own</strong> Google Drive - no Diagramforce account, no server, nothing extra to manage. Each diagram becomes a regular file in a <strong>Diagramforce</strong> folder you own, so you stay in control and can stop sharing or delete it whenever you like.</p>
+      <p style="margin:0">Back up and share your diagrams using <strong>your own</strong> Google Drive - no Diagramforce account, no server, nothing extra to manage. Each diagram becomes a regular file in a <strong>Diagramforce</strong> folder you own, so you stay in control and can stop sharing or delete it whenever you like. Diagramforce is a verified <a href="https://workspace.google.com/marketplace/app/diagramforce/873718407054" target="_blank" rel="noopener" class="df-about__link">Google Workspace Marketplace app</a>.</p>
 
       <h4 style="${head}">Features</h4>
       <ul style="${list}">

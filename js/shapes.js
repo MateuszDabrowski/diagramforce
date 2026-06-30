@@ -2,9 +2,9 @@
 // All shapes are under the `sf` namespace
 // Uses JointJS v4 JSON markup array syntax
 
-import { parseMarkdown } from './markdown.js?v=1.19.0.49';
-import { fieldFocus } from './canvas/focus-state.js?v=1.19.0.49';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, applyGanttMarkerGeometry, applyGanttGroupGeometry, ganttGroupSummary, dateToLocalX, layoutTimelineTasks, ganttRowLayout, ganttTimelineFor, ganttSummaryLaneH, recolorGroupTasks, GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H } from './canvas/gantt-layout.js?v=1.19.0.49';
+import { parseMarkdown } from './markdown.js?v=1.19.1.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.19.1.1';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, applyGanttMarkerGeometry, applyGanttGroupGeometry, ganttGroupSummary, dateToLocalX, layoutTimelineTasks, ganttRowLayout, ganttTimelineFor, ganttSummaryLaneH, recolorGroupTasks, GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H } from './canvas/gantt-layout.js?v=1.19.1.1';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX

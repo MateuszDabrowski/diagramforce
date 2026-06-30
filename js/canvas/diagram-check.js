@@ -10,7 +10,7 @@
 //
 // Overlay machinery mirrors review-overlay.js: an own `<g>` inside `.joint-layers` that rides the paper
 // transform (tracks pan/zoom for free) and redraws as cells move; cleared on a graph reset (tab switch).
-import { cctx } from './context.js?v=1.19.0.49';
+import { cctx } from './context.js?v=1.19.1.1';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const COL = '#DA4E55';   // red — matches the issue / Removed palette
