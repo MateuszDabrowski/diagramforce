@@ -150,7 +150,10 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
 export function exportSVG(transparent = true) {
   const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   try {
-    const contentBBox = paper.getContentBBox();
+    // Use getContentArea() (MODEL coords), NOT getContentBBox() (PAPER coords = model × zoom + pan). The export
+    // strips the pan/zoom transform off .joint-layers below so shapes render at model scale, so the viewBox must
+    // be in model coords too. getContentBBox() would desync the crop from the content on any zoomed/panned canvas.
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -210,7 +213,10 @@ function exportRaster(transparent, format) {
   const ext = format === 'webp' ? 'webp' : 'png';
   const fmtLabel = format.toUpperCase();
   try {
-    const contentBBox = paper.getContentBBox();
+    // Use getContentArea() (MODEL coords), NOT getContentBBox() (PAPER coords = model × zoom + pan). The export
+    // strips the pan/zoom transform off .joint-layers below so shapes render at model scale, so the viewBox must
+    // be in model coords too. getContentBBox() would desync the crop from the content on any zoomed/panned canvas.
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -330,7 +336,10 @@ export async function exportGIF(transparent = false) {
   }
   let progressToastDismiss = null;
   try {
-    const contentBBox = paper.getContentBBox();
+    // Use getContentArea() (MODEL coords), NOT getContentBBox() (PAPER coords = model × zoom + pan). The export
+    // strips the pan/zoom transform off .joint-layers below so shapes render at model scale, so the viewBox must
+    // be in model coords too. getContentBBox() would desync the crop from the content on any zoomed/panned canvas.
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
