@@ -151,3 +151,41 @@ select:focus-visible {
     min-height: 0;
   }
 }
+
+/* ── Shared dropdown/menu item base (CLEANUP C1) ───────────────────
+   The four menu-item families - the canvas right-click menu (.df-ctx-menu__item, modals.css), the toolbar &
+   hamburger menus (.df-toolbar__menu-item, toolbar.css), the tab popovers (.df-tab-pop__item, tabs.css), and the
+   ER-marker picker (.df-marker-picker__item, properties.css) - all repeated these six identical declarations.
+   Only the declarations that are byte-identical across ALL FOUR and are overridden by NO variant live here, so
+   this rule is ORDER-INDEPENDENT: `color` and `text-align` deliberately stay per-family because their --danger /
+   --center variants share this (single-class) specificity and would flip on source order. Each family keeps its
+   own display / padding / background / border-radius / gap deltas in its own file. */
+.df-ctx-menu__item,
+.df-toolbar__menu-item,
+.df-tab-pop__item,
+.df-marker-picker__item {
+  width: 100%;
+  border: none;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Shared standard-input base (CLEANUP C3) ───────────────────────
+   The three "standard" text inputs - the properties-panel input (.df-properties__input), the stencil search
+   (.df-stencil__search), and the share-URL field (.df-share-modal__url) - repeated these six identical
+   declarations. (The table field-input + the group <select> are DELIBERATELY not here: they use their own
+   font/bg/radius - a 10px system-ui table cell and a --bg-panel picklist are different things.) Only the
+   byte-identical, non-overridden declarations live here, so the rule is ORDER-INDEPENDENT; each input keeps its
+   own padding / box-sizing / outline / transition / :focus treatment (which diverges: ring vs border-only). */
+.df-properties__input,
+.df-stencil__search,
+.df-share-modal__url {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+}

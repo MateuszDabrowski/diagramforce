@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.1.1';
-import { pctx } from './context.js?v=1.19.1.1';
-import { driveFileName, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.19.1.1';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.19.1.1';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.19.1.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.2.99';
+import { pctx } from './context.js?v=1.19.2.99';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.19.2.99';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision } from './drive-sync-logic.js?v=1.19.2.99';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.19.2.99';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -119,6 +119,12 @@ export function preloadDriveAuth() {
 let _tokenClient = null;
 let _accessToken = null;
 let _tokenExpiry = 0;
+// Account pre-selection for the GIS popup. A Drive "Open with" launch names the account that owns the session
+// (`state.userId` = the Google profile id, the ID-token `sub`), so passing it as GIS's `hint` PRE-SELECTS that
+// account and skips the chooser - the per-tab sign-in becomes one frictionless click (CR). An unknown/invalid
+// hint just falls back to the normal account chooser, so this is strictly additive.
+let _loginHint = null;
+export function setLoginHint(h) { _loginHint = String(h || '').trim() || null; }
 // Valid = present AND not within 30 s of its ~1 h expiry. Lets the UI show "sign in"
 // proactively (red) instead of waiting for a save to fail and discover the dead token.
 function tokenValid() { return !!_accessToken && Date.now() < _tokenExpiry - 30000; }
@@ -171,7 +177,7 @@ function getToken({ prompt = '' } = {}) {
       scheduleCatchUpSave();
       resolve(_accessToken);
     };
-    _tokenClient.requestAccessToken({ prompt });
+    _tokenClient.requestAccessToken({ prompt, ...(_loginHint ? { hint: _loginHint } : {}) });
   }));
 }
 
@@ -240,11 +246,9 @@ function tabState(id) {
 }
 
 // ── Settings (localStorage; provider-scoped so other providers can reuse the seam) ──
-const LS = { autosync: 'df.gdrive.autosync', cadence: 'df.gdrive.cadence', folder: 'df.gdrive.folderId' };
-const CADENCE_DEFAULT = 120000;   // 2 min — conservative to keep Drive revisions sparse
+const LS = { autosync: 'df.gdrive.autosync', folder: 'df.gdrive.folderId' };
+const CADENCE_DEFAULT = 120000;   // 2 min — conservative to keep Drive revisions sparse (drives the upstream poll interval)
 export function isAutosyncOn() { return localStorage.getItem(LS.autosync) === '1'; }
-export function getCadence() { return localStorage.getItem(LS.cadence) || String(CADENCE_DEFAULT); }
-export function setCadence(v) { localStorage.setItem(LS.cadence, String(v)); }
 export function isSignedIn() { return tokenValid(); }
 /** "Connected" once signed in, auto-sync is on, or a tab the USER saved has a Drive file — gates the menu
  *  shape. An IMPORTED tab (opened from a `#gd=` share link, possibly anonymously / logged out) must NOT
@@ -529,6 +533,18 @@ export async function reconcileTabDriveLinks() {
   const token = _accessToken;
   let owned;
   try { owned = await listMyDiagrams(); } catch { return; }
+  // Backup mirrors carry a visible '[Backup] ' prefix so a user scanning Drive's own UI can't mistake one for
+  // the working diagram (they used to share its exact name - the delete-the-wrong-file trap, CR). Mirrors from
+  // before the prefix are healed HERE: the listing already holds names + stamps, so it's one fire-and-forget
+  // metadata PATCH per stale mirror, once per sign-in, no extra reads.
+  for (const f of owned || []) {
+    if (f && f.appProperties && f.appProperties.dfBackupOf && f.name && !isBackupPrefixed(f.name)) {
+      fetch(`${API}/${encodeURIComponent(f.id)}?supportsAllDrives=true`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `${BACKUP_PREFIX}${f.name}` }),
+      }).catch(() => { /* best-effort - the next sign-in retries */ });
+    }
+  }
   owned = (owned || []).filter((f) => f && f.ownedByMe !== false && !(f.appProperties && (f.appProperties.dfBackupOf || f.appProperties.dfEditShareOf)));   // own masters only — never a foreign shared file, a My-Drive backup mirror, or a recipient-editable share copy (which shares the master's NAME, so the name-match heal must skip it)
   const allTabs = pctx.getAllTabs ? pctx.getAllTabs() : [];
   // Only the user's OWN-master, content-bearing tabs are candidates: an imported/shared-source tab points at
@@ -778,7 +794,7 @@ async function writeFile(fileId, data, target, token) {
     // CREATE: custom vendor MIME (set pre-prod, before any files exist) → reliable Drive "Open with" matching +
     // makes Diagramforce the default opener (not Drive's JSON viewer). The bytes are still JSON; the anonymous
     // public read (alt=media) is MIME-agnostic.
-    const metadata = { name: driveFileName(data.name), mimeType: DGF_MIME, appProperties };
+    const metadata = { name: (target && target.name) || driveFileName(data.name), mimeType: DGF_MIME, appProperties };   // target.name = system-file override (e.g. '[Backup] ...'); user masters keep driveFileName
     if (target && target.folderId) metadata.parents = [target.folderId];
     res = await fetch(`${UPLOAD}?uploadType=multipart&fields=${FIELDS}&supportsAllDrives=true`, {
       method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipartBody(metadata, jsonStr, boundary),
@@ -1108,7 +1124,7 @@ async function ensureMyDriveBackup(id, data, token) {
   if ((s.copies || []).some((c) => c && c.kind === 'mydrive-backup')) return;     // already mirrored
   try {
     const folderId = await ensureFolder(token);
-    const meta = await writeFile(null, data, { folderId, appProperties: { dfBackupOf: s.fileId } }, token);
+    const meta = await writeFile(null, data, { folderId, name: driveBackupFileName(data.name), appProperties: { dfBackupOf: s.fileId } }, token);   // '[Backup] ' prefix - visibly NOT the working diagram in Drive's UI (CR)
     s.copies = upsertCopy(s.copies, { fileId: meta.id, kind: 'mydrive-backup', label: 'My Drive backup', lastRevisionId: meta.headRevisionId || null, lastPushedAt: Date.now(), conflict: false });
     persistState(id, s); notify();
   } catch (e) { console.warn('Diagramforce: My-Drive backup create failed', e); }   // retry on the next save
@@ -1223,7 +1239,12 @@ export function disableAutosync() {
  *  re-establishes the links. */
 export function disconnectDrive() {
   _accessToken = null; _tokenExpiry = 0;
-  localStorage.setItem(LS.autosync, '0');
+  // CLEAR the key (not set '0'): an explicit Disconnect is a full reset, NOT a "manual mode" choice. Leaving '0'
+  // would make a later reconnect PRESERVE off (getToken only defaults ON when the key is unset), but a fresh
+  // connect from the not-connected state must default auto-sync ON. removeItem returns us to the pristine
+  // first-run state so the next sign-in re-defaults ON. (A deliberate auto-sync OFF while connected lives in
+  // disableAutosync, which correctly keeps '0' so a token-lapse re-auth preserves it.)
+  localStorage.removeItem(LS.autosync);
   if (_autosaveTimer) { clearTimeout(_autosaveTimer); _autosaveTimer = null; }
   stopUpstreamPoll();
   _driveReconcileDone = false;   // a future reconnect re-checks Drive state from scratch
@@ -1751,6 +1772,36 @@ async function findBackupFileId(masterFileId, token) {
   return (data.files && data.files[0] && data.files[0].id) || null;
 }
 
+/** Rename the tab's OWNED Drive master when the TAB is renamed, so Drive stays in step with the app (CR: a
+ *  cloned "X (clone)" file kept its old name after the tab became "Y"). Metadata-only `files.update({name})` -
+ *  content, revisions and sharing are untouched. Deliberately narrow + silent:
+ *  - token-gated (no popup): signed out -> skip; the Drive name simply lags until a rename while signed in.
+ *  - OWN masters only: a direct-edit shared master (s.sharedInEdit) is someone ELSE'S file - renaming it would
+ *    rename it for its owner. Every other s.fileId in the model is user-owned (created by doSave / adopted via
+ *    the owned import branch); if that invariant ever breaks, Drive 403s and we swallow it (fire-and-forget). */
+export async function renameDriveMaster(tabId, newTabName) {
+  try {
+    if (!isDriveConfigured() || !tokenValid()) return false;
+    const s = driveByTab.get(tabId);
+    if (!s || !s.fileId || s.sharedInEdit) return false;
+    const res = await fetch(`${API}/${encodeURIComponent(s.fileId)}?supportsAllDrives=true`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + _accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: driveFileName(newTabName) }),
+    });
+    // The private My-Drive backup mirror follows the rename too (else it keeps "[Backup] <old name>.dgf"
+    // while the master reads the new name - the pairing goes invisible in Drive). Best-effort.
+    const bk = (s.copies || []).find((c) => c && c.kind === 'mydrive-backup' && c.fileId);
+    if (bk) {
+      fetch(`${API}/${encodeURIComponent(bk.fileId)}?supportsAllDrives=true`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + _accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: driveBackupFileName(newTabName) }),
+      }).catch(() => { /* the reconcile prefix-heal doesn't cover base-name drift; next rename retries */ });
+    }
+    return res.ok;
+  } catch { return false; }
+}
+
 export async function deleteDiagramFromDrive(fileId) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return false; }
   let token = tokenValid() ? _accessToken : null;
@@ -1820,7 +1871,7 @@ export async function deleteDiagramFromDrive(fileId) {
 }
 
 /** Reset a tab's runtime + persisted Drive link (after its file is trashed) → the tab is now local-only. */
-export function clearTabDriveState(tabId) {
+function clearTabDriveState(tabId) {
   const s = driveByTab.get(tabId);
   if (!s) return;
   s.fileId = null; s.imported = false; s.dirty = false; s.lastSavedAt = 0; s.lastHash = null;
@@ -2561,11 +2612,11 @@ export async function pushTemplates(templates, deleted = []) {
     if (id) {
       res = await fetch(`${UPLOAD}/${encodeURIComponent(id)}?uploadType=multipart&fields=id&supportsAllDrives=true`, {
         method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary },
-        body: multipartBody({ appProperties }, payload, boundary),
+        body: multipartBody({ name: TEMPLATES_DRIVE_NAME, appProperties }, payload, boundary),   // name rides along: heals a pre-'[App Data]' file on its next push
       });
     } else {
       const folderId = await ensureFolder(token);
-      const metadata = { name: 'Diagramforce Templates.json', mimeType: 'application/json', appProperties };
+      const metadata = { name: TEMPLATES_DRIVE_NAME, mimeType: 'application/json', appProperties };
       if (folderId) metadata.parents = [folderId];
       res = await fetch(`${UPLOAD}?uploadType=multipart&fields=id&supportsAllDrives=true`, {
         method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary },

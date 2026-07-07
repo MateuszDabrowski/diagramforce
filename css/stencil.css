@@ -47,17 +47,12 @@
 .df-stencil__search::-webkit-search-cancel-button { display: none; }
 
 .df-stencil__search {
+  /* border / border-radius / background / color / font-size / font-family: shared standard-input base (layout.css) */
   flex: 1;
   min-width: 0;
   width: 100%;
   padding: 6px var(--spacing-md);
   padding-right: 28px; /* leave room for the clear button */
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--bg-app);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -94,11 +89,7 @@
 
 .df-stencil__search:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
-}
-
-[data-theme="dark"] .df-stencil__search:focus {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .df-stencil__body {

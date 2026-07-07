@@ -4,18 +4,9 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver } from '../util.js?v=1.19.1.1';
-import { escHtml } from '../util.js?v=1.19.1.1';
-import { buildModal } from '../feedback.js?v=1.19.1.1';
-import { pctx } from './context.js?v=1.19.1.1';
-
-function stableStringify(v) {
-  if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
-  if (v && typeof v === 'object') {
-    return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStringify(v[k])).join(',') + '}';
-  }
-  return JSON.stringify(v === undefined ? null : v);
-}
+import { compareSemver, escHtml, stableStringify, sanitizeFilenamePart } from '../util.js?v=1.19.2.99';
+import { buildModal } from '../feedback.js?v=1.19.2.99';
+import { pctx } from './context.js?v=1.19.2.99';
 
 /** Content signature of a cell array (a diagram's `graph.cells` or a template's
  *  `cells`). Two imports with the same signature are exact duplicates. Exported
@@ -137,7 +128,7 @@ function showVersionWarningModal(savedVersion, sourceName, diff, rawData) {
           viewport: exportData.viewport || null,
         };
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-        const safeName = (backupData.title).replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'backup';
+        const safeName = sanitizeFilenamePart(backupData.title, 'backup');
         triggerDownload(URL.createObjectURL(blob), `df_backup_${safeName}_${dateSuffix()}.json`);
       }
       btn.textContent = 'Exported!';

@@ -40,3 +40,21 @@ export function driveFileName(name) {
 export function myDiagramsQuery() {
   return `(mimeType = '${DGF_MIME}' or name contains '.dgf') and trashed = false`;
 }
+
+/** Visible SYSTEM-file markers (CR): the app's non-diagram files in the user's Drive carry a bracket PREFIX so
+ *  they can't be mistaken for a working diagram in Drive's own UI and deleted by accident. PREFIX (not suffix):
+ *  Drive truncates long names in list view, so a suffix marker disappears exactly when it's needed; a prefix
+ *  survives truncation and clusters the system files together. All system files are FOUND by appProperties or a
+ *  cached id - never by name - so renaming them is lookup-safe. Pure (unit-tested). */
+export const BACKUP_PREFIX = '[Backup] ';
+export const TEMPLATES_DRIVE_NAME = '[App Data] Diagramforce Templates.json';
+
+/** The Drive file name for a diagram's private My-Drive backup mirror: `[Backup] <name>.dgf`. */
+export function driveBackupFileName(name) {
+  return `${BACKUP_PREFIX}${driveFileName(name)}`;
+}
+
+/** Does a Drive file name already carry the backup marker? (The sign-in reconcile heals pre-prefix mirrors.) */
+export function isBackupPrefixed(name) {
+  return String(name || '').startsWith(BACKUP_PREFIX);
+}

@@ -5,13 +5,14 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.1.1';
-import { diagramHasImage } from '../image-component.js?v=1.19.1.1';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.1.1';
-import { escHtml, sharePillHtml } from '../util.js?v=1.19.1.1';
-import { pctx } from './context.js?v=1.19.1.1';
-import { shareGlyphKind } from './drive-sync-logic.js?v=1.19.1.1';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth } from './remote-store.js?v=1.19.1.1';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.2.99';
+import { diagramHasImage } from '../image-component.js?v=1.19.2.99';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.2.99';
+import { escHtml } from '../util.js?v=1.19.2.99';
+import { sharePillHtml } from '../storage-ui.js?v=1.19.2.99';
+import { pctx } from './context.js?v=1.19.2.99';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.19.2.99';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.19.2.99';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -159,6 +160,28 @@ export async function shareGroupToDrive(tabIds, label, meta = {}) {
   }
 }
 
+/** True when the current URL carries something loadFromURL() will act on — a Google Drive "Open with"
+ *  `?state=` OPEN, or a `#dfg=` / `#gd=` / `#diagram=` share hash. PURE (no side effects, no history
+ *  rewrite). The boot sequence calls this BEFORE the empty-session New-Diagram modal fires: restoreTabs()
+ *  runs in Phase 7 but loadFromURL() only in Phase 9, so on a fresh browser opened via Open-with / a share
+ *  link the New-Diagram overlay would otherwise pop OVER the sign-in / share-load modal (A2 paper-cut). A
+ *  `?state=` with action 'create'/'new' (or unparseable JSON) returns false — those fall through to a
+ *  normal new-diagram boot, exactly as loadFromURL treats them. Mirrors loadFromURL's own matchers. */
+export function hasPendingUrlLoad() {
+  try {
+    const stateRaw = new URLSearchParams(window.location.search).get('state');
+    if (stateRaw) {
+      try {
+        const st = JSON.parse(stateRaw);
+        const action = st && (st.action || 'open');
+        if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) return true;
+      } catch { /* malformed → normal boot */ }
+    }
+    const hash = window.location.hash || '';
+    return /[#&]dfg=g\d+\./.test(hash) || /[#&]gd=[A-Za-z0-9_-]+/.test(hash) || hash.includes('diagram=');
+  } catch { return false; }
+}
+
 export async function loadFromURL() {
   const { sanitizeGraphJSON, normalizeDiagramType, checkVersionWarning, onImport: onImportCallback } = pctx;
   // Google Drive "Open with Diagramforce" / "New" — Drive loads the app with a `?state=` QUERY param
@@ -172,6 +195,7 @@ export async function loadFromURL() {
     const action = st && (st.action || 'open');
     if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) {
       preloadDriveAuth();   // prime GIS NOW (Open-with launch) so the restricted-open modal's "Sign in & open" click isn't popup-blocked by first-load gesture loss
+      if (st.userId != null) setLoginHint(st.userId);   // pre-select the launching account in the GIS popup - one click, no account chooser (CR)
       // Drive "Multiple file support": open EVERY selected file as its own tab. Sequential so each
       // lands as a separate tab through the import pipeline; one failure doesn't abort the rest.
       // (Each loadDriveRef does anon read → Picker fallback → restricted-open modal — no gesture needed.)
@@ -392,6 +416,10 @@ function showShareModal(url, opts = {}) {
         <div class="df-share__row df-share__gd-result" hidden>
           <input type="text" class="df-share__field df-share__gd-field" readonly aria-label="Google Drive share link" spellcheck="false">
           <button type="button" class="df-modal__btn df-share__copy" data-copy="drive">Copy</button>
+        </div>
+        <div class="df-share__invite-row" hidden>
+          <span class="df-share__shared-drive-hint">On the first open, recipients sign in and pick this diagram from "Shared with me" (one-time). Send them the ready-made note so the extra step doesn't read as a broken link.</span>
+          <button type="button" class="df-modal__btn df-modal__btn--amber-outline df-share__copy-invite">Copy invite text</button>
         </div>
         <div class="df-share__shared-drive">
           <span class="df-share__shared-drive-hint">Put an editable copy in a team Shared Drive so everyone there can edit it together.</span>
@@ -749,6 +777,16 @@ function showShareModal(url, opts = {}) {
       body.querySelector('.df-share__email-field')?.addEventListener('click', (e) => { if (e.target.classList.contains('df-share__email-field')) emailInput.focus(); });
     }
 
+    // The last created Drive link (url + scope) - what "Copy invite text" copies a guidance note for.
+    let lastShare = null;
+    body.querySelector('.df-share__copy-invite')?.addEventListener('click', async () => {
+      if (!lastShare) return;
+      const name = pctx.tabNameCb ? pctx.tabNameCb() : 'Diagram';
+      const msg = inviteText({ name, url: lastShare.url, scope: lastShare.scope });
+      try { await navigator.clipboard.writeText(msg); showToast('Invite text copied ✓', 'success'); }
+      catch { showError('Clipboard blocked - copy the link field instead.'); }
+    });
+
     createBtn.addEventListener('click', async () => {
       const scope = scopeOf();
       const access = (scope === 'user' || scope === 'domain') ? accessOf() : 'view';   // Copy/Collaborate: Invite + Organisation
@@ -760,6 +798,12 @@ function showShareModal(url, opts = {}) {
           ? await shareActiveEditable({ scope, emails, domain })   // Collaborate: editable copy for the invited people OR the whole org
           : await shareActiveScoped({ scope, domain, emails });
         gdField.value = gdUrl; gdResult.hidden = false;
+        // A NON-public share needs recipient guidance: under drive.file their FIRST open detours through a
+        // sign-in + a one-time "Shared with me" pick, which cold recipients read as a broken link. Surface the
+        // ready-to-paste invite note for Invite/Organisation; a Public link opens anonymously, so hide it there.
+        lastShare = { url: gdUrl, scope };
+        const inviteRow = body.querySelector('.df-share__invite-row');
+        if (inviteRow) inviteRow.hidden = !(scope === 'user' || scope === 'domain');
         // Auto-copy the fresh link (item 8) — that's what you want it for. Falls back to select-the-field
         // if the clipboard is blocked (the Copy button stays available either way).
         let copied = false;

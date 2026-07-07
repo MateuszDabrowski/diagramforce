@@ -40,9 +40,9 @@ export const ALLOWED_CELL_TYPES = new Set([
   'standard.Link',
 ]);
 
-export const VALID_DIAGRAM_TYPES = new Set(['architecture', 'process', 'datamodel', 'datamapping', 'org', 'gantt', 'sequence']);
+const VALID_DIAGRAM_TYPES = new Set(['architecture', 'process', 'datamodel', 'datamapping', 'org', 'gantt', 'sequence']);
 // Aliases the loader normalises (kept lenient).
-export const DIAGRAM_TYPE_ALIASES = { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping' };
+const DIAGRAM_TYPE_ALIASES = { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping' };
 
 /** The diagram type(s) a TYPE-SPECIFIC shape belongs to. Cross-type generics (Note/TextLabel/Line/Image/Pill/Legend/
  *  Table/Link/Container/Zone/SimpleNode/Annotation/Task) return null - they're valid anywhere, so no warning. */

@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.19.1.1';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.19.1.1';
-import { nodeContrastText } from '../util.js?v=1.19.1.1';
-import { getIconDataUri } from '../icons.js?v=1.19.1.1';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from './gantt-layout.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.19.2.99';
+import { nodeContrastText } from '../util.js?v=1.19.2.99';
+import { getIconDataUri } from '../icons.js?v=1.19.2.99';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.19.2.99';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -354,7 +354,7 @@ function isThemeDefaultFill(c) {
 // Bake contrasting label/subtitle colours onto a SimpleNode whose body is an explicit solid
 // colour, for any text still on the theme default. No-op for theme-adaptive bodies (text keeps
 // adapting) and for explicitly-coloured text. Runs on load (migrateNodes); idempotent.
-export function applyNodeTextContrast(cell) {
+function applyNodeTextContrast(cell) {
   if (cell.get('type') !== 'sf.SimpleNode') return;
   const contrast = nodeContrastText(cell.attr('body/fill'));
   if (!contrast) return;

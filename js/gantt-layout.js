@@ -3,7 +3,7 @@
 // table / LLM-authored JSON) and the bar moves to the right column. Shared by the shapes views (live edits +
 // timeline re-layout) and the load migration (migrateNodes). Back-compat: a task with no dates, or no resolvable
 // timeline, keeps its manual pixel position untouched.
-import { dateToX, spanWidth, xToDate } from './gantt-scale.js?v=1.19.1.1';
+import { dateToX, spanWidth, xToDate } from './gantt-scale.js?v=1.19.2.99';
 
 /** The timeline a task belongs to: its embed parent if that's a timeline, else the SINGLE timeline in the graph (so
  *  an LLM/table needn't set embedding when there's only one). Null when ambiguous (multiple, none) and not embedded. */
@@ -19,7 +19,7 @@ export function ganttTimelineFor(task) {
 /** How many dated/undated GanttTask BARS are bound to this timeline (embedded in it, or — when it's the sole
  *  timeline — every bar in the graph; same binding rule as ganttTimelineFor). Phase 4.0: the axis left-panel
  *  reserves space when there are label rows OR bars, so bars become first-class without needing `tasks[]`. */
-export function timelineBarCount(tl) {
+function timelineBarCount(tl) {
   const graph = tl && tl.graph;
   if (!graph) return 0;
   let n = 0;
@@ -363,15 +363,6 @@ export function backfillGanttOrders(tl) {
   if (!bars.length || bars.every(b => b.get('order') != null)) return false;
   ganttBarsByVisualOrder(tl, bars).forEach((b, i) => b.set('order', i));
   return true;
-}
-
-/** The next free `order` for a bar APPENDED to a timeline (one past the current max) — used when a stencil-dropped
- *  GanttTask needs an order so it lands as a new last row instead of an unsnapped orphan. */
-export function nextGanttOrder(tl) {
-  const bars = timelineBars(tl);
-  let max = -1;
-  for (const b of bars) { const o = b.get('order'); if (o != null && o > max) max = o; }
-  return max + 1;
 }
 
 /** Derive a bar's { start, end } ISO dates from its CURRENT x/width — the inverse of applyGanttGeometry. Used by the

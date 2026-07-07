@@ -3,8 +3,9 @@
 // source→target mapping lineage instead, reusing table-view.js — see the dispatch in toolbar.js.)
 // Columns mirror the per-object field CSV in properties.js (fieldsToCsv), prefixed with an
 // Object column so a flat, multi-object export stays unambiguous.
-import { sanitizeFilenamePart } from './util.js?v=1.19.1.1';
-import { getActiveTabName } from './tabs.js?v=1.19.1.1';
+import { sanitizeFilenamePart } from './util.js?v=1.19.2.99';
+import { getActiveTabName } from './tabs.js?v=1.19.2.99';
+import { triggerDownload } from './persistence.js?v=1.19.2.99';
 
 const COLUMNS = ['Object', 'API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
 
@@ -37,11 +38,5 @@ export function exportObjectSchemaCsv(graph) {
   const csv = buildObjectSchemaCsv(graph);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `df_${sanitizeFilenamePart(getActiveTabName(), 'tab')}_schema.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerDownload(url, `df_${sanitizeFilenamePart(getActiveTabName(), 'tab')}_schema.csv`);
 }

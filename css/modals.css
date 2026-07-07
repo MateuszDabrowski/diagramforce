@@ -233,15 +233,13 @@
 .df-modal__btn.df-save-mgr__backup-now {
   flex-shrink: 0;
   white-space: nowrap;
-  --_amber: #D4911F;
   background: transparent;
-  border-color: var(--_amber);
-  color: var(--_amber);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
-[data-theme="dark"] .df-modal__btn.df-save-mgr__backup-now { --_amber: var(--brand-amber); }
 .df-modal__btn.df-save-mgr__backup-now:hover {
-  background: var(--_amber);
-  border-color: var(--_amber);
+  background: var(--brand-amber-strong);
+  border-color: var(--brand-amber-strong);
   color: #1C1E21;
 }
 /* Success flash — JS toggles `is-backed` for ~2s after a successful backup,
@@ -258,18 +256,16 @@
    Selected). Transparent fill; darker amber in light mode for text contrast; fills on hover. Mirrors the
    backup-now treatment. The compound `.df-modal__btn` selector keeps it ahead of the neutral base. */
 .df-modal__btn.df-modal__btn--amber-outline {
-  --_amber: #D4911F;
   background: transparent;
-  border-color: var(--_amber);
-  color: var(--_amber);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
-[data-theme="dark"] .df-modal__btn.df-modal__btn--amber-outline { --_amber: var(--brand-amber); }
 /* Hover stays a WIRE (a faint amber wash, never a solid fill) - uniform with "Save to Google Drive" so every amber
    wire button reads the same. */
 .df-modal__btn.df-modal__btn--amber-outline:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--_amber) 12%, transparent);
-  border-color: var(--_amber);
-  color: var(--_amber);
+  background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
 
 /* Legacy save-item aliases — now handled by .df-modal__row */
@@ -351,6 +347,20 @@
 }
 .df-modal__btn--danger-outline:hover {
   background: color-mix(in srgb, var(--brand-red) 12%, transparent);
+}
+
+/* Discard changes (C2) — drops unsaved edits but KEEPS the saved copy, so it reads as cautionary (not
+   data-destroying): a muted outline, distinct from the red --danger-outline and the grey-fill neutral. The one
+   genuine delta kept when the close-confirm/close-tabs button clones were folded into .df-modal__btn. */
+.df-modal__btn--discard {
+  background: transparent;
+  border-color: var(--border-color-strong);
+  color: var(--text-secondary);
+}
+.df-modal__btn--discard:hover {
+  background: var(--toolbar-button-hover);
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* ── Confirm modal (v1.12.0) ────────────────────────
@@ -1051,6 +1061,10 @@
 /* "Add to Shared Drive" action: a separate way to share, below the link controls, across all scopes. The
    description wraps on the LEFT and the button stays on the RIGHT (item 4). */
 .df-share__shared-drive { display: flex; align-items: center; gap: var(--spacing-md); margin-top: var(--spacing-sm); padding-top: var(--spacing-sm); border-top: 1px solid var(--border-color); }
+/* "Copy invite text" guidance row (non-public shares). Same layout as the Shared-Drive row, but its OWN class:
+   piggybacking .df-share__shared-drive made its `display:flex` defeat the `hidden` attribute (author rule beats
+   the UA [hidden] rule), so the row showed before any link existed. :not([hidden]) keeps hidden working. */
+.df-share__invite-row:not([hidden]) { display: flex; align-items: center; gap: var(--spacing-md); margin-top: var(--spacing-sm); }
 .df-share__shared-drive-hint { flex: 1 1 auto; min-width: 0; font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.4; }
 .df-share__add-drive { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; }
 /* R8 — "Sharing" status block: is this diagram shared, with whom, copy vs collaborate. Sits above the
@@ -1066,13 +1080,11 @@
 .df-share__status-icon use { fill: currentColor; }
 /* "Manage" / "View original" - a compact amber WIRE button (wash on hover), right-aligned + vertically centred. */
 .df-share__manage-btn {
-  --_amber: #D4911F;
   flex: 0 0 auto; display: inline-flex; align-items: center; white-space: nowrap;
   padding: 4px 10px; font-size: 12px; font-weight: 600; text-decoration: none;
-  border: 1px solid var(--_amber); border-radius: var(--border-radius-sm); color: var(--_amber);
+  border: 1px solid var(--brand-amber-strong); border-radius: var(--border-radius-sm); color: var(--brand-amber-strong);
 }
-[data-theme="dark"] .df-share__manage-btn { --_amber: var(--brand-amber); }
-.df-share__manage-btn:hover { background: color-mix(in srgb, var(--_amber) 12%, transparent); }
+.df-share__manage-btn:hover { background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent); }
 /* (i) panel: Copy / Collab in point form (vs the pros/cons two-column layout). */
 .df-share__info-points { margin: 0; padding-left: 18px; font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.5; }
 .df-share__info-points strong { color: var(--text-primary); }
@@ -1143,15 +1155,6 @@
 .df-review-picker__desc { margin: 0 0 14px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
 .df-review-picker__h { margin: 14px 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .df-review-picker__h:first-of-type { margin-top: 0; }
-.df-review-picker__row {
-  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
-  width: 100%; padding: 9px 12px; margin: 0 0 6px;
-  border: 1px solid var(--border-color); border-radius: 8px;
-  background: var(--bg-app); cursor: pointer; text-align: left; font-family: var(--font-family);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-.df-review-picker__row:hover { border-color: var(--color-primary); background: var(--toolbar-button-hover); }
-.df-review-picker__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .df-review-picker__sub { font-size: 11px; color: var(--text-muted); }
 .df-review-picker__empty { margin: 8px 0 0; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
 /* The signed-out "Sign in to Google Drive" CTA sits right under its explainer line — give it breathing room
@@ -1174,14 +1177,14 @@
 .df-review-bar__stat i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .df-review-bar__stat--add i { background: #2E9E5B; }
 .df-review-bar__stat--chg i { background: #E8881A; }
-.df-review-bar__stat--del i { background: #DA4E55; }
+.df-review-bar__stat--del i { background: var(--brand-red); }
 .df-review-bar__exit { white-space: nowrap; }
 /* On a phone the bar drops the long title and keeps the stats + Exit compact. */
 @media (max-width: 768px) { .df-review-bar { gap: 10px; padding: 8px 10px 8px 14px; } .df-review-bar__title { display: none; } }
 
 /* ── Loose-connector pre-save warning (NBA #3, refocused) — banner inside the Save & Export manager ── */
 .df-save-mgr__loose { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; color: var(--text-primary); background: rgba(218, 78, 85, 0.12); border: 1px solid rgba(218, 78, 85, 0.45); }
-.df-save-mgr__loose-icon { flex: 0 0 auto; color: #DA4E55; display: inline-flex; }
+.df-save-mgr__loose-icon { flex: 0 0 auto; color: var(--brand-red); display: inline-flex; }
 .df-save-mgr__loose-text { flex: 1 1 auto; }
 .df-save-mgr__loose-review { flex: 0 0 auto; }
 
@@ -1320,15 +1323,13 @@
 .df-modal__btn.df-save-mgr__drivebtn {
   /* Brand-amber WIRE (uses the #D4911F light / --brand-amber dark split, like --amber-outline, since #F6B355 is too
      pale on white). Reads as a Drive destination, matched to "Add to Shared Drive" + "Back up now". */
-  --_amber: #D4911F;
   display: inline-flex; align-items: center; gap: 6px;
   background: transparent;
-  border-color: var(--_amber);
-  color: var(--_amber);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
-[data-theme="dark"] .df-modal__btn.df-save-mgr__drivebtn { --_amber: var(--brand-amber); }
 /* Hover stays a WIRE (transparent fill) - a faint amber wash, not a solid fill, so it never reads as the primary. */
-.df-modal__btn.df-save-mgr__drivebtn:hover:not(:disabled) { background: color-mix(in srgb, var(--_amber) 12%, transparent); color: var(--_amber); }
+.df-modal__btn.df-save-mgr__drivebtn:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent); color: var(--brand-amber-strong); }
 .df-save-mgr__drivebtn .df-toolbar__icon { width: 15px; height: 15px; }
 /* "Add to Shared Drive" is brand-amber outline (item 5) but still carries the Drive glyph + label, so it needs
    the inline-flex icon layout the blue drivebtn provided. The class is the JS hook (btnShared), kept for wiring. */
@@ -1348,19 +1349,9 @@
   color: var(--text-primary); background: var(--toolbar-bg);
   border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);
 }
-/* "Connect Google Drive" — blue wire (outline) button, not a full fill. Uses --brand-blue (the
-   same blue as the primary buttons) so it's blue in both themes, not --color-primary (red in dark). */
-.df-share__connect {
-  /* Brand-amber WIRE + wash-on-hover, uniform with "Save to Google Drive" / "Add to Shared Drive" (was blue). */
-  --_amber: #D4911F;
-  display: inline-flex; align-items: center; gap: 6px;   /* room for the Drive glyph (matches "Save to Google Drive") */
-  background: transparent;
-  color: var(--_amber);
-  border: 1px solid var(--_amber);
-}
-[data-theme="dark"] .df-share__connect { --_amber: var(--brand-amber); }
-.df-share__connect .df-toolbar__icon { width: 15px; height: 15px; }
-.df-share__connect:hover { background: color-mix(in srgb, var(--_amber) 12%, transparent); color: var(--_amber); }
+/* "Sign in to Google Drive" (Share unlock) deliberately has NO local style: it inherits the shared
+   filled-amber .df-modal__btn--accent, IDENTICAL to the Load / Version-history / Close & Delete sign-in
+   affordances (CR: one sign-in look everywhere; the old amber-wire override made this one an outlier). */
 
 /* Footer — shared between Save & Load */
 
@@ -1396,45 +1387,22 @@
   cursor: not-allowed;
 }
 
-/* ── Close tab confirmation modal ─────────────────── */
+/* ── Close-tab confirmation + backup-reminder buttons ─────────────────── */
+/* The close-confirm dialog + Close & Delete manager buttons now use the canonical .df-modal__btn family (C2);
+   only these backup-reminder overlay buttons keep .df-modal__btn as their base and override the fill. */
 
-.df-close-confirm__btn {
-  padding: 5px var(--spacing-sm);   /* D2: match the canonical .df-modal__btn size (was 6px 14px) */
-  border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-xs);   /* D2: 11px, matching .df-modal__btn (was --font-size-sm / 12px) */
-  font-family: var(--font-family);
-  font-weight: 500;
-  cursor: pointer;
-  /* Default (secondary): neutral grey fill — Close / Cancel. */
-  border: 1px solid transparent;
-  background: var(--modal-btn-neutral-bg);
-  color: var(--modal-btn-neutral-fg);
-  transition: background var(--transition-fast), color var(--transition-fast),
-              border-color var(--transition-fast);
+/* Backup reminder's "Connect Google Drive" (5c): the standard filled-amber Drive sign-in look. .df-modal__btn
+   already supplies inline-flex + gap so the multicolour Drive glyph centres on the text line. Placed AFTER
+   .df-modal__btn so the amber fill wins the same-specificity tie. */
+.df-backup-modal__connect {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-amber); border-color: var(--brand-amber); color: #1A1A1A;
 }
+.df-backup-modal__connect:hover { filter: brightness(1.06); background: var(--brand-amber); }
+.df-backup-modal__connect .df-toolbar__icon { width: 15px; height: 15px; }
 
-.df-close-confirm__btn:hover {
-  background: var(--modal-btn-neutral-bg-hover);
-  color: var(--modal-btn-neutral-fg);
-}
-
-/* Positive commit (Copy Link, Save and Close) — brand blue fill, both themes. */
-.df-close-confirm__btn--save {
-  background: var(--brand-blue);
-  border-color: var(--brand-blue);
-  color: #fff;
-}
-
-.df-close-confirm__btn--save:hover {
-  background: var(--brand-blue);
-  border-color: var(--brand-blue);
-  color: #fff;
-  opacity: 0.88;
-}
-
-/* Backup-reminder overlay: a backup button turns brand-green "✓ Backed up!"
-   on success and STAYS green until the overlay closes (no auto-revert, unlike
-   the share button). Beats the blue --save fill + its hover. */
+/* Backup button turns brand-green "✓ Backed up!" on success and STAYS green until the overlay closes (no
+   auto-revert). Beats the blue --primary fill + its hover. */
 .df-backup-modal__btn.is-backed,
 .df-backup-modal__btn.is-backed:hover {
   background: var(--brand-green);
@@ -1443,53 +1411,20 @@
   opacity: 1;
 }
 
-/* Delete diagram — fully destructive (removes the durable saved copy). Red outline, fills red on hover.
-   NOT the neutral grey fill of the base button (that was the "grey fill" bug on the inline-styled Delete). */
-.df-close-confirm__btn--delete {
-  background: transparent;
-  border-color: var(--brand-red);
-  color: var(--brand-red);
-}
-
-.df-close-confirm__btn--delete:hover {
-  background: var(--brand-red);
-  border-color: var(--brand-red);
-  color: #fff;
-}
-
-/* Discard changes — drops the unsaved edits but KEEPS the saved copy, so it reads as a cautionary (not
-   data-destroying) action: a muted outline distinct from the red Delete and the grey-fill Cancel. */
-.df-close-confirm__btn--discard {
-  background: transparent;
-  border-color: var(--border-color-strong);
-  color: var(--text-secondary);
-}
-
-.df-close-confirm__btn--discard:hover {
-  background: var(--toolbar-button-hover);
-  border-color: var(--text-secondary);
-  color: var(--text-primary);
-}
-
-/* Unsaved-changes footer can hold up to 4 outcomes (Cancel / Discard changes / Delete diagram / Save and
-   Close). Wrap as a safety on narrow widths; stack full-width on phones so the row never cramps (an earlier
-   4-button row was rolled back for exactly that). */
+/* Unsaved-changes footer can hold up to 4 outcomes (Cancel / Discard / Delete / Save). Wrap as a safety on
+   narrow widths; stack full-width on phones so the row never cramps (an earlier 4-button row was rolled back
+   for exactly that). Buttons are the canonical .df-modal__btn now (C2). */
 .df-close-confirm-modal .df-modal__footer { flex-wrap: wrap; }
 @media (max-width: 768px) {
   .df-close-confirm-modal .df-modal__footer { flex-direction: column; align-items: stretch; }
-  .df-close-confirm-modal .df-close-confirm__btn { width: 100%; }
+  .df-close-confirm-modal .df-modal__btn { width: 100%; }
 }
 
 /* ── Share modal ─────────────────────────────────── */
 
 .df-share-modal__url {
+  /* border / border-radius / background / color / font-size / font-family: shared standard-input base (layout.css) */
   width: 100%;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
-  color: var(--text-primary);
-  background: var(--bg-app);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
   padding: 8px 10px;
   outline: none;
   box-sizing: border-box;
@@ -1525,6 +1460,10 @@
 .df-field-modal__check-toggle .df-toolbar__checkbox-tick { opacity: 0; }
 .df-field-modal__check-toggle.is-checked { color: var(--color-primary); }
 .df-field-modal__check-toggle.is-checked .df-toolbar__checkbox-tick { opacity: 1; }
+/* A PK / FQK field is inherently required: the Required toggle stays ticked but is
+   locked (non-interactive) — the key type owns the value. Dimmed like the table view's
+   forced-nullable box (.df-tbl__check--locked). */
+.df-field-modal__check-toggle.is-locked { opacity: 0.5; cursor: not-allowed; }
 
 /* Import / Export Fields (CSV) — collapsible panel pinned between the (scrolling)
    field list and the modal footer. */
@@ -1764,7 +1703,7 @@
   align-items: center;
   justify-content: center;
 }
-.df-table-modal__del-btn:hover:not(:disabled) { color: var(--brand-red, #DA4E55); }
+.df-table-modal__del-btn:hover:not(:disabled) { color: var(--brand-red, var(--brand-red)); }
 .df-table-modal__del-btn:disabled { opacity: 0.25; cursor: default; }
 
 /* + Row / + Column add strips: dashed, fill their grid span, brand-blue on hover. */
@@ -1791,9 +1730,7 @@
 
 /* ── Mobile modal touch targets ──────────────────────────────── */
 @media (max-width: 768px) {
-  .df-modal__btn,
-  .df-close-confirm__btn,
-  .df-close-tabs__btn {   /* D2: was missing here, so Close-Multiple-Tabs buttons stayed tiny on phones */
+  .df-modal__btn {   /* every dialog button is .df-modal__btn now (C2), incl. the Close-confirm / Close & Delete rows */
     min-height: 44px;
     padding: 10px 16px;
     font-size: var(--font-size-md);
@@ -1909,21 +1846,16 @@
 }
 
 .df-ctx-menu__item {
+  /* width / border / font-size / font-family / cursor / white-space: shared .df-menu-item base (layout.css) */
   display: flex;
   align-items: center;
   gap: 9px;
-  width: 100%;
   text-align: left;
   padding: 6px 14px;
   background: none;
-  border: none;
   border-radius: var(--border-radius-sm);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
   font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
 }
 .df-ctx-menu__icon { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 16px; color: var(--text-muted); }
 .df-ctx-menu__item:hover:not(:disabled) .df-ctx-menu__icon { color: inherit; }
@@ -2043,13 +1975,11 @@
 /* Skip — brand-amber OUTLINE (no fill); fills amber on hover. Darker amber in light mode for
    WCAG text contrast (mirrors the export "Back up now" button); brand-amber in dark mode. */
 .df-tour__skip {
-  --_skip-amber: #D4911F;
   background: transparent;
-  border-color: var(--_skip-amber);
-  color: var(--_skip-amber);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
-[data-theme="dark"] .df-tour__skip { --_skip-amber: var(--brand-amber); }
-.df-tour__skip:hover { background: var(--_skip-amber); border-color: var(--_skip-amber); color: #1C1E21; }
+.df-tour__skip:hover { background: var(--brand-amber-strong); border-color: var(--brand-amber-strong); color: #1C1E21; }
 
 /* Back — brand-blue OUTLINE (no fill); fills blue on hover. Mirrors the amber
    "Back up now" outline pattern, swapped to the brand-blue navigation colour. */

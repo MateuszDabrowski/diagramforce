@@ -11,8 +11,9 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.19.1.1';
-import { showError, showToast } from './feedback.js?v=1.19.1.1';
+import { createElementFromComponent } from './components.js?v=1.19.2.99';
+import { ER_MARKER_D } from './er-markers.js?v=1.19.2.99';
+import { showError, showToast } from './feedback.js?v=1.19.2.99';
 
 let modules = {};
 
@@ -242,7 +243,7 @@ function dedupeTabName(baseName) {
  * 3. Barycentric ordering within each layer to reduce crossings.
  * 4. Place nodes on a grid; back-edges are still routed by sfManhattan.
  */
-export function hierarchicalLayout(graph, _parsed, direction) {
+function hierarchicalLayout(graph, _parsed, direction) {
   const elements = graph.getElements();
   if (elements.length === 0) return;
   const H_GAP = 80;   // space between layers
@@ -386,7 +387,7 @@ function defaultTabName(type) {
 
 // ─── Detection ─────────────────────────────────────────────────────────────
 
-function detectDiagramType(text) {
+export function detectDiagramType(text) {
   const lines = text.split('\n');
   for (let raw of lines) {
     const line = raw.trim();
@@ -406,7 +407,7 @@ function detectDiagramType(text) {
 
 // ─── Top-level dispatch ────────────────────────────────────────────────────
 
-function parseMermaid(text, kind) {
+export function parseMermaid(text, kind) {
   // Strip %% comments and directive blocks
   const cleaned = stripComments(text);
   switch (kind) {
@@ -443,7 +444,7 @@ const FLOW_SHAPES = [
   { open: '{',   close: '}',   shape: 'rhombus' },
 ];
 
-function parseFlowchart(text, targetType) {
+export function parseFlowchart(text, targetType) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   const elementsById = new Map();
@@ -659,7 +660,7 @@ function flowComponent(label, shape, targetType) {
 
 // ─── State diagram parser ──────────────────────────────────────────────────
 
-function parseStateDiagram(text) {
+export function parseStateDiagram(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const elementsById = new Map();
   const links = [];
@@ -709,7 +710,7 @@ function parseStateDiagram(text) {
 
 // ─── ER diagram parser ─────────────────────────────────────────────────────
 
-function parseErDiagram(text) {
+export function parseErDiagram(text) {
   const lines = text.split('\n');
   const entities = new Map(); // name → { fields: [] }
   const rels = [];
@@ -835,9 +836,9 @@ function buildLink(lk, src, tgt) {
   if (lk.erTarget) {
     targetMarker = erMarkerPath(lk.erTarget, strokeColor);
   } else if (lk.arrow === false) {
-    targetMarker = { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
+    targetMarker = { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
   } else {
-    targetMarker = { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' };
+    targetMarker = { type: 'path', d: ER_MARKER_D.arrow };
   }
 
   // Source marker
@@ -845,7 +846,7 @@ function buildLink(lk, src, tgt) {
   if (lk.erSource) {
     sourceMarker = erMarkerPath(lk.erSource, strokeColor);
   } else {
-    sourceMarker = { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
+    sourceMarker = { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
   }
 
   const lineAttrs = {
@@ -968,7 +969,7 @@ function inferSequenceRole(id, label) {
  * Returns the standard parser payload plus `isSequence: true` so that the
  * importer can skip auto-layout / port-snapping.
  */
-function parseSequenceDiagram(text) {
+export function parseSequenceDiagram(text) {
   const lines = text.split('\n');
 
   // ── Pass 1: tokenise into a flat event stream ───────────────────────────
@@ -1298,12 +1299,12 @@ function buildSequenceLink(lk, src, tgt) {
   // Target marker — open V-head for async / open, filled triangle for sync.
   let targetMarker;
   if (lk.arrow === 'openAsync' || lk.arrow === 'open') {
-    targetMarker = { type: 'path', d: 'M 0 -6 L -14 0 L 0 6', fill: 'none', stroke: strokeColor, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+    targetMarker = { type: 'path', d: ER_MARKER_D.lineArrow, fill: 'none', stroke: strokeColor, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
   } else if (lk.arrow === 'lost') {
     // Simple X at the tip to indicate lost message
     targetMarker = { type: 'path', d: 'M -10 -6 L 0 6 M -10 6 L 0 -6', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
   } else {
-    targetMarker = { type: 'path', d: 'M 0 -6 L -14 0 L 0 6 z' };
+    targetMarker = { type: 'path', d: ER_MARKER_D.arrow };
   }
 
   const srcW = (src.get('size') || {}).width || 140;
@@ -1351,17 +1352,17 @@ function erMarkerPath(name, stroke) {
   const BG = 'var(--bg-canvas, #1A1A1A)';
   switch (name) {
     case 'one':
-      return { type: 'path', d: 'M -12 -8 L -12 8 M -12 0 L 0 0', fill: 'none', stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.one, fill: 'none', stroke, 'stroke-width': 2 };
     case 'zeroOne':
-      return { type: 'path', d: 'M 2 0 a 5 5 0 1 1 -10 0 a 5 5 0 1 1 10 0 Z M -8 0 L -12 0 M -12 -8 L -12 8', fill: BG, stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.zeroOne, fill: BG, stroke, 'stroke-width': 2 };
     case 'many':
-      return { type: 'path', d: 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0', fill: 'none', stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.many, fill: 'none', stroke, 'stroke-width': 2 };
     case 'oneMany':
-      return { type: 'path', d: 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8', fill: 'none', stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.oneMany, fill: 'none', stroke, 'stroke-width': 2 };
     case 'zeroMany':
-      return { type: 'path', d: 'M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0', fill: BG, stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.zeroMany, fill: BG, stroke, 'stroke-width': 2 };
     case 'none':
     default:
-      return { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke, 'stroke-width': 2 };
+      return { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke, 'stroke-width': 2 };
   }
 }

@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -247,7 +247,9 @@ function recomputeCrossingBumps() {
   refreshCrossingBumpOpacity();
 }
 
-function getLinkOrthogonalSegments(linkView) {
+// Exported for unit testing (S7 coverage gap — the router.js precedent). Pure given a
+// linkView-shaped object ({ route, sourcePoint, targetPoint }); reads only module consts.
+export function getLinkOrthogonalSegments(linkView) {
   const route = linkView.route || [];
   const src = linkView.sourcePoint;
   const tgt = linkView.targetPoint;
@@ -290,7 +292,10 @@ function getLinkOrthogonalSegments(linkView) {
   return out;
 }
 
-function findOrthoCrossing(segA, segB, buffer) {
+// Exported for unit testing (S7 coverage gap). PURE geometry: given two orthogonal
+// segments ({a:{x,y}, b:{x,y}}) + an endpoint buffer, returns the {x,y} of a TRUE 4-way
+// crossing (both segments pass through, neither ends near it) or null. Reads only BUMP_ORTHO_TOL.
+export function findOrthoCrossing(segA, segB, buffer) {
   const aIsH = Math.abs(segA.a.y - segA.b.y) < BUMP_ORTHO_TOL;
   const aIsV = Math.abs(segA.a.x - segA.b.x) < BUMP_ORTHO_TOL;
   const bIsH = Math.abs(segB.a.y - segB.b.y) < BUMP_ORTHO_TOL;

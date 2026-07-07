@@ -168,14 +168,9 @@
 /* ── Inputs ────────────────────────────────────────────── */
 
 .df-properties__input {
+  /* border / border-radius / background / color / font-size / font-family: shared standard-input base (layout.css) */
   width: 100%;
   padding: 6px var(--spacing-sm);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--bg-app);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   box-sizing: border-box;
 }
@@ -273,11 +268,7 @@
 .df-properties__input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
-}
-
-[data-theme="dark"] .df-properties__input:focus {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .df-properties__select {
@@ -297,11 +288,7 @@
 .df-properties__select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
-}
-
-[data-theme="dark"] .df-properties__select:focus {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 /* ── Slide toggle (on/off switch) ─────────────────────── */
@@ -354,11 +341,7 @@
 }
 
 .df-properties__toggle-input:focus-visible + .df-properties__toggle-track {
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.25);
-}
-
-[data-theme="dark"] .df-properties__toggle-input:focus-visible + .df-properties__toggle-track {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 /* ── Segmented slider (two-position choice) ───────────── */
@@ -404,18 +387,7 @@
 
 .df-properties__segmented-option:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(53, 120, 229, 0.35);
-}
-
-[data-theme="dark"] .df-properties__segmented-option:focus-visible {
-  box-shadow: 0 0 0 2px rgba(218, 78, 85, 0.35);
-}
-
-/* Compact variant — a 4-stop slider (None / New / Removed / Changed for the Highlight overlay).
-   Tighter padding + font so four labels fit the panel width without wrapping. */
-.df-properties__segmented--compact .df-properties__segmented-option {
-  padding: 3px 4px;
-  font-size: 11px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
 /* ── Color field ───────────────────────────────────────── */
@@ -540,22 +512,18 @@
   text-align: center;
   cursor: pointer;
   opacity: 0;
-  pointer-events: none;   /* not clickable until revealed — stops accidental deletes while applying */
-  transition: opacity var(--transition-fast), pointer-events 0s;
+  pointer-events: none;   /* not clickable until revealed via .is-removable (JS-armed) */
+  transition: opacity var(--transition-fast);
 }
-/* Reveal the × only after a LONG hover (the delay) — a quick click on the swatch applies the colour
-   instead, so you stop deleting swatches you meant to apply. */
-.df-prop-palette-swatch:hover .df-prop-palette-swatch__remove,
-.df-prop-palette-swatch:focus-within .df-prop-palette-swatch__remove {
-  opacity: 1;
-  pointer-events: auto;
-  transition-delay: 0.55s;
-}
-/* Right-click on a swatch reveals the × immediately (no wait). */
+/* The × is revealed — visible AND clickable ATOMICALLY — only when the swatch carries .is-removable, which
+   JS (renderPalette) adds after a LONG continuous hover or immediately on right-click, plus on keyboard focus.
+   Deliberately NOT a bare CSS `:hover` transition-delay: browsers flip `pointer-events:auto` at the START of
+   the hover while `opacity` respects the delay, so the delete target went live BEFORE the × was visible —
+   clicking a swatch to APPLY it deleted it instead (user-reported). Gating on a JS class keeps the two in sync. */
+.df-prop-palette-swatch:focus-within .df-prop-palette-swatch__remove,
 .df-prop-palette-swatch.is-removable .df-prop-palette-swatch__remove {
   opacity: 1;
   pointer-events: auto;
-  transition-delay: 0s;
 }
 .df-prop-palette-swatch__remove:hover {
   color: var(--brand-red);
@@ -597,11 +565,7 @@
 
 .df-prop-icon-preview:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.12);
-}
-
-[data-theme="dark"] .df-prop-icon-preview:focus-within {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .df-prop-icon-swatch {
@@ -653,7 +617,7 @@
 
 .df-prop-icon-clear:hover {
   background: rgba(218, 78, 85, 0.15);
-  color: #DA4E55;
+  color: var(--brand-red);
 }
 
 /* ── Action buttons ────────────────────────────────────── */
@@ -787,18 +751,13 @@
 
 /* Convert — orange accent (darker in light mode for WCAG contrast) */
 .df-properties__btn--convert {
-  --_convert-color: #D4911F;
-  border-color: var(--_convert-color);
-  color: var(--_convert-color);
-}
-
-[data-theme="dark"] .df-properties__btn--convert {
-  --_convert-color: var(--brand-amber);
+  border-color: var(--brand-amber-strong);
+  color: var(--brand-amber-strong);
 }
 
 .df-properties__btn--convert:hover {
-  background: var(--_convert-color);
-  border-color: var(--_convert-color);
+  background: var(--brand-amber-strong);
+  border-color: var(--brand-amber-strong);
   color: #fff;
 }
 
@@ -834,13 +793,13 @@
 
 /* Delete — red danger */
 .df-properties__btn--delete {
-  border-color: #DA4E55;
-  color: #DA4E55;
+  border-color: var(--brand-red);
+  color: var(--brand-red);
 }
 
 .df-properties__btn--delete:hover {
-  background: #DA4E55;
-  border-color: #DA4E55;
+  background: var(--brand-red);
+  border-color: var(--brand-red);
   color: #fff;
 }
 
@@ -883,9 +842,9 @@
   padding: 0;
   text-align: center;
 }
-.df-field-key--pk { color: #F6B355; border-color: #F6B355; }
-.df-field-key--fk { color: #1D73C9; border-color: #1D73C9; }
-.df-field-key--fqk { color: #DA4E55; border-color: #DA4E55; }   /* Fully Qualified Key — brand red */
+.df-field-key--pk { color: var(--brand-amber); border-color: var(--brand-amber); }
+.df-field-key--fk { color: var(--brand-blue); border-color: var(--brand-blue); }
+.df-field-key--fqk { color: var(--brand-red); border-color: var(--brand-red); }   /* Fully Qualified Key — brand red */
 
 .df-field-input {
   height: 22px;
@@ -927,7 +886,7 @@
 }
 .df-field-delete:hover {
   background: rgba(218, 78, 85, 0.2);
-  color: #DA4E55;
+  color: var(--brand-red);
 }
 
 .df-properties__btn--add-field {
@@ -1025,19 +984,14 @@
 }
 
 .df-marker-picker__item {
+  /* width / border / font-size / font-family / cursor / white-space: shared .df-menu-item base (layout.css) */
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
   padding: 5px 10px;
-  border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
-  cursor: pointer;
   text-align: left;
-  white-space: nowrap;
 }
 
 .df-marker-picker__item:hover {
@@ -1438,14 +1392,14 @@
   padding: 5px var(--spacing-sm);
   background: transparent;
   border: 2px solid transparent;   /* 2px reserved so the selected dash/dotted border adds no layout shift */
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--border-radius-sm);
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.df-shapestate__row:hover { background: var(--bg-hover, var(--border-color)); }
+.df-shapestate__row:hover { background: var(--toolbar-button-hover); }
 /* The checkbox is an SVG box stroked in the state's own colour + dash (the example visual lives ON the border).
    The white tick is hidden until the row is selected; the box fills with the state colour then. */
 .df-shapestate__check {

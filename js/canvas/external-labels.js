@@ -18,7 +18,7 @@
 // Reads the live graph/paper + the load guard via the canvas context (cctx);
 // canvas.js calls initExternalLabelAutoplace() once in init() after the cctx
 // hydration block, and keeps cctx.isLoadingJSON synced in setLoadingJSON().
-import { cctx } from './context.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
 
 const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnEvent',
@@ -26,12 +26,29 @@ const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnDataObject',
 ]);
 
-const LABEL_SIDE_ATTRS = {
+export const EXTERNAL_LABEL_SIDES = ['bottom', 'top', 'right', 'left'];
+
+export const LABEL_SIDE_ATTRS = {
   bottom: { x: 'calc(0.5 * w)', y: 'calc(h + 10)', textAnchor: 'middle', textVerticalAnchor: 'top' },
   top:    { x: 'calc(0.5 * w)', y: -10,            textAnchor: 'middle', textVerticalAnchor: 'bottom' },
   right:  { x: 'calc(w + 10)',  y: 'calc(0.5 * h)', textAnchor: 'start', textVerticalAnchor: 'middle' },
   left:   { x: -10,             y: 'calc(0.5 * h)', textAnchor: 'end',   textVerticalAnchor: 'middle' },
 };
+
+/**
+ * Pure side-selection: pick the label side by priority bottom → top → right → left,
+ * choosing the FIRST side that has no connecting link; if all four are in use, fall
+ * back to bottom (accept the collision rather than leave the label off-canvas).
+ * Exported for unit testing (the router.js precedent — extract the pure decision).
+ * @param {Set<string>} usedSides sides ('bottom'|'top'|'right'|'left') that have a link
+ * @returns {string} the chosen side, always a key of LABEL_SIDE_ATTRS
+ */
+export function pickLabelSide(usedSides) {
+  for (const side of EXTERNAL_LABEL_SIDES) {
+    if (!usedSides.has(side)) return side;
+  }
+  return 'bottom';
+}
 
 function computeUsedPortSides(cell) {
   const { graph } = cctx;
@@ -58,12 +75,7 @@ function refreshExternalLabelPosition(cell) {
   if (!cell?.get || !paper) return;
   if (!EXTERNAL_LABEL_SHAPES.has(cell.get('type'))) return;
   const used = computeUsedPortSides(cell);
-  // Priority: bottom (default) → top → right → left → bottom (fallback)
-  const preferred = ['bottom', 'top', 'right', 'left'];
-  let chosen = 'bottom';
-  for (const side of preferred) {
-    if (!used.has(side)) { chosen = side; break; }
-  }
+  const chosen = pickLabelSide(used);
   const sideAttrs = LABEL_SIDE_ATTRS[chosen];
   const existing = cell.attr('label') || {};
   // Skip if already correct (avoids redundant attr writes that re-render

@@ -7,10 +7,10 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.19.1.1';
-import { pctx } from './context.js?v=1.19.1.1';
-import { compactGraphForSave } from './json-pipeline.js?v=1.19.1.1';
-import { countDiagramShapes } from '../util.js?v=1.19.1.1';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.19.2.99';
+import { pctx } from './context.js?v=1.19.2.99';
+import { compactGraphForSave } from './json-pipeline.js?v=1.19.2.99';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.19.2.99';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -137,6 +137,30 @@ export function getStorageFootprint() {
     bytes += (key.length + val.length) * 2;
   }
   return bytes;
+}
+
+/**
+ * The footprint SPLIT into user-meaningful buckets, so the storage gauge reconciles with what the
+ * Close & Delete / Load lists actually show (CR: "1.9 MB used" vs ~0.5 MB of visible diagrams - the
+ * difference was the session-restore blob, My Templates, and app settings, all counted but never itemised):
+ *  - diagrams:  the open-tabs session blob (`sf-diagrams-tabs`, a live copy of every open tab) + the named
+ *               browser archives (`sfdiag::save::*`) - what the delete lists can actually free.
+ *  - templates: the My Templates library (`sfdiag::customTemplates`).
+ *  - app:       everything else (theme, brand palette, Drive config/flags, one-time notices).
+ * Same UTF-16 accounting as getStorageFootprint; diagrams+templates+app === total.
+ */
+export function getStorageBreakdown() {
+  const b = { diagrams: 0, templates: 0, app: 0, total: 0 };
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key == null) continue;
+    const bytes = (key.length + (localStorage.getItem(key) || '').length) * 2;
+    b.total += bytes;
+    if (key === 'sf-diagrams-tabs' || key.startsWith(NAMED_SAVE_PREFIX)) b.diagrams += bytes;
+    else if (key === 'sfdiag::customTemplates') b.templates += bytes;
+    else b.app += bytes;
+  }
+  return b;
 }
 
 /**
@@ -320,7 +344,7 @@ function downloadSingleDiagram(name, diagramType, graphJSON, viewport, mappingMo
   const { triggerDownload, dateSuffix } = pctx;
   const data = buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode, group);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const safeName = (name || 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
+  const safeName = sanitizeFilenamePart(name, 'diagram');
   triggerDownload(URL.createObjectURL(blob), `df_${safeName}_${dateSuffix()}.json`);
 }
 
@@ -554,7 +578,7 @@ function showBackupReminderModal() {
     width: '480px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
     bodyHtml: '<p class="df-backup-modal__msg" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>',
-    footerHtml: `${canConnect ? '<button class="df-close-confirm__btn df-backup-modal__connect" style="margin-right:auto"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Connect Google Drive</button>' : ''}<button class="df-close-confirm__btn df-close-confirm__btn--save df-backup-modal__btn"${canConnect ? '' : ' style="margin-left:auto"'}>Export</button>`,
+    footerHtml: `${canConnect ? '<button class="df-modal__btn df-backup-modal__connect" style="margin-right:auto"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Connect Google Drive</button>' : ''}<button class="df-modal__btn df-modal__btn--primary df-backup-modal__btn"${canConnect ? '' : ' style="margin-left:auto"'}>Export</button>`,
   });
   // textContent (not innerHTML) for the body copy — no interpolation risk.
   body.querySelector('.df-backup-modal__msg').textContent = canConnect

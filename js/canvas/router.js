@@ -7,9 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.19.1.1';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.1.1';
-import { busTrunkXForLink } from './bus-routing.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.2.99';
 
 // ── Routing geometry constants ──
 const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -26,6 +25,54 @@ const SNAP_STRAIGHT = 4; // collapse a near-collinear orthogonal link to DEAD-ST
 // Slice 2 router extraction; the const stayed behind, leaving this an undefined
 // cross-module reference — relocating it here closes that gap.)
 const CHANNEL_HEIGHT = 16;
+
+// ── Per-reroute-pass cache (P1) ──────────────────────────────────────────────
+// rerouteAllLinks (link-runtime.js) re-routes EVERY link per animation frame while an element is dragged.
+// Without this, each link's router run rebuilt the FULL obstacle list (getBBox over all elements) and
+// gatherPortEnds rescanned all links for port-ends (up to ~6x per link) → O(L·E + L²) per frame.
+// beginRoutePass snapshots the obstacle bboxes + a portId→ends index ONCE; the router reads them for every
+// link in the pass; the caller MUST call endRoutePass in a `finally` — a leaked pass would feed stale
+// geometry to later single-link reroutes. Module-level because the router body is a per-call closure. The
+// snapshot's `graph` is checked at read time so a cache from another tab's graph is never used.
+// Element types that are NOT routing obstacles (routes may pass straight through them). Zones / text /
+// notes / BPMN pools / Gantt frames are backdrops. Sequence shapes are semantically pass-through: in UML a
+// message line may cross any lifeline / activation bar / fragment frame between its source and target, so
+// treating them as obstacles would force inter-participant connectors to detour around full-height columns.
+// (Per-link exclusions — a source/target's embedded parent container, a sequence self-loop's own cell — are
+// applied separately at route time via excludeIds, since they depend on the link, not the element type.)
+const OBSTACLE_SKIP_TYPES = new Set([
+  'sf.Zone', 'sf.TextLabel', 'sf.Note', 'sf.BpmnPool', 'sf.BpmnDataObject', 'sf.GanttTimeline', 'sf.GanttGroup',
+  'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation', 'sf.SequenceFragment',
+]);
+let _routePass = null;   // { graph, boxes: [{id, box}], portEnds: Map<"cellId::portId", [{link,end}]> } | null
+
+/** Open a reroute pass: snapshot the obstacle bboxes + the portId→ends index for `gr` once, so every link
+ *  routed until endRoutePass() reuses them instead of recomputing. Idempotent-ish: a second call re-snapshots. */
+export function beginRoutePass(gr) {
+  if (!gr) { _routePass = null; return; }
+  const boxes = [];
+  for (const el of gr.getElements()) {
+    if (OBSTACLE_SKIP_TYPES.has(el.get('type'))) continue;
+    const bb = el.getBBox();
+    if (bb) boxes.push({ id: el.id, box: { x: bb.x, y: bb.y, width: bb.width, height: bb.height } });
+  }
+  const portEnds = new Map();
+  const add = (id, port, link, end) => {
+    if (!id || !port) return;
+    const k = id + '::' + port;
+    let arr = portEnds.get(k); if (!arr) portEnds.set(k, arr = []);
+    arr.push({ link, end });
+  };
+  for (const l of gr.getLinks()) {
+    const s = l.get('source'), t = l.get('target');
+    add(s?.id, s?.port, l, 'source');
+    add(t?.id, t?.port, l, 'target');
+  }
+  _routePass = { graph: gr, boxes, portEnds };
+}
+
+/** Close the current reroute pass. MUST run in a `finally` around the batch (a leaked pass poisons later reroutes). */
+export function endRoutePass() { _routePass = null; }
 
 // ── Pure geometry helpers (exported for tests) ──
 // Best-effort calc() evaluator covering the handful of forms used by our
@@ -240,6 +287,11 @@ export function registerSfRouter() {
   // All link ends touching a physical port (cell id + port id), regardless of
   // whether the link defines that port as its source or target.
   function gatherPortEnds(gr, cellId, portId) {
+    // P1: served from the pass index when one is open for THIS graph (built identically, in gr.getLinks()
+    // order, so the returned set + ordering match the scan exactly).
+    if (_routePass && _routePass.graph === gr) {
+      return _routePass.portEnds.get(cellId + '::' + portId) || [];
+    }
     const ends = [];
     for (const l of gr.getLinks()) {
       const s = l.get('source');
@@ -346,82 +398,15 @@ export function registerSfRouter() {
     return Math.round((positionFraction - 0.5) * edgeLen);
   }
 
-  // Channel index for parallel-bus spreading (CR-5.3).  Returns the
-  // link's index (G) within its DIRECTION-MATCHED sibling group (N
-  // total) at this port, OR null when there's nothing to spread.
-  //
-  // Direction split: siblings whose targets sit on opposite sides of
-  // the source cell's centre travel in opposite directions in the bus
-  // area and their bus X ranges don't overlap — they can share the same
-  // Y axis without visual conflict. Only same-direction siblings need
-  // channel allocation (their bus X ranges DO overlap near the source).
-  // This promotes "shared axis when no overlap" while still spreading
-  // the cases where overlap would otherwise produce close-parallel piles.
-  //
-  // Duplicates trunkAnchorOffset's bucket build because the two end up
-  // wanting different return shapes; deliberate duplication > over-
-  // abstracted shared helper that mixes concerns.
-  function trunkChannelIndex(link, end, cell, side) {
-    if (!side || !cell) return null;
-    const gr = link.graph;
-    if (!gr) return null;
-    const portId = link.get(end)?.port;
-    if (!portId) return null;
-    const ends = gatherPortEnds(gr, cell.id, portId);
-    if (ends.length < 2) return null;
-    const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
-    const buckets = new Map();
-    for (const e of ends) {
-      const sig = endSignature(e.link, e.end);
-      let bucket = buckets.get(sig);
-      if (!bucket) { bucket = { coords: [] }; buckets.set(sig, bucket); }
-      const farRef = e.link.get(e.end === 'source' ? 'target' : 'source');
-      const farCell = farRef?.id ? gr.getCell(farRef.id) : null;
-      const farBB = farCell?.getBBox?.();
-      if (farBB) {
-        bucket.coords.push(tangentAxis === 'x'
-          ? centerX(farBB)
-          : centerY(farBB));
-      }
-    }
-    const sigEntries = [...buckets.entries()].map(([sig, b]) => ({
-      sig,
-      mean: b.coords.length ? b.coords.reduce((a, c) => a + c, 0) / b.coords.length : Infinity,
-    }));
-    sigEntries.sort((a, b) => a.mean - b.mean || a.sig.localeCompare(b.sig));
-    if (sigEntries.length < 2) return null;
-
-    const mySig = endSignature(link, end);
-    const myEntry = sigEntries.find(e => e.sig === mySig);
-    if (!myEntry) return null;
-
-    // Split by direction relative to the cell's centre on the tangent axis.
-    const bb = cell.getBBox();
-    if (!bb) return null;
-    const cellCenter = tangentAxis === 'x'
-      ? centerX(bb)
-      : centerY(bb);
-    const mySide = myEntry.mean <= cellCenter ? 'low' : 'high';
-    const sameDirEntries = sigEntries.filter(e =>
-      ((e.mean <= cellCenter) ? 'low' : 'high') === mySide
-    );
-    if (sameDirEntries.length < 2) return null;     // alone in this direction
-
-    const G = sameDirEntries.findIndex(e => e.sig === mySig);
-    if (G < 0) return null;
-    return { index: G, count: sameDirEntries.length };
-  }
-
   // Per-LINK channel index (CR-5.3 v2). Returns this link's position
   // among ALL link ends touching this port that head in the same
   // direction, OR null when there's nothing to spread.
   //
-  // Differs from trunkChannelIndex in that EVERY link gets its own
-  // channel — same-signature bundled links each receive a distinct
-  // channel index based on target position, so they fan out into
-  // visually separate buses instead of overlapping at a single shared Y.
-  // This is what makes a hub-and-spoke diagram look like 4 distinct
-  // connections instead of "1 line with a marker pile".
+  // EVERY link gets its own channel — same-signature bundled links each
+  // receive a distinct channel index based on target position, so they
+  // fan out into visually separate buses instead of overlapping at a
+  // single shared Y. This is what makes a hub-and-spoke diagram look
+  // like 4 distinct connections instead of "1 line with a marker pile".
   function linkChannelIndex(link, end, cell, side) {
     if (!side || !cell) return null;
     // Self-loops bypass channel allocation. A self-loop's source and
@@ -623,23 +608,20 @@ export function registerSfRouter() {
       }
     }
 
-    for (const el of gr.getElements()) {
-      const type = el.get('type');
-      if (type === 'sf.Zone' || type === 'sf.TextLabel' || type === 'sf.Note' || type === 'sf.BpmnPool' || type === 'sf.BpmnDataObject'
-        || type === 'sf.GanttTimeline' || type === 'sf.GanttGroup') continue;
-      // Sequence shapes are semantically pass-through — in UML a message line
-      // may cross any lifeline between source and target. Treating them as
-      // obstacles forces inter-participant connectors to detour around full-
-      // height columns, which looks broken. Activations are excluded too so
-      // messages can cross activation bars on intervening lifelines, and
-      // Fragments (loop/alt/opt frames) are excluded because messages are
-      // typically drawn THROUGH them. Self-loops still get the same-side
-      // override above, which is independent of the obstacle set.
-      if (type === 'sf.SequenceParticipant' || type === 'sf.SequenceActor'
-        || type === 'sf.SequenceActivation' || type === 'sf.SequenceFragment') continue;
-      if (excludeIds.has(el.id)) continue;
-      const bb = el.getBBox();
-      if (bb) obstacles.push({ x: bb.x, y: bb.y, width: bb.width, height: bb.height });
+    // P1: inside a reroute pass, reuse the snapshotted bboxes (getBBox already run once for the whole batch)
+    // and just apply this link's per-link exclusions. OBSTACLE_SKIP_TYPES was applied when the snapshot was
+    // built, so it's the SAME set the fallback loop skips below — see the note on OBSTACLE_SKIP_TYPES for why
+    // Zone/TextLabel/Note/BPMN-pool/Gantt/Sequence shapes are pass-through for routing.
+    if (_routePass && _routePass.graph === gr) {
+      for (const o of _routePass.boxes) if (!excludeIds.has(o.id)) obstacles.push(o.box);
+    } else {
+      for (const el of gr.getElements()) {
+        const type = el.get('type');
+        if (OBSTACLE_SKIP_TYPES.has(type)) continue;
+        if (excludeIds.has(el.id)) continue;
+        const bb = el.getBBox();
+        if (bb) obstacles.push({ x: bb.x, y: bb.y, width: bb.width, height: bb.height });
+      }
     }
 
     // Dead-straight snap (v1.19.0.28): pull a near-collinear opposing-side pair onto one shared axis so the link
@@ -768,22 +750,6 @@ export function registerSfRouter() {
         for (let i = 0; i < waypoints.length - 1; i++) {
           if (i > 0) route.push(waypoints[i]);
           route.push(...orthoRoute(waypoints[i], waypoints[i + 1], obstacles));
-        }
-        route.push(to);
-        return route;
-      }
-
-      // Global BUS routing (draft, flag-gated, ORTHOGONAL links only - mapping connectors never reach here).
-      // A hub-fan member rides a shared vertical trunk instead of fanning: [from -> (trunkX, from.y) ->
-      // (trunkX, to.y) -> to]. Reuses the manual-vertices path shape (orthoRoute between waypoints for obstacle
-      // safety). Returns null when off / not a hub member, so the normal path below is unchanged.
-      const _busTrunkX = _isSequenceSelfLoop ? null : busTrunkXForLink(gr, link);
-      if (_busTrunkX != null) {
-        const wps = [from, { x: _busTrunkX, y: from.y }, { x: _busTrunkX, y: to.y }, to];
-        const route = [from];
-        for (let i = 0; i < wps.length - 1; i++) {
-          if (i > 0) route.push(wps[i]);
-          route.push(...orthoRoute(wps[i], wps[i + 1], obstacles));
         }
         route.push(to);
         return route;

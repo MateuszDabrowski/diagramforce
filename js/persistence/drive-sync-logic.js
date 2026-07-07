@@ -448,6 +448,17 @@ export function archiveDedupName({ browserSaveName = null, driveKey = null, save
   return { fresh: true };
 }
 
+/** Ready-to-paste invite message for a NON-public Drive share link (Invite / Organisation scope). Under the
+ *  `drive.file` OAuth scope a recipient's FIRST open of a private share cannot direct-read the file (files.get
+ *  404s until they grant per-file access via the Picker's "Shared with me" view), so the app walks them through
+ *  a sign-in + a one-time picker. This message sets that expectation UP FRONT, so the recipient doesn't read
+ *  the extra step as "the link is broken". Pure - unit-tested. */
+export function inviteText({ name = 'Diagram', url = '', scope = 'user' } = {}) {
+  const who = scope === 'domain' ? 'your work Google account' : 'the Google account I invited';
+  return `Open my Diagramforce diagram "${name}": ${url}\n`
+    + `Sign in with ${who}. If Google asks on the first open, pick "${name}" in the "Shared with me" window - that is a one-time step.`;
+}
+
 /** Human size label for a revision's byte count: "—" (unknown) / "812 B" / "12.3 KB" / "1.2 MB".
  *  Drive omits `size` for some revisions, so null/undefined/'' are "unknown" — NOT 0 B. */
 export function revisionSizeLabel(bytes) {

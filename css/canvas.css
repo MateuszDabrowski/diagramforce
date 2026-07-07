@@ -21,13 +21,6 @@
   pointer-events: all;
 }
 
-/* Data Cloud mapping mode puts a port on EVERY field — revealing them all just
-   because the object is SELECTED is visual clutter. For DataObjects, reveal ports
-   only on object HOVER, never on bare selection (CR). The selected+hover rule wins
-   by specificity so hovering a selected object still shows them. */
-.joint-type-df-dataobject.selected .joint-port { opacity: 0; pointer-events: none; }
-.joint-type-df-dataobject.selected:hover .joint-port { opacity: 1; pointer-events: all; }
-
 /* sf.Link: the external-link icon hit area is a circle button — highlight on hover
    to signal it's clickable (opens the URL). The rest of the element just selects. */
 .joint-element[data-type="sf.Link"] [joint-selector="iconHit"] {
@@ -35,7 +28,7 @@
 }
 .joint-element[data-type="sf.Link"] [joint-selector="iconHit"]:hover {
   fill: rgba(29, 115, 201, 0.12);
-  stroke: #1D73C9;
+  stroke: var(--brand-blue);
 }
 
 /* Selection highlight — applied via JS classList.add('selected').
@@ -298,8 +291,8 @@ foreignObject[data-md] del { text-decoration: line-through; }
 /* ── Touch: larger ports & link tools ─────────────────────────── */
 /* Gated on coarse pointer too (not just narrow width) so a TABLET in desktop layout (>768px, touch,
    no hover) can reveal + grab ports to draw links. The `.joint-element.selected .joint-port` reveal
-   below also overrides the DataObject "hover-only" hide (canvas.css ~28) by equal specificity + later
-   source order, so DataObject ER/mapping links become drawable on touch. */
+   below shows ports on the tapped element (DataObjects included), so their ER/mapping links stay
+   drawable on touch. */
 @media (max-width: 768px), (pointer: coarse) {
   /* Make ports bigger for touch (scale up from 5px radius to ~12px) */
   .joint-port circle {
@@ -334,11 +327,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
 
 .df-inline-edit__input {
   pointer-events: all;
-  box-shadow: 0 0 0 3px rgba(53, 120, 229, 0.2);
-}
-
-[data-theme="dark"] .df-inline-edit__input {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 /* ── Animated connector flow ─────────────────────────────────── */

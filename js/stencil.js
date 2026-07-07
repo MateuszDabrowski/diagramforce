@@ -1,16 +1,16 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.19.1.1';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './canvas/gantt-layout.js?v=1.19.1.1';
-import { cctx } from './canvas/context.js?v=1.19.1.1';
-import { getAllIcons, getCategories } from './icons.js?v=1.19.1.1';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost } from './canvas.js?v=1.19.1.1';
-import { startImageAddFlow } from './image-component.js?v=1.19.1.1';
-import * as history from './history.js?v=1.19.1.1';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.19.1.1';
-import { confirmModal } from './feedback.js?v=1.19.1.1';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.19.1.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.19.2.99';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.19.2.99';
+import { getAllIcons, getCategories } from './icons.js?v=1.19.2.99';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.19.2.99';
+import { startImageAddFlow } from './image-component.js?v=1.19.2.99';
+import * as history from './history.js?v=1.19.2.99';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.19.2.99';
+import { confirmModal } from './feedback.js?v=1.19.2.99';
+import { escHtml } from './util.js?v=1.19.2.99';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.19.2.99'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -390,24 +390,13 @@ function buildCategoryHeader(label, count) {
     <svg class="df-stencil__category-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
       <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    <span>${escapeHtml(label)}</span>`;
+    <span>${escHtml(label)}</span>`;
   const countSpan = document.createElement('span');
   countSpan.className = 'df-stencil__category-count';
   countSpan.textContent = count;
   header.appendChild(left);
   header.appendChild(countSpan);
   return header;
-}
-
-// Local HTML escape — kept inline so the stencil module has no
-// cross-module dependency on persistence.js just for one helper.
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 function buildComponentItem(template) {
@@ -467,7 +456,7 @@ function endDropGhost() {
   _ghostDragSize = null;
   _ghostDragType = null;
   hideDropGhost();
-  cctx.clearGanttDateChip?.();   // issue 6: also clear the phase-insert overlay bar
+  clearGanttDateChip();   // issue 6: also clear the phase-insert overlay bar
 }
 function refreshDropGhost(clientX, clientY) {
   if (!_ghostDragSize || !_ghostDragType) { hideDropGhost(); return; }
@@ -481,9 +470,9 @@ function refreshDropGhost(clientX, clientY) {
     const pt = paper.clientToLocalPoint(clientX, clientY);
     const tls = graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
     const tl = tls.find(e => e.getBBox().containsPoint(pt)) || (tls.length === 1 ? tls[0] : null);
-    if (tl && _ghostDragType === 'sf.GanttGroup') cctx.showGanttGroupInsertBar?.(tl, ganttGroupInsertSlotY(tl, pt.y));
-    else if (tl) { const tgt = ganttDropTarget(tl, pt.y, null); cctx.showGanttGroupInsertBar?.(tl, tgt.lineLocalY, 2.5); }
-    else cctx.clearGanttDateChip?.();
+    if (tl && _ghostDragType === 'sf.GanttGroup') showGanttGroupInsertBar(tl, ganttGroupInsertSlotY(tl, pt.y));
+    else if (tl) { const tgt = ganttDropTarget(tl, pt.y, null); showGanttGroupInsertBar(tl, tgt.lineLocalY, 2.5); }
+    else clearGanttDateChip();
     return;
   }
   const pt = paper.clientToLocalPoint(clientX, clientY);
@@ -543,7 +532,7 @@ function setupDropZone() {
   canvasEl.addEventListener('dragleave', (evt) => {
     // Only clear when the cursor actually leaves the canvas — dragleave
     // fires on every child boundary crossing too.
-    if (evt.target === canvasEl) { clearDropHighlight(); hideDropGhost(); cctx.clearGanttDateChip?.(); }
+    if (evt.target === canvasEl) { clearDropHighlight(); hideDropGhost(); clearGanttDateChip(); }
   });
 
   canvasEl.addEventListener('drop', (evt) => {

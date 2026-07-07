@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.19.1.1';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.2.99';
 
 // ── Tolerances ──────────────────────────────────────────────────────
 const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)
@@ -77,7 +77,11 @@ function buildSpacingDragContext(moved, originParent) {
 // a pair of peers on the given axis, with edge-to-edge gaps matching within
 // SPACING_TOL. Returns the closest match (smallest delta) or null. Three cases
 // per pair (A, B) sorted by axis-center: A→B→Dragged, Dragged→A→B, A→Dragged→B.
-function findSequentialSpacing(movedBB, peers, axis) {
+// Exported for unit testing (S7 coverage gap — the router.js precedent). PURE: given the
+// dragged element's bbox, the row/column peer bboxes ({bb}), and an axis ('x'|'y'), returns
+// the closest sequential-rhythm match ({delta, expectedCenter, gap, A, B, proximity}) within
+// SPACING_TOL, or null. Depends only on args + the util/geometry helpers + SPACING_TOL.
+export function findSequentialSpacing(movedBB, peers, axis) {
   // Helper: get "near" and "far" edges along the axis
   const edgeNear = (bb) => axis === 'x' ? bb.x : bb.y;
   const edgeFar  = (bb) => axis === 'x' ? right(bb) : bottom(bb);

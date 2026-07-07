@@ -381,18 +381,13 @@
 }
 
 .df-toolbar__menu-item {
+  /* width / border / font-size / font-family / cursor / white-space: shared .df-menu-item base (layout.css) */
   display: block;
-  width: 100%;
   padding: 6px 14px;
-  border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
   font-weight: 500;
   text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
 }
 
 .df-toolbar__menu-item:hover:not(:disabled) {

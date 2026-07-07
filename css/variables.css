@@ -3,20 +3,20 @@
   --brand-blue: #1D73C9;
   --brand-red: #DA4E55;
   --brand-amber: #F6B355;
+  /* "Legible amber": #F6B355 is too light to read on a light background, so amber accents (Save-manager backup,
+     amber-outline buttons, convert buttons, the format-glyph wire, Skip-tour) use this darker amber in LIGHT
+     mode; theme.css swaps it back to --brand-amber in DARK. Single source for what were 7 private --_amber vars. */
+  --brand-amber-strong: #D4911F;
   --brand-green: #27AE60;   /* Success / confirmation accent (e.g. "Copied!" feedback) */
   --brand-primary: var(--brand-blue);   /* the primary brand hue, theme-stable (does NOT flip like --color-primary) — used for focus rings / brand hovers */
 
   /* Cloud-sync status — theme-stable semantic hues. Deliberately NOT --color-primary
      (which flips blue↔red between themes); each picks the stop legible on its bg.
      Dark-mode values in theme.css. Light = darker stops for contrast on white. */
-  --sync-off: #8A8F98;
-  --sync-ok: var(--brand-blue);       /* "working" — blue in light, orange in dark (theme.css) */
-  --sync-pending: var(--brand-blue);  /* pending is calm too — same as ok, just different text */
   --sync-error: #A32D2D;
 
   /* Semantic colors (overridden per theme) */
   --color-primary: var(--brand-blue);
-  --color-secondary: var(--brand-red);
   --color-accent: var(--brand-amber);
   --color-danger: var(--brand-red);   /* destructive actions (delete / discard) — brand red, theme-stable */
 
@@ -68,21 +68,18 @@
   --properties-width: 256px;
 
   /* Canvas */
-  --canvas-grid-color: rgba(0, 0, 0, 0.08);
 
   /* Sizing */
   --toolbar-height: 50px;   /* trimmed from 60: the icons/controls are unchanged (~32px), this just removes the
                                excess whitespace above/below them to reclaim ~10px of vertical canvas on laptops */
   --border-radius-sm: 6px;
   --border-radius-md: 8px;
-  --border-radius-lg: 12px;
 
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
   --spacing-lg: 16px;
-  --spacing-xl: 24px;
 
   /* Shared height of the panel header rows (right-sidebar search header + the
      Data Mapping table topbar) so their bottom borders line up into one
@@ -96,7 +93,6 @@
   --font-size-sm: 12px;
   --font-size-md: 14px;
   --font-size-lg: 16px;
-  --font-size-xl: 20px;
   --line-height: 1.65;
 
   /* Shadows */
@@ -115,12 +111,9 @@
   --node-border: #DADDE1;
   --node-text: #1C1E21;
   --node-subtitle: rgba(0, 0, 0, 0.45);
-  --node-radius: 8px;
   --container-bg: #F5F6F7;
   --container-border: #DADDE1;
-  --container-text: #1C1E21;
   --port-color: var(--brand-blue);
-  --port-size: 10px;
   --selection-color: var(--brand-blue);
   --gantt-phase-fill: #2A2D32;
   --gantt-task-uncompleted: #C9CDD3;

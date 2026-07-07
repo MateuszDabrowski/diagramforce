@@ -21,9 +21,10 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.19.1.1';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.19.1.1';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.19.1.1';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.19.2.99';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.19.2.99';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.19.2.99';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.19.2.99';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -191,15 +192,7 @@ function safeTemplateCells(template) {
 }
 
 // ── Capture ─────────────────────────────────────────────────────────
-
-/** Fresh cell ID — JointJS uuid when available, else crypto / random fallback. */
-function newCellId() {
-  try {
-    if (typeof joint !== 'undefined' && joint.util?.uuid) return joint.util.uuid();
-  } catch { /* fall through */ }
-  if (window.crypto?.randomUUID) return crypto.randomUUID();
-  return 'pat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-}
+// (newCellId now lives in the shared clone-cells leaf, imported above — V7.)
 
 /**
  * Capture the current multi-selection as a reusable template.
@@ -364,9 +357,6 @@ export function instantiateTemplate(templateId, dropPoint) {
   const cells = safeTemplateCells(template);
   if (cells.length === 0) return;
 
-  const idMap = new Map();
-  cells.forEach(c => { if (c.id != null) idMap.set(c.id, newCellId()); });
-
   // Bounding box of the positioned cells so we can centre the group on the
   // drop point (mirrors how single-shape drops centre on the cursor).
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -382,31 +372,9 @@ export function instantiateTemplate(templateId, dropPoint) {
   const dx = (hasBox && dropPoint) ? Math.round(dropPoint.x - (minX + (maxX - minX) / 2)) : 0;
   const dy = (hasBox && dropPoint) ? Math.round(dropPoint.y - (minY + (maxY - minY) / 2)) : 0;
 
-  const clones = cells.map(json => {
-    const clone = JSON.parse(JSON.stringify(json));
-    clone.id = idMap.get(json.id) || newCellId();
-
-    if (clone.parent) {
-      const np = idMap.get(clone.parent);
-      if (np) clone.parent = np; else delete clone.parent;
-    }
-    if (Array.isArray(clone.embeds)) {
-      clone.embeds = clone.embeds.map(e => idMap.get(e)).filter(Boolean);
-    }
-    if (clone.source?.id) {
-      const ns = idMap.get(clone.source.id);
-      if (ns) clone.source = { ...clone.source, id: ns };
-    }
-    if (clone.target?.id) {
-      const nt = idMap.get(clone.target.id);
-      if (nt) clone.target = { ...clone.target, id: nt };
-    }
-    if (clone.position) clone.position = { x: clone.position.x + dx, y: clone.position.y + dy };
-    if (Array.isArray(clone.vertices)) {
-      clone.vertices = clone.vertices.map(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
-    }
-    return clone;
-  });
+  // Fresh ids for every cell; parent/embeds + link source/target REMAPPED (keepContainment) so a repeated drop
+  // keeps its grouping and never collides. Shared V7 helper (also used by clipboard paste, keepContainment:false).
+  const { clones } = cloneCellsForInsert(cells, { dx, dy, keepContainment: true });
 
   if (history?.startBatch) history.startBatch();
   try {

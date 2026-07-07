@@ -1,6 +1,7 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.19.1.1';
+import * as history from './history.js?v=1.19.2.99';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.19.2.99';
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the
@@ -47,59 +48,21 @@ export function paste() {
 
   selection.clearSelection();
 
-  // Map old element IDs to new IDs
-  const idMap = new Map();
+  // Clone every copied element + inter-selection link with fresh, PRE-MINTED ids (V7 shared helper) — links
+  // rewire to the new element ids, positions/vertices shift by pasteOffset, and containment is DROPPED (copy()
+  // only snapshots the selected elements, not a container's unselected children, so a remapped parent could
+  // dangle). Elements first so the links resolve their endpoints within the single addCells batch. This replaces
+  // the old fragile temporary-'add'-listener id-harvesting.
+  const { clones } = cloneCellsForInsert([...clipboardCells, ...clipboardLinks],
+    { dx: pasteOffset, dy: pasteOffset, keepContainment: false });
 
-  // Listen for 'add' events to capture newly created cell IDs
-  let lastAdded = null;
-  const onAdd = (cell) => { lastAdded = cell; };
-  graph.on('add', onAdd);
-
-  // One undo step for the whole paste — every cloned element + link is one `add`
-  // command; the batch composites them so a single Cmd+Z removes the entire paste.
+  // One undo step for the whole paste — addCells composites every clone so a single Cmd+Z removes the entire paste.
   history.startBatch();
   try {
-    clipboardCells.forEach(json => {
-      const clone = JSON.parse(JSON.stringify(json));
-      const oldId = clone.id;
-      delete clone.id;
-      delete clone.parent;
-      delete clone.embeds;
-
-      if (clone.position) {
-        clone.position.x += pasteOffset;
-        clone.position.y += pasteOffset;
-      }
-
-      lastAdded = null;
-      graph.addCell(clone);
-      if (lastAdded && lastAdded.isElement()) {
-        idMap.set(oldId, lastAdded.id);
-        selection.addToSelection(lastAdded.id);
-      }
-    });
-
-    // Recreate links between cloned elements
-    clipboardLinks.forEach(json => {
-      const clone = JSON.parse(JSON.stringify(json));
-      delete clone.id;
-
-      const newSrcId = idMap.get(clone.source?.id);
-      const newTgtId = idMap.get(clone.target?.id);
-      if (!newSrcId || !newTgtId) return;
-
-      clone.source = { ...clone.source, id: newSrcId };
-      clone.target = { ...clone.target, id: newTgtId };
-
-      // Offset vertices if any
-      if (clone.vertices) {
-        clone.vertices = clone.vertices.map(v => ({ x: v.x + pasteOffset, y: v.y + pasteOffset }));
-      }
-
-      graph.addCell(clone);
-    });
+    graph.addCells(clones);
+    // Select the pasted ELEMENTS only (the idMap now covers link ids too); links carry source/target in their JSON.
+    clones.forEach(c => { if (!(c.source || c.target)) selection.addToSelection(c.id); });
   } finally {
-    graph.off('add', onAdd);
     history.endBatch();
   }
 }

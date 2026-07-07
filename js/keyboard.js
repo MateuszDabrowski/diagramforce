@@ -55,6 +55,7 @@ export const SHORTCUT_GROUPS = [
   { title: 'Edit', items: [
     ['Ctrl+Z', 'Undo'],
     ['Ctrl+Shift+Z', 'Redo'],
+    ['Ctrl+Y', 'Redo'],
     ['Ctrl+C', 'Copy (in-app + PNG to clipboard)'],
     ['Ctrl+Shift+C', 'Copy as transparent PNG'],
     ['Ctrl+V', 'Paste'],
@@ -62,7 +63,7 @@ export const SHORTCUT_GROUPS = [
     ['Delete', 'Delete selection'],
   ] },
   { title: 'Select & move', items: [
-    ['Ctrl+A', 'Select all'],
+    ['Ctrl+A', 'Select all (or edit label if one shape selected)'],
     ['Arrows', 'Nudge selection (4 px)'],
     ['Shift+Arrows', 'Nudge selection (16 px)'],
     ['Escape', 'Clear selection'],

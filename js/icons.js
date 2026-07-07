@@ -2,6 +2,8 @@
 // Loads self-hosted SVG sprite files, inlines them into the page,
 // and provides a searchable catalog of all available icons.
 
+import { sanitizeCssColor } from './util.js?v=1.19.2.99';
+
 const SPRITE_CATEGORIES = ['standard', 'utility', 'action', 'custom', 'doctype'];
 const iconRegistry = []; // [{ category, name, id }]
 
@@ -154,7 +156,7 @@ export function getIconDataUri(iconId, color = '#FFFFFF', size = 32) {
     return '';
   }
 
-  const safeColor = color.replace(/[^a-zA-Z0-9#(),.\s%-]/g, '');
+  const safeColor = sanitizeCssColor(color);
   // Replace currentColor with the actual color (stencilSvg icons use currentColor)
   const innerContent = symbol.innerHTML.replace(/currentColor/g, safeColor);
   const viewBox = normalizedViewBoxes.get(safeId) || symbol.getAttribute('viewBox') || '0 0 52 52';

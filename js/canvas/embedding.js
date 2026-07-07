@@ -12,8 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.19.1.1';
-import { isUndoRedoActive } from '../history.js?v=1.19.1.1';
+import { cctx } from './context.js?v=1.19.2.99';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.19.2.99';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -82,9 +82,29 @@ export function canEmbed(parentType, childType) {
 // to a container edge to be captured. Measured edge-to-edge, so the feel is the
 // same regardless of how wide the child is. Sides + bottom are forgiving; the top
 // is tiny because a container never grows upward (its header sits at the top).
-const CAPTURE_HALO_BOTTOM = 80;
-const CAPTURE_HALO_SIDE = 80;
-const CAPTURE_HALO_TOP = 12;
+//
+// HYSTERESIS (v1.19.2, capture redesign stage b): two thresholds, not one, so
+// capture is easy to KEEP but harder to trigger by accident.
+//   • ENTER — a shape NOT already in a container must come within this (tighter)
+//     margin of the edge to be captured. Small, so drops merely NEAR a container
+//     no longer get sucked in.
+//   • EXIT  — once a shape IS captured (its drag started inside container X), it
+//     stays in X until dragged out past this (larger) margin. Applied ONLY to the
+//     drag's origin parent (see findHaloParent's originParentId), which also wins
+//     over a neighbour's enter-halo so the shape doesn't pop sideways mid-drag.
+// Direct bbox OVERLAP (findModelsInArea, in findEmbeddingParent) always captures
+// regardless — these margins govern the catch region BEYOND the visible edge.
+// Tuned down from 32/80 (user feedback): 20 ENTER = capture only when the shape is
+// clearly approaching (fewer surprise grabs near a container); 40 EXIT = a shape
+// drags out with far less travel (the 80px sticky exit made dragging a captured
+// shape out to a corner require a very long move). EXIT stays > ENTER so the
+// hysteresis band still prevents capture/release flicker at the boundary.
+const CAPTURE_ENTER_SIDE = 20;
+const CAPTURE_ENTER_BOTTOM = 20;
+const CAPTURE_ENTER_TOP = 12;
+const CAPTURE_EXIT_SIDE = 40;
+const CAPTURE_EXIT_BOTTOM = 40;
+const CAPTURE_EXIT_TOP = 12;
 // The grouping parents that opt into the halo + drop-ghost. Free-form groupers
 // (Container, Zone, BPMN Pool/Subprocess/Loop) wrap a child wherever it lands.
 // The RACI Task ALSO opts in (v1.15.0) — users need the capture highlight — but
@@ -93,7 +113,7 @@ const CAPTURE_HALO_TOP = 12;
 // label/description column), via the Task branches in tuckChildInside /
 // previewCapturedParentBounds / fitParentToChildren below. Other structured
 // parents (Gantt timeline, sequence participant/actor) stay exact-overlap.
-const HALO_PARENT_TYPES = new Set([
+export const HALO_PARENT_TYPES = new Set([
   'sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop', 'sf.Task',
 ]);
 
@@ -111,27 +131,78 @@ const POOL_HEADER_W = 30;
 // Single definition shared by both capture paths — canvas drag (via
 // findEmbeddingParent) and stencil drop (via stencil.js tryEmbed). Returns the
 // parent element, or null.
-export function findHaloParent(childBBox, childType, excludeId) {
+//
+// `originParentId` (optional) is the container the dragged element STARTED inside
+// (snapshotted at element:pointerdown — a stencil drop has none). When set, that
+// container is tested against the larger EXIT margin and, if it still qualifies,
+// WINS outright (hysteresis stickiness); every other container is tested against
+// the tighter ENTER margin. Without it, all containers use ENTER.
+export function findHaloParent(childBBox, childType, excludeId, originParentId) {
   const { graph } = cctx;
   if (!graph) return null;
   const cl = childBBox.x, cr = childBBox.x + childBBox.width;
   const ct = childBBox.y, cb = childBBox.y + childBBox.height;
   let best = null;
   let bestZ = -Infinity;
+  let sticky = null;   // the origin parent, if the child is still within its EXIT halo
   for (const el of graph.getElements()) {
     if (el.id === excludeId) continue;
     const type = el.get('type');
     if (!HALO_PARENT_TYPES.has(type)) continue;
     if (!canEmbed(type, childType)) continue;
+    const isOrigin = originParentId && el.id === originParentId;
+    const mSide = isOrigin ? CAPTURE_EXIT_SIDE : CAPTURE_ENTER_SIDE;
+    const mTop = isOrigin ? CAPTURE_EXIT_TOP : CAPTURE_ENTER_TOP;
+    const mBottom = isOrigin ? CAPTURE_EXIT_BOTTOM : CAPTURE_ENTER_BOTTOM;
     const b = el.getBBox();
     // AABB intersection of the child bbox with the container bbox inflated per side.
-    if (cr >= b.x - CAPTURE_HALO_SIDE && cl <= b.x + b.width + CAPTURE_HALO_SIDE
-      && cb >= b.y - CAPTURE_HALO_TOP && ct <= b.y + b.height + CAPTURE_HALO_BOTTOM) {
+    if (cr >= b.x - mSide && cl <= b.x + b.width + mSide
+      && cb >= b.y - mTop && ct <= b.y + b.height + mBottom) {
+      if (isOrigin) sticky = el;
       const z = el.get('z') || 0;
       if (z > bestZ) { bestZ = z; best = el; }
     }
   }
-  return best;
+  // While the child is still within its origin parent's (larger) exit halo, keep it
+  // there — don't let a neighbour's enter-halo pull it out. Past that halo, `sticky`
+  // is null and the tightest-enter, topmost-z candidate wins as usual.
+  return sticky || best;
+}
+
+// The FREE shapes that visually sit inside a captor but aren't grouped into it — i.e. they overlap the
+// captor's bbox, have no parent, and the captor could legally embed them (and don't ENCLOSE the captor).
+// This is the "N shapes inside but not grouped" set powering the capture overlay's dashed halos, the
+// right-click "Group N inside" item, and the floating Group pill. Single source of truth so all three agree.
+export function enclosedCapturableShapes(captor) {
+  const { graph } = cctx;
+  if (!graph || !captor?.isElement?.()) return [];
+  const captorType = captor.get('type');
+  if (!HALO_PARENT_TYPES.has(captorType)) return [];
+  const bb = captor.getBBox();
+  return graph.findModelsInArea(bb).filter((el) =>
+    el.id !== captor.id
+    && el.isElement?.()
+    && !el.get('parent')
+    && canEmbed(captorType, el.get('type'))
+    && !el.getBBox().containsRect(bb));
+}
+
+// Embed each child into the captor in one undo entry (a child already in a DIFFERENT parent is un-embedded
+// first — JointJS embed() throws on an already-embedded cell). Positions are kept; the change:parent listener
+// (below) then tucks Task/TaskGroup children and auto-fits the captor. Used by the capture overlay's Group
+// pill; selection.js's multi-select Group runs the equivalent through its own callback path.
+export function groupChildrenInto(captor, children) {
+  const { graph } = cctx;
+  if (!captor || !children || !children.length) return;
+  startBatch();
+  try {
+    for (const c of children) {
+      const pid = c.get('parent');
+      if (pid === captor.id) continue;
+      if (pid) { const p = graph.getCell(pid); if (p) p.unembed(c); }
+      captor.embed(c);
+    }
+  } finally { endBatch(); }
 }
 
 // ── RACI Task geometry (v1.15.0) ────────────────────────────────────
@@ -222,6 +293,15 @@ export function tuckChildInside(child, parent) {
 export function findEmbeddingParent(elementView) {
   const { graph } = cctx;
   const childType = elementView.model.get('type');
+  // Movement gate: a currently-FREE element that has barely moved (a click's jitter) captures NOTHING,
+  // so a click on a node overlapping a container doesn't re-embed it + drag the container over. Only
+  // free elements are gated — an embedded child has _dragOriginParent set and stays exempt (so a click
+  // re-homes it to the same parent, never ejects it). Once the drag passes the threshold, normal capture
+  // resumes for the rest of the gesture.
+  if (!_dragOriginParent && _dragStartPos) {
+    const p = elementView.model.position();
+    if (Math.hypot(p.x - _dragStartPos.x, p.y - _dragStartPos.y) < CAPTURE_MIN_DRAG) return [];
+  }
   const bbox = elementView.model.getBBox();
   const candidates = graph.findModelsInArea(bbox).filter(
     (el) => el.id !== elementView.model.id
@@ -277,7 +357,7 @@ export function findEmbeddingParent(elementView) {
     (el) => HALO_PARENT_TYPES.has(el.get('type')) && canEmbed(el.get('type'), childType)
   );
   if (!hasContainerHit) {
-    const halo = findHaloParent(bbox, childType, elementView.model.id);
+    const halo = findHaloParent(bbox, childType, elementView.model.id, _dragOriginParent);
     if (halo && !candidates.includes(halo)) candidates.push(halo);
   }
   return candidates;
@@ -446,7 +526,7 @@ function findCaptureParent(childBBox, childType, excludeId) {
       && canEmbed(el.get('type'), childType))
     .sort((a, b) => (b.get('z') || 0) - (a.get('z') || 0));
   if (overlap.length) return overlap[0];
-  return findHaloParent(childBBox, childType, excludeId);
+  return findHaloParent(childBBox, childType, excludeId, _dragOriginParent);
 }
 
 // Pure: the container's bounds after capturing childBBox — mirrors
@@ -495,11 +575,35 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
 let _dragSelectionBBox = null;
 export function setDragSelectionBBox(bbox) { _dragSelectionBBox = bbox || null; }
 
+// The container the currently-dragged element STARTED inside, snapshotted at
+// element:pointerdown (below) — the memory the capture hysteresis needs. It MUST
+// be captured at pointerdown: JointJS embeddingMode detaches an embedded child
+// (parent → null) on the first pointermove, so reading it live mid-drag is useless.
+// Read by findEmbeddingParent (the live capture decision) + findCaptureParent (the
+// drop-ghost preview) so both apply the sticky EXIT margin to the origin parent.
+// Null outside a canvas drag (incl. every stencil drop → those use ENTER margins).
+let _dragOriginParent = null;
+
+// The dragged element's position at pointerdown — lets findEmbeddingParent gate capture on REAL movement.
+let _dragStartPos = null;
+// A currently-FREE element must be dragged at least this far before it can be captured. A click's
+// sub-pixel jitter otherwise re-embeds a node that merely OVERLAPS a container (then auto-fit drags the
+// container onto it) — the "I clicked the node and the whole box moved" bug. Gates FREE elements ONLY: an
+// already-embedded child is exempt (a jitter re-homes it to the SAME parent = a no-op; gating it would
+// EJECT a clicked child instead).
+const CAPTURE_MIN_DRAG = 6;
+
 // Show/refresh the dashed ghost; hides it when nothing would capture. `childBBox` (the element
 // under the pointer) finds the would-be parent; `growBBox` (defaults to childBBox) is what the
 // container is previewed wrapping — the whole multi-selection during a group drag. childType
 // drives canEmbed; excludeId is the dragged element's own id (null for a stencil drop).
 export function showDropGhost(childBBox, childType, excludeId, growBBox) {
+  // Match findEmbeddingParent's movement gate: a barely-moved FREE element previews nothing (no capture
+  // will happen), so a click's jitter doesn't flash the ghost. Stencil drops pass _dragStartPos=null → skip.
+  if (!_dragOriginParent && _dragStartPos && childBBox
+    && Math.hypot(childBBox.x - _dragStartPos.x, childBBox.y - _dragStartPos.y) < CAPTURE_MIN_DRAG) {
+    hideDropGhost(); return null;
+  }
   const parent = findCaptureParent(childBBox, childType, excludeId);
   if (!parent) { hideDropGhost(); return null; }
   const b = previewCapturedParentBounds(growBBox || childBBox, parent, excludeId);
@@ -546,7 +650,17 @@ export function registerEmbedding(cctx) {
   const _pendingParents = new Set();
   const fitNow = (id) => { const p = id && graph.getCell(id); if (p) fitParentToChildren(p); };
 
-  paper.on('element:pointerdown', () => { _dragActive = true; _dragMoved = false; hideDropGhost(); });
+  paper.on('element:pointerdown', (cellView) => {
+    _dragActive = true; _dragMoved = false;
+    // Snapshot the origin parent NOW — JointJS nulls an embedded child's parent on
+    // the first pointermove, so this is the only moment it's readable. Powers the
+    // capture hysteresis (sticky EXIT margin for this container while dragging).
+    _dragOriginParent = cellView?.model?.get?.('parent') || null;
+    // Snapshot the start position too — findEmbeddingParent gates a FREE element's capture on how far it
+    // has actually moved (a click's jitter must not re-capture an overlapping node).
+    _dragStartPos = cellView?.model?.position ? { ...cellView.model.position() } : null;
+    hideDropGhost();
+  });
   paper.on('element:pointermove', (cellView) => {
     _dragMoved = true;
     // Live preview: dashed ghost of the container this element would land in. During a
@@ -557,14 +671,35 @@ export function registerEmbedding(cctx) {
   });
   paper.on('element:pointerup', (cellView) => {
     hideDropGhost();
+    const model = cellView?.model;
+    // A drop must MATCH the drop-ghost border. JointJS finalises an embed from the candidate it last tracked,
+    // and it can retain one set while the element briefly passed THROUGH the enter zone even though the DROP
+    // position is clear of the capture region (the border correctly vanished) — the "drag in a tick then back
+    // out, border gone but it still captures" report. So re-run the SAME capture decision the border uses
+    // (findCaptureParent — it reads the still-set _dragOriginParent, so this MUST precede the resets below,
+    // and while _dragActive is still true so the unembed's change:parent re-fit defers into _pendingParents)
+    // and unembed if the element landed in a captor the region wouldn't actually choose. Only a free-form
+    // captor; only on a genuine mismatch → it never fires on a normal drop (where border == capture).
+    // Single-element drags only (`!_dragSelectionBBox`): a multi-select group capture embeds by the SELECTION
+    // union, so the under-pointer element's OWN bbox may legitimately not reach the captor — don't second-guess
+    // that here (selection.js owns the group case).
+    if (_dragActive && _dragMoved && !_dragSelectionBBox && model?.isElement?.()) {
+      const droppedIn = model.get('parent');
+      const captor = droppedIn && graph.getCell(droppedIn);
+      if (captor && HALO_PARENT_TYPES.has(captor.get('type'))) {
+        const shouldCapture = findCaptureParent(model.getBBox(), model.get('type'), model.id);
+        if (!shouldCapture || shouldCapture.id !== droppedIn) captor.unembed(model, { ui: true });
+      }
+    }
     _dragSelectionBBox = null;   // always reset so the next (single) drag isn't sized to a stale union
+    _dragOriginParent = null;    // clear the hysteresis snapshot for the next drag / stencil drop
+    _dragStartPos = null;        // clear the movement-gate snapshot
     const moved = _dragActive && _dragMoved;
     _dragActive = false;
     _dragMoved = false;
     if (!moved) { _pendingParents.clear(); return; } // pure click — nothing settled
     // Tuck a halo-captured child fully inside its parent before the fit, so the
     // height-only grow never leaves it poking out a side/top.
-    const model = cellView?.model;
     if (model?.isElement?.()) {
       const pid = model.get('parent');
       const parent = pid && graph.getCell(pid);

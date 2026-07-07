@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/theme.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/layout.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/stencil.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/properties.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/tabs.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/canvas.css?v=1.19.1.1">
-  <link rel="stylesheet" href="css/modals.css?v=1.19.1.1">
+  <link rel="stylesheet" href="css/variables.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/theme.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/layout.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/stencil.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/properties.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/tabs.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/canvas.css?v=1.19.2.99">
+  <link rel="stylesheet" href="css/modals.css?v=1.19.2.99">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -327,12 +327,13 @@
               <button class="df-sync__status-btn" type="button" data-sync-status-btn hidden></button>
             </div>
             <div class="df-toolbar__menu-separator" role="separator"></div>
-            <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="enable">
-              <svg class="df-toolbar__icon" aria-hidden="true"><use href="#sync"></use></svg>
-              Connect Google Drive
-            </button>
-            <!-- Save & Export / Load & Import are NOT duplicated here: they live on the always-present
-                 navbar (Save / Load buttons). This menu carries only Drive-unique actions. -->
+            <!-- No signed-out "Connect Google Drive" item: the status-row "Sign in" button IS the connect
+                 action, and it (via signIn -> getToken) already defaults auto-sync ON for a first-ever connect
+                 while PRESERVING the user's choice on a re-auth. The removed item called enableAutosync, which
+                 force-set auto-sync on even on re-auth - the one path that violated "keep user choice", so it's
+                 the odd one out. Auto-sync stays user-controllable via the toggle below once connected.
+                 Save & Export / Load & Import aren't duplicated here either - they live on the always-present
+                 navbar; this menu carries only Drive-unique actions. -->
             <button class="df-toolbar__menu-item df-toolbar__menu-item--icon" data-sync="history">
               <svg class="df-toolbar__icon" aria-hidden="true"><use href="#clock"></use></svg>
               Version history
@@ -353,7 +354,7 @@
             <div class="df-sync__cadence" hidden>
               <span class="df-sync__cadence-note">Saves every 2 minutes, and the moment you open, switch, or close a tab.</span>
             </div>
-            <div class="df-toolbar__menu-separator" role="separator"></div>
+            <div class="df-toolbar__menu-separator" role="separator" data-sync-sep2></div>
             <button class="df-toolbar__menu-item df-toolbar__menu-item--icon df-sync__disconnect" data-sync="disconnect">
               <svg class="df-toolbar__icon" aria-hidden="true"><use href="#logout"></use></svg>
               Disconnect Google Drive
@@ -726,8 +727,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.19.1.1"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.19.1.1"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.19.1.1"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.19.2.99"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.19.2.99"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.19.2.99"></script>
 </body>
 </html>

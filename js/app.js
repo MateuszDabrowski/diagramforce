@@ -1,27 +1,27 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.19.1.1';
-import * as icons       from './icons.js?v=1.19.1.1';
-import { getAllStencilSvgs } from './components.js?v=1.19.1.1';
-import * as shapes      from './shapes.js?v=1.19.1.1';
-import * as canvas      from './canvas.js?v=1.19.1.1';
-import * as stencil     from './stencil.js?v=1.19.1.1';
-import * as selection   from './selection.js?v=1.19.1.1';
-import * as history     from './history.js?v=1.19.1.1';
-import * as clipboard   from './clipboard.js?v=1.19.1.1';
-import * as templates    from './templates.js?v=1.19.1.1';
-import * as keyboard    from './keyboard.js?v=1.19.1.1';
-import * as toolbar     from './toolbar.js?v=1.19.1.1';
-import * as properties  from './properties.js?v=1.19.1.1';
-import * as persistence from './persistence.js?v=1.19.1.1';
-import * as tabs        from './tabs.js?v=1.19.1.1';
-import * as mermaidImport from './mermaid-import.js?v=1.19.1.1';
-import * as tableView    from './table-view.js?v=1.19.1.1';
-import * as walkthrough  from './walkthrough.js?v=1.19.1.1';
-import * as whatsNew     from './whats-new.js?v=1.19.1.1';
-import * as a11y         from './a11y.js?v=1.19.1.1';
-import { seedDefaultPalette } from './brand-palette.js?v=1.19.1.1';
+import * as theme       from './theme.js?v=1.19.2.99';
+import * as icons       from './icons.js?v=1.19.2.99';
+import { getAllStencilSvgs } from './components.js?v=1.19.2.99';
+import * as shapes      from './shapes.js?v=1.19.2.99';
+import * as canvas      from './canvas.js?v=1.19.2.99';
+import * as stencil     from './stencil.js?v=1.19.2.99';
+import * as selection   from './selection.js?v=1.19.2.99';
+import * as history     from './history.js?v=1.19.2.99';
+import * as clipboard   from './clipboard.js?v=1.19.2.99';
+import * as templates    from './templates.js?v=1.19.2.99';
+import * as keyboard    from './keyboard.js?v=1.19.2.99';
+import * as toolbar     from './toolbar.js?v=1.19.2.99';
+import * as properties  from './properties.js?v=1.19.2.99';
+import * as persistence from './persistence.js?v=1.19.2.99';
+import * as tabs        from './tabs.js?v=1.19.2.99';
+import * as mermaidImport from './mermaid-import.js?v=1.19.2.99';
+import * as tableView    from './table-view.js?v=1.19.2.99';
+import * as walkthrough  from './walkthrough.js?v=1.19.2.99';
+import * as whatsNew     from './whats-new.js?v=1.19.2.99';
+import * as a11y         from './a11y.js?v=1.19.2.99';
+import { seedDefaultPalette } from './brand-palette.js?v=1.19.2.99';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -76,6 +76,9 @@ async function main() {
 
   // --- Phase 4: Interaction ---
   selection.init(graph, paper);
+  // Capture-visibility overlay (stage a): selecting a single grouping shape halos its captured children
+  // (solid amber) vs overlapping-free shapes it could group (dashed amber) + a "Group N" pill. cctx-only.
+  selection.onChange((ids) => canvas.syncCaptureOverlay(ids));
   history.init(graph);
   // While a diagram LOADS (graph.fromJSON + the post-load icon/link normalisations), history must NOT record:
   // those are not user edits. Wire the canvas loading flag so history skips them (else re-resolving a placeholder
@@ -129,6 +132,14 @@ async function main() {
   selection.setEndpointSetter(properties.setLinkEndpoints);
   // Copy/Paste style clipboard for the MULTI-select right-click menu (single-element uses the action provider).
   selection.setStyleApi({ copy: properties.copyCellStyle, has: properties.hasStyleClip, paste: properties.pasteCellStyle });
+  // Embedding rules for the multi-select "Group" action (capture redesign stage d) — canEmbed + a captor-type
+  // test from canvas/embedding.js (the single source of truth), passed as a callback to avoid a module cycle.
+  selection.setCaptureApi({
+    canEmbed: canvas.canEmbed,
+    isCaptorType: (t) => canvas.HALO_PARENT_TYPES.has(t),
+    enclosedShapes: canvas.enclosedCapturableShapes,   // free shapes sitting inside a captor but not grouped
+    groupInto: canvas.groupChildrenInto,               // embed a set of shapes into a captor (one undo)
+  });
   // Change Review "Apply as Highlight States" bakes the diff via the same Shape-state setter (wired to avoid a cycle).
   toolbar.setShapeStateApplier?.(properties.applyShapeState);
   // "Copy as PNG" right-click action — rasters the selection to the OS clipboard (paste into Slack/docs as an image).
@@ -185,6 +196,16 @@ async function main() {
 
   // --- Phase 7b: Mermaid import (needs tabs + canvas + graph) ---
   mermaidImport.init(moduleRefs);
+
+  // --- Phase 7c: wiring self-check (S8) ---
+  // Every DECLARED pctx/cctx callback slot must be wired by now (canvas.init + persistence.init
+  // + the setters above + tabs.init). Because every call site optional-chains these handles
+  // (`pctx.fn?.()`), a wiring a future refactor drops fails SILENTLY - the Drive/save/load flow
+  // just no-ops. Surface it loudly instead. (dev/tests/e2e/wiring.spec.js asserts [] on all engines.)
+  const _unwired = { pctx: persistence.assertPctxWired(), cctx: canvas.assertCctxWired() };
+  if (_unwired.pctx.length || _unwired.cctx.length) {
+    console.error('[wiring] unwired required callbacks after init -', _unwired);
+  }
 
   // --- Phase 8: Mobile interactions ---
   canvas.initMobileDragHandles();

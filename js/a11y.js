@@ -18,8 +18,8 @@
 // Pure overlay — reads graph/selection, drives selection + offscreen nodes. Never mutates the
 // diagram or history. The "describe a shape" knowledge lives in properties.js (the inspector
 // already owns the type→label map + name accessors); we just narrate + navigate + outline.
-import { describeCell, cellName } from './properties.js?v=1.19.1.1';
-import { escHtml } from './util.js?v=1.19.1.1';
+import { describeCell, cellName } from './properties.js?v=1.19.2.99';
+import { escHtml } from './util.js?v=1.19.2.99';
 
 let graph = null;
 let selection = null;
@@ -53,7 +53,7 @@ export function announce(msg) {
 }
 
 /** Announce the current selection ("Selected Object: Contact" / "3 items selected"). */
-export function announceSelection() {
+function announceSelection() {
   const ids = selection?.getSelectedIds?.() || [];
   if (ids.length === 0) return;                 // deselect → stay quiet (no "nothing" chatter)
   if (ids.length === 1) {

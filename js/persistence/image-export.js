@@ -5,9 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.19.1.1';
-import { showToast, showError } from '../feedback.js?v=1.19.1.1';
-import { pctx } from './context.js?v=1.19.1.1';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.19.2.99';
+import { showToast, showError } from '../feedback.js?v=1.19.2.99';
+import { sanitizeFilenamePart } from '../util.js?v=1.19.2.99';
+import { pctx } from './context.js?v=1.19.2.99';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -86,8 +87,19 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
   return new Promise((resolve, reject) => {
     try {
       const { graph, paper } = pctx;
-      const bbox = graph.getCellsBBox(renderCells);
+      let bbox = graph.getCellsBBox(renderCells);
       if (!bbox || bbox.width === 0) { reject(new Error('Selection has no area.')); return; }
+      // The model bbox misses a link's ROUTED geometry: sfManhattan elbows + self-loop stubs run up to ~40px
+      // OUTSIDE the endpoint boxes, so edge connectors were cut from the copied PNG (CR). Union in each
+      // selected link view's rendered connection path - already in LOCAL coords, the viewBox's space.
+      for (const cell of renderCells) {
+        if (!cell.isLink || !cell.isLink()) continue;
+        try {
+          const conn = paper.findViewByModel(cell)?.getConnection?.();
+          const cb = conn && conn.bbox();
+          if (cb) bbox = bbox.union(cb);
+        } catch { /* unrendered view - the model bbox stands */ }
+      }
 
       const padding = 24;
       const exportW = bbox.width + padding * 2;
@@ -150,7 +162,10 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
 export function exportSVG(transparent = true) {
   const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   try {
-    const contentBBox = paper.getContentBBox();
+    // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
+    // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
+    // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -195,7 +210,7 @@ export function exportSVG(transparent = true) {
 
     const svgStr = new XMLSerializer().serializeToString(svgClone);
     const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
-    const safeName = (getTabNameCallback?.() || 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
+    const safeName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
     triggerDownload(url, `df_${safeName}_${dateSuffix()}.svg`);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     showToast('SVG exported ✓', 'success');
@@ -210,7 +225,10 @@ function exportRaster(transparent, format) {
   const ext = format === 'webp' ? 'webp' : 'png';
   const fmtLabel = format.toUpperCase();
   try {
-    const contentBBox = paper.getContentBBox();
+    // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
+    // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
+    // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -283,7 +301,7 @@ function exportRaster(transparent, format) {
       ctx.drawImage(img, 0, 0, exportW, exportH);
 
       canvas.toBlob(blob => {
-        const baseName = (getTabNameCallback ? getTabNameCallback() : 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
+        const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
         if (blob) {
           triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
           showToast(`${fmtLabel} downloaded ✓`, 'success');
@@ -330,7 +348,10 @@ export async function exportGIF(transparent = false) {
   }
   let progressToastDismiss = null;
   try {
-    const contentBBox = paper.getContentBBox();
+    // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
+    // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
+    // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
+    const contentBBox = paper.getContentArea();
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -486,7 +507,7 @@ export async function exportGIF(transparent = false) {
     gif.finish();
     const bytes = gif.bytes();
     const blob = new Blob([bytes], { type: 'image/gif' });
-    const gifName = (getTabNameCallback ? getTabNameCallback() : 'diagram').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'diagram';
+    const gifName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
     triggerDownload(URL.createObjectURL(blob), `df_${gifName}_${dateSuffix()}.gif`);
     progressToastDismiss?.();
     showToast('GIF downloaded ✓', 'success');

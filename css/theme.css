@@ -1,11 +1,8 @@
 [data-theme="dark"] {
   --color-primary: var(--brand-red);
-  --color-secondary: var(--brand-blue);
+  --brand-amber-strong: var(--brand-amber);   /* dark mode: the base amber is legible on the dark surface */
 
   /* Cloud-sync status — lighter stops for contrast on the dark toolbar (see variables.css). */
-  --sync-off: #8B8F98;
-  --sync-ok: var(--brand-amber);      /* "working" — orange in dark mode */
-  --sync-pending: var(--brand-amber);
   --sync-error: #F09595;
 
   --bg-app: #212121;
@@ -32,7 +29,6 @@
 
   --properties-bg: #18191A;
 
-  --canvas-grid-color: rgba(255, 255, 255, 0.06);
 
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 5px 40px rgba(0, 0, 0, 0.35);
@@ -48,7 +44,6 @@
   --node-subtitle: rgba(255, 255, 255, 0.5);
   --container-bg: rgba(255, 255, 255, 0.04);
   --container-border: #3A3B3C;
-  --container-text: #F5F6F7;
   --pool-header-bg: rgba(255, 255, 255, 0.08);
   --port-color: var(--brand-red);
   --selection-color: var(--brand-red);

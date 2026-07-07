@@ -11,15 +11,20 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.19.1.1';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.19.1.1';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.19.1.1';
-import { SF_FIELD_TYPES } from './properties.js?v=1.19.1.1';
-import { buildModal, showToast, showError } from './feedback.js?v=1.19.1.1';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.19.1.1';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders, timelineBars, orderToY, layoutTimelineTasks } from './canvas/gantt-layout.js?v=1.19.1.1';
-import { durationDays, addDaysISO } from './canvas/gantt-scale.js?v=1.19.1.1';
-import { applyGanttDepLinkStyle } from './canvas.js?v=1.19.1.1';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.19.2.99';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.19.2.99';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.19.2.99';
+import { SF_FIELD_TYPES } from './properties.js?v=1.19.2.99';
+import { keyImpliesRequired } from './field-model.js?v=1.19.2.99';
+import { buildModal, showToast, showError } from './feedback.js?v=1.19.2.99';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.19.2.99';
+import { triggerDownload } from './persistence.js?v=1.19.2.99';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.19.2.99';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.19.2.99';
+// S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
+// dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
+// syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.19.2.99';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -120,7 +125,7 @@ const sideIds = (side, r) => side === 'src'
 const draftKeyOf = (objId, fid) => `${objId}::${fid}`;
 // A field is Nullable unless it's explicitly required, or a PK / FQK (a key is inherently mandatory) —
 // mirrors srcCells()/buildData()'s notNull rule and the diagram-view field editor's auto-required.
-const isNullable = (d) => !!d && !(d.required || d.keyType === 'pk' || d.keyType === 'fqk');
+const isNullable = (d) => !!d && !(d.required || keyImpliesRequired(d.keyType));
 
 // Columns in render order. `section` drives the three coloured header blocks
 // (src = Data Sources, map = Data Mapping, tgt = Data Targets) + the dividers. Display
@@ -224,6 +229,10 @@ export function init(modules) {
   graph = modules.graph;
   container = document.getElementById('mapping-table-view');
   paperEl = document.getElementById('paper');
+  // Wire the extracted Gantt structural-ops module: the live graph + the facade callbacks its ops
+  // call after a live mutation (syncGanttDraft re-snapshots the bar draft; render re-draws; the dep
+  // editor's onClose refreshes only while an edit session is open).
+  initGanttPlan({ graph, syncGanttDraft, render, isEditSession: () => _active && _editing });
   // Live refresh: re-evaluate + redraw whenever the active graph changes structurally
   // (guarded so it's inert while the diagram view is showing). Coalesced to one frame.
   if (graph) {
@@ -380,7 +389,7 @@ const typeGroupsDiffer = (a, b) => { const ga = groupOf(a), gb = groupOf(b); ret
 
 function srcCells(obj, field) {
   // A PK / FQK is mandatory, so it's never nullable even if `required` wasn't set explicitly.
-  const notNull = field?.required || field?.keyType === 'pk' || field?.keyType === 'fqk';
+  const notNull = field?.required || keyImpliesRequired(field?.keyType);
   return {
     srcDataLayer: dataLayerOf(obj),
     srcObject: objName(obj),
@@ -427,7 +436,7 @@ function buildData() {
     // Expression / Rule: the link's transform note (`expressionRule`). Falls back to the
     // legacy `mappingLabel` prop, then the connector's visual label, for back-compat.
     const expr = (l.prop('expressionRule') || l.prop('mappingLabel') || linkLabelText(l) || '').trim();
-    const tNotNull = tF?.required || tF?.keyType === 'pk' || tF?.keyType === 'fqk';
+    const tNotNull = tF?.required || keyImpliesRequired(tF?.keyType);
     rows.push({
       ...srcCells(sObj, sF),
       cardinality: cardinalityOf(sObj, tObj),    // the Source↔Target ER relationship (or em-dash)
@@ -651,7 +660,7 @@ export function render() {
       return `<button type="button" class="df-tbl__check${on ? ' is-checked' : ''}" data-k="${k}" data-bool="${ec.prop}" role="checkbox" aria-checked="${on}" title="Deprecated">${ICON_CHECKBOX}</button>`;
     }
     // nullable — derived from required + key; forced off (and locked) when the field is a PK / FQK.
-    const forced = d.keyType === 'pk' || d.keyType === 'fqk';
+    const forced = keyImpliesRequired(d.keyType);
     const on = isNullable(d);
     return `<button type="button" class="df-tbl__check${on ? ' is-checked' : ''}${forced ? ' df-tbl__check--locked' : ''}" data-k="${k}" data-nullable role="checkbox" aria-checked="${on}"${forced ? ' disabled aria-disabled="true" title="A PK / FQK is always mandatory"' : ' title="Nullable"'}>${ICON_CHECKBOX}</button>`;
   };
@@ -922,9 +931,10 @@ function endEditSession(commit) {
   if (_active) render();
 }
 
-export function saveEdits() { if (_editing) endEditSession(true); }
-export function cancelEdits() { if (_editing) endEditSession(false); }
-export function isEditing() { return _editing; }
+// Save/Cancel handlers for the staged edit overlay (wired to #tbl-edit-save/#tbl-edit-cancel above).
+// Internal-only — the external edit-session API is guardLeave (below), wired via tabs.setSwitchGuard.
+function saveEdits() { if (_editing) endEditSession(true); }
+function cancelEdits() { if (_editing) endEditSession(false); }
 
 // Commit the draft → graph: for every field whose draft differs from its snapshot, write the merged props
 // back, grouped per object into ONE `fields` set, all inside a single undo batch (#10). Existing fields
@@ -1045,166 +1055,6 @@ function syncGanttDraft() {
   }
 }
 
-// + Add task → a dated bar (next order, start → +7 days) embedded in `tl`, mirroring the timeline panel's
-// "+ Task". Immediate + undoable; the new row is then editable inline.
-function addGanttTask(tlId) {
-  const tl = tlId && graph.getCell(tlId);
-  if (!tl) return;
-  const pad = (n) => String(n).padStart(2, '0');
-  const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const startStr = tl.get('startDate') || isoOf(new Date());
-  const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
-  const order = timelineBars(tl).length;
-  startBatch();
-  try {
-    const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: isoOf(ed), attrs: { label: { text: 'New Task' } } });
-    graph.addCell(bar);
-    tl.embed(bar);
-    if (!applyGanttGeometry(bar, tl)) bar.position(tl.position().x + (tl.get('taskListWidth') || 200), orderToY(tl, order), { gantt: true });
-  } finally { endBatch(); }
-  syncGanttDraft();
-  render();
-}
-
-// Delete a task row → remove the bar cell + close the order gap. Immediate + undoable (matches the panel).
-function deleteGanttBar(barId) {
-  const bar = barId && graph.getCell(barId);
-  if (!bar) return;
-  const tl = ganttTimelineFor(bar);
-  startBatch();
-  try { graph.removeCells([bar]); if (tl) resequenceGanttOrders(tl); } finally { endBatch(); }
-  syncGanttDraft();
-  render();
-}
-
-// Reorder: move the dragged bar to before `toBarId` (drop target), rewrite `order`, re-layout. Immediate +
-// undoable, mirroring the panel's drag-reorder (splice in timelineBars order, renumber, re-snap).
-function reorderGanttBar(fromBarId, toBarId) {
-  const moved = fromBarId && graph.getCell(fromBarId);
-  const target = toBarId && graph.getCell(toBarId);
-  if (!moved || !target || moved === target) return;
-  const tl = ganttTimelineFor(moved);
-  if (!tl || ganttTimelineFor(target) !== tl) return;   // only reorder within one timeline
-  const ordered = timelineBars(tl);
-  const fromIdx = ordered.indexOf(moved), toIdx = ordered.indexOf(target);
-  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-  const [m] = ordered.splice(fromIdx, 1);
-  ordered.splice(toIdx > fromIdx ? toIdx : toIdx + 1, 0, m);   // insert AFTER the drop target (matches the below-indicator)
-  startBatch();
-  try {
-    // A drop across groups also adopts the target's group (so the bar lands where it visually dropped).
-    if ((moved.get('groupId') || null) !== (target.get('groupId') || null)) moved.set('groupId', target.get('groupId') || null);
-    ordered.forEach((b, idx) => { if (b.get('order') !== idx) b.set('order', idx); });
-    // Derive Y FROM the new order (like the panel's reorder) — NOT resequenceGanttOrders, which would re-sort
-    // by current Y and undo the move (the bars haven't physically moved yet).
-    layoutTimelineTasks(tl);
-  } finally { endBatch(); }
-  syncGanttDraft();
-  render();
-}
-
-// ── Dependencies editor (Phase 5c) — predecessor ganttDep links ─────────────
-// A task's deps are inbound standard.Links tagged linkKind:'ganttDep' (depType FS/SS/FF/SF + lag), NOT a
-// scalar prop — so they're edited LIVE (each add/remove/change its own undo entry) in a small anchored editor,
-// not in the Save/Cancel draft. The deps cell shows the derived summary + opens this on click.
-const ganttDepLinks = (barId) => {
-  const bar = barId && graph.getCell(barId);
-  return bar ? graph.getConnectedLinks(bar, { inbound: true }).filter(l => l.prop('linkKind') === 'ganttDep') : [];
-};
-const ganttSiblingTasks = (barId) => {
-  const bar = barId && graph.getCell(barId);
-  const tl = bar && ganttTimelineFor(bar);
-  return tl ? timelineBars(tl).filter(b => b.id !== barId) : [];
-};
-const depBatch = (fn) => { startBatch(); try { fn(); } finally { endBatch(); } };
-
-function openDepEditor(barId, anchorEl) {
-  const bar = barId && graph.getCell(barId);
-  if (!bar) return;
-  const name = bar.get('taskLabel') || bar.attr('label/text') || 'Task';
-  const m = buildModal({
-    title: `Dependencies: ${name}`,
-    // Anchored modals hide the header, so the body carries its own heading; a Done button gives a clear close
-    // (Escape + clicking the scrim also close it).
-    bodyHtml: `<div class="df-dep-editor__head">Predecessors of <strong>${escHtml(String(name))}</strong></div><div class="df-dep-editor" id="df-dep-editor"></div>`,
-    footerHtml: '<button type="button" id="df-dep-done" class="df-tbl__csv df-tbl__csv--primary">Done</button>',
-    anchor: anchorEl, width: 380,
-    onClose: () => { if (_active && _editing) render(); },   // refresh the deps-cell summary behind the modal
-  });
-  renderDepList(m.body.querySelector('#df-dep-editor'), barId);
-  m.overlay.querySelector('#df-dep-done')?.addEventListener('click', m.close);
-}
-
-// (Re)draw the predecessor list into the editor host. Each control mutates the graph live, then re-draws.
-function renderDepList(host, barId) {
-  if (!host) return;
-  const links = ganttDepLinks(barId);
-  const siblings = ganttSiblingTasks(barId);
-  const nameOf = (id) => { const c = id && graph.getCell(id); return c ? (c.get('taskLabel') || c.attr('label/text') || 'Task') : String(id || ''); };
-  host.innerHTML = '';
-
-  if (!links.length) {
-    const p = document.createElement('p');
-    p.className = 'df-dep-editor__empty';
-    p.textContent = siblings.length ? 'No dependencies yet.' : 'No other tasks in this timeline to depend on.';
-    host.appendChild(p);
-  }
-
-  for (const link of links) {
-    const row = document.createElement('div');
-    row.className = 'df-dep-editor__row';
-    const curPred = link.get('source') && link.get('source').id;
-
-    const predSel = document.createElement('select');
-    predSel.className = 'df-properties__input df-dep-editor__pred';
-    predSel.title = 'Predecessor task';
-    // Candidates = siblings NOT already a predecessor via another link (so a repoint can't duplicate one),
-    // always keeping THIS link's own current source selectable.
-    const usedByOthers = new Set(links.filter(l => l !== link).map(l => l.get('source') && l.get('source').id));
-    // If the current predecessor isn't a sibling (a cross-timeline dep drawn on the canvas), surface it as a
-    // selected option so the select faithfully shows the real predecessor instead of auto-picking a wrong one.
-    if (curPred && !siblings.some(s => s.id === curPred)) {
-      const o = document.createElement('option');
-      o.value = curPred; o.textContent = `${nameOf(curPred)} (other timeline)`; o.selected = true;
-      predSel.appendChild(o);
-    }
-    for (const s of siblings) {
-      if (s.id !== curPred && usedByOthers.has(s.id)) continue;   // already used by another dependency
-      const o = document.createElement('option');
-      o.value = s.id; o.textContent = nameOf(s.id); if (s.id === curPred) o.selected = true;
-      predSel.appendChild(o);
-    }
-    // Repoint, then re-derive the whole editor (the Add button's availability + other rows' option sets change).
-    predSel.addEventListener('change', () => { depBatch(() => link.source({ id: predSel.value, port: 'port-right' })); renderDepList(host, barId); });
-    row.appendChild(predSel);
-
-    const del = document.createElement('button');
-    del.type = 'button'; del.className = 'df-field-delete'; del.textContent = '×'; del.title = 'Remove dependency';
-    del.addEventListener('click', () => { depBatch(() => graph.removeCells([link])); renderDepList(host, barId); });
-    row.appendChild(del);
-
-    host.appendChild(row);
-  }
-
-  const usedPreds = new Set(links.map(l => l.get('source') && l.get('source').id));
-  const avail = siblings.filter(s => !usedPreds.has(s.id));
-  const add = document.createElement('button');
-  add.type = 'button'; add.className = 'df-properties__btn df-properties__btn--add-field df-dep-editor__add';
-  add.textContent = '+ Add dependency';
-  if (!avail.length) { add.disabled = true; add.title = siblings.length ? 'Every other task is already a predecessor' : 'No other tasks in this timeline'; }
-  add.addEventListener('click', () => {
-    const pred = avail[0];
-    if (!pred) return;
-    depBatch(() => {
-      const link = new joint.shapes.standard.Link({ source: { id: pred.id, port: 'port-right' }, target: { id: barId, port: 'port-left' } });
-      link.prop('linkKind', 'ganttDep');
-      graph.addCell(link);
-      applyGanttDepLinkStyle(link);
-    });
-    renderDepList(host, barId);
-  });
-  host.appendChild(add);
-}
 
 // ── Draft mutators (called from the in-cell controls) ───────────────────────
 
@@ -1312,13 +1162,13 @@ function toggleKey(key, token) {
   const d = _draft?.get(key);
   if (!d) return;
   if (d.keyType === token) d.keyType = null;
-  else { d.keyType = token; if (token === 'pk' || token === 'fqk') d.required = true; }
+  else { d.keyType = token; if (keyImpliesRequired(token)) d.required = true; }
 }
 
 // Nullable checkbox — the inverse of required. No-op for a PK / FQK (always mandatory; the box is locked).
 function toggleNullable(key) {
   const d = _draft?.get(key);
-  if (!d || d.keyType === 'pk' || d.keyType === 'fqk') return;
+  if (!d || keyImpliesRequired(d.keyType)) return;
   d.required = isNullable(d);   // was nullable → become required (not-nullable), and vice-versa
 }
 
@@ -1440,13 +1290,7 @@ function exportRowsCsv(rows, cols = COLUMNS, suffix = 'mapping') {
 function downloadCsv(csv, suffix) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `df_${sanitizeFilenamePart(getActiveTabName(), 'tab')}_${suffix}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerDownload(url, `df_${sanitizeFilenamePart(getActiveTabName(), 'tab')}_${suffix}.csv`);
 }
 
 // In-view export button: the schema CSV in model mode (reuses data-export.js for an identical file),

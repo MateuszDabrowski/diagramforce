@@ -13,10 +13,10 @@
 // Offline: templates/*.json are SW-precached (sw.js), and the versioned cache name busts them on
 // every release/dev bump, so no `?v=` query is needed on the fetch.
 
-import { renderTemplateThumbnail } from './templates.js?v=1.19.1.1';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.2.99';
 
 // ── Manifest (small; the cells are fetched lazily) ──────────────────────────
-export const OFFICIAL_TEMPLATES = [
+const OFFICIAL_TEMPLATES = [
   {
     id: 'official-data360-contact-mapping',
     name: 'Data 360 Contact Mapping',
@@ -40,7 +40,7 @@ export function getOfficialTemplates() {
   return OFFICIAL_TEMPLATES;
 }
 
-export function getOfficialTemplate(id) {
+function getOfficialTemplate(id) {
   return OFFICIAL_TEMPLATES.find((t) => t.id === id) || null;
 }
 

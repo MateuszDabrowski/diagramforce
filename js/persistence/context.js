@@ -59,3 +59,18 @@ export const pctx = {
   normalizeDiagramType: null, // (type) => canonical type
   checkVersionWarning: null,  // async (savedVer, name, rawData) => boolean
 };
+
+// ── Wiring self-check (S8) ──────────────────────────────────────────────
+// Every slot DECLARED in the literal above MUST be non-null after app boot:
+// persistence.init() + the app.js setters + tabs.init() wire them all. Because
+// the callbacks are optional-chained at every call site (`pctx.fn?.()`), a slot
+// that a future refactor forgets to wire fails SILENTLY (the Drive/save/load flow
+// just no-ops). assertPctxWired() surfaces that: app.js calls it once at the end
+// of init and an E2E asserts it returns []. REQUIRED_PCTX_KEYS is captured at
+// module-eval so it tracks the literal automatically (add a slot → it's required).
+// Dynamic extras added later by setters (e.g. mappingModeCb) are intentionally NOT
+// asserted here — only the declared contract is guarded.
+const REQUIRED_PCTX_KEYS = Object.keys(pctx);
+export function assertPctxWired() {
+  return REQUIRED_PCTX_KEYS.filter((k) => pctx[k] == null);
+}

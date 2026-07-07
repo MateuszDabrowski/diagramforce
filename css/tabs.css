@@ -441,19 +441,14 @@
 /* Menu items mirror the toolbar dropdown items (.df-toolbar__menu-item): muted text that
    brightens on hover, 6px×14px rows, weight 500, optional leading icon. */
 .df-tab-pop__item {
+  /* width / border / font-size / font-family / cursor / white-space: shared .df-menu-item base (layout.css) */
   display: block;
-  width: 100%;
   text-align: left;
   padding: 6px 14px;
-  border: none;
   background: none;
   border-radius: var(--border-radius-sm);
   color: var(--text-secondary);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
   font-weight: 500;
-  white-space: nowrap;
 }
 .df-tab-pop__item:hover { background: var(--toolbar-button-hover); color: var(--text-primary); }
 .df-tab-pop__item--danger { color: var(--color-danger, #c23934); }
@@ -472,18 +467,17 @@
    glyph mirrors what you'll get. Darker amber in light mode for text contrast (like the amber Export buttons). */
 .df-tab-pop__item--fmt { display: flex; align-items: center; gap: 8px; }
 .df-fmt-glyph {
-  --_a: #D4911F;
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 36px; height: 16px; padding: 0 4px;
-  border: 1px solid var(--_a); border-radius: 4px;
-  background: var(--_a); color: #fff;
+  border: 1px solid var(--brand-amber-strong); border-radius: 4px;
+  background: var(--brand-amber-strong); color: #fff;
   font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0.3px; flex-shrink: 0;
 }
-[data-theme="dark"] .df-fmt-glyph { --_a: var(--brand-amber); color: #1a1a1a; }
-.df-fmt-glyph--wire { background: transparent; color: var(--_a); }
+[data-theme="dark"] .df-fmt-glyph { color: #1a1a1a; }
+.df-fmt-glyph--wire { background: transparent; color: var(--brand-amber-strong); }
 /* The dark filled-glyph rule above (#1a1a1a text) out-specifies the wire rule, which made the transparent
    variants' text dark-on-transparent → invisible on the dark menu. Restore the amber wire text in dark. */
-[data-theme="dark"] .df-fmt-glyph--wire { color: var(--_a); }
+[data-theme="dark"] .df-fmt-glyph--wire { color: var(--brand-amber-strong); }
 .df-tab-pop__header {
   padding: 4px 10px 2px;
   font-size: var(--font-size-xs, 11px);
@@ -725,68 +719,9 @@
   flex-shrink: 0;
 }
 
-.df-close-tabs__btn {
-  padding: 5px var(--spacing-sm);   /* D2: match the canonical .df-modal__btn size (was 6px 14px) */
-  border-radius: var(--border-radius-sm);
-  /* Default (secondary): neutral grey fill — Cancel. */
-  border: 1px solid transparent;
-  background: var(--modal-btn-neutral-bg);
-  color: var(--modal-btn-neutral-fg);
-  font-size: var(--font-size-xs);   /* D2: 11px, matching .df-modal__btn (was --font-size-sm / 12px) */
-  font-family: var(--font-family);
-  font-weight: 500;   /* match the sibling modal buttons (.df-close-confirm__btn / .df-modal__btn) */
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-}
-
-/* Secondary hover — scoped so it never recolours the filled variants. */
-.df-close-tabs__btn:not(.df-close-tabs__btn--primary):not(.df-close-tabs__btn--save):not(.df-close-tabs__btn--accent):not(.df-close-tabs__btn--danger):hover:not(:disabled) {
-  background: var(--modal-btn-neutral-bg-hover);
-}
-
-.df-close-tabs__btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Positive commit (Save and Close) — brand blue fill, both themes. */
-.df-close-tabs__btn--save {
-  background: var(--brand-blue);
-  color: #FFFFFF;
-  border-color: var(--brand-blue);
-}
-
-.df-close-tabs__btn--save:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-/* Destructive primary (Close Selected / Close Anyway) — brand-red fill in both
-   themes, matching the danger convention (closing tabs can discard work). */
-.df-close-tabs__btn--primary {
-  background: var(--brand-red);
-  color: #FFFFFF;
-  border-color: var(--brand-red);
-}
-
-.df-close-tabs__btn--primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-/* "Close Selected" (--accent, right) is the PRIMARY destructive action — brand-red FILL. "Close and Delete
-   Selected" (--danger, left) is the SECONDARY — a brand-red WIRE (transparent fill) — so the two read as
-   primary vs secondary rather than two identical filled reds. */
-.df-close-tabs__btn--accent {
-  background: var(--brand-red);
-  color: #FFFFFF;
-  border-color: var(--brand-red);
-}
-.df-close-tabs__btn--accent:hover:not(:disabled) { filter: brightness(1.08); }
-.df-close-tabs__btn--danger {
-  background: transparent;
-  color: var(--brand-red);
-  border-color: var(--brand-red);
-}
-.df-close-tabs__btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-red) 12%, transparent); }
+/* The Close & Delete manager + its unsaved-changes confirm use the canonical .df-modal__btn family now (C2):
+   Cancel = base neutral, Save = --primary (blue), Close Anyway / Close Selected = --danger (red fill),
+   Delete Selected = --danger-outline (red wire). The bespoke .df-close-tabs__btn clones were deleted. */
 
 /* New tab button */
 .df-tabs__new {
@@ -1034,7 +969,7 @@
 }
 
 .df-new-modal__close:hover {
-  background: var(--bg-hover);
+  background: var(--toolbar-button-hover);
   color: var(--text-primary);
 }
 

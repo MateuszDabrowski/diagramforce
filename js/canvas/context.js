@@ -38,3 +38,16 @@ export const cctx = {
   //   boolean.
   isLoadingJSON: false,       // bool flag
 };
+
+// ── Wiring self-check (S8) ──────────────────────────────────────────────
+// Every slot DECLARED in the literal above MUST be non-null after canvas.init()
+// (+ the register*(cctx) hooks + app.js's canvas.setMappingModeGetter). Like pctx,
+// the cctx forward-refs are optional-chained at call sites, so a missed wiring is a
+// silent no-op. assertCctxWired() surfaces it (app.js calls it once at init; an E2E
+// asserts []). isLoadingJSON is a boolean (starts `false`, which is non-null → passes).
+// Dynamic extras added by register* hooks (freqClockUri, getMappingMode, refitAllParents,
+// fitToCells, syncFrequencyLabel) are intentionally NOT asserted — only the declared contract.
+const REQUIRED_CCTX_KEYS = Object.keys(cctx);
+export function assertCctxWired() {
+  return REQUIRED_CCTX_KEYS.filter((k) => cctx[k] == null);
+}
