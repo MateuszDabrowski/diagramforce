@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.19.2.99';
-import { buildModal } from './feedback.js?v=1.19.2.99';
+import { compareSemver } from './util.js?v=1.19.3.8';
+import { buildModal } from './feedback.js?v=1.19.3.8';
 
 const SEEN_KEY = 'df_whats_new_seen';
 

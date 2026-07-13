@@ -1,6 +1,6 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.19.2.99';
-import { btn, tctx } from './context.js?v=1.19.2.99';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.19.3.8';
+import { btn, tctx } from './context.js?v=1.19.3.8';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
 
@@ -121,6 +121,10 @@ export function updateDisplayMenuVisibility() {
   if (layeredLabel) layeredLabel.textContent = layeredPromoted ? 'Auto Layout' : 'Layered Auto Layout (beta)';
   const hLabel = document.getElementById('auto-layout-h-label');
   if (hLabel) hLabel.textContent = isDataMapping ? 'Auto Layout' : 'Horizontal Auto Layout';
+  // Re-face Connectors: a link tidy for any 4-side-port diagram. Hidden for the same types as auto-layout
+  // (Gantt has no free links; Sequence positions are lifeline-meaningful and its links aren't 4-side-port).
+  const refaceBtn = document.getElementById('btn-reface-connectors');
+  if (refaceBtn) refaceBtn.style.display = hideAutoLayout ? 'none' : '';
 
   // DataObject display options — shown for both Data Model and Data Mapping tabs
   // (both use sf.DataObject). Mapping is its own diagram type now, so there's no

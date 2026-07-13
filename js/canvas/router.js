@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.19.2.99';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.2.99';
+import { cctx } from './context.js?v=1.19.3.8';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.3.8';
 
 // ── Routing geometry constants ──
 const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -124,6 +124,37 @@ export function pathClear(pts, obstacles) {
   return true;
 }
 
+// Length of an axis-aligned segment (a→b) lying inside a bbox expanded by `pad` (sibling of segHitsBox). 0 for
+// a segment that clears the box or is diagonal. `pad` defaults to PAD (the router's clearance zone); a caller
+// may pass 0 for overlap against the ACTUAL box rectangle.
+export function segOverlapLen(ax, ay, bx, by, box, pad = PAD) {
+  const x1 = box.x - pad, y1 = box.y - pad, x2 = right(box) + pad, y2 = bottom(box) + pad;
+  if (ax === bx) { // vertical
+    if (ax <= x1 || ax >= x2) return 0;
+    const lo = Math.min(ay, by), hi = Math.max(ay, by);
+    return Math.max(0, Math.min(hi, y2) - Math.max(lo, y1));
+  }
+  if (ay === by) { // horizontal
+    if (ay <= y1 || ay >= y2) return 0;
+    const lo = Math.min(ax, bx), hi = Math.max(ax, bx);
+    return Math.max(0, Math.min(hi, x2) - Math.max(lo, x1));
+  }
+  return 0;
+}
+
+// Total PADDED-box overlap of a full candidate route a→…mid…→b — the cost the least-overlap fallback minimises.
+// PADDED (not the actual box) on purpose: it also penalises routes that hug an obstacle EDGE, which is exactly
+// where near-parallel links stack into a foreign-overlap PILE. Measured: padded ranking keeps foreign-overlap
+// flat, whereas ranking by the actual box lets fallbacks edge-hug and pile (the banned trade).
+function routeOverlap(a, mid, b, obstacles) {
+  const pts = [a, ...mid, b];
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    for (const box of obstacles) total += segOverlapLen(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, box);
+  }
+  return total;
+}
+
 // Try a candidate route; return it if clear, or null.
 export function tryRoute(a, mid, b, obstacles) {
   const pts = [a, ...mid, b];
@@ -136,22 +167,33 @@ export function orthoRoute(a, b, obstacles) {
   const sameY = Math.abs(a.y - b.y) < 2;
   const sameX = Math.abs(a.x - b.x) < 2;
 
+  // Pool the SHORT candidates (the two L's + two Z's) as they are generated. When every candidate is blocked,
+  // the fallback returns the LEAST-overlap one from this pool instead of a blind through-node L (D1). A clear
+  // route still returns immediately below (byte-identical to before), so the pool is only consulted on the
+  // fallback path. `consider` records the candidate AND returns it when clear (so the early returns stand).
+  // DELIBERATELY pool ONLY the short L/Z routes: the detour + S-route candidates are long obstacle-edge huggers,
+  // and choosing one as a fallback would run it collinear with other links' detours → a foreign-overlap PILE,
+  // i.e. trade tunneling for collinear overlap (the banned trade the gate caught). Short L/Z stay near the
+  // direct path, so the least-overlap pick reduces over-node without spawning parallel corridors.
+  const pool = [];
+  const consider = (mid) => { pool.push(mid); return pathClear([a, ...mid, b], obstacles) ? mid : null; };
+
   // --- L-shapes (one turn) — skip when degenerate ---
   if (!sameY && !sameX) {
-    const r = tryRoute(a, [{ x: b.x, y: a.y }], b, obstacles)
-           ?? tryRoute(a, [{ x: a.x, y: b.y }], b, obstacles);
+    const r = consider([{ x: b.x, y: a.y }])
+           ?? consider([{ x: a.x, y: b.y }]);
     if (r) return r;
   }
 
   // --- Z-shapes (two turns) — skip degenerate axis ---
   if (!sameY) {
     const my = Math.round((a.y + b.y) / 2);
-    const r = tryRoute(a, [{ x: a.x, y: my }, { x: b.x, y: my }], b, obstacles);
+    const r = consider([{ x: a.x, y: my }, { x: b.x, y: my }]);
     if (r) return r;
   }
   if (!sameX) {
     const mx = Math.round((a.x + b.x) / 2);
-    const r = tryRoute(a, [{ x: mx, y: a.y }, { x: mx, y: b.y }], b, obstacles);
+    const r = consider([{ x: mx, y: a.y }, { x: mx, y: b.y }]);
     if (r) return r;
   }
 
@@ -177,7 +219,9 @@ export function orthoRoute(a, b, obstacles) {
   const yCandidates = [...yBelow, ...yAbove].sort((p, q) => Math.abs(p - midY) - Math.abs(q - midY));
   const xCandidates = [...xRight, ...xLeft].sort((p, q) => Math.abs(p - midX) - Math.abs(q - midX));
 
-  // Try vertical detour (go to detourY, cross horizontally, return)
+  // Try vertical detour (go to detourY, cross horizontally, return). NOT pooled for the least-overlap fallback:
+  // these are long obstacle-edge-hugging routes, and picking one as a fallback runs it collinear with other
+  // links' detours → a foreign-overlap PILE (the banned trade). A clear detour is still returned immediately.
   for (const dy of yCandidates) {
     const r = tryRoute(a, [{ x: a.x, y: dy }, { x: b.x, y: dy }], b, obstacles);
     if (r) return r;
@@ -198,8 +242,18 @@ export function orthoRoute(a, b, obstacles) {
     }
   }
 
-  // Last resort: straight L (visible overlap, better than nothing)
-  return [{ x: b.x, y: a.y }];
+  // Last resort: nothing is clear. Return the LEAST-overlap short candidate (L/Z) rather than a blind
+  // through-node L (D1). The blind L is included as the floor, so this is never worse than the old behaviour;
+  // strict `<` keeps the earliest (simplest/shortest) candidate on ties, since the pool is already in
+  // preference order.
+  const blindL = [{ x: b.x, y: a.y }];
+  pool.push(blindL);
+  let best = blindL, bestOv = Infinity;
+  for (const mid of pool) {
+    const ov = routeOverlap(a, mid, b, obstacles);
+    if (ov < bestOv) { bestOv = ov; best = mid; }
+  }
+  return best;
 }
 
 // Dead-straight snap. Given the two stub points + their exit directions, if they exit on directly OPPOSING
@@ -352,11 +406,11 @@ export function registerSfRouter() {
     // largely parallel and prevents the auto-layout-creates-crossings issue
     // that pure alphabetical signature-sort produced.
     const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
-    const buckets = new Map(); // signature → { coords: [], anySelf: boolean }
+    const buckets = new Map(); // signature → { coords: [], linkKey }
     for (const e of ends) {
       const sig = endSignature(e.link, e.end);
       let bucket = buckets.get(sig);
-      if (!bucket) { bucket = { coords: [] }; buckets.set(sig, bucket); }
+      if (!bucket) { bucket = { coords: [], linkKey: null }; buckets.set(sig, bucket); }
       const farRef = e.link.get(e.end === 'source' ? 'target' : 'source');
       const farCell = farRef?.id ? gr.getCell(farRef.id) : null;
       const farBB = farCell?.getBBox?.();
@@ -365,14 +419,30 @@ export function registerSfRouter() {
           ? centerX(farBB)
           : centerY(farBB));
       }
+      // Link-stable tiebreak key (min member link id). The SAME link presents
+      // DIFFERENT signatures at its two ends (tail vs arrowhead), so a
+      // signature-string tiebreak sorts that link into OPPOSITE lanes at its
+      // two ports — a co-linear opposing pair then renders as two crossed
+      // Z-jogs (the "short-connector fan-out loop"). The min-link-id is
+      // identical viewed from either port, so tiebreaking on it gives the link
+      // the same lane rank at both ends → it draws straight. See the sort below.
+      const lid = String(e.link.id || '');
+      if (bucket.linkKey == null || lid < bucket.linkKey) bucket.linkKey = lid;
     }
     const sigEntries = [...buckets.entries()].map(([sig, b]) => ({
       sig,
+      linkKey: b.linkKey != null ? b.linkKey : sig,
       mean: b.coords.length ? b.coords.reduce((a, c) => a + c, 0) / b.coords.length : Infinity,
     }));
-    // Primary: mean far-end coord (closest child gets closest anchor).
-    // Tiebreak: signature string so the order stays deterministic.
-    sigEntries.sort((a, b) => a.mean - b.mean || a.sig.localeCompare(b.sig));
+    // Primary: mean far-end coord (closest child gets closest anchor) — keeps
+    // fans ordered by target position and crossing-free. Tiebreak (co-linear
+    // case only): the group's member-link id so a link lands on the SAME lane
+    // at both of its ports and renders straight instead of jogged. Final
+    // tiebreak: signature, so the order stays fully deterministic.
+    sigEntries.sort((a, b) =>
+      a.mean - b.mean
+      || (a.linkKey < b.linkKey ? -1 : a.linkKey > b.linkKey ? 1 : 0)
+      || a.sig.localeCompare(b.sig));
     const N = sigEntries.length;
     const G = sigEntries.findIndex(e => e.sig === endSignature(link, end));
     if (G < 0) return null;

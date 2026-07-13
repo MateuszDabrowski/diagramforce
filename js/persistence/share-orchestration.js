@@ -5,14 +5,14 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.2.99';
-import { diagramHasImage } from '../image-component.js?v=1.19.2.99';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.2.99';
-import { escHtml } from '../util.js?v=1.19.2.99';
-import { sharePillHtml } from '../storage-ui.js?v=1.19.2.99';
-import { pctx } from './context.js?v=1.19.2.99';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.19.2.99';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.19.2.99';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.19.3.8';
+import { diagramHasImage } from '../image-component.js?v=1.19.3.8';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.3.8';
+import { escHtml } from '../util.js?v=1.19.3.8';
+import { sharePillHtml } from '../storage-ui.js?v=1.19.3.8';
+import { pctx } from './context.js?v=1.19.3.8';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.19.3.8';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.19.3.8';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */

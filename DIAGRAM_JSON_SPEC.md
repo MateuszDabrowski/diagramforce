@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.19.2** — matches the app's current `appVersion`; set `"appVersion": "1.19.2"` in generated files.
+> **Spec snapshot: v1.19.3** — matches the app's current `appVersion`; set `"appVersion": "1.19.3"` in generated files.
 >
 > **Validate before importing.** Run `npm run validate -- your-diagram.json` (a zero-dependency dev CLI) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -12,12 +12,20 @@
 > type-specific shape used in the wrong diagram type. It exits non-zero on errors, so it doubles as a CI gate. The CLI
 > shares the **same shape allowlist** the app loads with (`js/persistence/diagram-schema.js`), so it can't drift.
 
+> **Agent self-correction loop.** When you generate a diagram programmatically (e.g. from an LLM CLI like Claude
+> Code), don't stop at "it parsed as JSON". Run the loop: **generate -> `npm run validate -- file.json` -> fix every
+> ERROR and re-run until the file is clean -> then open it in the app (Load > Import) and eyeball the render.**
+> ERRORS mean cells or links will silently vanish on load; WARNINGS are quiet-degrade traps (a shape that loads but
+> renders wrong - a one-sided embed, a name in the wrong field, a stale field-port id, a gateway with no glyph). The
+> validator proves the diagram will **load intact** - it does **not** judge whether the layout **reads well** (spacing,
+> overlaps, flow), so the final visual pass is on you: fix ERRORS, then WARNINGS, then look at it.
+
 ## Top-Level Structure
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -40,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.19.2"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.19.3"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
@@ -55,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.2", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.2" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.3", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.3" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -88,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.2", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.3", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.2" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.3" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -175,8 +183,11 @@ adds a concrete rule.
 ## Common authoring mistakes (per type)
 
 The traps below are **type-specific** - things the loader silently heals, drops, or derives, so emitting them wrong
-fails quietly. (The generic mistakes - an unknown shape `type`, a link to a missing id, duplicate ids, a wrong
-`diagramType` - are caught by `npm run validate`; see the top of this doc.) Each rule is `✗ wrong → ✓ right`.
+fails quietly. `npm run validate` catches the generic mistakes (unknown shape `type`, a link to a missing id,
+duplicate ids, a wrong `diagramType`) **plus the five highest-frequency type-specific traps below** - a one-sided
+embed, a duplicate Gantt `order`, an OrgPerson missing top-level `personName`, a stale DataObject field-port `<fid>`,
+and a BpmnGateway with no marker glyph. The rest still fail quietly, so this section stays your guide. Each rule is
+`✗ wrong → ✓ right`.
 
 **`architecture`**
 - ✗ `type: "sf.Link"` to connect two shapes → ✓ `type: "standard.Link"` with `source`/`target` `{id, port}`. `sf.Link` is a standalone clickable-URL pill ELEMENT (a `url`-prop node with no ports), not a connector.
@@ -1827,7 +1838,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.19.2", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.19.3", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1909,7 +1920,7 @@ their cadence on the line. *(Validated with `npm run validate`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -1941,7 +1952,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2068,7 +2079,7 @@ swaps port direction. *(Validated with `npm run validate`; rendered in-app.)*
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2098,7 +2109,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2131,7 +2142,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2182,7 +2193,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.2",
+  "appVersion": "1.19.3",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

@@ -1,25 +1,25 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.19.2.99';
-import { tbctx } from './tabs/context.js?v=1.19.2.99';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.19.2.99';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.19.2.99';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.19.2.99';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.19.2.99';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.19.3.8';
+import { tbctx } from './tabs/context.js?v=1.19.3.8';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.19.3.8';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.19.3.8';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.19.3.8';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.19.3.8';
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.19.2.99';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.19.2.99';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.2.99';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName } from './persistence/drive-sync-logic.js?v=1.19.2.99';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.19.2.99';
-import { wireMenuDismiss } from './menu.js?v=1.19.2.99';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.19.2.99';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.19.2.99';
-import { getPalette } from './brand-palette.js?v=1.19.2.99';
-import { getAllIcons } from './icons.js?v=1.19.2.99';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.2.99';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.19.3.8';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.19.3.8';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.3.8';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.19.3.8';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.19.3.8';
+import { wireMenuDismiss } from './menu.js?v=1.19.3.8';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.19.3.8';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.19.3.8';
+import { getPalette } from './brand-palette.js?v=1.19.3.8';
+import { getAllIcons } from './icons.js?v=1.19.3.8';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.3.8';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -799,7 +799,7 @@ export function getAllTabs() {
     // Drive status for the Save-to-Drive modal's per-row chip.
     driveFileId: t.driveFileId || null,
     driveDriveId: t.driveDriveId || null,             // set → the file LIVES on a team Shared Drive → "Shared Drive" chip + tab glyph
-    driveHasMyDriveBackup: (t.driveCopies || []).some(c => c && c.kind === 'mydrive-backup'),   // a Shared-Drive file mirrored into My Drive → "My Drive" chip too
+    driveHasMyDriveBackup: hasVerifiedMyDriveBackup(t.driveCopies),   // a Shared-Drive file mirrored into My Drive → "My Drive" chip too. VERIFIED mirrors only: a bare pointer survives the user deleting the mirror in Drive, and the chip must not claim a file that is gone
     driveSharedCopies: (t.driveCopies || []).filter(c => c && c.kind === 'shared-drive').length,
     driveEditShares: (t.driveCopies || []).filter(c => c && c.kind === 'edit-share').length,   // # of editable copies fanned out (Collab/Copy) → "shared by you" out-chip
     driveCopies: (t.driveCopies && t.driveCopies.length) ? t.driveCopies : null,   // raw fan-out targets → lets the Load library cross-ref + hide recipient-editable copies created before the dfEditShareOf stamp

@@ -1,8 +1,9 @@
 // Storage-manager UI emitters (CLEANUP S1) — moved out of the documented-pure util.js. These build (or, for the
 // split-table + tri-state helpers, mutate) DOM for the Save / Load / Close managers' rows, chips, collapsible
 // split tables, and select-alls (including the V4/V5 helpers). Depends only on the genuinely-pure helpers that
-// stay in util.js.
-import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.19.2.99';
+// stay in util.js + the zero-dep drive-sync-logic leaf (hasVerifiedMyDriveBackup — the chip's honesty rule).
+import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.19.3.8';
+import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.19.3.8';
 
 export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', active = false, checkbox = '',
   diagramType = '', typeTitle = '', icon: iconOverride = '', leadingIcon = false, name = '', nameSuffix = '', groupBadge = '', count = null,
@@ -152,7 +153,11 @@ export function driveChipsHtml(t, { driveOn = false, browserOn = true, browserTi
 export function tabRowChipsHtml(tab, { driveOn = false } = {}) {
   const copies = tab.driveCopies || [];
   const sharedCopies = copies.filter((c) => c && c.kind === 'shared-drive').length;
-  const hasMyDriveBackup = copies.some((c) => c && c.kind === 'mydrive-backup');
+  // A bare `mydrive-backup` pointer is NOT evidence the mirror exists — deleting it in Drive left the pointer behind
+  // and the chip kept claiming "My Drive" for a file that was gone. Require the `verifiedAt` stamp a create, a
+  // successful fan-out write, or a reconcile probe sets (hasVerifiedMyDriveBackup). A legacy entry reads unverified
+  // until the next reconcile confirms it (chip off, one sync) or prunes it (chip off, honestly).
+  const hasMyDriveBackup = hasVerifiedMyDriveBackup(copies);
   const chips = driveChipsHtml({ ...tab, driveSharedCopies: sharedCopies }, { driveOn, onSharedDrive: !!tab.driveDriveId, hasMyDriveBackup });
   const src = tab.driveSharedSource;
   // A VIEW FORK is your own file → no pill (only a refresh pointer). Otherwise the pill shows access (Collab/Copy).

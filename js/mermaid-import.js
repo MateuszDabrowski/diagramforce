@@ -11,9 +11,9 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.19.2.99';
-import { ER_MARKER_D } from './er-markers.js?v=1.19.2.99';
-import { showError, showToast } from './feedback.js?v=1.19.2.99';
+import { createElementFromComponent } from './components.js?v=1.19.3.8';
+import { ER_MARKER_D } from './er-markers.js?v=1.19.3.8';
+import { showError, showToast } from './feedback.js?v=1.19.3.8';
 
 let modules = {};
 
@@ -179,47 +179,106 @@ export function snapLinksToPorts(graph, direction) {
     // they route the link down-and-around through empty space (the reported architecture tangle). Clear them so
     // the link re-routes fresh on the new layout. Captured by recordPositionsBatch, so it undoes with the layout.
     if ((link.get('vertices') || []).length) link.set('vertices', []);
-    const sb = src.getBBox();
-    const tb = tgt.getBBox();
-    const dx = (tb.x + tb.width / 2) - (sb.x + sb.width / 2);
-    const dy = (tb.y + tb.height / 2) - (sb.y + sb.height / 2);
-    const srcIsDO = src.get('type') === 'sf.DataObject';
-    const tgtIsDO = tgt.get('type') === 'sf.DataObject';
-    // DataObjects carry explicit field-level ports (`field-left-*` /
-    // `field-right-*`) attached to PK/FK rows. Those connections are
-    // semantically meaningful — losing them would collapse an ER diagram
-    // back to object-level arrows. Preserve any field port the user has
-    // already wired up; only snap ends that are still at the generic
-    // object-level ports (or have no port at all).
-    const srcPortId = link.get('source')?.port || '';
-    const tgtPortId = link.get('target')?.port || '';
-    const srcIsFieldPort = typeof srcPortId === 'string' && srcPortId.startsWith('field-');
-    const tgtIsFieldPort = typeof tgtPortId === 'string' && tgtPortId.startsWith('field-');
-    let srcPort, tgtPort;
-    // DataObject only has top/bottom static ports at the object level —
-    // never pick left/right.
-    if (srcIsDO || tgtIsDO) {
-      if (dy >= 0) { srcPort = 'port-bottom'; tgtPort = 'port-top'; }
-      else         { srcPort = 'port-top';    tgtPort = 'port-bottom'; }
-    } else {
-      // Prefer the axis matching the layout direction so cross-layer edges
-      // always exit on the "flow" side (e.g. vertical layout → top/bottom).
-      // Fall back to the longer axis when direction isn't specified.
-      let useVertical;
-      if (direction === 'vertical') useVertical = Math.abs(dy) > 1;
-      else if (direction === 'horizontal') useVertical = Math.abs(dx) <= 1;
-      else useVertical = Math.abs(dy) > Math.abs(dx);
-      if (useVertical) {
-        if (dy >= 0) { srcPort = 'port-bottom'; tgtPort = 'port-top'; }
-        else         { srcPort = 'port-top';    tgtPort = 'port-bottom'; }
-      } else {
-        if (dx >= 0) { srcPort = 'port-right'; tgtPort = 'port-left'; }
-        else         { srcPort = 'port-left';  tgtPort = 'port-right'; }
-      }
+    // Stage C M8: for the same reason the label's stored position.distance/offset (hand-placed on the OLD
+    // route) is now meaningless - it commonly lands ON a node after re-layout. Re-centre every label on the
+    // fresh connector (distance 0.5, offset 0). Also captured by recordPositionsBatch → one undo step.
+    const labels = link.labels?.() || [];
+    if (labels.length) {
+      link.labels(labels.map((l) => ({ ...l, position: { distance: 0.5, offset: 0 } })));
     }
+    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, direction);
     if (!srcIsFieldPort && src.getPort?.(srcPort)) link.source({ id: src.id, port: srcPort });
     if (!tgtIsFieldPort && tgt.getPort?.(tgtPort)) link.target({ id: tgt.id, port: tgtPort });
   }
+}
+
+/**
+ * The port-facing heuristic, factored out so both post-layout snapping
+ * (snapLinksToPorts) and the standalone Re-face Connectors action share ONE
+ * source of truth. Given a link and its two endpoint elements, returns which
+ * side port each end should attach to so the connector exits toward the other
+ * box: left<->right when the boxes sit side by side, top<->bottom when stacked.
+ * `direction` biases the choice to the layout's flow axis ('vertical' /
+ * 'horizontal'); pass null/undefined for pure geometry (longer-axis wins).
+ * Also reports whether either end sits on a DataObject field port, which the
+ * caller must leave alone (ER cardinality lives on those).
+ */
+export function pickFacingPorts(link, src, tgt, direction) {
+  const sb = src.getBBox();
+  const tb = tgt.getBBox();
+  const dx = (tb.x + tb.width / 2) - (sb.x + sb.width / 2);
+  const dy = (tb.y + tb.height / 2) - (sb.y + sb.height / 2);
+  const srcIsDO = src.get('type') === 'sf.DataObject';
+  const tgtIsDO = tgt.get('type') === 'sf.DataObject';
+  // DataObjects carry explicit field-level ports (`field-left-*` /
+  // `field-right-*`) attached to PK/FK rows. Those connections are
+  // semantically meaningful — losing them would collapse an ER diagram
+  // back to object-level arrows. Preserve any field port the user has
+  // already wired up; only snap ends still at the generic object-level ports.
+  const srcPortId = link.get('source')?.port || '';
+  const tgtPortId = link.get('target')?.port || '';
+  const srcIsFieldPort = typeof srcPortId === 'string' && srcPortId.startsWith('field-');
+  const tgtIsFieldPort = typeof tgtPortId === 'string' && tgtPortId.startsWith('field-');
+  let srcPort, tgtPort;
+  // DataObject only has top/bottom static ports at the object level —
+  // never pick left/right.
+  if (srcIsDO || tgtIsDO) {
+    if (dy >= 0) { srcPort = 'port-bottom'; tgtPort = 'port-top'; }
+    else         { srcPort = 'port-top';    tgtPort = 'port-bottom'; }
+  } else {
+    // Geometry-primary: attach to the side actually FACING the other box - the
+    // larger delta wins (side by side → left/right; stacked → top/bottom). The
+    // layout `direction` only breaks an exact tie toward the flow axis; it no
+    // longer FORCES that axis. The old `direction === 'vertical' → |dy| > 1`
+    // rule re-ported every clearly-sideways cross-zone edge to top/bottom, so a
+    // horizontal-flow architecture came out of a vertical auto-layout with all
+    // ports on the wrong side - the hooked "auto-layout tangle". Longer-axis
+    // facing fixes that while staying identical for a clean single-axis flow
+    // (a vertical stack still has |dy| ≫ |dx| → top/bottom).
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    let useVertical;
+    if (ay > ax) useVertical = true;
+    else if (ax > ay) useVertical = false;
+    else useVertical = direction !== 'horizontal';   // exact tie → prefer the flow axis
+    if (useVertical) {
+      if (dy >= 0) { srcPort = 'port-bottom'; tgtPort = 'port-top'; }
+      else         { srcPort = 'port-top';    tgtPort = 'port-bottom'; }
+    } else {
+      if (dx >= 0) { srcPort = 'port-right'; tgtPort = 'port-left'; }
+      else         { srcPort = 'port-left';  tgtPort = 'port-right'; }
+    }
+  }
+  return { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort };
+}
+
+/**
+ * Standalone "Re-face Connectors" tidy: re-attach every link to the side port
+ * pointing at its other end (pure geometry — no layout direction). Unlike
+ * snapLinksToPorts, this is NOT a post-auto-layout step, so it is deliberately
+ * conservative:
+ *   - links carrying MANUAL VERTICES are skipped entirely — a user-routed
+ *     connector is sacred, and re-facing its ends would fight its waypoints;
+ *   - vertices are never cleared and labels are never re-centred;
+ *   - self-loops, danglers, and DataObject field ports are left untouched.
+ * Returns the count of links whose ports actually changed. The caller wraps
+ * the call in a history batch (one undo step) and reroutes afterwards.
+ */
+export function refaceConnectors(graph) {
+  let changed = 0;
+  for (const link of graph.getLinks()) {
+    const src = link.getSourceElement?.();
+    const tgt = link.getTargetElement?.();
+    if (!src || !tgt || src === tgt) continue;          // danglers + self-loops
+    if ((link.get('vertices') || []).length) continue;  // user route is sacred
+    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, null);
+    const curS = link.get('source')?.port;
+    const curT = link.get('target')?.port;
+    let touched = false;
+    if (!srcIsFieldPort && srcPort !== curS && src.getPort?.(srcPort)) { link.source({ id: src.id, port: srcPort }); touched = true; }
+    if (!tgtIsFieldPort && tgtPort !== curT && tgt.getPort?.(tgtPort)) { link.target({ id: tgt.id, port: tgtPort }); touched = true; }
+    if (touched) changed++;
+  }
+  return changed;
 }
 
 /**

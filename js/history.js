@@ -344,6 +344,7 @@ export function init(_graph) {
   // undo/redo.
   graph.on('change:labels', (cell) => {
     if (isUndoRedoing || loadingGuard?.()) return;
+    if (_suppressPositionTracking) return;   // recordPositionsBatch captures labels itself (M8 reset → one undo step)
     const oldLabels = cell.previous('labels');
     const newLabels = cell.get('labels');
     const oldStr = JSON.stringify(oldLabels ?? []);
@@ -661,12 +662,14 @@ export function recordPositionsBatch(callback, afterRestore = null) {
   }
   const beforeEndpoints = new Map();
   const beforeVertices = new Map();
+  const beforeLabels = new Map();
   for (const link of graph.getLinks()) {
     beforeEndpoints.set(link.id, {
       source: JSON.parse(JSON.stringify(link.get('source') || {})),
       target: JSON.parse(JSON.stringify(link.get('target') || {})),
     });
     beforeVertices.set(link.id, JSON.stringify(link.get('vertices') ?? []));
+    beforeLabels.set(link.id, JSON.stringify(link.get('labels') ?? []));
   }
 
   // Suppress the change:position handler's pendingChanges recording for
@@ -749,6 +752,22 @@ export function recordPositionsBatch(callback, afterRestore = null) {
     const newV = JSON.parse(newVStr);
     undos.push(() => { const c = graph.getCell(id); if (c) c.set('vertices', oldV); });
     redos.push(() => { const c = graph.getCell(id); if (c) c.set('vertices', newV); });
+  }
+
+  // 4. Link LABEL diffs (M8) — auto-layout re-routes every link, so a label's stored position.distance/
+  //    offset (hand-placed on the OLD route) now lands wherever, often on a node. snapLinksToPorts resets
+  //    them to the connector centre; capture that here so it undoes in THIS one step (the change:labels
+  //    listener bails during the batch, mirroring the vertices path).
+  for (const link of graph.getLinks()) {
+    const oldLStr = beforeLabels.get(link.id);
+    if (oldLStr == null) continue;
+    const newLStr = JSON.stringify(link.get('labels') ?? []);
+    if (oldLStr === newLStr) continue;
+    const id = link.id;
+    const oldL = JSON.parse(oldLStr);
+    const newL = JSON.parse(newLStr);
+    undos.push(() => { const c = graph.getCell(id); if (c) c.set('labels', oldL); });
+    redos.push(() => { const c = graph.getCell(id); if (c) c.set('labels', newL); });
   }
 
   if (undos.length === 0) return;

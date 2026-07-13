@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.19.2.99';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.2.99';
-import { resizeDataObjectToFit } from './components.js?v=1.19.2.99';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.2.99';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.19.2.99';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.2.99';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.2.99';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.19.2.99';
-import { renderTemplateThumbnail } from './templates.js?v=1.19.2.99';
-import { showWhatsNewNow } from './whats-new.js?v=1.19.2.99';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.2.99';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.19.2.99';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.19.2.99';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.19.2.99';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.19.2.99';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.19.2.99';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.19.2.99';
+import { diagramHasImage } from './image-component.js?v=1.19.3.8';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.3.8';
+import { resizeDataObjectToFit } from './components.js?v=1.19.3.8';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.3.8';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.19.3.8';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.3.8';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.3.8';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.19.3.8';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.3.8';
+import { showWhatsNewNow } from './whats-new.js?v=1.19.3.8';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.3.8';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.19.3.8';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.19.3.8';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.19.3.8';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.19.3.8';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.19.3.8';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.19.3.8';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.19.2.99';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.19.2.99';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.19.2.99';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.19.3.8';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.19.3.8';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.19.3.8';
 
 let modules = {};
 export function init(_modules) {
@@ -386,9 +386,31 @@ export function init(_modules) {
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
   btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
-  // v2 (experimental): Layered = vertical ranks + barycentre cross-alignment (children under parents).
-  // A second option to A/B compare against the current auto-layout until confirmed better.
-  btn('btn-auto-layout-layered')?.addEventListener('click', () => runAutoLayout('vertical', { align: 'barycenter' }));
+  // The promoted single "Auto Layout" (Data Model / Architecture / Org): Layered = barycentre
+  // cross-alignment (children under parents). detectAxis reads the flow axis from the diagram's own
+  // geometry (Stage C M2) instead of forcing vertical, so a left→right lane design isn't rotated into
+  // a column; 'vertical' stays the fallback when the axis can't be read.
+  btn('btn-auto-layout-layered')?.addEventListener('click', () => runAutoLayout('vertical', { align: 'barycenter', detectAxis: true }));
+
+  // Re-face Connectors — a standalone tidy that re-attaches every link to the side port facing its other
+  // end (the mermaid-import port heuristic, reused). Node positions are untouched; hand-routed links (manual
+  // vertices) are skipped. recordPositionsBatch snapshots + diffs the source/target endpoints so the whole
+  // re-port is ONE undo step (same path snapLinksToPorts rides after auto-layout); change:source/target then
+  // reroutes each link. rerouteAllLinks() forces the redraw immediately rather than waiting on the rAF cascade.
+  btn('btn-reface-connectors')?.addEventListener('click', () => {
+    let changed = 0;
+    modules.history.recordPositionsBatch(() => {
+      try { changed = modules.mermaidImport.refaceConnectors(modules.graph); } catch {}
+    });
+    rerouteAllLinks();
+    showToast(
+      changed > 0
+        ? `Re-faced ${changed} connector${changed === 1 ? '' : 's'} to face their targets ✓`
+        : 'Connectors already face their targets - nothing to re-face.',
+      changed > 0 ? 'success' : 'info',
+    );
+    document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
+  });
 
   // Help menu — consolidates the old standalone ? (guided tour) + i (about) icons + What's new into ONE
   // dropdown. btn-help-tour is wired in walkthrough.js (start); the other two here.

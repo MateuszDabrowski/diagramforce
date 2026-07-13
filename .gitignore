@@ -29,6 +29,7 @@ CLAUDE.md
 .claude/
 examples/
 dev/
+*.sketch
 
 # Dev-only debug pages
 reset.html

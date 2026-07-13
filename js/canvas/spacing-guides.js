@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.19.2.99';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.2.99';
+import { cctx } from './context.js?v=1.19.3.8';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.3.8';
 
 // ── Tolerances ──────────────────────────────────────────────────────
 const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)

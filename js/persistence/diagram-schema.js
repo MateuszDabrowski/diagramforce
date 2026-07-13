@@ -83,13 +83,14 @@ export function validateDiagram(diagram) {
 
   const ids = new Set();
   const seen = new Set();
+  const byId = new Map();   // id -> cell (first occurrence) - powers the reciprocity / field-port checks below.
   // First pass: collect valid cell ids (for the dangling-link check) + structural/allowlist/dup checks.
   for (const c of cells) {
     if (!c || typeof c !== 'object') { errors.push('A cell is not an object (dropped on load).'); continue; }
     const id = c.id;
     const ct = c.type;
     if (typeof id !== 'string' || !id) errors.push(`Cell missing a string \`id\` (type ${JSON.stringify(ct)}).`);
-    else { if (seen.has(id)) errors.push(`Duplicate cell id "${id}".`); seen.add(id); ids.add(id); }
+    else { if (seen.has(id)) errors.push(`Duplicate cell id "${id}".`); else byId.set(id, c); seen.add(id); ids.add(id); }
     if (typeof ct !== 'string' || !ct) { errors.push(`Cell "${id ?? '?'}" missing a string \`type\`.`); continue; }
     if (!ALLOWED_CELL_TYPES.has(ct)) {
       errors.push(`Cell "${id ?? '?'}" has unknown type "${ct}" - SILENTLY DROPPED on load (not in the shape allowlist).`);
@@ -128,6 +129,85 @@ export function validateDiagram(diagram) {
       for (const eid of c.embeds) {
         if (!ids.has(eid)) warnings.push(`Cell "${c.id ?? '?'}" \`embeds\` a missing cell "${eid}" - pruned on load.`);
       }
+    }
+  }
+
+  // Type-specific QUIET-DEGRADE traps (documented in DIAGRAM_JSON_SPEC.md "Common authoring mistakes"). Unlike the
+  // generic failures above, the loader neither drops nor heals these - the cell loads but renders WRONG, so an author
+  // can't see the mistake without this check. All WARNINGS (the diagram still imports).
+
+  // One-sided embed: both cells are present but the parent<->embeds relationship is declared on only one side.
+  // json-pipeline.js S6 only strips parent/embeds pointing at a MISSING cell; it does NOT reconcile a half-declared
+  // embed. JointJS reads `parent` and `embeds` as independent attributes, so a one-sided embed group-moves /
+  // reparents asymmetrically. The spec tells authors to set BOTH sides (child `parent` AND the id in parent `embeds`).
+  for (const c of cells) {
+    if (!c || typeof c !== 'object' || typeof c.id !== 'string') continue;
+    if (typeof c.parent === 'string' && ids.has(c.parent)) {
+      const p = byId.get(c.parent);
+      const embeds = Array.isArray(p?.embeds) ? p.embeds : [];
+      if (!embeds.includes(c.id)) {
+        warnings.push(`Cell "${c.id}" sets \`parent\` "${c.parent}" but that cell's \`embeds\` doesn't list "${c.id}" - set BOTH sides (the loader won't reconcile a one-sided embed).`);
+      }
+    }
+    if (Array.isArray(c.embeds)) {
+      for (const eid of c.embeds) {
+        if (!ids.has(eid)) continue;   // missing-child case already warned above
+        const child = byId.get(eid);
+        if (child && child.parent !== c.id) {
+          warnings.push(`Cell "${c.id}" \`embeds\` "${eid}" but that cell's \`parent\` is ${child.parent == null ? 'unset' : `"${child.parent}"`}, not "${c.id}" - set BOTH sides.`);
+        }
+      }
+    }
+  }
+
+  // Gantt: `order` IS the row slot - two GanttTasks with the same order collide in one row. (A MISSING order is
+  // auto-healed from the bar's Y on load, so only the un-healed duplicate is flagged.)
+  const ganttRow = new Map();   // order value -> first task id that claimed it
+  for (const c of cells) {
+    if (!c || c.type !== 'sf.GanttTask' || typeof c.order !== 'number') continue;
+    if (ganttRow.has(c.order)) {
+      warnings.push(`GanttTask "${c.id ?? '?'}" reuses \`order\` ${c.order} (already used by "${ganttRow.get(c.order)}") - each bar needs a distinct 0-based row slot.`);
+    } else ganttRow.set(c.order, c.id ?? '?');
+  }
+
+  // OrgPerson: the name must be the TOP-LEVEL `personName` - the view overwrites attrs.nameLabel from it every
+  // render, so a name placed only in attrs paints once then vanishes. A `vacant` slot may legitimately have none.
+  for (const c of cells) {
+    if (!c || c.type !== 'sf.OrgPerson') continue;
+    const hasName = typeof c.personName === 'string' && c.personName.trim() !== '';
+    if (!hasName && c.vacant !== true) {
+      warnings.push(`OrgPerson "${c.id ?? '?'}" has no top-level \`personName\` - put the name there (not in attrs.nameLabel), or set \`vacant: true\`.`);
+    }
+  }
+
+  // DataObject field ports: a link end referencing `field-{left,right}-<fid>` must name a fid that exists on that
+  // object's `fields` - a stale fid builds no port, so the link end dangles. Only checked when the object's fields
+  // actually carry fids (generators MAY omit them; the app assigns on load) and the ref isn't the legacy numeric
+  // index form (`field-left-3`, which migrateLinks re-keys), to avoid false positives.
+  const FIELD_PORT = /^field-(?:left|right)-(.+)$/;
+  for (const c of cells) {
+    if (!isLink(c)) continue;
+    for (const end of ['source', 'target']) {
+      const ref = c[end];
+      if (!ref || typeof ref !== 'object' || typeof ref.port !== 'string' || typeof ref.id !== 'string') continue;
+      const m = FIELD_PORT.exec(ref.port);
+      if (!m || /^\d+$/.test(m[1])) continue;
+      const obj = byId.get(ref.id);
+      if (!obj || obj.type !== 'sf.DataObject' || !Array.isArray(obj.fields)) continue;
+      const fids = obj.fields.map((f) => f && f.fid).filter((x) => typeof x === 'string');
+      if (fids.length && !fids.includes(m[1])) {
+        warnings.push(`Link "${c.id ?? '?'}" ${end} port "${ref.port}" references field id "${m[1]}" not on DataObject "${ref.id}" - copy a real \`fid\` from its fields (a stale one builds no port, so the end dangles).`);
+      }
+    }
+  }
+
+  // BpmnGateway: the decision glyph lives in `attrs.marker.text` and is NOT derived from `gatewayType` on load
+  // (it's applied only at stencil-drop), so an authored gateway without it renders blank / inert.
+  for (const c of cells) {
+    if (!c || c.type !== 'sf.BpmnGateway') continue;
+    const t = c.attrs?.marker?.text;
+    if (typeof t !== 'string' || t.trim() === '') {
+      warnings.push(`BpmnGateway "${c.id ?? '?'}" has no \`attrs.marker.text\` glyph (× exclusive / + parallel / ○ inclusive / ◇ event) - it renders blank (the loader doesn't derive it from gatewayType).`);
     }
   }
 

@@ -3,7 +3,9 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.19.2.99';
+import { cctx } from './context.js?v=1.19.3.8';
+// The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.19.3.8';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -74,77 +76,43 @@ export function autoLayout(direction, opts = {}) {
     });
   }
 
-  // For each layout element, compute its effective size (including embedded children)
-  const sizes = new Map();
-  layoutEls.forEach(el => {
+  // Layout UNITS: each top-level element as a box. Sizes are the element's own size —
+  // embedded children ride along with their parent (groups are rigid units on this path).
+  const units = layoutEls.map((el) => {
     const s = el.size();
-    sizes.set(el.id, { w: s.width, h: s.height });
+    return { id: el.id, w: s.width, h: s.height };
   });
-
-  // Build directed + undirected adjacency from links
-  const adj = new Map();       // undirected — for connected components
-  const adjOut = new Map();    // directed — source→target for layering
-  const adjIn = new Map();     // directed — target←source for layering
-  layoutEls.forEach(el => {
-    adj.set(el.id, new Set());
-    adjOut.set(el.id, new Set());
-    adjIn.set(el.id, new Set());
-  });
+  const unitIds = new Set(units.map((u) => u.id));
 
   // Helper: resolve an element ID to its top-level layout ID
   function toLayoutId(cellId) {
-    if (adj.has(cellId)) return cellId;
+    if (unitIds.has(cellId)) return cellId;
     const cell = graph.getCell(cellId);
     const parentId = cell?.get('parent');
-    if (parentId && adj.has(parentId)) return parentId;
+    if (parentId && unitIds.has(parentId)) return parentId;
     // Nested deeper — walk up
     let cur = cell;
     while (cur) {
       const pid = cur.get('parent');
       if (!pid) break;
-      if (adj.has(pid)) return pid;
+      if (unitIds.has(pid)) return pid;
       cur = graph.getCell(pid);
     }
     return null;
   }
 
-  const layoutLinks = links.filter(link => {
+  // Resolve every link onto the units it connects. Self-edges and links whose endpoints don't
+  // resolve are dropped (layoutGraphSubset also guards, but keep the intent visible here).
+  const edges = [];
+  for (const link of links) {
     const sId = toLayoutId(link.get('source')?.id);
     const tId = toLayoutId(link.get('target')?.id);
-    return sId && tId && sId !== tId && adj.has(sId) && adj.has(tId);
-  });
-  layoutLinks.forEach(link => {
-    const sId = toLayoutId(link.get('source')?.id);
-    const tId = toLayoutId(link.get('target')?.id);
-    adj.get(sId).add(tId);
-    adj.get(tId).add(sId);
-    adjOut.get(sId).add(tId);
-    adjIn.get(tId).add(sId);
-  });
-
-  // Find connected components
-  const visited = new Set();
-  const components = [];
-  for (const el of layoutEls) {
-    if (visited.has(el.id)) continue;
-    const comp = [];
-    const stack = [el.id];
-    while (stack.length) {
-      const id = stack.pop();
-      if (visited.has(id)) continue;
-      visited.add(id);
-      comp.push(id);
-      for (const n of (adj.get(id) || [])) {
-        if (!visited.has(n)) stack.push(n);
-      }
-    }
-    components.push(comp);
+    if (sId && tId && sId !== tId) edges.push({ source: sId, target: tId });
   }
-
-  const pos = new Map();
 
   // Detect diagram type to choose layout direction
   // Flow/BPMN → horizontal (left-to-right), everything else → vertical (top-to-bottom)
+  // The AXIS is the caller's decision, not the engine's — Stage C M2 will override this in laneMode.
   let isHorizontal;
   if (direction === 'horizontal') {
     isHorizontal = true;
@@ -161,450 +129,43 @@ export function autoLayout(direction, opts = {}) {
     isHorizontal = horizCount > layoutEls.length / 2;
   }
 
-  const GAP_X = isHorizontal ? 80 : 64;  // must exceed 2× router STUB (20) + PAD (16) = 56
-  const GAP_Y = isHorizontal ? 64 : 80;
-
-  function layoutComponent(ids) {
-    if (ids.length === 1) {
-      pos.set(ids[0], { x: 0, y: 0 });
-      return;
-    }
-
-    const idSet = new Set(ids);
-
-    // Use longest-path layering based on directed edges for proper flow direction.
-    // Assign each node a layer = longest path from any root (node with no in-edges in this component).
-    const level = new Map();
-
-    // Find roots: nodes with no incoming edges within this component
-    const roots = ids.filter(id => {
-      const inEdges = adjIn.get(id) || new Set();
-      return ![...inEdges].some(n => idSet.has(n));
+  // GEOMETRIC AXIS DETECTION (Stage C M2) — opt-in via opts.detectAxis (the promoted "Auto Layout"
+  // button). The button hard-codes 'vertical', so a diagram a human drew LEFT→RIGHT (numbered lanes
+  // running across the page) is otherwise rotated into an unreadable tall column. Read the intended
+  // axis back out of the EXISTING geometry and let it win — but ONLY in "lane mode", i.e. a diagram
+  // that is mostly grouped content (≥2 top-level Zone/Container groups AND ≥50% of cells embedded).
+  // The gate matters: a hub diagram can have 2 containers sitting side-by-side (wide x-spread) while
+  // its real flow is vertical — mixed-hub is exactly that (28% embedded), so it stays OFF this path.
+  if (opts.detectAxis) {
+    const groups = layoutEls.filter((el) => {
+      const t = el.get('type');
+      return t === 'sf.Zone' || t === 'sf.Container';
     });
-    // If there's a cycle (no roots), fall back to the highest out-degree node
-    if (roots.length === 0) roots.push(ids.reduce((best, id) => (adjOut.get(id) || new Set()).size > (adjOut.get(best) || new Set()).size ? id : best, ids[0]));
-
-    // BFS/topological longest-path assignment.
-    // Cycle guard: a longest simple path in a graph with N nodes is at most N-1,
-    // so clamp level updates there — otherwise a back-edge (e.g. B→C→D→B) would
-    // re-push nodes indefinitely and hang the layout.
-    const maxLevel = ids.length - 1;
-    const queue = [...roots];
-    roots.forEach(r => level.set(r, 0));
-    while (queue.length) {
-      const id = queue.shift();
-      const l = level.get(id);
-      for (const n of (adjOut.get(id) || [])) {
-        if (!idSet.has(n)) continue;
-        const newLevel = l + 1;
-        if (newLevel > maxLevel) continue;
-        if (!level.has(n) || level.get(n) < newLevel) {
-          level.set(n, newLevel);
-          queue.push(n);
-        }
-      }
-    }
-    // Assign unvisited nodes (disconnected within component) via undirected BFS
-    for (const id of ids) {
-      if (!level.has(id)) {
-        level.set(id, 0);
-        const bfsQ = [id];
-        while (bfsQ.length) {
-          const cur = bfsQ.shift();
-          for (const n of (adj.get(cur) || [])) {
-            if (idSet.has(n) && !level.has(n)) {
-              level.set(n, level.get(cur) + 1);
-              bfsQ.push(n);
-            }
-          }
-        }
-      }
-    }
-
-    // Group by layer
-    const layers = new Map();
-    for (const id of ids) {
-      const l = level.get(id) ?? 0;
-      if (!layers.has(l)) layers.set(l, []);
-      layers.get(l).push(id);
-    }
-
-    const sortedLevels = [...layers.keys()].sort((a, b) => a - b);
-
-    // --- Barycentric crossing-reduction pass ---
-    // Assign initial order indices within each layer (preserve natural order)
-    const orderIndex = new Map(); // id → index within its layer
-    for (const l of sortedLevels) {
-      const layer = layers.get(l);
-      layer.forEach((id, i) => orderIndex.set(id, i));
-    }
-
-    // Collect edges between adjacent layers using directed edges resolved to this component
-    function edgesBetween(layerA, layerB) {
-      const setB = new Set(layerB);
-      const posA = new Map();
-      layerA.forEach((id, i) => posA.set(id, i));
-      const posB = new Map();
-      layerB.forEach((id, i) => posB.set(id, i));
-      const edges = [];
-      for (const aId of layerA) {
-        for (const n of (adjOut.get(aId) || [])) {
-          if (setB.has(n)) edges.push([posA.get(aId), posB.get(n)]);
-        }
-        for (const n of (adjIn.get(aId) || [])) {
-          if (setB.has(n)) edges.push([posA.get(aId), posB.get(n)]);
-        }
-      }
-      return edges;
-    }
-
-    // Count crossings between two adjacent layers
-    function countCrossings(layerA, layerB) {
-      const edges = edgesBetween(layerA, layerB);
-      let crossings = 0;
-      for (let i = 0; i < edges.length; i++) {
-        for (let j = i + 1; j < edges.length; j++) {
-          if ((edges[i][0] - edges[j][0]) * (edges[i][1] - edges[j][1]) < 0) crossings++;
-        }
-      }
-      return crossings;
-    }
-
-    // Total crossings across all adjacent layer pairs
-    function totalCrossings() {
-      let total = 0;
-      for (let li = 0; li < sortedLevels.length - 1; li++) {
-        total += countCrossings(layers.get(sortedLevels[li]), layers.get(sortedLevels[li + 1]));
-      }
-      return total;
-    }
-
-    // Neighbors connected to a specific adjacent layer (both directions)
-    function neighborsInLayer(id, layerSet) {
-      const result = [];
-      for (const n of (adjOut.get(id) || [])) { if (layerSet.has(n)) result.push(n); }
-      for (const n of (adjIn.get(id) || [])) { if (layerSet.has(n)) result.push(n); }
-      return result;
-    }
-
-    // Snapshot the best ordering found so far
-    let bestCrossings = totalCrossings();
-    const bestOrder = new Map();
-    for (const l of sortedLevels) {
-      bestOrder.set(l, [...layers.get(l)]);
-    }
-
-    // Run multiple sweeps of barycentric ordering
-    const NUM_SWEEPS = 6;
-    for (let sweep = 0; sweep < NUM_SWEEPS; sweep++) {
-      // Forward sweep (layer 0 → N): order each layer by avg index of predecessors in previous layer
-      for (let li = 1; li < sortedLevels.length; li++) {
-        const layer = layers.get(sortedLevels[li]);
-        const prevLayer = layers.get(sortedLevels[li - 1]);
-        const prevSet = new Set(prevLayer);
-        const prevPos = new Map();
-        prevLayer.forEach((id, i) => prevPos.set(id, i));
-
-        const bary = new Map();
-        for (const id of layer) {
-          const nbrs = neighborsInLayer(id, prevSet);
-          if (nbrs.length > 0) {
-            bary.set(id, nbrs.reduce((s, n) => s + prevPos.get(n), 0) / nbrs.length);
-          } else {
-            bary.set(id, orderIndex.get(id) ?? 0);
-          }
-        }
-        layer.sort((a, b) => bary.get(a) - bary.get(b));
-        layer.forEach((id, i) => orderIndex.set(id, i));
-      }
-
-      // Backward sweep (layer N → 0): order each layer by avg index of successors in next layer
-      for (let li = sortedLevels.length - 2; li >= 0; li--) {
-        const layer = layers.get(sortedLevels[li]);
-        const nextLayer = layers.get(sortedLevels[li + 1]);
-        const nextSet = new Set(nextLayer);
-        const nextPos = new Map();
-        nextLayer.forEach((id, i) => nextPos.set(id, i));
-
-        // Two-phase placement to avoid leaf siblings stealing the center
-        // slot from a branching node. Branching nodes are anchored at a
-        // position proportional to the center-of-mass of their children in
-        // the next layer; leaves are then slotted into remaining positions
-        // preserving their current relative order.
-        const branching = [];
-        const leaves = [];
-        for (const id of layer) {
-          const nbrs = neighborsInLayer(id, nextSet);
-          if (nbrs.length > 0) {
-            const avgNext = nbrs.reduce((s, n) => s + nextPos.get(n), 0) / nbrs.length;
-            // Map [0, nextLayer.length-1] → [0, layer.length-1].
-            // When the next layer has a single node, every branching node has
-            // the same anchor (0); the collision loop below then shifts them
-            // into distinct slots preserving avgNext order.
-            const scale = nextLayer.length > 1 ? (layer.length - 1) / (nextLayer.length - 1) : 0;
-            const targetPos = Math.round(avgNext * scale);
-            branching.push({ id, targetPos, avgNext });
-          } else {
-            leaves.push(id);
-          }
-        }
-        // Assign branching nodes to their target slots (resolve collisions
-        // by shifting to the nearest free slot).
-        const slots = new Array(layer.length).fill(null);
-        branching.sort((a, b) => a.avgNext - b.avgNext);
-        for (const b of branching) {
-          let p = Math.max(0, Math.min(layer.length - 1, b.targetPos));
-          if (slots[p] !== null) {
-            // Find nearest free slot
-            let found = -1;
-            for (let d = 1; d < layer.length; d++) {
-              if (p - d >= 0 && slots[p - d] === null) { found = p - d; break; }
-              if (p + d < layer.length && slots[p + d] === null) { found = p + d; break; }
-            }
-            if (found >= 0) p = found;
-          }
-          slots[p] = b.id;
-        }
-        // Fill remaining slots with leaves in their current order
-        let lIdx = 0;
-        for (let i = 0; i < slots.length; i++) {
-          if (slots[i] === null) {
-            while (lIdx < leaves.length && leaves[lIdx] === undefined) lIdx++;
-            slots[i] = leaves[lIdx++];
-          }
-        }
-        layer.length = 0;
-        layer.push(...slots);
-        layer.forEach((id, i) => orderIndex.set(id, i));
-      }
-
-      // Track the best ordering seen so far.
-      // Use `<=` so later (converged) orderings overwrite earlier ties —
-      // the initial order may already have zero layer-pair crossings but
-      // still produce physically crossed routes.
-      const cur = totalCrossings();
-      if (cur <= bestCrossings) {
-        bestCrossings = cur;
-        for (const l of sortedLevels) {
-          bestOrder.set(l, [...layers.get(l)]);
-        }
-      }
-    }
-
-    // Restore the best ordering found across all sweeps
-    for (const l of sortedLevels) {
-      const layer = layers.get(l);
-      const best = bestOrder.get(l);
-      layer.length = 0;
-      layer.push(...best);
-      layer.forEach((id, i) => orderIndex.set(id, i));
-    }
-
-    // Adjacent-exchange refinement: swap neighboring pairs if it reduces total crossings
-    for (let pass = 0; pass < 3; pass++) {
-      for (let li = 0; li < sortedLevels.length; li++) {
-        const layer = layers.get(sortedLevels[li]);
-        if (layer.length < 2) continue;
-        // Gather adjacent layers (check crossings against both neighbors)
-        const adjLayers = [];
-        if (li > 0) adjLayers.push(layers.get(sortedLevels[li - 1]));
-        if (li < sortedLevels.length - 1) adjLayers.push(layers.get(sortedLevels[li + 1]));
-        if (adjLayers.length === 0) continue;
-
-        let improved = true;
-        while (improved) {
-          improved = false;
-          for (let i = 0; i < layer.length - 1; i++) {
-            let before = 0;
-            for (const al of adjLayers) before += countCrossings(layer, al);
-            // Swap
-            [layer[i], layer[i + 1]] = [layer[i + 1], layer[i]];
-            let after = 0;
-            for (const al of adjLayers) after += countCrossings(layer, al);
-            if (after < before) {
-              improved = true; // keep swap
-            } else {
-              // Undo swap
-              [layer[i], layer[i + 1]] = [layer[i + 1], layer[i]];
-            }
-          }
-        }
-        layer.forEach((id, i) => orderIndex.set(id, i));
-      }
-    }
-
-    // --- Position layers using the optimized ordering ---
-    if (align === 'barycenter') {
-      // v2 "Layered": keep the optimised ranks + order, but pull each node's CROSS-axis toward the
-      // barycentre of its linked neighbours (children sit under their parents), packed in order with a
-      // min gap so the order + non-overlap survive. Along-axis (the rank) is fixed per layer.
-      const crossSz = (id) => (isHorizontal ? sizes.get(id).h : sizes.get(id).w);
-      const alongSz = (id) => (isHorizontal ? sizes.get(id).w : sizes.get(id).h);
-      const crossGap = isHorizontal ? GAP_Y : GAP_X;
-      const alongGap = isHorizontal ? GAP_X : GAP_Y;
-      // Along-axis coord per layer = cumulative max extent of the previous layers.
-      const alongAt = new Map();
-      let aCur = 0;
-      for (const l of sortedLevels) {
-        alongAt.set(l, aCur);
-        let mx = 0; for (const id of layers.get(l)) mx = Math.max(mx, alongSz(id));
-        aCur += mx + alongGap;
-      }
-      // Seed cross positions sequentially by the optimised order.
-      const cross = new Map();
-      for (const l of sortedLevels) { let c = 0; for (const id of layers.get(l)) { cross.set(id, c); c += crossSz(id) + crossGap; } }
-      const neigh = (id) => { const r = []; for (const n of (adjOut.get(id) || [])) if (cross.has(n)) r.push(n); for (const n of (adjIn.get(id) || [])) if (cross.has(n)) r.push(n); return r; };
-      // Order-preserving pack toward the neighbour barycentre.
-      const packLayer = (layer) => {
-        let prevEnd = -Infinity;
-        for (const id of layer) {
-          const ns = neigh(id);
-          let want = ns.length ? ns.reduce((s, n) => s + cross.get(n) + crossSz(n) / 2, 0) / ns.length - crossSz(id) / 2 : cross.get(id);
-          if (prevEnd > -Infinity && want < prevEnd + crossGap) want = prevEnd + crossGap;
-          cross.set(id, want);
-          prevEnd = want + crossSz(id);
-        }
-      };
-      for (let sweep = 0; sweep < 8; sweep++) {
-        for (let i = 0; i < sortedLevels.length; i++) packLayer(layers.get(sortedLevels[i]));            // down
-        for (let i = sortedLevels.length - 1; i >= 0; i--) packLayer(layers.get(sortedLevels[i]));        // up
-      }
-      // Descendant sets (node + everything reachable via adjOut within this component), built bottom-up so a
-      // parent unions its children's sets. Longest-path leveling makes every adjOut edge go to a strictly
-      // higher level, so children are finalised before their parents in this deepest-first pass.
-      const descendants = new Map();
-      for (const id of ids) descendants.set(id, new Set([id]));
-      for (let li = sortedLevels.length - 1; li >= 0; li--) {
-        for (const id of layers.get(sortedLevels[li])) {
-          const set = descendants.get(id);
-          for (const ch of (adjOut.get(id) || [])) if (descendants.has(ch)) for (const d of descendants.get(ch)) set.add(d);
-        }
-      }
-      const shiftSubtree = (id, delta) => { if (!delta) return; for (const d of descendants.get(id)) cross.set(d, cross.get(d) + delta); };
-
-      // Straighten single-child SPINES (internal nodes too, not just leaves): a node whose parent has exactly
-      // ONE child should sit directly under/across that parent - a straight connector. Shift the node's WHOLE
-      // subtree by the same delta so the branch stays attached. Top-down so each parent is final before its
-      // child aligns; a MULTI-child parent is never moved, so its children keep the barycentre spread and the
-      // spine keeps running straight AFTER a split (Start->Process->Decision->...->Terminator stays a line).
-      for (const l of sortedLevels) {
-        for (const id of layers.get(l)) {
-          const parents = [...(adjIn.get(id) || [])].filter((p) => cross.has(p));
-          if (parents.length === 1 && [...(adjOut.get(parents[0]) || [])].filter((k) => cross.has(k)).length === 1) {
-            shiftSubtree(id, (cross.get(parents[0]) + crossSz(parents[0]) / 2 - crossSz(id) / 2) - cross.get(id));
-          }
-        }
-      }
-      // Re-clamp each layer in order to remove any overlaps the cascades introduced; shift a colliding node's
-      // whole subtree (so a straightened spine stays straight). Shallow->deep so parents settle before kids.
-      for (const l of sortedLevels) {
-        let prevEnd = -Infinity;
-        for (const id of layers.get(l)) {
-          if (prevEnd > -Infinity && cross.get(id) < prevEnd + crossGap) shiftSubtree(id, (prevEnd + crossGap) - cross.get(id));
-          prevEnd = cross.get(id) + crossSz(id);
-        }
-      }
-      for (const l of sortedLevels) for (const id of layers.get(l)) {
-        pos.set(id, isHorizontal ? { x: alongAt.get(l), y: cross.get(id) } : { x: cross.get(id), y: alongAt.get(l) });
-      }
-    } else if (isHorizontal) {
-      let x = 0;
-      for (const l of sortedLevels) {
-        const col = layers.get(l);
-        let y = 0, maxW = 0;
-        for (const id of col) {
-          const sz = sizes.get(id);
-          pos.set(id, { x, y });
-          y += sz.h + GAP_Y;
-          maxW = Math.max(maxW, sz.w);
-        }
-        const offset = -(y - GAP_Y) / 2;
-        for (const id of col) { pos.get(id).y += offset; }
-        // Align single-element columns with predecessors
-        if (col.length === 1 && l > sortedLevels[0]) {
-          const id = col[0], sz = sizes.get(id);
-          const preds = [...(adjIn.get(id) || [])].filter(n => pos.has(n));
-          if (preds.length) {
-            const avgCY = preds.reduce((s, n) => s + pos.get(n).y + (sizes.get(n)?.h || 0) / 2, 0) / preds.length;
-            pos.get(id).y = avgCY - sz.h / 2;
-          }
-        }
-        x += maxW + GAP_X;
-      }
-    } else {
-      // Vertical: layers are rows (top-to-bottom)
-      let y = 0;
-      for (const l of sortedLevels) {
-        const row = layers.get(l);
-        let x = 0, maxH = 0;
-        for (const id of row) {
-          const sz = sizes.get(id);
-          pos.set(id, { x, y });
-          x += sz.w + GAP_X;
-          maxH = Math.max(maxH, sz.h);
-        }
-        const offset = -(x - GAP_X) / 2;
-        for (const id of row) { pos.get(id).x += offset; }
-        // Align single-element rows with predecessors
-        if (row.length === 1 && l > sortedLevels[0]) {
-          const id = row[0], sz = sizes.get(id);
-          const preds = [...(adjIn.get(id) || [])].filter(n => pos.has(n));
-          if (preds.length) {
-            const avgCX = preds.reduce((s, n) => s + pos.get(n).x + (sizes.get(n)?.w || 0) / 2, 0) / preds.length;
-            pos.get(id).x = avgCX - sz.w / 2;
-          }
-        }
-        y += maxH + GAP_Y;
-      }
+    const laneMode = groups.length >= 2 && (embeddedIds.size / elements.length) >= 0.5;
+    if (laneMode) {
+      // Read the axis from the LANE (group) arrangement — that is where the author's intent lives.
+      const boxes = groups.map((g) => { const p = g.position(), s = g.size(); return { x: p.x, y: p.y, w: s.width, h: s.height }; });
+      const axis = detectFlowAxis(boxes);
+      if (axis.confident) isHorizontal = axis.isHorizontal;   // ambiguous spread ⇒ keep the caller's default
     }
   }
 
-  components.forEach(comp => layoutComponent(comp));
-
-  // Arrange disconnected components: horizontal stacks side-by-side, vertical stacks top-to-bottom
-  const COMP_GAP = 64;
-  if (isHorizontal) {
-    let compX = 0;
-    for (const comp of components) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const id of comp) { const p = pos.get(id), sz = sizes.get(id); minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x + sz.w); maxY = Math.max(maxY, p.y + sz.h); }
-      for (const id of comp) { const p = pos.get(id); p.x += compX - minX; p.y += -minY; }
-      compX += (maxX - minX) + COMP_GAP;
-    }
-  } else {
-    let compY = 0;
-    for (const comp of components) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const id of comp) { const p = pos.get(id), sz = sizes.get(id); minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x + sz.w); maxY = Math.max(maxY, p.y + sz.h); }
-      for (const id of comp) { const p = pos.get(id); p.x += -minX; p.y += compY - minY; }
-      compY += (maxY - minY) + COMP_GAP;
-    }
-  }
-
-  // Overlap removal — prefer horizontal push to preserve layer structure
-  const MIN_SEP = 56;
-  const ids = [...pos.keys()];
-  for (let iter = 0; iter < 80; iter++) {
-    let anyOverlap = false;
-    for (let i = 0; i < ids.length; i++) {
-      for (let j = i + 1; j < ids.length; j++) {
-        const a = pos.get(ids[i]), b = pos.get(ids[j]);
-        const sa = sizes.get(ids[i]), sb = sizes.get(ids[j]);
-        const ax = a.x + sa.w / 2, ay = a.y + sa.h / 2;
-        const bx = b.x + sb.w / 2, by = b.y + sb.h / 2;
-        const dx = bx - ax, dy = by - ay;
-        const overlapX = (sa.w + sb.w) / 2 + MIN_SEP - Math.abs(dx);
-        const overlapY = (sa.h + sb.h) / 2 + MIN_SEP - Math.abs(dy);
-        if (overlapX > 0 && overlapY > 0) {
-          anyOverlap = true;
-          // Always push horizontally to preserve layer rows
-          const push = overlapX / 2 + 1;
-          if (dx >= 0) { a.x -= push; b.x += push; } else { a.x += push; b.x -= push; }
-        }
-      }
-    }
-    if (!anyOverlap) break;
-  }
+  // The layered engine (Stage C C2): ranks + crossing reduction + coordinates + component
+  // stacking + overlap removal. Pure — returns local, unrounded coordinates.
+  // Gaps come from the engine's defaults (GAP_X/GAP_Y keyed on the axis).
+  // breakCycles (Stage C M6): architecture diagrams legitimately contain feedback edges
+  // (reports/analytics flowing back upstream). Ranking on the raw graph let those poison the
+  // longest-path levels — the mixed-hub fixture collapsed to a single 12-node rank (a 3729px smear)
+  // and the lane diagram's flow order inverted. Ignore back-edges when RANKING; they still render.
+  //
+  // maxRankExtent / rankMedianFactor (M7): wrap a rank wider than max(1400, 2 × median rank) into
+  // sub-rows. Both numbers are MEASURED, not guessed (dev/scripts/measure-layout.mjs): on mixed-hub
+  // the cap takes aspect 2.92 → 1.38 and total connector skew 8497 → 3786, and it fires on no other
+  // fixture. The plan's original 3× factor was tried and is worse on every metric (1.67 / 5211).
+  const pos = layoutGraphSubset(units, edges, {
+    isHorizontal, align, breakCycles: true,
+    maxRankExtent: opts.maxRankExtent ?? 1400, rankMedianFactor: opts.rankMedianFactor ?? 2,
+  });
 
   // Apply positions — move parents and let embedded children follow
   let globalMinX = Infinity, globalMinY = Infinity;

@@ -1,8 +1,8 @@
 // Cloud-sync control (CLEANUP S4) — the Drive sync icon + state-aware dropdown (sign-in status row / sync-now / history / auto-sync toggle / disconnect / about). Connecting is the status-row "Sign in" button (signIn), NOT a menu item. Reads tctx.modules; imports btn+setupDropdown (context) + showDriveHistoryModal (drive-history) - one-way slice edges. init calls setupSyncControl.
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.19.2.99';
-import { formatRelativeTime } from '../util.js?v=1.19.2.99';
-import { btn, setupDropdown, tctx } from './context.js?v=1.19.2.99';
-import { showDriveHistoryModal } from './drive-history.js?v=1.19.2.99';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.19.3.8';
+import { formatRelativeTime } from '../util.js?v=1.19.3.8';
+import { btn, setupDropdown, tctx } from './context.js?v=1.19.3.8';
+import { showDriveHistoryModal } from './drive-history.js?v=1.19.3.8';
 
 // One icon (left of Share Link) + a state-aware dropdown menu. The Drive icon is
 // colour + glyph coded by sync state via the SLDS sync family; the time text shows
@@ -70,9 +70,8 @@ export function setupSyncControl() {
     btnEl.title = isError ? 'Google Drive sign-in needed - left-click for menu, right-click to reconnect'
       : isConflict ? 'This diagram changed on Google Drive - left-click for menu, right-click to review'
       : isRefresh ? 'The original shared file has new changes - left-click for menu, right-click to refresh'
-      : st.state === 'off' ? 'Google Drive - left-click for menu, right-click to sync this diagram'
       : st.state === 'saving' ? 'Saving to Google Drive…'
-      : 'Google Drive sync - left-click for menu, right-click to sync now';
+      : 'Google Drive sync - left-click for menu, right-click to sync all diagrams now';
 
     // "Connected" = account-level (signed in, OR auto-sync on, OR any tab linked to a Drive file). It drives
     // BOTH the menu shape AND the status copy, so they can never contradict (no "Not connected" header while
@@ -81,14 +80,17 @@ export function setupSyncControl() {
     const auto = p.isAutosyncOn?.();
     // Menu first row: the state explainer (left) + the KEY contextual action as a wire button (right) - so the first
     // element under the icon is always the action that matters. Sign in (signed off) / Review (conflict) / Refresh
-    // (upstream changed) / Sync now (connected + manual). No button when connected + auto-sync on + idle (nothing to do).
+    // (upstream changed) / Sync now (connected + idle). "Sync now" is offered even when AUTO-SYNC IS ON: it is the
+    // only surface that re-verifies every diagram against Drive (reconcileDriveLinks), so a user whose files were
+    // deleted or moved out-of-band had no way to trigger a re-check short of signing out and back in. Hidden only
+    // while a save is already in flight (nothing to add).
     if (statusText) statusText.textContent = syncStatusText(st, connected);
     if (statusBtn) {
       let label = '', tone = '';
       if (isError || !connected) { label = 'Sign in'; tone = 'error'; }
       else if (isConflict) { label = 'Review'; tone = 'conflict'; }
       else if (isRefresh) { label = 'Refresh'; tone = 'refresh'; }
-      else if (!auto) { label = 'Sync now'; tone = 'sync'; }
+      else if (st.state !== 'saving') { label = 'Sync now'; tone = 'sync'; }
       statusBtn.textContent = label;
       statusBtn.dataset.tone = tone;
       statusBtn.hidden = !label;
@@ -171,8 +173,10 @@ export function setupSyncControl() {
   });
 
   // Right-click the icon = fire the primary action for the current state, skipping the menu.
-  // error → reconnect (sign in); saving → no-op; everything else (off/synced/pending) → sync the
-  // active diagram now (saveToDrive signs in first if needed). Suppress the browser context menu.
+  // error → reconnect (sign in); saving → no-op; everything else (off/synced/pending) → syncNow: re-verify every
+  // open diagram against Drive and push what's behind. It used to call saveToDrive (the ACTIVE tab only), which
+  // both contradicted the tooltip and let a "nothing to do" answer for one tab read as "all diagrams are synced".
+  // syncNow signs in first if needed. Suppress the browser context menu.
   btnEl.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     closeMenu();
@@ -181,7 +185,7 @@ export function setupSyncControl() {
     else if (state === 'conflict') p.resolveActiveConflict?.();
     else if (state === 'refresh') p.reopenLatestFromDrive?.();   // pull the original's latest (item 6)
     else if (state === 'saving') { /* already saving — nothing to do */ }
-    else p.saveToDrive?.();
+    else p.syncNow?.();
   });
 
   p.setDriveStatusListener?.(render);

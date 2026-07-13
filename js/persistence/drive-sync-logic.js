@@ -28,6 +28,56 @@ export function removeCopy(copies, fileId) {
 }
 
 /**
+ * Is a fan-out copy DEAD — i.e. should its pointer be dropped from `copies[]`? Only on DIRECT evidence that the
+ * file is gone: a 404 (deleted) or an explicit `trashed:true`. NEVER on a 403 (access temporarily lost, e.g. a
+ * Shared-Drive permission change) and never on a network/5xx blip, either of which would silently unlink a live
+ * fan-out target that other people may be editing.
+ *
+ * Deliberately STRICTER than `healDecision`, which also recreates an own master on a 403: an own master can be
+ * rebuilt from local content at zero cost, whereas dropping a copy pointer severs the link to someone else's file.
+ * Without this, a deleted copy was swallowed forever (`catch { continue }`) — a deleted My-Drive backup mirror was
+ * never re-minted, and its stale pointer kept rendering a green "My Drive" chip for a file that no longer existed.
+ */
+export function deadCopyDecision({ status = null, trashed = false } = {}) {
+  if (trashed === true) return 'drop';
+  return status === 404 ? 'drop' : 'keep';
+}
+
+/**
+ * Every Drive file id an open tab already accounts for as something OTHER than its own master: its fan-out copies
+ * (My-Drive backup mirror / Shared-Drive copy / edit-share copy) plus the upstream file it was opened from.
+ *
+ * `reconcileTabDriveLinks` must never ADOPT one of these as a tab's master. A Shared-Drive copy carries the
+ * master's exact NAME and byte-identical CONTENT, so it passes both the name match and the content verify; adopting
+ * it silently relocates the "master" onto the Shared Drive (so no My-Drive file is ever written again) and leaves
+ * the tab fanning out to ITSELF, which flags a permanent false `conflict` on the next save.
+ *
+ * The `dfBackupOf` / `dfEditShareOf` / `dfCopyOf` appProperties are the durable, closed-tab-safe layer; this set is
+ * the belt-and-braces layer for copies minted before those stamps existed. Pure: takes plain state objects with
+ * either the runtime (`copies` / `sharedSource`) or persisted (`driveCopies` / `driveSharedSource`) field names.
+ */
+export function reservedDriveFileIds(tabStates) {
+  const out = new Set();
+  for (const s of tabStates || []) {
+    if (!s) continue;
+    for (const c of s.copies || s.driveCopies || []) if (c && c.fileId) out.add(c.fileId);
+    const src = s.sharedSource || s.driveSharedSource;
+    if (src && src.fileId) out.add(src.fileId);
+  }
+  return out;
+}
+
+/**
+ * Does this tab hold a My-Drive backup mirror whose existence was CONFIRMED against Drive (`verifiedAt` stamped by
+ * a create, a successful fan-out write, or a reconcile probe)? A bare pointer is NOT evidence — the mirror may have
+ * been deleted in Drive, and the "My Drive" chip must not claim a file that isn't there. A legacy entry with no
+ * `verifiedAt` reads as unverified until the next reconcile confirms or prunes it.
+ */
+export function hasVerifiedMyDriveBackup(copies) {
+  return (Array.isArray(copies) ? copies : []).some((c) => c && c.kind === 'mydrive-backup' && c.verifiedAt);
+}
+
+/**
  * Title + plain-language framing + per-option descriptions for the 3-way Pull / Keep / Fork dialog, by
  * divergence context. Written for non-technical users (e.g. business analysts): the labels say what HAPPENS,
  * the `intro` explains the situation and reassures that nothing is deleted, and each `*Desc` spells out the

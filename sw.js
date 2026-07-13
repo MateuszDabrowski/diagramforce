@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.19.2.99';
+const CACHE_VERSION = '1.19.3.8';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -51,6 +51,7 @@ const PRECACHE_URLS = [
   `./js/canvas/link-runtime.js?v=${CACHE_VERSION}`,
   `./js/canvas/link-classifier.js?v=${CACHE_VERSION}`,
   `./js/canvas/auto-layout.js?v=${CACHE_VERSION}`,
+  `./js/canvas/layout-core.js?v=${CACHE_VERSION}`,
   `./js/canvas/migration.js?v=${CACHE_VERSION}`,
   `./js/canvas/crossing-bumps.js?v=${CACHE_VERSION}`,
   `./js/canvas/review-overlay.js?v=${CACHE_VERSION}`,
@@ -128,6 +129,7 @@ const PRECACHE_URLS = [
   `./js/components.js?v=${CACHE_VERSION}`,
   `./js/components/stencil-kit.js?v=${CACHE_VERSION}`,
   `./js/table-view.js?v=${CACHE_VERSION}`,
+  `./js/table-view/builders.js?v=${CACHE_VERSION}`,
   `./js/table-view/gantt-plan.js?v=${CACHE_VERSION}`,
   `./js/walkthrough.js?v=${CACHE_VERSION}`,
   `./js/whats-new.js?v=${CACHE_VERSION}`,

@@ -13,7 +13,7 @@
 // Offline: templates/*.json are SW-precached (sw.js), and the versioned cache name busts them on
 // every release/dev bump, so no `?v=` query is needed on the fetch.
 
-import { renderTemplateThumbnail } from './templates.js?v=1.19.2.99';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.3.8';
 
 // ── Manifest (small; the cells are fetched lazily) ──────────────────────────
 const OFFICIAL_TEMPLATES = [

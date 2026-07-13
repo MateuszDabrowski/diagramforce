@@ -1,8 +1,8 @@
 // Process-diagram shapes (BPMN family + Flowchart shapes + Annotation) (CLEANUP S3). registerBpmnFlow() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { ensureMarkdownFO } from './markdown-fo.js?v=1.19.2.99';
-import { portGroups, portItems } from './ports.js?v=1.19.2.99';
+import { ensureMarkdownFO } from './markdown-fo.js?v=1.19.3.8';
+import { portGroups, portItems } from './ports.js?v=1.19.3.8';
 
 export function registerBpmnFlow() {
   // --- BpmnEvent ---
