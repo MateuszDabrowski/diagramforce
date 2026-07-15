@@ -3,9 +3,9 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.19.3.8';
+import { cctx } from './context.js?v=1.19.4.4';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.19.3.8';
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.19.4.4';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────

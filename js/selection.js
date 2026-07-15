@@ -1,20 +1,20 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as history from './history.js?v=1.19.3.8';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.19.3.8';
-import { fieldFocus } from './canvas/focus-state.js?v=1.19.3.8';
+import * as history from './history.js?v=1.19.4.4';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.19.4.4';
+import { fieldFocus } from './canvas/focus-state.js?v=1.19.4.4';
 // S9: the corner-drag resize interaction (handles + tracking guides + per-type snap/date logic)
 // extracted to ./selection/resize-handles.js; initResizeHandles wires graph/paper/selectedIds in init().
-import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.19.3.8';
+import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.19.4.4';
 // S9: the canvas context menu (right-click + touch long-press) + its action helpers extracted to
 // ./selection/context-menu.js; initContextMenu wires the live graph/selection in init(). The 6 app.js
 // action-API setters + copySelectionAsPng live there now and are re-exported below so wiring is unchanged.
-import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.19.3.8';
+import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.19.4.4';
 export {
   setAutoSizer, setCopyAsPng, setEndpointSetter, setActionProvider, setStyleApi, setCaptureApi,
   copySelectionAsPng,
-} from './selection/context-menu.js?v=1.19.3.8';
+} from './selection/context-menu.js?v=1.19.4.4';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -879,6 +879,13 @@ function setupMultiDrag() {
         if (!el || !el.isElement || !el.isElement()) continue;
         if (C && id === C.id) continue;                  // never embed the container into itself
         const cur = el.get('parent');
+        // A peer that is a CHILD of another selected element is already correctly parented and is
+        // moved by JointJS's cascade — never re-home it. Without this, dragging a Container that
+        // sits inside a Zone (so C = the container's parent = the Zone, which canEmbed the nodes)
+        // re-embedded the container's OWN children INTO the Zone, tearing them out of the container
+        // ("multi-drag leaves captured nodes behind"). Mirrors the pointermove cascade guard above,
+        // and covers deeper layers too (a BPMN Pool dragged with its Subprocess/Loop/Tasks selected).
+        if (cur && selectedIds.has(cur)) continue;
         if (C && canEmbed(cType, el.get('type'))) {
           // CAPTURE — the group was dropped ON a container; pull every qualifying peer in.
           // No overlap needed: the container auto-fits to GROW around the whole selection,

@@ -12,8 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.19.3.8';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.19.3.8';
+import { cctx } from './context.js?v=1.19.4.4';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.19.4.4';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -350,17 +350,26 @@ export function findEmbeddingParent(elementView) {
     }
     return timelines;
   }
-  // Capture halo: if the element doesn't overlap any container-like parent that
-  // can hold it, fall back to the inflated catch region so a drop just outside
-  // the border still embeds. Purely additive — a real overlap still wins.
-  const hasContainerHit = candidates.some(
-    (el) => HALO_PARENT_TYPES.has(el.get('type')) && canEmbed(el.get('type'), childType)
-  );
+  // frontParentOnly (JointJS default, not overridden here) makes processEmbedding consider ONLY
+  // the front-most (highest-z) candidate, then run validateEmbedding on that one alone. findModels
+  // InArea returns ascending z, so an element that momentarily overlaps a higher-z SIBLING mid-drag
+  // — a SimpleNode (z2000) over its Container (z1000), a BpmnTask over its Pool(0)/Subprocess/Loop
+  // (500), a flow node over its Zone — presents that sibling as the front candidate. canEmbed(
+  // sibling, child) is false → JointJS finds no valid front parent and UNEMBEDS the element ("it
+  // dropped out of the container"; the orphan then no longer cascades on a group drag → "multi-drag
+  // leaves nodes behind"). Fix: keep ONLY candidates that can legally embed this child, so the
+  // front candidate is always the correct (deepest/highest-z) valid parent. This generalises the
+  // Gantt-specific resolution above (gotcha 2.33) to EVERY embedding layer — Container/Zone, BPMN
+  // Pool/Subprocess/Loop, RACI Task/Group, Sequence participant/actor.
+  const validParents = candidates.filter((el) => canEmbed(el.get('type'), childType));
+  // Capture halo: when no free-form grouper (Container/Zone/Pool/…) is directly overlapped, fall
+  // back to the inflated catch region so a drop just outside the border still embeds. Additive.
+  const hasContainerHit = validParents.some((el) => HALO_PARENT_TYPES.has(el.get('type')));
   if (!hasContainerHit) {
     const halo = findHaloParent(bbox, childType, elementView.model.id, _dragOriginParent);
-    if (halo && !candidates.includes(halo)) candidates.push(halo);
+    if (halo && !validParents.includes(halo)) validParents.push(halo);
   }
-  return candidates;
+  return validParents;
 }
 
 // ── Auto-fit engine ─────────────────────────────────────────────────

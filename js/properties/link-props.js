@@ -7,11 +7,11 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.19.3.8';
-import { prctx } from './context.js?v=1.19.3.8';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.19.3.8';
-import { ER_MARKER_D } from '../er-markers.js?v=1.19.3.8';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.19.3.8';
+import * as history from '../history.js?v=1.19.4.4';
+import { prctx } from './context.js?v=1.19.4.4';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.19.4.4';
+import { ER_MARKER_D } from '../er-markers.js?v=1.19.4.4';
+import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.19.4.4';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -199,6 +199,73 @@ export function renderMappingControls(sec, links, { onStructureChange } = {}) {
   }
 }
 
+// ── Endpoint-marker infra (SHARED: single-connector panel + multi-connector bulk) ──────────────────────────
+// Extracted from renderLinkProps so the multi-select "Connectors" section can offer the SAME Source/Target end
+// pickers — bulk arrowheads ("make all these arrows") is a top mass-change. `buildLinkMarkerDefs` is a function of
+// the cell's own stroke/width (ER markers carry an explicit stroke that must track the line, so multi builds defs
+// per-cell); `detectLinkMarker` reads a link's current marker back to a picker key; `applyLinkMarker` sets it with
+// the Safari <marker>-cache re-insert (setLinkAttrsAndRepaint). Verbatim-equal to the old locals — no behaviour
+// change to the single panel.
+export const LINK_MARKER_OPTS = [
+  { value: 'none',      label: 'None' },
+  { value: 'arrow',     label: 'Arrow' },
+  { value: 'lineArrow', label: 'Line Arrow' },
+  { value: 'one',       label: 'One (1)' },
+  { value: 'zeroOne',   label: 'Zero or One (0..1)' },
+  { value: 'many',      label: 'Many (N)' },
+  { value: 'oneMany',   label: 'One or Many (1..N)' },
+  { value: 'zeroMany',  label: 'Zero or Many (0..N)' },
+];
+export function buildLinkMarkerDefs(stroke, lineWidth) {
+  return {
+    none:        { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke, 'stroke-width': lineWidth, 'stroke-dasharray': 'none' },
+    arrow:       { type: 'path', d: ER_MARKER_D.arrow, 'stroke-dasharray': 'none' },
+    lineArrow:   { type: 'path', d: ER_MARKER_D.lineArrow, fill: 'none', stroke, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-dasharray': 'none' },
+    one:         { type: 'path', d: ER_MARKER_D.one, fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
+    zeroOne:     { type: 'path', d: ER_MARKER_D.zeroOne, fill: 'var(--bg-canvas, #1A1A1A)', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
+    many:        { type: 'path', d: ER_MARKER_D.many, fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
+    oneMany:     { type: 'path', d: ER_MARKER_D.oneMany, fill: 'none', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
+    zeroMany:    { type: 'path', d: ER_MARKER_D.zeroMany, fill: 'var(--bg-canvas, #1A1A1A)', stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
+  };
+}
+export function detectLinkMarker(markerAttr) {
+  if (!markerAttr) return 'none';
+  const d = markerAttr.d ?? '';
+  if (!d) return 'none';
+  if (d.includes('z')) return 'arrow';
+  if (/M\s*0\s+-6\s+L\s*-14\s+0\s+L\s*0\s+6/.test(d)) return 'lineArrow';
+  if (/M\s*-14\s+-6\s+L\s*0\s+0\s+L\s*-14\s+6/.test(d)) return 'lineArrow';
+  const isCrowFoot = /(?:L|M)\s*0\s+0\s+L\s*-12\s+-?8/.test(d) || d.includes('L 12 0');
+  const hasCircle = /a [345] [345]/.test(d);
+  if (isCrowFoot && hasCircle) return 'zeroMany';
+  if (isCrowFoot && /M [3-9] -8|M -?15/.test(d)) return 'oneMany';
+  if (isCrowFoot) return 'many';
+  if (hasCircle) return 'zeroOne';
+  if (/M\s*-?\d+\s+-8\s*L\s*-?\d+\s+8/.test(d)) return 'one';
+  return 'none';
+}
+export function applyLinkMarker(cell, markerKey, def) {
+  setLinkAttrsAndRepaint(cell, (line) => {
+    if (def) line[markerKey] = def;
+    else delete line[markerKey];
+  });
+}
+export const LINK_MARKER_SVGS = {
+  none:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/>',
+  arrow:     '<line x1="2" y1="9" x2="20" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 4 L 31 9 L 20 14 Z" fill="currentColor"/>',
+  lineArrow: '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 3 L 30 9 L 20 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>',
+  one:       '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
+  zeroOne:   '<line x1="2" y1="9" x2="18" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="22" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="26" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
+  many:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
+  oneMany:   '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="18" y1="3" x2="18" y2="15" stroke="currentColor" stroke-width="2"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
+  zeroMany:  '<line x1="2" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
+};
+// Connector label font-size setter — shared by the single panel + the multi-connector bulk control (clamped 8-24).
+export function applyLinkFontSize(cell, v) {
+  const size = Math.max(8, Math.min(24, v));
+  if ((cell.labels() || []).length > 0) cell.label(0, { attrs: { text: { fontSize: size } } });
+}
+
 export function renderLinkProps(cell) {
   // Content — primary text only (Font size moved to Appearance for
   // consistency with every other shape's typography placement).
@@ -287,114 +354,19 @@ export function renderLinkProps(cell) {
   // Font size — connector label typography. Lives in Appearance for
   // consistency with the universal convention (text content in Content;
   // text styling in Appearance).
-  addNumber(appearance, 'Font size', currentLabelSize, v => {
-    const labels = cell.labels();
-    if (labels.length > 0) {
-      cell.label(0, { attrs: { text: { fontSize: Math.max(8, Math.min(24, v)) } } });
-    }
-  }, { min: 8, max: 24 });
+  addNumber(appearance, 'Font size', currentLabelSize, v => applyLinkFontSize(cell, v), { min: 8, max: 24 });
   const stroke = cell.attr('line/stroke') || '#333333';
   const lineWidth = cell.attr('line/strokeWidth') ?? 2; // None stub follows the line weight
-  // ER crow's foot markers — negative-x convention (toward element).
-  // Crow's foot prongs fan out toward negative-x (toward the entity).
-  // Explicit fill/stroke is set because ER markers are open paths (no
-  // auto-inheritance from line).
-  // All marker defs include `'stroke-dasharray': 'none'` so that when the
-  // line is dashed/dotted, the marker geometry stays solid — browsers
-  // (notably Safari) otherwise propagate the line's dasharray into marker
-  // content at the rendering level, making arrowheads / ER notation look
-  // broken.  For auto-inheriting markers (e.g. `arrow`), the explicit
-  // 'none' does not override stroke/fill inheritance — it only pins the
-  // dasharray.
-  const markerDefs = {
-    // None: simple stub line extending toward element (fills the connectionPoint gap)
-    none:        { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke: stroke, 'stroke-width': lineWidth, 'stroke-dasharray': 'none' },
-    // Arrow: NO explicit fill/stroke — JointJS auto-inherits from line stroke
-    // and auto-trims the line at the marker boundary. Using JointJS native
-    // coordinate convention: tip at negative-x, base at x=0.
-    arrow:       { type: 'path', d: ER_MARKER_D.arrow, 'stroke-dasharray': 'none' },
-    // Line arrow (open V): two-stroke open arrowhead, no fill. Used for
-    // async/open messages on sequence diagrams; also useful as a lighter
-    // alternative to the filled arrow on any diagram type. Explicit fill/
-    // stroke because this is an open path (won't auto-inherit like `arrow`).
-    lineArrow:   { type: 'path', d: ER_MARKER_D.lineArrow, fill: 'none', stroke: stroke, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-dasharray': 'none' },
-    // ── ER notation (negative-x = toward element, positive-x = toward link) ──
-    // One: bar at entity end (x=-12) + stem back to line (x=0)
-    one:         { type: 'path', d: ER_MARKER_D.one, fill: 'none', stroke: stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
-    // Zero-or-One: circle (line side, edge at x=2) → connecting line → bar at x=-12 (entity side)
-    zeroOne:     { type: 'path', d: ER_MARKER_D.zeroOne, fill: 'var(--bg-canvas, #1A1A1A)', stroke: stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
-    // Many: crow's foot — 3 prongs fan toward element
-    many:        { type: 'path', d: ER_MARKER_D.many, fill: 'none', stroke: stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
-    // One-or-Many: bar (line side) → crow's foot (entity side)
-    oneMany:     { type: 'path', d: ER_MARKER_D.oneMany, fill: 'none', stroke: stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
-    // Zero-or-Many: circle (link side, 4px gap, bg-filled) → crow's foot (entity side, identical to many)
-    zeroMany:    { type: 'path', d: ER_MARKER_D.zeroMany, fill: 'var(--bg-canvas, #1A1A1A)', stroke: stroke, 'stroke-width': 2, 'stroke-dasharray': 'none' },
-  };
-  const markerOpts = [
-    { value: 'none',      label: 'None' },
-    { value: 'arrow',     label: 'Arrow' },
-    { value: 'lineArrow', label: 'Line Arrow' },
-    { value: 'one',       label: 'One (1)' },
-    { value: 'zeroOne',   label: 'Zero or One (0..1)' },
-    { value: 'many',      label: 'Many (N)' },
-    { value: 'oneMany',   label: 'One or Many (1..N)' },
-    { value: 'zeroMany',  label: 'Zero or Many (0..N)' },
-  ];
-  function detectMarker(markerAttr) {
-    if (!markerAttr) return 'none';
-    const d = markerAttr.d ?? '';
-    if (!d) return 'none';
-    // Arrow: closed path with 'z'
-    if (d.includes('z')) return 'arrow';
-    // Line Arrow: two strokes meeting at the tip `M 0 -6 L -14 0 L 0 6` — no
-    // `z`, open V. Also accept the reversed-tip form that shipped in an earlier
-    // 1.6.0 build so existing diagrams keep showing the picker as "Line Arrow".
-    if (/M\s*0\s+-6\s+L\s*-14\s+0\s+L\s*0\s+6/.test(d)) return 'lineArrow';
-    if (/M\s*-14\s+-6\s+L\s*0\s+0\s+L\s*-14\s+6/.test(d)) return 'lineArrow';
-    // Crow's foot detection: at least one prong must ORIGINATE from the (0,0)
-    // central vertex — i.e. an `(L|M) 0 0` command immediately followed by
-    // `L -12 8` (or symmetric `L -12 -8`). Old format `L 12 0` kept for legacy
-    // diagrams.
-    // Why this stricter check: the "one" marker `M -12 -8 L -12 8 M -12 0 L 0 0`
-    // *also* contains both `L 0 0` (the stem) and a segment ending at `-12 8`
-    // (the vertical bar's far endpoint), so the previous looser regex
-    // misdetected "one" as "many". A genuine crow's foot prong always starts
-    // at (0,0); the "one" bar starts at (-12, -8).
-    const isCrowFoot = /(?:L|M)\s*0\s+0\s+L\s*-12\s+-?8/.test(d) || d.includes('L 12 0');
-    const hasCircle = /a [345] [345]/.test(d);
-    // Most specific first
-    if (isCrowFoot && hasCircle) return 'zeroMany';
-    if (isCrowFoot && /M [3-9] -8|M -?15/.test(d)) return 'oneMany';
-    if (isCrowFoot) return 'many';
-    if (hasCircle) return 'zeroOne';
-    if (/M\s*-?\d+\s+-8\s*L\s*-?\d+\s+8/.test(d)) return 'one';
-    return 'none';
-  }
-  function applyMarker(cell, markerKey, def) {
-    setLinkAttrsAndRepaint(cell, (line) => {
-      if (def) line[markerKey] = def;
-      else delete line[markerKey];
-    });
-  }
-  // SVG thumbnails (36×18 viewBox, 0.8× scale from marker coords).
-  // Mapping: connection point at x=20, thumb_x = 20 - marker_x * 0.8, thumb_y = 9 + marker_y * 0.8.
-  // Entity side = right.  Marker elements at stroke-width 2, lead line at 1.5.
-  const markerSvgs = {
-    none:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/>',
-    arrow:     '<line x1="2" y1="9" x2="20" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 4 L 31 9 L 20 14 Z" fill="currentColor"/>',
-    lineArrow: '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 20 3 L 30 9 L 20 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>',
-    one:       '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
-    zeroOne:   '<line x1="2" y1="9" x2="18" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="22" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="26" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2"/><line x1="30" y1="3" x2="30" y2="15" stroke="currentColor" stroke-width="2"/>',
-    many:      '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
-    oneMany:   '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="18" y1="3" x2="18" y2="15" stroke="currentColor" stroke-width="2"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
-    zeroMany:  '<line x1="2" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
-  };
+  // Endpoint markers — defs / opts / svgs / detect / apply are the SHARED module-level infra (top of file), so the
+  // single panel and the multi-connector bulk pickers stay in lockstep. `markerDefs` uses THIS cell's stroke/width
+  // (ER markers carry an explicit stroke that must track the line).
+  const markerDefs = buildLinkMarkerDefs(stroke, lineWidth);
   const lineStroke = cell.attr('line/stroke') || '#888888';
-  addMarkerPicker(appearance, 'Source end', detectMarker(cell.attr('line/sourceMarker')), markerOpts, markerSvgs, v => {
-    applyMarker(cell, 'sourceMarker', markerDefs[v]);
+  addMarkerPicker(appearance, 'Source end', detectLinkMarker(cell.attr('line/sourceMarker')), LINK_MARKER_OPTS, LINK_MARKER_SVGS, v => {
+    applyLinkMarker(cell, 'sourceMarker', markerDefs[v]);
   }, { strokeColor: lineStroke });
-  addMarkerPicker(appearance, 'Target end', detectMarker(cell.attr('line/targetMarker')), markerOpts, markerSvgs, v => {
-    applyMarker(cell, 'targetMarker', markerDefs[v]);
+  addMarkerPicker(appearance, 'Target end', detectLinkMarker(cell.attr('line/targetMarker')), LINK_MARKER_OPTS, LINK_MARKER_SVGS, v => {
+    applyLinkMarker(cell, 'targetMarker', markerDefs[v]);
   }, { strokeColor: lineStroke });
 
   // Reverse direction + Simplify path — generic link actions available on EVERY

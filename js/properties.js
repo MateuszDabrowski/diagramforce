@@ -1,11 +1,11 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.19.3.8';
-import { ER_MARKER_D } from './er-markers.js?v=1.19.3.8';
-import { cycleKeyType, keyImpliesRequired, keyTypeLabel, applyKeyType, newField } from './field-model.js?v=1.19.3.8';
-import { COLOR_SCHEMA, recolorCellIcon } from './properties/color-schema.js?v=1.19.3.8';
-import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.19.3.8';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.19.4.4';
+import { ER_MARKER_D } from './er-markers.js?v=1.19.4.4';
+import { cycleKeyType, keyImpliesRequired, keyTypeLabel, applyKeyType, newField } from './field-model.js?v=1.19.4.4';
+import { COLOR_SCHEMA, recolorCellIcon } from './properties/color-schema.js?v=1.19.4.4';
+import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.19.4.4';
 // Property-panel widget builders (CLEANUP S2 slice 3) — form fields, action buttons, pickers.
 import {
   CLONE_ICON_SVG, addActionBtn, addApplySizeBtn, addAutoSizeBtn, addChipInput, addCloneBtn,
@@ -14,39 +14,40 @@ import {
   addRotationField, addSegmented, addSelect, addText, addTextarea, addToggle,
   bringToFront, cloneCellPlain, copyCellStyle, field, getActiveCell, hasStyleClip,
   pasteCellStyle, rotationField, section, sendToBack, toHex, wireMarkdownShortcuts,
-} from './properties/widgets.js?v=1.19.3.8';
+} from './properties/widgets.js?v=1.19.4.4';
 // Re-export the style-clipboard trio for app.js (selection.setStyleApi) — they live in widgets.js now.
-export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.19.3.8';
+export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.19.4.4';
 // DataObject field editor (CLEANUP S2 slice 4) — renderDataObjectProps + the dblclick handler call these back.
-import { renderFieldEditor, openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.19.3.8';
+import { renderFieldEditor, openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.19.4.4';
 // SF_FIELD_TYPES lives in field-editor.js now; table-view.js still imports it from properties.js (this re-export).
-export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.19.3.8';
+export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.19.4.4';
 // Link / connector panel (CLEANUP S2 slice 5) — the facade dispatch (showProperties) + the multi-select
 // Connectors section use these; setLinkEndpoints is reached via properties.setLinkEndpoints (app.js), so re-export.
-import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle } from './properties/link-props.js?v=1.19.3.8';
-export { setLinkEndpoints } from './properties/link-props.js?v=1.19.3.8';
+import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle,
+  applyLinkFontColor, applyLinkFontSize, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.19.4.4';
+export { setLinkEndpoints } from './properties/link-props.js?v=1.19.4.4';
 // Shape type metadata (CLEANUP S2 slice 6) — pure data maps shared by the facade + renderers + convert + autoSizeCell.
-import { TYPE_LABELS, DEFAULT_SIZES } from './properties/type-meta.js?v=1.19.3.8';
+import { TYPE_LABELS, DEFAULT_SIZES } from './properties/type-meta.js?v=1.19.4.4';
 // Shape-type conversion (CLEANUP S2 slice 6) — the renderers' Convert buttons + the right-click convert menu (via
 // buildCellActions) call these; each rewires a cell in place preserving links + embedding.
-import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.19.3.8';
+import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.19.4.4';
 // Shared render tail (CLEANUP S2 slice 7) — every render*Props ends with finishStandardProps; autoSizeCell +
 // buildCellActions are wired into selection via app.js (properties.autoSizeCell / .buildCellActions), so re-export.
-import { finishStandardProps, autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.19.3.8';
-export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.19.3.8';
+import { finishStandardProps, autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.19.4.4';
+export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.19.4.4';
 // Per-family property renderers (CLEANUP S2 slice 8+) — the showProperties() dispatch calls these back.
-import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps } from './properties/renderers-sequence.js?v=1.19.3.8';
-import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.19.3.8';
-import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.19.3.8';
-import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.19.3.8';
-import { renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.19.3.8';
-import { triggerDownload } from './persistence.js?v=1.19.3.8';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.19.3.8';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.19.3.8';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.19.3.8';
-import * as stencilModule from './stencil.js?v=1.19.3.8';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.19.3.8';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.19.3.8';
+import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps } from './properties/renderers-sequence.js?v=1.19.4.4';
+import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.19.4.4';
+import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.19.4.4';
+import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.19.4.4';
+import { renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.19.4.4';
+import { triggerDownload } from './persistence.js?v=1.19.4.4';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.19.4.4';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.19.4.4';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.19.4.4';
+import * as stencilModule from './stencil.js?v=1.19.4.4';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.19.4.4';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.19.4.4';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -56,14 +57,14 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.19.3.8';
-import * as history from './history.js?v=1.19.3.8';
-import { startImageAddFlow } from './image-component.js?v=1.19.3.8';
-import { escHtml, sanitizeFilenamePart, sanitizeCssColor } from './util.js?v=1.19.3.8';
-import { getActiveTabName } from './tabs.js?v=1.19.3.8';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.19.3.8';
-import { newFid } from './shapes.js?v=1.19.3.8';
-import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './gantt-layout.js?v=1.19.3.8';
+} from './clipboard.js?v=1.19.4.4';
+import * as history from './history.js?v=1.19.4.4';
+import { startImageAddFlow } from './image-component.js?v=1.19.4.4';
+import { escHtml, sanitizeFilenamePart, sanitizeCssColor } from './util.js?v=1.19.4.4';
+import { getActiveTabName } from './tabs.js?v=1.19.4.4';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.19.4.4';
+import { newFid } from './shapes.js?v=1.19.4.4';
+import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './gantt-layout.js?v=1.19.4.4';
 
 
 
@@ -489,6 +490,16 @@ const SHAPE_STATE_STYLES = {
   dashed:   { stroke: '#DA4E55', strokeWidth: 2.5, strokeDasharray: '7 4'     },
   deferred: { stroke: '#1D73C9', strokeWidth: 2.5, strokeDasharray: '7 4'      },
 };
+// Connector (link) variant of the SAME state palette — a link paints on `line`, and its dash is the top-level
+// `lineStyle` prop, NEVER line/strokeDasharray (the Safari <marker> overlay owns that; see applyLinkLineStyle).
+// lineStyle values: 'none' (solid) / '8 4' (dashed) / '2 4' (dotted). So a connector can be flagged Added/
+// Changed/Removed/Deferred exactly like a shape, to highlight new / changed / removed / on-hold connections.
+const LINK_STATE_STYLES = {
+  bold:     { stroke: '#2E9E5B', strokeWidth: 3,   lineStyle: 'none' },  // Added    — green solid
+  dotted:   { stroke: '#E8881A', strokeWidth: 2.5, lineStyle: '2 4'  },  // Changed  — orange dotted
+  dashed:   { stroke: '#DA4E55', strokeWidth: 2.5, lineStyle: '8 4'  },  // Removed  — red dashed
+  deferred: { stroke: '#1D73C9', strokeWidth: 2.5, lineStyle: '8 4'  },  // Deferred — blue dashed
+};
 // Row labels are the review SEMANTICS; the stored values stay the style keys (standard/bold/dotted/dashed/
 // deferred) so the persisted `borderStyle` prop is unchanged. Order matches the review lifecycle the user asked
 // for: None, Added, Changed, Removed, Deferred. `deferred` (violet dash-dot = on hold) joined in v1.17.3.
@@ -503,10 +514,13 @@ const SHAPE_STATE_OPTS = [
 // Most shapes paint the Shape-state border on `body`. df.Legend's `body` is a transparent full-bounds selection
 // frame, so its Shape-state belongs on the visible `swatch` squircle instead — keyed here.
 const SHAPE_STATE_TARGET = { 'df.Legend': 'swatch' };
-const shapeStateSel = (cell) => SHAPE_STATE_TARGET[cell.get('type')] || 'body';
+// Links paint their state on `line`; shapes on `body` (or a per-type target). Drives both the target selector
+// and the "does this cell support a state?" test in the panels.
+const shapeStateSel = (cell) => cell.isLink?.() ? 'line' : (SHAPE_STATE_TARGET[cell.get('type')] || 'body');
 
 // Exported so Change Review's "Apply as Highlight states" can bake a diff into real borderStyle props.
 export function applyShapeState(cell, style) {
+  if (cell.isLink?.()) { applyLinkState(cell, style); return; }
   const sel = shapeStateSel(cell);
   const prev = cell.get('borderStyle') || 'standard';
   if (style === prev) return;
@@ -534,6 +548,39 @@ export function applyShapeState(cell, style) {
   cell.attr(`${sel}/stroke`, s.stroke);
   cell.attr(`${sel}/strokeWidth`, s.strokeWidth);
   cell.attr(`${sel}/strokeDasharray`, s.strokeDasharray);
+}
+
+// Connector Highlight State — mirrors applyShapeState, but drives the link's OWN styling setters (applyLinkStroke/
+// StrokeWidth/LineStyle) so it cooperates with the lineStyle overlay + Safari <marker> re-insert instead of being
+// wiped by them. Reuses the SAME `borderStyle` + `_origBorder` props (save/share/undo unchanged); on a link,
+// `_origBorder` carries {stroke, strokeWidth, lineStyle}, restored losslessly on None.
+function applyLinkState(cell, style) {
+  const prev = cell.get('borderStyle') || 'standard';
+  if (style === prev) return;
+  if (style === 'standard') {
+    const orig = cell.get('_origBorder');
+    if (orig) {
+      applyLinkStroke(cell, orig.stroke ?? '#888888');
+      applyLinkStrokeWidth(cell, orig.strokeWidth ?? 2);
+      applyLinkLineStyle(cell, orig.lineStyle ?? 'none');
+    }
+    cell.set('borderStyle', null);
+    cell.set('_origBorder', null);
+    return;
+  }
+  // First override away from None: remember the connector's own stroke/width/dash so None restores it losslessly.
+  if (prev === 'standard' || !cell.get('_origBorder')) {
+    cell.set('_origBorder', {
+      stroke: cell.attr('line/stroke') ?? '#888888',
+      strokeWidth: cell.attr('line/strokeWidth') ?? 2,
+      lineStyle: cell.prop('lineStyle') ?? 'none',
+    });
+  }
+  const s = LINK_STATE_STYLES[style];
+  cell.set('borderStyle', style);
+  applyLinkStroke(cell, s.stroke);
+  applyLinkStrokeWidth(cell, s.strokeWidth);
+  applyLinkLineStyle(cell, s.lineStyle);
 }
 
 // Build the five-state vertical list (None / Added / Changed / Removed / Deferred) into `body`: each row is the
@@ -579,13 +626,16 @@ function buildShapeStateList(body, current, onPick) {
   body.appendChild(list);
 }
 
-// Slot the Shape State `wrap` between the Content and Appearance sections (it's a structural/review attribute, so
-// it reads above pure styling). Inserts before the Appearance section when present; otherwise leaves it in place.
+// Slot the Shape State `wrap` above the styling section (it's a structural/review attribute, so it reads above
+// pure styling). Inserts before the FIRST styling section — "Appearance" (shapes / single connector / mixed) OR
+// "Connectors" (a pure-link multi-select, whose styling section is named "Connectors", not "Appearance"). Without
+// matching "Connectors" the section stayed appended BELOW it on a multi-connector panel while sitting ABOVE on a
+// single connector — the reported inconsistency. Otherwise leaves it in place.
 function placeShapeStateSection(wrap) {
   if (!wrap || wrap.parentElement !== bodyEl) return;
-  const appearance = [...bodyEl.querySelectorAll('.df-section')].find(sec =>
-    /^Appearance$/i.test(sec.querySelector('.df-section__header span')?.textContent?.trim() || ''));
-  if (appearance && appearance !== wrap) bodyEl.insertBefore(wrap, appearance);
+  const target = [...bodyEl.querySelectorAll('.df-section')].find(sec =>
+    /^(Appearance|Connectors)$/i.test(sec.querySelector('.df-section__header span')?.textContent?.trim() || ''));
+  if (target && target !== wrap) bodyEl.insertBefore(wrap, target);
 }
 
 // Whether the Highlight State section is expanded — remembered across re-renders so a state change (which
@@ -593,10 +643,11 @@ function placeShapeStateSection(wrap) {
 let shapeStateOpen = false;
 
 // Shared Shape-state control — its OWN collapsible section, COLLAPSED by default (it's a review/diff aid, not
-// everyday styling), holding the five states stacked as styled checkbox rows. Shown for any element with a `body`
-// outline to paint (boxes, pills, legends, etc.); links + body-less shapes are skipped.
+// everyday styling), holding the five states stacked as styled checkbox rows. Shown for any cell with a paintable
+// state target: a shape's `body` outline (boxes, pills, legends) OR a connector's `line` (v1.19.3.11). Body-less
+// shapes are skipped.
 function maybeAddShapeStateControl(cell) {
-  if (cell.isLink?.() || cell.attr(shapeStateSel(cell)) === undefined) return;
+  if (cell.attr(shapeStateSel(cell)) === undefined) return;
   const body = section(bodyEl, 'Highlight State', shapeStateOpen);
   // Track expand/collapse (the section() header handler toggles the class before this fires).
   body.parentElement.querySelector('.df-section__header')?.addEventListener('click', () => {
@@ -792,13 +843,75 @@ function showMultiProperties(count) {
     addSelect(sec, 'Line style', sameStyle ? styles[0] : 'none', LINK_LINE_STYLE_OPTS, v => {
       history.startBatch();
       try { links.forEach(l => applyLinkLineStyle(l, v)); } finally { history.endBatch(); }
-    });
+    }, { mixed: !sameStyle });
     const widths = links.map(l => l.attr('line/strokeWidth') ?? 2);
     const sameWidth = widths.every(w => w === widths[0]);
     addNumber(sec, 'Line width', sameWidth ? widths[0] : '', v => {
       history.startBatch();
       try { links.forEach(l => applyLinkStrokeWidth(l, v)); } finally { history.endBatch(); }
+    }, { placeholder: sameWidth ? undefined : 'Mixed' });
+
+    // ── Bulk parity with the single-connector Appearance panel (v1.19.4.1): the fields that make sense to
+    // mass-change — Label colour, Font size, and BOTH endpoint markers (bulk arrowheads) — plus Reverse / Simplify
+    // as batch actions. Per-connector-UNIQUE fields (Label text, Frequency) are deliberately excluded. Each control
+    // applies to every selected link in ONE undo step; markers rebuild per-cell so each keeps its own stroke.
+    const fontColors = links.map(l => l.prop('fontColor') || l.attr('line/stroke') || '#888888');
+    addColorMulti(sec, 'Label color', fontColors.every(c => c === fontColors[0]) ? fontColors[0] : null, v => {
+      history.startBatch();
+      try { links.forEach(l => applyLinkFontColor(l, v)); } finally { history.endBatch(); }
     });
+    const sizes = links.map(l => l.labels()?.[0]?.attrs?.text?.fontSize ?? 13);
+    const sameSize = sizes.every(s => s === sizes[0]);
+    addNumber(sec, 'Font size', sameSize ? sizes[0] : '', v => {
+      history.startBatch();
+      try { links.forEach(l => applyLinkFontSize(l, v)); } finally { history.endBatch(); }
+    }, { min: 8, max: 24, placeholder: sameSize ? undefined : 'Mixed' });
+    const repStroke = links[0].attr('line/stroke') || '#888888';
+    const bulkMarker = (side, key) => {
+      const marks = links.map(l => detectLinkMarker(l.attr(`line/${key}`)));
+      addMarkerPicker(sec, side, marks.every(m => m === marks[0]) ? marks[0] : null, LINK_MARKER_OPTS, LINK_MARKER_SVGS, v => {
+        history.startBatch();
+        try {
+          links.forEach(l => applyLinkMarker(l, key,
+            buildLinkMarkerDefs(l.attr('line/stroke') || '#333333', l.attr('line/strokeWidth') ?? 2)[v]));
+        } finally { history.endBatch(); }
+      }, { strokeColor: repStroke });
+    };
+    bulkMarker('Source end', 'sourceMarker');
+    bulkMarker('Target end', 'targetMarker');
+
+    // Reverse direction (swap endpoints) + Simplify path (clear vertices + round) — batch versions of the single
+    // panel's foot buttons; each is one undo step across the whole selection.
+    const bulkBtn = (label, svg, onClick) => {
+      const b = document.createElement('button');
+      b.className = 'df-properties__btn df-properties__btn--auto-size';
+      b.style.marginTop = '6px';
+      b.innerHTML = `${svg} ${label}`;
+      b.addEventListener('click', () => { history.startBatch(); try { onClick(); } finally { history.endBatch(); } });
+      sec.appendChild(b);
+    };
+    bulkBtn('Reverse direction',
+      '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5 L13 5 M10 2 L13 5 L10 8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11 L3 11 M6 8 L3 11 L6 14" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      () => links.forEach(l => { const s = l.get('source'), t = l.get('target'); l.set({ source: t, target: s }); }));
+    bulkBtn('Simplify path',
+      '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13 L14 3" stroke-linecap="round"/><circle cx="2" cy="13" r="1.5" fill="currentColor" stroke="none"/><circle cx="14" cy="3" r="1.5" fill="currentColor" stroke="none"/></svg>',
+      () => links.forEach(l => { l.vertices([]); l.connector('rounded', { radius: 8 }); }));
+  };
+
+  // Highlight State — the shared 5-state list applied to every selected shape (body) AND connector (line) in one
+  // undo step. A local so BOTH the pure-connector branch and the element/mixed path below can place it; without
+  // this a pure-link multi-select (which returns early) never showed the section.
+  const addMultiHighlightState = () => {
+    const hlCells = cells.filter(c => c.attr(shapeStateSel(c)) !== undefined);
+    if (hlCells.length === 0) return;
+    const hlVals = hlCells.map(c => c.get('borderStyle') || 'standard');
+    const sameHl = hlVals.every(s => s === hlVals[0]);
+    const hlSec = section(bodyEl, 'Highlight State', false);
+    buildShapeStateList(hlSec, sameHl ? hlVals[0] : 'standard', v => {
+      history.startBatch();
+      try { hlCells.forEach(c => applyShapeState(c, v)); } finally { history.endBatch(); }
+    });
+    placeShapeStateSection(hlSec.parentElement);
   };
 
   if (elements.length === 0) {
@@ -807,6 +920,7 @@ function showMultiProperties(count) {
       bodyEl.innerHTML = `<p class="df-properties__multi-msg">No editable cells selected.</p>`;
     } else {
       renderConnectorSection();
+      addMultiHighlightState();   // connectors get Highlight State too
     }
     addDeleteBtn(footerEl, () => { graph.removeCells(cells); selection.clearSelection(); });
     return;
@@ -920,20 +1034,9 @@ function showMultiProperties(count) {
     });
   }
 
-  // ── Shape state — the same collapsible checkbox list as single-select, applied to EVERY selected element with a
-  // body outline at once (mark a batch Added / Changed / Removed / Deferred in one undo step). Shows the shared
-  // value, or None when mixed. Collapsed by default, mirroring the single-element panel.
-  const hlCells = elements.filter(c => c.attr(shapeStateSel(c)) !== undefined);
-  if (hlCells.length > 0) {
-    const hlVals = hlCells.map(c => c.get('borderStyle') || 'standard');
-    const sameHl = hlVals.every(s => s === hlVals[0]);
-    const hlSec = section(bodyEl, 'Highlight State', false);
-    buildShapeStateList(hlSec, sameHl ? hlVals[0] : 'standard', v => {
-      history.startBatch();
-      try { hlCells.forEach(c => applyShapeState(c, v)); } finally { history.endBatch(); }
-    });
-    placeShapeStateSection(hlSec.parentElement);   // between Content and Appearance, as in the single panel
-  }
+  // ── Highlight state — shape (body) + connector (line), applied to the whole selection in one undo step
+  // (mark a batch Added / Changed / Removed / Deferred). Same helper the pure-connector branch above uses.
+  addMultiHighlightState();
 
   // ── Actions section (Order, Auto-size, Convert) ──
   const actionSec = section(bodyEl, 'Actions');

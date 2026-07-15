@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.19.3.8';
-import { showToast, showError } from '../feedback.js?v=1.19.3.8';
-import { sanitizeFilenamePart } from '../util.js?v=1.19.3.8';
-import { pctx } from './context.js?v=1.19.3.8';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.19.4.4';
+import { showToast, showError } from '../feedback.js?v=1.19.4.4';
+import { sanitizeFilenamePart } from '../util.js?v=1.19.4.4';
+import { pctx } from './context.js?v=1.19.4.4';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -36,8 +36,9 @@ export function exportPNG(transparent = false) {
 /**
  * Copy the given cells (a selection) to the OS clipboard as a PNG, so the user can paste the diagram straight into
  * Slack / docs / chat as an image (the Lucidchart-style "copy as image"). RASTER only - vector/SVG clipboard types
- * are not reliably read by other apps. Renders ONLY the selected cells (+ links whose both ends are selected),
- * cropped to their bounding box, on a solid background (transparent reads badly on a themed surface).
+ * are not reliably read by other apps. Renders the selected cells + the embedded descendants of any selected
+ * grouper (so a lone-selected Container/Zone copies its whole content, not an empty frame) + links whose both
+ * ends are in that set, cropped to their bounding box, on a solid background (transparent reads badly on a theme).
  *
  * Uses the ClipboardItem(Promise<Blob>) pattern: the blob promise is handed to ClipboardItem and `clipboard.write`
  * is called SYNCHRONOUSLY inside the user gesture (the context-menu click, or the Cmd+C keydown), so Safari keeps
@@ -45,7 +46,22 @@ export function exportPNG(transparent = false) {
  */
 export function copyCellsAsPng(cells, { silent = false, transparent = false, deferToNextFrame = false } = {}) {
   const { graph } = pctx;
-  const selected = (cells || []).filter(Boolean);
+  const base = (cells || []).filter(Boolean);
+  // Expand to include the embedded DESCENDANTS of any selected grouper (Container / Zone / Pool / …): selecting a
+  // grouper doesn't auto-select its children, and the crop below strips every cell NOT in idSet, so a lone-grouper
+  // copy would rasterise an EMPTY frame. Mirrors clipboard.copy()'s subtree expansion — element children only;
+  // internal links are picked up by the endpoint pass below, and a link that leaves the subtree is left out.
+  const selected = [...base];
+  const seen = new Set(base.map(c => c.id));
+  const addDescendants = (id) => {
+    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
+      if (seen.has(childId)) continue;
+      const child = graph.getCell(childId);
+      if (!child || !child.isElement || !child.isElement()) continue;   // links come via the endpoint pass
+      seen.add(childId); selected.push(child); addDescendants(childId);
+    }
+  };
+  base.forEach(c => addDescendants(c.id));
   const elementIds = new Set(selected.filter(c => c.isElement && c.isElement()).map(c => c.id));
   // `silent` (the Cmd+C overload path) suppresses every toast/error: the in-memory internal copy is the primary
   // action there, so the PNG is best-effort and must not nag on each copy or on a browser that blocks it.

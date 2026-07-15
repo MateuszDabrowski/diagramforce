@@ -2,17 +2,17 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.19.3.8';
-import * as history from '../history.js?v=1.19.3.8';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.19.3.8';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.19.3.8';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.19.3.8';
-import { confirmModal, showToast } from '../feedback.js?v=1.19.3.8';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.19.3.8';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.19.3.8';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.19.3.8';
-import { escHtml } from '../util.js?v=1.19.3.8';
-import { saveCellAsShape } from '../templates.js?v=1.19.3.8';
+import { prctx, asUndoBatch } from './context.js?v=1.19.4.4';
+import * as history from '../history.js?v=1.19.4.4';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.19.4.4';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.19.4.4';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.19.4.4';
+import { confirmModal, showToast } from '../feedback.js?v=1.19.4.4';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.19.4.4';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.19.4.4';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.19.4.4';
+import { escHtml } from '../util.js?v=1.19.4.4';
+import { saveCellAsShape } from '../templates.js?v=1.19.4.4';
 
 export function section(parent, title, open = true) {
   const wrap = document.createElement('div');
@@ -989,7 +989,7 @@ export function addColor(parent, label, value, onChange, opts = {}) {
 
 /**
  * Multi-select color field: when `value` is null the swatch stays muted
- * and the text input shows a "Multiple" placeholder so the user can see
+ * and the text input shows a "Mixed" placeholder so the user can see
  * the selected elements disagree on this colour. Picking a colour (either
  * via swatch or by typing a hex) applies it to every selected element.
  */
@@ -1016,7 +1016,7 @@ export function addColorMulti(parent, label, value, onChange) {
   textInput.type = 'text';
   textInput.className = 'df-properties__input';
   textInput.value = mixed ? '' : hex;
-  if (mixed) textInput.placeholder = 'Multiple';
+  if (mixed) textInput.placeholder = 'Mixed';
 
   const clearMixed = () => {
     swatch.classList.remove('df-properties__color--mixed');
@@ -1056,6 +1056,9 @@ export function addNumber(parent, label, value, onChange, opts = {}) {
   input.type = 'number';
   input.className = 'df-properties__input';
   input.value = value ?? 0;
+  // Multi-select MIXED state: pass value '' + opts.placeholder 'Mixed' so a differing selection shows an empty
+  // field hinting "Mixed" rather than a concrete (misleading) number. No-op for the usual single-value callers.
+  if (opts.placeholder) input.placeholder = opts.placeholder;
   input.min = min;
   if (max != null) input.max = max;
   // Gap 31 (v1.12.0) — track the last committed value so a cleared input
@@ -1363,7 +1366,7 @@ export function addSegmented(parent, label, value, options, onChange, opts = {})
   f.appendChild(wrap);
 }
 
-export function addSelect(parent, label, value, options, onChange) {
+export function addSelect(parent, label, value, options, onChange, opts = {}) {
   // Discrete control: one `change` per action. Batch onChange so a type switch that
   // also repaints multiple attrs (e.g. BpmnEvent / Gateway / SequenceFragment) is ONE
   // undo step — the type prop + every attr land together.
@@ -1371,11 +1374,19 @@ export function addSelect(parent, label, value, options, onChange) {
   const f = field(parent, label);
   const sel = document.createElement('select');
   sel.className = 'df-properties__select';
+  // Multi-select MIXED state (opt-in): a leading disabled "Mixed" option, shown selected until the user picks a
+  // real value. Keeps a differing multi-selection from reading as one concrete value. Existing single-value
+  // callers omit `opts.mixed`, so their behaviour is unchanged.
+  if (opts.mixed) {
+    const m = document.createElement('option');
+    m.value = '__mixed__'; m.textContent = 'Mixed'; m.disabled = true; m.selected = true;
+    sel.appendChild(m);
+  }
   options.forEach(opt => {
     const o = document.createElement('option');
     o.value = opt.value;
     o.textContent = opt.label;
-    if (opt.value === value) o.selected = true;
+    if (!opts.mixed && opt.value === value) o.selected = true;
     sel.appendChild(o);
   });
   sel.addEventListener('change', () => onChange(sel.value));
@@ -1398,7 +1409,10 @@ export function addMarkerPicker(parent, label, current, options, svgs, onChange,
   const btn = document.createElement('button');
   btn.className = 'df-marker-picker__btn';
   const updateBtn = (val) => {
-    const opt = options.find(o => o.value === val) || options[0];
+    const opt = options.find(o => o.value === val);
+    // A `current` that matches no option = a multi-select MIXED state (the selected connectors carry different
+    // markers). Show "Mixed" rather than silently falling back to options[0] ("None"), which read as "all None".
+    if (!opt) { btn.innerHTML = '<span>Mixed</span>'; return; }
     const svg = svgs[val] || '';
     btn.innerHTML = svg
       ? `<svg width="32" height="18" viewBox="0 0 36 18">${svg}</svg><span>${opt.label}</span>`

@@ -4,12 +4,12 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.19.3.8';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.19.3.8';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, triggerDownload } from '../persistence.js?v=1.19.3.8';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.19.3.8';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.19.3.8';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.19.3.8';
+import { tbctx } from './context.js?v=1.19.4.4';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.19.4.4';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, triggerDownload } from '../persistence.js?v=1.19.4.4';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.19.4.4';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.19.4.4';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.19.4.4';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 

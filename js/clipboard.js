@@ -1,7 +1,7 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.19.3.8';
-import { cloneCellsForInsert } from './clone-cells.js?v=1.19.3.8';
+import * as history from './history.js?v=1.19.4.4';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.19.4.4';
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the
@@ -23,13 +23,25 @@ export function init(_graph, _paper, _selection) {
 export function hasClipboard() { return clipboardCells.length > 0; }
 
 export function copy() {
-  const allCells = selection.getSelectedElements();
-  const elements = allCells.filter(c => c.isElement());
-  if (elements.length === 0) return;
-  const elementIds = new Set(elements.map(el => el.id));
+  const selected = selection.getSelectedElements().filter(c => c.isElement());
+  if (selected.length === 0) return;
+  // Expand to include the embedded DESCENDANTS of any selected grouper (Container / Zone / Pool / …), so
+  // copying a lone-selected grouper captures its whole subtree instead of an empty shell — the reported
+  // "click a Zone, Ctrl+C/V pastes an empty box" bug. Selecting a grouper puts only IT in selectedIds
+  // (children aren't auto-selected), so without this the clipboard held just the grouper. Recursive →
+  // nested groupers; `embeds` may include LINK ids (filtered out of the element set here, re-copied by the
+  // endpoint pass below). A marquee that already selected the children directly still works — they're in the set.
+  const elementIds = new Set(selected.map(el => el.id));
+  const addDescendants = (id) => {
+    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
+      if (!elementIds.has(childId)) { elementIds.add(childId); addDescendants(childId); }
+    }
+  };
+  selected.forEach(el => addDescendants(el.id));
+  const elements = [...elementIds].map(id => graph.getCell(id)).filter(c => c?.isElement?.());
   clipboardCells = elements.map(el => el.toJSON());
 
-  // Also copy links that connect two selected elements
+  // Copy every link whose BOTH endpoints are in the (expanded) set — captures a grouper's internal links too.
   clipboardLinks = [];
   graph.getLinks().forEach(link => {
     const srcId = link.get('source')?.id;
@@ -48,13 +60,14 @@ export function paste() {
 
   selection.clearSelection();
 
-  // Clone every copied element + inter-selection link with fresh, PRE-MINTED ids (V7 shared helper) — links
-  // rewire to the new element ids, positions/vertices shift by pasteOffset, and containment is DROPPED (copy()
-  // only snapshots the selected elements, not a container's unselected children, so a remapped parent could
-  // dangle). Elements first so the links resolve their endpoints within the single addCells batch. This replaces
-  // the old fragile temporary-'add'-listener id-harvesting.
+  // Clone every copied element + link with fresh, PRE-MINTED ids (V7 shared helper) — links rewire to the new
+  // element ids, positions/vertices shift by pasteOffset. keepContainment:true remaps parent/embeds THROUGH the
+  // idMap, so a copied grouper's descendants re-embed into the CLONED grouper (copy() now snapshots the whole
+  // subtree). A child whose parent wasn't copied has its parent dropped (cloneCellsForInsert guards the dangle),
+  // so a partial marquee still pastes those as free cells. Elements first so links resolve endpoints in the one
+  // addCells batch.
   const { clones } = cloneCellsForInsert([...clipboardCells, ...clipboardLinks],
-    { dx: pasteOffset, dy: pasteOffset, keepContainment: false });
+    { dx: pasteOffset, dy: pasteOffset, keepContainment: true });
 
   // One undo step for the whole paste — addCells composites every clone so a single Cmd+Z removes the entire paste.
   history.startBatch();

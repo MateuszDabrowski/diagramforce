@@ -11,9 +11,9 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.19.3.8';
-import { ER_MARKER_D } from './er-markers.js?v=1.19.3.8';
-import { showError, showToast } from './feedback.js?v=1.19.3.8';
+import { createElementFromComponent } from './components.js?v=1.19.4.4';
+import { ER_MARKER_D } from './er-markers.js?v=1.19.4.4';
+import { showError, showToast } from './feedback.js?v=1.19.4.4';
 
 let modules = {};
 

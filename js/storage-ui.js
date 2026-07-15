@@ -2,8 +2,8 @@
 // split-table + tri-state helpers, mutate) DOM for the Save / Load / Close managers' rows, chips, collapsible
 // split tables, and select-alls (including the V4/V5 helpers). Depends only on the genuinely-pure helpers that
 // stay in util.js + the zero-dep drive-sync-logic leaf (hasVerifiedMyDriveBackup — the chip's honesty rule).
-import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.19.3.8';
-import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.19.3.8';
+import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.19.4.4';
+import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.19.4.4';
 
 export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', active = false, checkbox = '',
   diagramType = '', typeTitle = '', icon: iconOverride = '', leadingIcon = false, name = '', nameSuffix = '', groupBadge = '', count = null,
