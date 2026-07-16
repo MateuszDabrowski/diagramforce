@@ -318,6 +318,108 @@
   font-size: var(--font-size-xs, 11px);
 }
 
+/* ── Template ROWS (1.19.5) — one template per row (My Templates + Official Templates): a small
+   thumb, the full name + a muted details line (counts / description), an eye that expands an inline
+   fitted preview below the row (the Drive version-history preview pattern), and the hover-× delete
+   inline on My rows. My Shapes keeps the tile grid above. */
+.df-stencil__items--template-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px var(--spacing-sm) var(--spacing-sm);
+}
+
+.df-stencil__item--row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 6px;
+}
+
+.df-stencil__row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.df-stencil__item--row .df-template-thumb {
+  width: 44px;
+  height: 36px;
+  flex: none;
+}
+
+.df-stencil__row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.df-stencil__item--row .df-stencil__item-label {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.df-stencil__row-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.df-template-preview {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.df-template-preview:hover,
+.df-template-preview.is-active {
+  color: var(--text-primary);
+  background: var(--bg-canvas, rgba(127, 127, 127, 0.1));
+}
+
+/* The × sits inline after the eye on a row (not absolutely positioned like on grid tiles); the shared
+   hover-reveal rule below still drives its opacity. */
+.df-stencil__item--row .df-template-delete {
+  position: static;
+  flex: none;
+}
+
+.df-template-preview-box {
+  margin-top: 6px;
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-canvas, rgba(127, 127, 127, 0.06));
+  overflow: hidden;
+}
+
+.df-template-preview-box[hidden] {
+  display: none;
+}
+
+.df-template-preview-loading {
+  display: block;
+  padding: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 .df-template-delete {
   position: absolute;
   top: 3px;

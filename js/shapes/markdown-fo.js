@@ -1,6 +1,6 @@
 // Markdown foreignObject helper (CLEANUP S3, CR-6.1) — sf.TextLabel/Note render inline markdown as native HTML
 // inside an SVG <foreignObject>. Moved out of shapes.js so every registrar view can call it.
-import { parseMarkdown } from '../markdown.js?v=1.19.4.4';
+import { parseMarkdown } from '../markdown.js?v=1.19.5.8';
 
 // ── Markdown foreignObject helper (CR-6.1) ─────────────────────────
 // sf.TextLabel and sf.Note render their text as native HTML inside an SVG

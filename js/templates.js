@@ -12,7 +12,7 @@
 // They are NOT part of any diagram's save schema, so they neither bloat
 // browser saves / shares nor affect the save-schema version tier.
 //
-//   Capture   → saveSelectionAsTemplate()  (button in the multi-select panel)
+//   Capture   → saveSelectionAsTemplate()  (multi-select panel button + multi-select right-click menu item)
 //   Library   → getTemplates / deleteTemplate + renderTemplateThumbnail (stencil)
 //   Instance  → instantiateTemplate()       (stencil drop, with fresh cell IDs)
 //
@@ -21,10 +21,10 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.19.4.4';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.19.4.4';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.19.4.4';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.19.4.4';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.19.5.8';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.19.5.8';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.19.5.8';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.19.5.8';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -353,7 +353,17 @@ export function instantiateTemplate(templateId, dropPoint) {
   if (!graph) return;
   const template = getTemplates().find(p => p.id === templateId);
   if (!template) return;
+  insertTemplateCells(template, dropPoint);
+}
 
+/**
+ * Shared drop core - also the stencil's OFFICIAL-template insert path (1.19.5): sanitise a
+ * template-shaped object ({ cells }) and add it to the live graph centred on `dropPoint`,
+ * with the same fresh-id / containment / one-undo-step / select-new-top-levels behaviour
+ * instantiateTemplate has always had.
+ */
+export function insertTemplateCells(template, dropPoint) {
+  if (!graph) return;
   const cells = safeTemplateCells(template);
   if (cells.length === 0) return;
 

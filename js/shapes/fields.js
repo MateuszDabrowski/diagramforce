@@ -1,6 +1,6 @@
 // DataObject field helpers (CLEANUP S3) — the stable-fid machinery + the visible-fields rule, moved out of
 // shapes.js so the data-object registrar (and the external importers via the facade re-export) share one copy.
-import { sctx } from './context.js?v=1.19.4.4';
+import { sctx } from './context.js?v=1.19.5.8';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX

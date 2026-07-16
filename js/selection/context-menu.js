@@ -6,9 +6,10 @@
 // action-provider, style, capture) live here now; selection.js re-exports their setters + copySelectionAsPng
 // so app.js / keyboard.js wiring is unchanged.
 
-import * as clipboard from '../clipboard.js?v=1.19.4.4';
-import * as history from '../history.js?v=1.19.4.4';
-import { wireMenuDismiss } from '../menu.js?v=1.19.4.4';
+import * as clipboard from '../clipboard.js?v=1.19.5.8';
+import * as history from '../history.js?v=1.19.5.8';
+import { wireMenuDismiss } from '../menu.js?v=1.19.5.8';
+import { saveSelectionAsTemplate } from '../templates.js?v=1.19.5.8';
 
 // ── Injected selection context (wired by selection.init → initContextMenu). Read at CALL time; the
 // selectedIds Set is shared BY REFERENCE with selection.js so the menu sees the live selection. ──
@@ -357,6 +358,11 @@ export function showContextMenu(clientX, clientY, model, opts = {}) {
       addItem('Copy', () => clipboard.copy(), { icon: CTX_ICON.copy });
       addCopyPng();
       if (_autoSizer) addItem('Auto size', () => autoSizeSelection(), { icon: CTX_ICON.autosize });
+      // Save as Template — the whole-selection counterpart to single-select "Save Shape": capture every selected
+      // shape + connector as one reusable My Templates block (mirrors the multi-select properties footer button).
+      // Its own separated group, matching where Save Shape sits after Auto size in the single-element menu.
+      addSep();
+      addItem('Save as Template', () => saveSelectionAsTemplate(), { icon: CTX_ICON.saveShape });
       if (_styleApi && !model.isLink()) {
         addSep();
         // Copy style needs ONE coherent source — only when the selection is a single styled type (item 8).

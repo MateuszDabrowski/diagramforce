@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.19.4.4';
+const CACHE_VERSION = '1.19.5.8';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -167,6 +167,7 @@ const PRECACHE_URLS = [
   // versioned cache name busts them on every bump). Add a line here per new templates/*.json.
   './templates/data360-contact-mapping.json',
   './templates/mce-email-data-views.json',
+  './templates/mce-mobile-data-views.json',
 ];
 
 self.addEventListener('install', (event) => {

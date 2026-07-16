@@ -11,7 +11,7 @@
 // and embedding's auto-fit reacts to the resulting change events — so the drop must settle first.
 // Reads cctx.graph/paper; imports the pure Gantt geometry helpers from gantt-layout.js.
 
-import { deriveGanttDates, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.19.4.4';
+import { deriveGanttDates, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.19.5.8';
 
 export function registerGanttDrag(cctx) {
   const { graph, paper } = cctx;

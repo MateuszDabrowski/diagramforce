@@ -13,7 +13,7 @@
 // Offline: templates/*.json are SW-precached (sw.js), and the versioned cache name busts them on
 // every release/dev bump, so no `?v=` query is needed on the fetch.
 
-import { renderTemplateThumbnail } from './templates.js?v=1.19.4.4';
+import { renderTemplateThumbnail } from './templates.js?v=1.19.5.8';
 
 // ── Manifest (small; the cells are fetched lazily) ──────────────────────────
 const OFFICIAL_TEMPLATES = [
@@ -30,6 +30,13 @@ const OFFICIAL_TEMPLATES = [
     description: 'Marketing Cloud Engagement data model for email channel System Data Views',
     diagramType: 'datamodel',
     file: 'templates/mce-email-data-views.json',
+  },
+  {
+    id: 'official-mce-mobile-data-views',
+    name: 'MCE Mobile Data Views',
+    description: 'Marketing Cloud Engagement data model for MobileConnect SMS channel System Data Views',
+    diagramType: 'datamodel',
+    file: 'templates/mce-mobile-data-views.json',
   },
 ];
 

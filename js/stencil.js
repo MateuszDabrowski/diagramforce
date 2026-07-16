@@ -1,16 +1,17 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.19.4.4';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.19.4.4';
-import { getAllIcons, getCategories } from './icons.js?v=1.19.4.4';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.19.4.4';
-import { startImageAddFlow } from './image-component.js?v=1.19.4.4';
-import * as history from './history.js?v=1.19.4.4';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, onTemplatesChange } from './templates.js?v=1.19.4.4';
-import { confirmModal } from './feedback.js?v=1.19.4.4';
-import { escHtml } from './util.js?v=1.19.4.4';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.19.4.4'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.19.5.8';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.19.5.8';
+import { getAllIcons, getCategories } from './icons.js?v=1.19.5.8';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.19.5.8';
+import { startImageAddFlow } from './image-component.js?v=1.19.5.8';
+import * as history from './history.js?v=1.19.5.8';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.19.5.8';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.5.8';
+import { confirmModal } from './feedback.js?v=1.19.5.8';
+import { escHtml } from './util.js?v=1.19.5.8';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.19.5.8'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -100,10 +101,11 @@ export function setDiagramType(type) {
 function renderCategories() {
   bodyEl.innerHTML = '';
 
-  // The stencil is grouped into THREE bands (v1.17.0): "Custom {Type} Shapes" (the user's own saved shapes +
-  // templates for THIS type), "{Type} Shapes" (this type's built-in shapes), and "Other Shapes" (everything for
-  // the OTHER types). "My Shapes" = single shapes saved via Save Shape (kind:'shape'); "My Templates" = multi-
-  // shape groups (kind unset). Both live in the template store, so they share thumbnail / drop / sync / delete.
+  // The stencil is grouped into THREE bands (v1.17.0; first band renamed 1.19.5): "{Type} Templates"
+  // (official starters + the user's own saved shapes + templates for THIS type), "{Type} Shapes" (this
+  // type's built-in shapes), and "Other Shapes" (everything for the OTHER types). "My Shapes" = single
+  // shapes saved via Save Shape (kind:'shape'); "My Templates" = multi-shape groups (kind unset). Both
+  // live in the template store, so they share thumbnail / drop / sync / delete.
   const allTemplates = getTemplates();
   const isShape = (t) => t.kind === 'shape';
   const myTemplates = allTemplates.filter((t) => !isShape(t));
@@ -112,13 +114,20 @@ function renderCategories() {
   const shortOf = (t) => DIAGRAM_TYPES[t]?.short || t || 'Other';
   const curShort = shortOf(currentDiagramType);
 
-  // ── Group 1: Custom {Type} Shapes (current type's My Shapes + My Templates) ──
+  // ── Group 1: {Type} Templates — the type's starting points + the user's own saved content.
+  // "Official Templates" (1.19.5) LEADS the band: the New-Diagram modal's curated starters for THIS type as
+  // drag-to-INSERT rows (drop the whole template into the CURRENT canvas, fresh ids), unlike the modal which
+  // opens one as a new tab. Collapsed by default; metas only at build time — the heavy cells JSON + thumbnails
+  // lazy-load on first reveal. Then My Shapes (grid tiles) + My Templates (rows). ──
+  const allOfficials = getOfficialTemplates();
+  const officialMetas = allOfficials.filter((t) => t.diagramType === currentDiagramType);
   const curShapes = myShapes.filter((t) => t.diagramType === currentDiagramType);
   const curTemplates = myTemplates.filter((t) => t.diagramType === currentDiagramType);
-  if (curShapes.length || curTemplates.length) {
-    bodyEl.appendChild(buildGroupHeader(`Custom ${curShort} Shapes`));
+  if (officialMetas.length || curShapes.length || curTemplates.length) {
+    bodyEl.appendChild(buildGroupHeader(`${curShort} Templates`));
+    if (officialMetas.length) bodyEl.appendChild(buildOfficialTemplatesSection(officialMetas, 'Official Templates', `official-templates-${currentDiagramType}`));
     if (curShapes.length) bodyEl.appendChild(buildTemplatesSection('My Shapes', `my-shapes-${currentDiagramType}`, curShapes));
-    if (curTemplates.length) bodyEl.appendChild(buildTemplatesSection('My Templates', `my-templates-${currentDiagramType}`, curTemplates));
+    if (curTemplates.length) bodyEl.appendChild(buildTemplatesSection('My Templates', `my-templates-${currentDiagramType}`, curTemplates, false, 'rows'));
   }
 
   // ── Group 2: {Type} Shapes (the current type's built-in shapes + SLDS icons) ──
@@ -173,24 +182,26 @@ function renderCategories() {
     }
   }
 
-  // ── Group 3: Other Shapes — every OTHER type's My Shapes + My Templates + built-in shapes, grouped by type,
-  // all collapsed, so a shape can be reused across diagram types. ──
+  // ── Group 3: Other Shapes — every OTHER type's Official Templates + My Shapes + My Templates + built-in
+  // shapes, grouped by type, all collapsed, so a shape / starter can be reused across diagram types. ──
   const unknownTypes = [...new Set(allTemplates.map((t) => t.diagramType).filter((t) => t && !knownTypes.includes(t)))];
   let otherShown = false;
   for (const type of [...knownTypes.filter((t) => t !== currentDiagramType), ...unknownTypes]) {
+    const tOfficials = allOfficials.filter((t) => t.diagramType === type);
     const tShapes = myShapes.filter((t) => t.diagramType === type);
     const tTemplates = myTemplates.filter((t) => t.diagramType === type);
     const cross = knownTypes.includes(type) ? buildCrossTypeSection(type) : null;
-    if (!tShapes.length && !tTemplates.length && !cross) continue;
+    if (!tOfficials.length && !tShapes.length && !tTemplates.length && !cross) continue;
     if (!otherShown) { bodyEl.appendChild(buildGroupHeader('Other Shapes')); otherShown = true; }
     const s = shortOf(type);
+    if (tOfficials.length) bodyEl.appendChild(buildOfficialTemplatesSection(tOfficials, `${s} · Official Templates`, `official-templates-${type}`));
     if (tShapes.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Shapes`, `my-shapes-${type || 'untyped'}`, tShapes, true));
-    if (tTemplates.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true));
+    if (tTemplates.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true, 'rows'));
     if (cross) bodyEl.appendChild(cross);
   }
 }
 
-// A non-collapsible band divider that introduces a run of related sections (Custom {Type} Shapes / {Type}
+// A non-collapsible band divider that introduces a run of related sections ({Type} Templates / {Type}
 // Shapes / Other Shapes). Distinct from a category header (no chevron / count - it's a grouping label).
 function buildGroupHeader(label) {
   const h = document.createElement('div');
@@ -257,9 +268,11 @@ function buildCrossTypeSection(type) {
 // ── Custom templates (user-saved; "template" is the internal name) ──
 // One reusable section builder, called once per diagram type that has templates —
 // "My {Type} Templates". Header label, categoryId, and initial collapsed state vary
-// (the active workspace's group is expanded, the rest collapsed); everything else
-// (thumbnail snapshot, drag/drop, hover-× delete via buildTemplateItem) is identical.
-function buildTemplatesSection(label, categoryId, templates, collapsed = false) {
+// (the active workspace's group is expanded, the rest collapsed). Two layouts (1.19.5):
+// variant 'grid' (My Shapes — single shapes read fine as small tiles, via buildTemplateItem)
+// vs 'rows' (My Templates — one template per row with a details line + eye preview, via
+// buildMyTemplateRow, matching the Official Templates rows).
+function buildTemplatesSection(label, categoryId, templates, collapsed = false, variant = 'grid') {
   const section = document.createElement('div');
   section.className = 'df-stencil__category' + (collapsed ? ' df-stencil__category--collapsed' : '');
   section.dataset.categoryId = categoryId;
@@ -270,10 +283,10 @@ function buildTemplatesSection(label, categoryId, templates, collapsed = false) 
   });
 
   const items = document.createElement('div');
-  items.className = 'df-stencil__items df-stencil__items--templates';
+  items.className = 'df-stencil__items ' + (variant === 'rows' ? 'df-stencil__items--template-rows' : 'df-stencil__items--templates');
 
   for (const template of templates) {
-    items.appendChild(buildTemplateItem(template));
+    items.appendChild(variant === 'rows' ? buildMyTemplateRow(template) : buildTemplateItem(template));
   }
 
   section.appendChild(header);
@@ -296,7 +309,25 @@ function buildTemplateItem(template) {
   labelSpan.textContent = template.name || 'Template';
   item.appendChild(labelSpan);
 
-  // Per-template delete (×) — appears on hover/focus.
+  item.appendChild(buildTemplateDeleteBtn(template));
+
+  item._sfTemplateId = template.id;
+  item._sfTemplateName = template.name;
+
+  item.addEventListener('dragstart', (evt) => {
+    evt.dataTransfer.setData('application/sf-diagrams-template', JSON.stringify({ id: template.id }));
+    evt.dataTransfer.effectAllowed = 'copy';
+  });
+
+  item.addEventListener('dblclick', () => {
+    instantiateTemplate(template.id, getCanvasCenterLocalPoint());
+  });
+
+  return item;
+}
+
+// Per-template delete (×) — appears on hover/focus. Shared by the My Shapes grid tiles and My Templates rows.
+function buildTemplateDeleteBtn(template) {
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'df-template-delete';
@@ -315,21 +346,193 @@ function buildTemplateItem(template) {
     });
     if (ok) deleteTemplate(template.id);
   });
-  item.appendChild(del);
+  return del;
+}
 
-  item._sfTemplateId = template.id;
-  item._sfTemplateName = template.name;
+// ── Template ROWS (1.19.5) — the readable one-per-row layout shared by My Templates and Official
+// Templates: small thumb + full name + a details line, an eye that expands an inline fitted preview
+// under the row (the Drive version-history preview pattern), and the × delete on My rows only. ──
 
-  item.addEventListener('dragstart', (evt) => {
+const PREVIEW_EYE_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>`;
+
+/** "N shapes · M connectors" for a template's serialized cells (links carry source+target). */
+function templateCountsLine(cells) {
+  const total = Array.isArray(cells) ? cells.length : 0;
+  const links = (cells || []).filter((c) => c && c.source && c.target).length;
+  const shapes = total - links;
+  return `${shapes} shape${shapes === 1 ? '' : 's'} · ${links} connector${links === 1 ? '' : 's'}`;
+}
+
+/** Row chrome: [thumb | name + sub-line | (buttons appended by caller)] + a hidden preview box below. */
+function buildTemplateRowBase({ name, sub, title }) {
+  const row = document.createElement('div');
+  row.className = 'df-stencil__item df-stencil__item--template df-stencil__item--row';
+  row.draggable = true;
+  row.dataset.label = (name || '').toLowerCase();
+  row.title = title || name || 'Template';
+
+  const main = document.createElement('div');
+  main.className = 'df-stencil__row-main';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'df-template-thumb';
+  main.appendChild(thumb);
+
+  const text = document.createElement('div');
+  text.className = 'df-stencil__row-text';
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'df-stencil__item-label';
+  labelSpan.textContent = name || 'Template';
+  text.appendChild(labelSpan);
+  if (sub) {
+    const subSpan = document.createElement('span');
+    subSpan.className = 'df-stencil__row-sub';
+    subSpan.textContent = sub;
+    text.appendChild(subSpan);
+  }
+  main.appendChild(text);
+
+  const previewBox = document.createElement('div');
+  previewBox.className = 'df-template-preview-box';
+  previewBox.hidden = true;
+
+  row.appendChild(main);
+  row.appendChild(previewBox);
+  return { row, main, thumb, previewBox };
+}
+
+/** Eye toggle → inline preview under the row. One open per items container (like Drive history); the large
+ *  thumbnail renders at the box's real width so the fitted diagram is crisp. `getCells` may be async
+ *  (officials fetch on demand); a loading line shows until it resolves. */
+function wireRowPreview(row, main, previewBox, getCells) {
+  const eye = document.createElement('button');
+  eye.type = 'button';
+  eye.className = 'df-template-preview';
+  eye.title = 'Preview';
+  eye.setAttribute('aria-label', 'Preview template');
+  eye.innerHTML = PREVIEW_EYE_SVG;
+  eye.addEventListener('mousedown', (e) => e.stopPropagation());
+  eye.addEventListener('dblclick', (e) => e.stopPropagation());
+  eye.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const wasOpen = !previewBox.hidden;
+    const items = row.closest('.df-stencil__items');
+    items?.querySelectorAll('.df-template-preview-box').forEach((b) => { b.hidden = true; b.innerHTML = ''; });
+    items?.querySelectorAll('.df-template-preview').forEach((b) => b.classList.remove('is-active'));
+    if (wasOpen) return;   // second click → just close
+    previewBox.hidden = false;
+    eye.classList.add('is-active');
+    previewBox.innerHTML = '<span class="df-template-preview-loading">Loading preview…</span>';
+    const cells = await getCells();
+    if (previewBox.hidden) return;   // closed / switched while fetching
+    previewBox.innerHTML = '';
+    if (!Array.isArray(cells) || !cells.length) {
+      previewBox.innerHTML = '<span class="df-template-preview-loading">Could not load this template.</span>';
+      return;
+    }
+    const w = Math.max(180, (previewBox.clientWidth || row.clientWidth || 240) - 8);
+    const h = Math.min(Math.round(w * 0.7), 240);
+    previewBox.appendChild(renderTemplateThumbnail({ cells }, w, h));
+  });
+  main.appendChild(eye);
+}
+
+/** A My Templates row: counts sub-line, eye preview, delete ×, drag/dblclick/touch like the old tile. */
+function buildMyTemplateRow(template) {
+  const { row, main, thumb, previewBox } = buildTemplateRowBase({
+    name: template.name,
+    sub: templateCountsLine(template.cells),
+  });
+  thumb.replaceWith(renderTemplateThumbnail(template, 44, 36));
+  wireRowPreview(row, main, previewBox, () => template.cells);
+  main.appendChild(buildTemplateDeleteBtn(template));
+
+  row._sfTemplateId = template.id;
+  row._sfTemplateName = template.name;
+  row.addEventListener('dragstart', (evt) => {
     evt.dataTransfer.setData('application/sf-diagrams-template', JSON.stringify({ id: template.id }));
     evt.dataTransfer.effectAllowed = 'copy';
   });
-
-  item.addEventListener('dblclick', () => {
+  row.addEventListener('dblclick', () => {
     instantiateTemplate(template.id, getCanvasCenterLocalPoint());
   });
+  return row;
+}
 
-  return item;
+// ── Official templates (curated, read-only; the stencil variant of the New-Diagram "Templates" tab) ──
+// Rows match My Templates (thumb + name + details + eye preview + drag / dblclick-to-centre) minus the
+// delete ×; the details line is the manifest description. The heavy cells JSON is NOT fetched at stencil
+// build: thumbnails load once, when the items container first becomes VISIBLE (header expand OR search
+// auto-expand — an IntersectionObserver catches both, since a collapsed section hides its items with
+// display:none). Drops insert into the CURRENT canvas via the same sanitising fresh-id path as My
+// Templates (insertTemplateCells); the New Diagram modal stays the open-as-new-tab surface.
+function buildOfficialTemplatesSection(metas, label, categoryId) {
+  const section = document.createElement('div');
+  section.className = 'df-stencil__category df-stencil__category--collapsed';
+  section.dataset.categoryId = categoryId;
+
+  const items = document.createElement('div');
+  items.className = 'df-stencil__items df-stencil__items--template-rows';
+
+  const placeholders = new Map();   // meta.id → placeholder thumb node, swapped for the real SVG on load
+  let thumbsRequested = false;
+  const ensureThumbs = () => {
+    if (thumbsRequested) return;
+    thumbsRequested = true;
+    for (const meta of metas) {
+      renderOfficialThumbnail(meta.id, 44, 36).then((el) => {
+        const ph = placeholders.get(meta.id);
+        if (el && ph && ph.parentNode) ph.replaceWith(el);
+      });   // null / rejection → keep the empty placeholder thumb
+    }
+  };
+
+  const header = buildCategoryHeader(label, metas.length);
+  header.addEventListener('click', () => {
+    section.classList.toggle('df-stencil__category--collapsed');
+    ensureThumbs();
+  });
+
+  for (const meta of metas) {
+    const { row, main, thumb, previewBox } = buildTemplateRowBase({
+      name: meta.name,
+      sub: meta.description || '',
+      title: meta.description ? `${meta.name} - ${meta.description}` : meta.name,
+    });
+    placeholders.set(meta.id, thumb);
+    wireRowPreview(row, main, previewBox, async () => (await loadOfficialTemplate(meta.id))?.cells || []);
+
+    // Touch long-press drag reads these (setupTouchDrag), mirroring _sfTemplateId on My Templates rows.
+    row._sfOfficialTemplateId = meta.id;
+    row._sfTemplateName = meta.name;
+    row.addEventListener('dragstart', (evt) => {
+      evt.dataTransfer.setData('application/sf-diagrams-official-template', JSON.stringify({ id: meta.id }));
+      evt.dataTransfer.effectAllowed = 'copy';
+    });
+    row.addEventListener('dblclick', () => {
+      insertOfficialTemplateAt(meta.id, getCanvasCenterLocalPoint());
+    });
+
+    items.appendChild(row);
+  }
+
+  // Search auto-expand bypasses the header click — observing the items container catches ANY first reveal.
+  const io = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { ensureThumbs(); io.disconnect(); }
+  });
+  io.observe(items);
+
+  section.appendChild(header);
+  section.appendChild(items);
+  return section;
+}
+
+/** Fetch (cached after the first hit) an official template's cells and insert them into the live graph
+ *  centred on `point` (paper-local) — the async official twin of instantiateTemplate. */
+function insertOfficialTemplateAt(id, point) {
+  loadOfficialTemplate(id).then((loaded) => {
+    if (loaded?.cells?.length) insertTemplateCells({ cells: loaded.cells }, point);
+  });
 }
 
 function buildIconSection(cat, icons, displayLabel) {
@@ -547,6 +750,16 @@ function setupDropZone() {
       try { info = JSON.parse(templateData); } catch { return; }
       const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
       instantiateTemplate(info.id, localPoint);
+      return;
+    }
+
+    // Official template drop — fetch (cached) then insert with fresh cell IDs at the drop point.
+    const officialData = evt.dataTransfer.getData('application/sf-diagrams-official-template');
+    if (officialData) {
+      let info;
+      try { info = JSON.parse(officialData); } catch { return; }
+      const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
+      insertOfficialTemplateAt(info.id, localPoint);
       return;
     }
 
@@ -932,6 +1145,7 @@ function setupTouchDrag() {
   let activeItem = null;
   let activeTemplate = null;
   let activeTemplateId = null;
+  let activeOfficialId = null;
   let activeLabel = null;
   let ghost = null;
   let startXY = null;
@@ -954,13 +1168,14 @@ function setupTouchDrag() {
     activeItem = null;
     activeTemplate = null;
     activeTemplateId = null;
+    activeOfficialId = null;
     activeLabel = null;
     startXY = null;
     dragging = false;
   };
 
   const startDrag = (clientX, clientY) => {
-    if (!activeTemplate && !activeTemplateId) return;
+    if (!activeTemplate && !activeTemplateId && !activeOfficialId) return;
     dragging = true;
     if (navigator.vibrate) navigator.vibrate(15);
     // Create simple ghost following finger
@@ -993,7 +1208,7 @@ function setupTouchDrag() {
   };
 
   const onEnd = (e) => {
-    if (dragging && (activeTemplate || activeTemplateId)) {
+    if (dragging && (activeTemplate || activeTemplateId || activeOfficialId)) {
       const t = e.changedTouches?.[0];
       if (t) {
         const el = document.elementFromPoint(t.clientX, t.clientY);
@@ -1001,6 +1216,8 @@ function setupTouchDrag() {
         if (el && canvasEl.contains(el)) {
           if (activeTemplateId) {
             instantiateTemplate(activeTemplateId, paper.clientToLocalPoint(t.clientX, t.clientY));
+          } else if (activeOfficialId) {
+            insertOfficialTemplateAt(activeOfficialId, paper.clientToLocalPoint(t.clientX, t.clientY));
           } else {
             dropTemplateAtClient(activeTemplate, t.clientX, t.clientY);
           }
@@ -1020,10 +1237,12 @@ function setupTouchDrag() {
     if (!item) return;
     const tpl = getTemplateFor(item);
     const templateId = item._sfTemplateId || null;
-    if (!tpl && !templateId) return;
+    const officialId = item._sfOfficialTemplateId || null;
+    if (!tpl && !templateId && !officialId) return;
     activeItem = item;
     activeTemplate = tpl;
     activeTemplateId = templateId;
+    activeOfficialId = officialId;
     activeLabel = item._sfTemplateName || null;
     const t = e.touches[0];
     startXY = { x: t.clientX, y: t.clientY };

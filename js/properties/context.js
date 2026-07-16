@@ -3,7 +3,7 @@
 // the widget / field-editor / renderer slices to come) READ prctx at CALL time so they never import the facade
 // back — the acyclic context pattern already used by persistence (pctx) and canvas (cctx). asUndoBatch lives here
 // too since every widget wraps its writes in it.
-import * as history from '../history.js?v=1.19.4.4';
+import * as history from '../history.js?v=1.19.5.8';
 
 export const prctx = {
   graph: null, paper: null, selection: null,
