@@ -1,10 +1,10 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.19.5.8';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.19.5.8';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.19.5.8';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.19.5.8';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.19.5.8';
-import { showSaveManagerModal } from './save-manager.js?v=1.19.5.8';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.20.0.63';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.20.0.63';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.20.0.63';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.20.0.63';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.20.0.63';
+import { showSaveManagerModal } from './save-manager.js?v=1.20.0.63';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;

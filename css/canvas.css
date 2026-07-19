@@ -232,6 +232,7 @@
 /* Reveal only the blueprint matching the active diagram type. */
 #canvas-container.is-empty[data-diagram-type="architecture"] .df-canvas-empty__wf[data-wf="architecture"],
 #canvas-container.is-empty[data-diagram-type="process"]      .df-canvas-empty__wf[data-wf="process"],
+#canvas-container.is-empty[data-diagram-type="flow"]         .df-canvas-empty__wf[data-wf="flow"],
 #canvas-container.is-empty[data-diagram-type="sequence"]     .df-canvas-empty__wf[data-wf="sequence"],
 #canvas-container.is-empty[data-diagram-type="datamodel"]    .df-canvas-empty__wf[data-wf="datamodel"],
 #canvas-container.is-empty[data-diagram-type="datamapping"]  .df-canvas-empty__wf[data-wf="datamapping"],

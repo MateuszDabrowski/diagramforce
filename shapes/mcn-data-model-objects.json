@@ -1,0 +1,1380 @@
+{
+  "version": 1,
+  "kind": "diagramforce-shape-pack",
+  "id": "mcn-data-model-objects",
+  "label": "MCN Data Model Objects",
+  "components": [
+    {
+      "type": "sf.DataObject",
+      "label": "Unified Individual",
+      "objectName": "Unified Individual",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Unified Individual Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "uind_id",
+          "required": true
+        },
+        {
+          "label": "Individual Id",
+          "apiName": "ssot__IndividualId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "uind_ind"
+        },
+        {
+          "label": "First Name",
+          "apiName": "ssot__FirstName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "uind_fn"
+        },
+        {
+          "label": "Last Name",
+          "apiName": "ssot__LastName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "uind_ln"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Unified Link Individual",
+      "objectName": "Unified Link Individual",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "ulink_id",
+          "required": true
+        },
+        {
+          "label": "Source Record Id",
+          "apiName": "ssot__SourceRecordId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ulink_src"
+        },
+        {
+          "label": "Unified Record Id",
+          "apiName": "ssot__UnifiedRecordId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ulink_uni"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Individual",
+      "objectName": "Individual",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "ind_id",
+          "required": true
+        },
+        {
+          "label": "First Name",
+          "apiName": "ssot__FirstName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_fn"
+        },
+        {
+          "label": "Last Name",
+          "apiName": "ssot__LastName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_ln"
+        },
+        {
+          "label": "Birth Date",
+          "apiName": "ssot__BirthDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "ind_bd"
+        },
+        {
+          "label": "Global Party Id",
+          "apiName": "ssot__GlobalPartyId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_gp"
+        },
+        {
+          "label": "Primary Account Id",
+          "apiName": "ssot__PrimaryAccountId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_acc"
+        },
+        {
+          "label": "Internal Organization Id",
+          "apiName": "ssot__InternalOrganizationId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_org"
+        },
+        {
+          "label": "Is Anonymous",
+          "apiName": "ssot__IsAnonymous__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_anon"
+        },
+        {
+          "label": "Data Source Id",
+          "apiName": "ssot__DataSourceId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ind_ds"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Contact Point Email",
+      "objectName": "Contact Point Email",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "cpe_id",
+          "required": true
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpe_party"
+        },
+        {
+          "label": "Email Address",
+          "apiName": "ssot__EmailAddress__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_email"
+        },
+        {
+          "label": "Email Domain",
+          "apiName": "ssot__EmailDomain__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_dom"
+        },
+        {
+          "label": "Is Active",
+          "apiName": "ssot__IsActive__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_act"
+        },
+        {
+          "label": "Is Undeliverable",
+          "apiName": "ssot__IsUndeliverable__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_und"
+        },
+        {
+          "label": "Primary Flag",
+          "apiName": "ssot__PrimaryFlag__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_pri"
+        },
+        {
+          "label": "Email Latest Bounce Date Time",
+          "apiName": "ssot__EmailLatestBouncedateTime__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "cpe_bdt"
+        },
+        {
+          "label": "Email Latest Bounce Reason Text",
+          "apiName": "ssot__EmailLatestBounceReasontext__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpe_brt"
+        },
+        {
+          "label": "Preference Rank Number",
+          "apiName": "ssot__PreferenceRankNumber__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "cpe_rank"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Contact Point Phone",
+      "objectName": "Contact Point Phone",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "cpp_id",
+          "required": true
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpp_party"
+        },
+        {
+          "label": "Device Id",
+          "apiName": "ssot__DeviceId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpp_dev"
+        },
+        {
+          "label": "Telephone Number",
+          "apiName": "ssot__Telephonenumber__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_tel"
+        },
+        {
+          "label": "Formatted E164 Phone Number",
+          "apiName": "ssot__FormattedE164Phonenumber__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_e164"
+        },
+        {
+          "label": "Phone Country Code",
+          "apiName": "ssot__PhoneCountryCode__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_cc"
+        },
+        {
+          "label": "Is SMS Capable",
+          "apiName": "ssot__IsSMSCapable__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_sms"
+        },
+        {
+          "label": "Is Voice Capable",
+          "apiName": "ssot__IsVoiceCapable__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_voice"
+        },
+        {
+          "label": "Is Active",
+          "apiName": "ssot__IsActive__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_act"
+        },
+        {
+          "label": "Primary Flag",
+          "apiName": "ssot__PrimaryFlag__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_pri"
+        },
+        {
+          "label": "Short Code",
+          "apiName": "ssot__ShortCode__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpp_sc"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Device",
+      "objectName": "Device",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "dev_id",
+          "required": true
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_nm"
+        },
+        {
+          "label": "Model Name",
+          "apiName": "ssot__ModelName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_mod"
+        },
+        {
+          "label": "Manufacturer Name",
+          "apiName": "ssot__ManufacturerName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_man"
+        },
+        {
+          "label": "OS Name",
+          "apiName": "ssot__OSName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_os"
+        },
+        {
+          "label": "OS Version Number",
+          "apiName": "ssot__OSVersionNumber__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_osv"
+        },
+        {
+          "label": "Device System Token Text",
+          "apiName": "ssot__DeviceSystemTokentext__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_tok"
+        },
+        {
+          "label": "GCM Sender Id",
+          "apiName": "ssot__GCMSenderId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_gcm"
+        },
+        {
+          "label": "Advertiser Id",
+          "apiName": "ssot__AdvertiserId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dev_adv"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Software Application",
+      "objectName": "Software Application",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "app_id",
+          "required": true
+        },
+        {
+          "label": "Software Application Name",
+          "apiName": "ssot__SoftwareApplicationName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "app_nm"
+        },
+        {
+          "label": "Product Id",
+          "apiName": "ssot__ProductId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "app_prod"
+        },
+        {
+          "label": "Provider Token Text",
+          "apiName": "ssot__ProviderTokenText__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "app_tok"
+        },
+        {
+          "label": "Internal Organization Id",
+          "apiName": "ssot__InternalOrganizationId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "app_org"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Contact Point Consent",
+      "objectName": "Contact Point Consent",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "cpc_id",
+          "required": true
+        },
+        {
+          "label": "Contact Point Id",
+          "apiName": "ssot__ContactPointId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpc_cp"
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpc_party"
+        },
+        {
+          "label": "Data Use Purpose Id",
+          "apiName": "ssot__DataUsePurposeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpc_dup"
+        },
+        {
+          "label": "Consent Status Id",
+          "apiName": "ssot__ConsentStatusId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpc_stat"
+        },
+        {
+          "label": "Consent Captured Date Time",
+          "apiName": "ssot__ConsentCaptureddateTime__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "cpc_cap"
+        },
+        {
+          "label": "Consent Captured Source Name",
+          "apiName": "ssot__ConsentCapturedSourceName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpc_src"
+        },
+        {
+          "label": "Double Consent Capture Date Time",
+          "apiName": "ssot__DoubleConsentCapturedateTime__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "cpc_dbl"
+        },
+        {
+          "label": "Effective From Date",
+          "apiName": "ssot__EffectiveFromDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "cpc_from"
+        },
+        {
+          "label": "Effective To Date",
+          "apiName": "ssot__EffectiveToDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "cpc_to"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Communication Subscription",
+      "objectName": "Communication Subscription",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "cs_id",
+          "required": true
+        },
+        {
+          "label": "Data Use Purpose Id",
+          "apiName": "ssot__DataUsePurposeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cs_dup"
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cs_nm"
+        },
+        {
+          "label": "Data Source Id",
+          "apiName": "ssot__DataSourceId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cs_ds"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Comm Subscription Consent",
+      "objectName": "Comm Subscription Consent",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "csc_id",
+          "required": true
+        },
+        {
+          "label": "Communication Subscription Id",
+          "apiName": "ssot__CommunicationSubscriptionId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_cs"
+        },
+        {
+          "label": "Consent Status Id",
+          "apiName": "ssot__ConsentStatusId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_stat"
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_party"
+        },
+        {
+          "label": "Contact Point Id",
+          "apiName": "ssot__ContactPointId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_cp"
+        },
+        {
+          "label": "Contact Point Consent Id",
+          "apiName": "ssot__ContactPointConsentId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_cpc"
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csc_ect"
+        },
+        {
+          "label": "Consent Captured Date Time",
+          "apiName": "ssot__ConsentCaptureddateTime__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "csc_cap"
+        },
+        {
+          "label": "Effective From Date",
+          "apiName": "ssot__EffectiveFromDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "csc_from"
+        },
+        {
+          "label": "Effective To Date",
+          "apiName": "ssot__EffectiveToDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "csc_to"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Consent Status",
+      "objectName": "Consent Status",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "stat_id",
+          "required": true
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "stat_nm"
+        },
+        {
+          "label": "Data Source Id",
+          "apiName": "ssot__DataSourceId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "stat_ds"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Data Use Purpose",
+      "objectName": "Data Use Purpose",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "dup_id",
+          "required": true
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dup_nm"
+        },
+        {
+          "label": "Description",
+          "apiName": "ssot__Description__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dup_desc"
+        },
+        {
+          "label": "Legal Basis Id",
+          "apiName": "ssot__LegalBasisId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dup_lb"
+        },
+        {
+          "label": "Can Data Subject Opt Out",
+          "apiName": "ssot__CanDataSubjectOptOut__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dup_opt"
+        },
+        {
+          "label": "Can Maintain Per Contact Point",
+          "apiName": "ssot__CanMaintainPerContactPoint__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dup_cp"
+        },
+        {
+          "label": "Can Maintain Per Party",
+          "apiName": "ssot__CanMaintainPerParty__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dup_party"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Data Use Legal Basis",
+      "objectName": "Data Use Legal Basis",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "dulb_id",
+          "required": true
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dulb_nm"
+        },
+        {
+          "label": "Description",
+          "apiName": "ssot__Description__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dulb_desc"
+        },
+        {
+          "label": "Source",
+          "apiName": "ssot__Source__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dulb_src"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Party Consent",
+      "objectName": "Party Consent",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "pc_id",
+          "required": true
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "pc_party"
+        },
+        {
+          "label": "Consent Status Id",
+          "apiName": "ssot__ConsentStatusId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "pc_stat"
+        },
+        {
+          "label": "Privacy Consent Status Id",
+          "apiName": "ssot__PrivacyConsentStatusId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "pc_priv"
+        },
+        {
+          "label": "Consent Captured Source Name",
+          "apiName": "ssot__ConsentCapturedSourceName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "pc_src"
+        },
+        {
+          "label": "Consent Captured Contact Point Type",
+          "apiName": "ssot__ConsentCapturedContactPointType__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "pc_cpt"
+        },
+        {
+          "label": "Consent Grantors",
+          "apiName": "ssot__ConsentGrantors__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "pc_grant"
+        },
+        {
+          "label": "Effective From Date",
+          "apiName": "ssot__EffectiveFromDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "pc_from"
+        },
+        {
+          "label": "Effective To Date",
+          "apiName": "ssot__EffectiveToDate__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "pc_to"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Email Engagement",
+      "objectName": "Email Engagement",
+      "headerColor": "#DA4E55",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "ee_id",
+          "required": true
+        },
+        {
+          "label": "Individual Id",
+          "apiName": "ssot__IndividualId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ee_ind"
+        },
+        {
+          "label": "Contact Point Id",
+          "apiName": "ssot__ContactPointId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ee_cp"
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ee_ect"
+        },
+        {
+          "label": "Engagement Publication Id",
+          "apiName": "ssot__EngagementPublicationId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ee_pub"
+        },
+        {
+          "label": "Engagement Asset Id",
+          "apiName": "ssot__EngagementAssetId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ee_asset"
+        },
+        {
+          "label": "Engagement Channel Action Id",
+          "apiName": "ssot__EngagementChannelActionId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ee_act"
+        },
+        {
+          "label": "Engagement Date Time",
+          "apiName": "ssot__EngagementDateTm__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "ee_dt"
+        },
+        {
+          "label": "Sent Date Time",
+          "apiName": "ssot__SentDateTm__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "ee_sdt"
+        },
+        {
+          "label": "Subject Line Text",
+          "apiName": "ssot__SubjectLineTxt__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ee_subj"
+        },
+        {
+          "label": "Email From Address",
+          "apiName": "ssot__EmailFromAddr__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ee_from"
+        },
+        {
+          "label": "Link URL",
+          "apiName": "ssot__LinkURL__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ee_url"
+        },
+        {
+          "label": "Is Test Send",
+          "apiName": "ssot__IsTestSend__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ee_test"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Email Publication",
+      "objectName": "Email Publication",
+      "headerColor": "#DA4E55",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "ep_id",
+          "required": true
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "ep_ect"
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ep_nm"
+        },
+        {
+          "label": "Open Pct",
+          "apiName": "ssot__OpenPct__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_open"
+        },
+        {
+          "label": "Click Through Pct",
+          "apiName": "ssot__ClickThroughPct__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_ctr"
+        },
+        {
+          "label": "Delivery Pct",
+          "apiName": "ssot__DeliveryPct__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_del"
+        },
+        {
+          "label": "Total Sent Qty",
+          "apiName": "ssot__TotalSentQty__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_sent"
+        },
+        {
+          "label": "Total Delivered Qty",
+          "apiName": "ssot__TotalDeliveredQty__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_deliv"
+        },
+        {
+          "label": "Total Hard Bounce Qty",
+          "apiName": "ssot__TotalHardBounceQty__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_hb"
+        },
+        {
+          "label": "Total Soft Bounce Qty",
+          "apiName": "ssot__TotalSoftBounceQty__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_sb"
+        },
+        {
+          "label": "Unique Opens Qty",
+          "apiName": "ssot__UniqueOpensQty__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "ep_uo"
+        },
+        {
+          "label": "Scheduled Dt",
+          "apiName": "ssot__ScheduledDt__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "ep_sch"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Device Application Engagement",
+      "objectName": "Device Application Engagement",
+      "headerColor": "#DA4E55",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "dae_id",
+          "required": true
+        },
+        {
+          "label": "Individual Id",
+          "apiName": "ssot__IndividualId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_ind"
+        },
+        {
+          "label": "Contact Point Id",
+          "apiName": "ssot__ContactPointId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_cp"
+        },
+        {
+          "label": "Device Id",
+          "apiName": "ssot__DeviceId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_dev"
+        },
+        {
+          "label": "Software Application Id",
+          "apiName": "ssot__SoftwareApplicationId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_app"
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_ect"
+        },
+        {
+          "label": "Engagement Publication Id",
+          "apiName": "ssot__EngagementPublicationId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_pub"
+        },
+        {
+          "label": "Engagement Asset Id",
+          "apiName": "ssot__EngagementAssetId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "dae_asset"
+        },
+        {
+          "label": "Engagement Channel Action Id",
+          "apiName": "ssot__EngagementChannelActionId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dae_act"
+        },
+        {
+          "label": "Engagement Date Time",
+          "apiName": "ssot__EngagementDateTm__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "dae_dt"
+        },
+        {
+          "label": "Screen Name",
+          "apiName": "ssot__ScreenName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dae_scr"
+        },
+        {
+          "label": "Geofence Name",
+          "apiName": "ssot__GeofenceName__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dae_geo"
+        },
+        {
+          "label": "Time In App Seconds Ct",
+          "apiName": "ssot__TimeInAppSecondsCt__c",
+          "type": "Number",
+          "keyType": null,
+          "fid": "dae_tia"
+        },
+        {
+          "label": "SDK Version Nbr",
+          "apiName": "ssot__SdkVersionNbr__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "dae_sdk"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Message Engagement",
+      "objectName": "Message Engagement",
+      "headerColor": "#DA4E55",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "me_id",
+          "required": true
+        },
+        {
+          "label": "Individual Id",
+          "apiName": "ssot__IndividualId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "me_ind"
+        },
+        {
+          "label": "Contact Point Id",
+          "apiName": "ssot__ContactPointId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "me_cp"
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "me_ect"
+        },
+        {
+          "label": "Engagement Publication Id",
+          "apiName": "ssot__EngagementPublicationId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "me_pub"
+        },
+        {
+          "label": "Engagement Asset Id",
+          "apiName": "ssot__EngagementAssetId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "me_asset"
+        },
+        {
+          "label": "Session Id",
+          "apiName": "ssot__SessionId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_sess"
+        },
+        {
+          "label": "Engagement Channel Action Id",
+          "apiName": "ssot__EngagementChannelActionId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_act"
+        },
+        {
+          "label": "Engagement Date Time",
+          "apiName": "ssot__EngagementDateTm__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "me_dt"
+        },
+        {
+          "label": "Sent Date Time",
+          "apiName": "ssot__SentDateTm__c",
+          "type": "DateTime",
+          "keyType": null,
+          "fid": "me_sdt"
+        },
+        {
+          "label": "Keyword Text",
+          "apiName": "ssot__KeywordTxt__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_kw"
+        },
+        {
+          "label": "Message Delivery Short Code",
+          "apiName": "ssot__MessageDeliveryShortCd__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_sc"
+        },
+        {
+          "label": "Send Time Social Id",
+          "apiName": "ssot__SendTimeSocialId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_soc"
+        },
+        {
+          "label": "Is Test Send",
+          "apiName": "ssot__IsTestSend__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "me_test"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Engagement Channel Type",
+      "objectName": "Engagement Channel Type",
+      "headerColor": "#DA4E55",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "ect_id",
+          "required": true
+        },
+        {
+          "label": "Name",
+          "apiName": "ssot__Name__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ect_nm"
+        },
+        {
+          "label": "Can Capture Consent",
+          "apiName": "ssot__CanCaptureConsent__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ect_cap"
+        },
+        {
+          "label": "Is Direct Activation Channel",
+          "apiName": "ssot__IsDirectActivationChannel__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ect_dir"
+        },
+        {
+          "label": "Data Source Id",
+          "apiName": "ssot__DataSourceId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "ect_ds"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Comm Subscription Channel Type",
+      "objectName": "Comm Subscription Channel Type",
+      "headerColor": "#7F2B82",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "csct_id",
+          "required": true
+        },
+        {
+          "label": "Communication Subscription Id",
+          "apiName": "ssot__CommunicationSubscriptionId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csct_cs"
+        },
+        {
+          "label": "Engagement Channel Type Id",
+          "apiName": "ssot__EngagementChannelTypeId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "csct_ect"
+        }
+      ]
+    },
+    {
+      "type": "sf.DataObject",
+      "label": "Contact Point App",
+      "objectName": "Contact Point App",
+      "headerColor": "#1D73C9",
+      "fields": [
+        {
+          "label": "Id",
+          "apiName": "ssot__Id__c",
+          "type": "Text",
+          "keyType": "pk",
+          "fid": "cpa_id",
+          "required": true
+        },
+        {
+          "label": "Party Id",
+          "apiName": "ssot__PartyId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpa_party"
+        },
+        {
+          "label": "Device Id",
+          "apiName": "ssot__DeviceId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpa_dev"
+        },
+        {
+          "label": "Software Application Id",
+          "apiName": "ssot__SoftwareApplicationId__c",
+          "type": "Text",
+          "keyType": "fk",
+          "fid": "cpa_app"
+        },
+        {
+          "label": "Application Login Id",
+          "apiName": "ssot__ApplicationLoginId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_login"
+        },
+        {
+          "label": "Device End Point Id",
+          "apiName": "ssot__DeviceEndPointId__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_ep"
+        },
+        {
+          "label": "Badge Count",
+          "apiName": "ssot__BadgeCount__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_badge"
+        },
+        {
+          "label": "Is Active",
+          "apiName": "ssot__IsActive__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_act"
+        },
+        {
+          "label": "Is Undeliverable",
+          "apiName": "ssot__IsUndeliverable__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_und"
+        },
+        {
+          "label": "Primary Flag",
+          "apiName": "ssot__PrimaryFlag__c",
+          "type": "Text",
+          "keyType": null,
+          "fid": "cpa_pri"
+        }
+      ]
+    }
+  ]
+}

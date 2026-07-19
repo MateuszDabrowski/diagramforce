@@ -175,6 +175,58 @@
   box-sizing: border-box;
 }
 
+/* Free-text combobox (Process/Trigger Type) — a contenteditable div, NOT an <input>, so no browser applies its
+   autofill overlay. Styled to read identically to the sibling text inputs. */
+.df-suggest { position: relative; }
+.df-suggest__box {
+  min-height: 20px;                 /* ~ one line at the shared input font-size + padding */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+  line-height: 1.4;
+}
+.df-suggest__box:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(29, 115, 201, 0.15);
+}
+.df-suggest__box:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.df-suggest__menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 3px;
+  max-height: 200px;
+  overflow-y: auto;
+  /* JS (placeMenu) flips this above the box when there's more room there (near the panel footer). */
+  background: var(--bg-panel, var(--bg-app));
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+/* Opens upward: sit above the box instead of below (set by placeMenu when room below is tight). */
+.df-suggest__menu--up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 3px;
+}
+.df-suggest__item {
+  padding: 6px var(--spacing-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+/* One shared highlight for mouse (mouseenter sets --active) and keyboard (arrow keys set --active). */
+.df-suggest__item--active { background: var(--color-primary); color: #fff; }
+
 /* Larger spinners for number inputs */
 .df-properties__input[type="number"] {
   -moz-appearance: textfield;

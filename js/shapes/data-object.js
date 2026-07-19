@@ -1,10 +1,10 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.19.5.8';
-import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.19.5.8';
-import { portGroups } from './ports.js?v=1.19.5.8';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.19.5.8';
+import { sctx } from './context.js?v=1.20.0.63';
+import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.20.0.63';
+import { portGroups } from './ports.js?v=1.20.0.63';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.20.0.63';
 
 export function registerDataObject() {
   // --- DataObject ---
@@ -401,12 +401,22 @@ export function registerDataObject() {
         let typeStr = field.type || '';
         if (showLen && field.length) typeStr += `(${field.length})`;
 
-        // Field label — truncated with an ellipsis so an over-long API name can never spill
+        // Field label — truncated with an ellipsis so an over-long name can never spill
         // past the object edge or collide with the right-aligned Data Type. The full,
         // untruncated text stays available as an SVG <title> tooltip.
-        const showLabels = model.get('showLabels');
-        const fullLabel = (field.apiName || field.label || '') +
-          (showLabels && field.label ? ` (${field.label})` : '') +
+        //
+        // LABEL-FIRST (1.20.0): the human label is primary (apiName fills in when the label is
+        // empty — panel-created fields default label:''), and `showLabels` now appends the API
+        // NAME when it differs (the pre-1.20 composition was apiName-primary with the label
+        // appended). This is a render-time REINTERPRETATION, not a migration: no cell is
+        // rewritten (Compare/version-history diffs + Drive hashes stay clean), the persisted
+        // key and its frozen share-codec MIN code ('+') are untouched, and a pre-1.20 client
+        // still renders both names for showLabels:true files. Equal label/apiName pairs are
+        // deduped (the old code rendered "Id (Id)").
+        const showApiNames = model.get('showLabels');
+        const primaryName = field.label || field.apiName || '';
+        const fullLabel = primaryName +
+          (showApiNames && field.apiName && field.apiName !== primaryName ? ` (${field.apiName})` : '') +
           (field.required ? ' *' : '');
         const typeW = typeStr ? typeStr.length * 5.6 + 8 : 4;   // ~px, font-size 10
         const avail = width - labelX - typeW - 8;               // px left for the label

@@ -11,9 +11,9 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.19.5.8';
-import { ER_MARKER_D } from './er-markers.js?v=1.19.5.8';
-import { showError, showToast } from './feedback.js?v=1.19.5.8';
+import { createElementFromComponent } from './components.js?v=1.20.0.63';
+import { ER_MARKER_D } from './er-markers.js?v=1.20.0.63';
+import { showError, showToast } from './feedback.js?v=1.20.0.63';
 
 let modules = {};
 
@@ -1392,8 +1392,9 @@ function buildSequenceLink(lk, src, tgt) {
     z: 3000,
   });
   // Dashed lines use `cell.prop('lineStyle')` so the overlay manager can
-  // paint dashes without bleeding into marker content on Safari.
-  if (dashed) link.prop('lineStyle', '6 4');
+  // paint dashes without bleeding into marker content on Safari. Use the panel's own "Dashed" value ('8 4' from
+  // LINK_LINE_STYLE_OPTS) so the Line Style control matches (a '6 4' reads as a non-match → falls back to Solid).
+  if (dashed) link.prop('lineStyle', '8 4');
 
   if (lk.label) {
     link.labels([{

@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
 >
-> **Spec snapshot: v1.19.5** — matches the app's current `appVersion`; set `"appVersion": "1.19.5"` in generated files.
+> **Spec snapshot: v1.20.0** — matches the app's current `appVersion`; set `"appVersion": "1.20.0"` in generated files.
 >
 > **Validate before importing.** Run `npm run validate -- your-diagram.json` (a zero-dependency dev CLI) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,10 +48,10 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.19.5"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.20.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
-| `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"` are accepted but the canonical forms are `"datamodel"` and `"org"` |
+| `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
 | `graph` | object | Yes | Contains `cells` array — the JointJS graph data |
 | `viewport` | object | No | Pan/zoom state. Omit to auto-fit on load |
 | `group` | object | No | `{ "name", "icon", "color" }` of the tab GROUP this diagram belonged to. Present only when the diagram was saved/exported from a named tab group. On load the app recreate-or-REJOINS a group of that name and drops the tab into it (so reopening one grouped diagram restores its group). Omit for ungrouped diagrams. Added v1.17.0 |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.5", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.5" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.20.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.20.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.19.5", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.20.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.19.5" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.20.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -118,7 +118,7 @@
 | `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image |
 | `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnLoop, BpmnPool, BpmnDataObject, Flow* shapes, Annotation |
 | `datamodel` | ERDs, Salesforce object models (pure ER) | DataObject |
-| `datamapping` | Data Cloud / Data 360 field mapping (mapping mode always on — all-field ports, Category, source→DMO mapping links) | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone` with `layerStage`: `source`/`dlo`/`dmo`/`activation`) |
+| `datamapping` | Data Cloud / Data 360 field mapping (mapping mode always on — all-field ports, Category, source→DMO mapping links) | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone` with `layerStage`: `source`/`datastream`/`dlo`/`dmo`/`activation`) |
 | `org` | Org charts, team structures, RACI workflows | OrgPerson, Container (Team), Zone (Department), Task, TaskGroup (RACI section) |
 | `gantt` | Project timelines | GanttTimeline, GanttTask, GanttMilestone, GanttGroup, GanttMarker |
 | `sequence` | UML sequence diagrams, message flows | SequenceParticipant, SequenceActor, SequenceActivation, SequenceFragment |
@@ -146,6 +146,7 @@ as a convenience when you're working in a Salesforce context; ignore it for non-
 | "What systems / products / integrations exist and how do they connect?" | `architecture` | System Landscape, Solution Architecture, Capability Map |
 | "Who are the people and teams - reporting lines, team composition, who is responsible for what (RACI)?" | `org` | Role Hierarchy (people / personas) |
 | "What are the steps of a process, in what order?" (approval, onboarding, branching, swimlanes) | `process` | Interaction / Process and Flow (BPMN) |
+| "How does a specific **Salesforce Flow** work - its screens, decisions, record operations, and elements?" | `flow` | Interaction / Process and Flow (Salesforce Flow) |
 | "In what time-order do systems or actors message each other?" | `sequence` | Interaction / Process and Flow (UML sequence) |
 | "What objects / fields exist and how are they related?" (schema, keys, cardinality) | `datamodel` | Data Model (ERD) |
 | "How do source fields map into Data Cloud DLOs / DMOs?" | `datamapping` | Data Model + Solution Architecture (Data Cloud) |
@@ -155,6 +156,7 @@ as a convenience when you're working in a Salesforce context; ignore it for non-
 
 - ✗ Drawing **people or teams** (two teams on a project, an org chart, who-does-what, reporting lines) as boxes-and-arrows in `architecture` → ✓ that is an **`org`** diagram. `architecture` is for SYSTEMS and integrations, never people. Use `sf.OrgPerson`, `sf.Container` (Team), and `sf.Task` + `sf.TaskGroup` for RACI. *(In Salesforce's framework this is the Role Hierarchy diagram - people are not free-floating actors in a system landscape.)*
 - ✗ Using `architecture` for a **step-by-step process** (an approval, an onboarding flow) → ✓ `process`. When the message is the ORDER of steps, use BPMN events / tasks / gateways, and number the steps.
+- ✗ Using `process` (generic BPMN) to document an **actual Salesforce Flow** → ✓ `flow`. `process` is for GENERIC business processes / non-Salesforce flowcharts; `flow` is specifically for documenting a Salesforce Flow with its real element vocabulary (Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records, Subflow, …). When the reader needs to see *this org's flow* - screen flow, record-triggered, or a marketing/campaign flow - use `flow` and its `df.Flow*` elements.
 - ✗ Using `architecture` (or any generic boxes) for a **data schema** (objects, fields, keys) → ✓ `datamodel`. You need field rows + crow's-foot cardinality, which only `sf.DataObject` provides.
 - ✗ Using `process` (one BPMN pool) when the point is **who messages whom, in what order**, across systems → ✓ `sequence`. Lifelines + ordered messages read an interaction better than a flowchart.
 - ✗ Drawing a **project plan / timeline** as a flowchart → ✓ `gantt`. Dates, dependencies, and a time axis are the message (Salesforce's Roadmap).
@@ -200,6 +202,13 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 - ✗ `targetMarker: {type:"none"}` (or any markerless object) on a flow you want arrowed - the loader skips markers with no `d`, so it loads undirected → ✓ OMIT `targetMarker` for a directed flow. `sourceMarker` is NOT auto-arrowed.
 - ✗ linking TO a `sf.BpmnPool` (it has no ports) → ✓ attach links to the step shapes (Task/Event/Gateway); embed steps with `parent:"pool-id"` + the id in the pool's `embeds[]`.
 
+**`flow`** (Salesforce Flow - see the [Flow Shapes](#flow-shapes-salesforce-flow-diagrams) reference)
+- ✗ putting the element name/label inside `attrs.label.text` → ✓ set the TOP-LEVEL `name` prop (it drives the card label via the model); the element TYPE renders as the grey subtitle automatically (shown once `name` differs from the type); `apiName`, `description` + the per-kind fields are also top-level documentation metadata (edited in the panel, NOT shown on the card). Nothing element-specific goes in `attrs`.
+- ✗ setting `attrs.icon.href` (or inventing an icon) → ✓ OMIT it entirely - each `df.Flow*` class bakes its own canonical white SLDS glyph on load. Authoring an icon href does nothing useful (and `refreshAllIconHrefs` skips flow cells).
+- ✗ `type:"sf.Link"` / a BPMN gateway to branch a decision → ✓ `type:"standard.Link"` with `source`/`target` `{id, port}` between `df.Flow*` cells; the four baked-in port ids (`port-top`/`port-right`/`port-bottom`/`port-left`) apply. A flow connector is **Standard** (grey, the default), **Fault** (set `attrs.line.stroke` to `#EA001E`), or **Go To** (set `attrs.line.stroke` to the Go To blue `#0B5CAB` - a dotted jump to an existing element) - see [Flow connectors](#flow-shapes-salesforce-flow-diagrams). Add outcome/loop labels via `labels`.
+- ✗ mixing `processType` and `triggerType` values → ✓ `processType` is the FLOW-level kind (`Flow` = screen flow, `AutoLaunchedFlow`, `Orchestrator`, `EvaluationFlow`, `Survey`, `Journey`, `PromptFlow`, `CheckoutFlow`, `RoutingFlow`, `Workflow`, `CustomEvent`, `InvocableProcess`, … - this is the complete standard set); `triggerType` exists only on an autolaunched Start (`RecordAfterSave`/`RecordBeforeSave`/`RecordBeforeDelete`/`Scheduled`/`PlatformEvent`/`DataCloudDataChange`/`DataGraphDataChange`/`AutomationEvent`/`ExternalSystemChange`/`EnterpriseScaleExternalSystemChange`/`Activation`/`Segment`/`CampaignMember`/`CrmRecordQuery`/`List`/`ScheduledJourney`/`Capability`/`FormSubmissionEvent`/`IndivRelatedRecord`). A screen flow's Start has no `triggerType`. In the property panel these two Start fields are FREE-TEXT inputs with a datalist of the most popular values as suggestions (`renderers-flow.js`) - type any value; the JSON value is always a free string. Every per-kind field is free text - never validated.
+- ✗ reaching for a `df.FlowDecision` diamond or a BPMN gateway to show a branch → ✓ every element is the SAME uniform card (`210 x 56`); the branch is expressed by the outgoing `standard.Link`s, not by the element shape.
+
 **`datamodel`**
 - ✗ emitting a `ports` block on an `sf.DataObject` → ✓ omit it entirely - the loader rebuilds `port-top`/`port-bottom`, `er-left`/`er-right`, and one `field-{left,right}-<fid>` per keyed field. Only REFERENCE a port from a link endpoint.
 - ✗ referencing a `field-…-<fid>` whose `<fid>` no field carries, or pointing a PK/FK link at a field with no `keyType` (no port is built) → ✓ copy a `fid` verbatim from a field in that object, or connect via the header `er-left`/`er-right` anchors.
@@ -209,7 +218,7 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 **`datamapping`** (additive - see the Data Cloud mapping checklist below)
 - ✗ `category` omitted, nested in `attrs`, or keyed `objectCategory` → ✓ top-level `"category": "Profile"`|`"Engagement"`|`"Other"` on each DLO/DMO cell.
 - ✗ a mapping link with explicit `router`/`connector` or ER markers, or no `linkKind` → ✓ `linkKind:"mapping"` + a `mappingType` from `Standard`/`Formula`/`Streaming Transform`/`Batch Transform`/`Calculated Insight`; the loader applies `sfMappingRouter`/`sfMappingConnector` itself.
-- ✗ a layer as `sf.Container`, or `layerStage` on the DataObject → ✓ each layer is an `sf.Zone` with top-level `layerStage` in `source`/`dlo`/`dmo`/`activation`.
+- ✗ a layer as `sf.Container`, or `layerStage` on the DataObject → ✓ each layer is an `sf.Zone` with top-level `layerStage` in `source`/`datastream`/`dlo`/`dmo`/`activation`.
 
 **`org`**
 - ✗ name/title in `attrs` (`nameLabel`/`positionLabel`) → ✓ top-level `personName` and `jobTitle` (the prop is `jobTitle`, NOT `position`/`title`/`role`); the view overwrites the attrs from the props every render.
@@ -504,8 +513,10 @@ Leave `icon/href` as `""` for a text-only node. A node whose `body/fill` is a br
 | **Integrations & APIs** | `data_streams` (REST / SOAP / Bulk / Streaming API) · `data_mapping` (GraphQL) · `topic2` (Pub/Sub) · `record_update` (Change Data Capture) · `event` (Platform Events) · `broadcast` (Event Relay) · `connected_apps` (Private Connect) · `database` (SFTP) |
 | **Activation Channels** | `email` · `sms` (SMS / LINE) · `whatsapp` · `page` (Website) · `live_chat` (Chat) · `social` (Social Media Ads) · `push` (Mobile Push) · `notification` (Web Push) · `voice_call` (Voice / IVR) · `store` (Point of Sale) · `agent_astro` (Agent) |
 | **Other common SLDS** | `data_lake_objects` (Data Lake) · `segments` (Personalization) · `einstein` · `campaign` · `advertising` · `macros` (Automation) · `desktop_and_phone` (Web App) · `phone_portrait` (Mobile) · `light_bulb` (Note) · `apex` · `integration` · `record` |
+| **Data Model / Data Mapping headers** (`sf.DataObject` `headerIcon/href`) | `individual` (Individual / Unified Individual) · `contact` (CRM Contact/Lead) · `email` · `sms` (Phone / SMS) · `push` (Mobile App / Contact Point App) · `phone_portrait` (Device) · `connected_apps` (Software Application) · `record_consent` (Consent / Subscription Consent / Preference Centre) · `broadcast` (Communication Subscription) · `topic2` (Channel Type) · `record` (Status / Purpose / Legal Basis lookups) · `address` (Contact Point Address) · `account` (Account / Account junctions) · `data_lake_objects` (DLO) · `data_mapping` (Data Stream / Unified Link) |
+| **Flow elements** (`df.Flow*` - AUTO-applied, do not set) | Real SLDS `standard:*` glyphs (verified against Flow Builder), baked WHITE on the category chip: `right` (Start) · `stop` (End) · `screen` · `custom_notification` (Action / Send to Data 360 / Mobile App / In-App / Campaign Member / Task) · `flow` (Subflow) · `sales_cadence` (Send to a Flow) · `email` · `sms` · `whatsapp` · `bot` (Forward to Bot) · `agent_astro` (Run Agent) · `outcome` (Exit) · `assignment` · `decision` · `loop` · `data_mapping` (Transform) · `path_experiment` · `sort` (Collection Sort) · `filter` (Collection Filter) · `today` (Wait / Wait Until Date / Wait Until Event) · `story` (Einstein Decision) · `record` (Determine CRM Record) · `record_lookup` (Get) · `record_create` (Create) · `record_update` (Update) · `record_delete` (Delete) · `recent` (Roll Back). Each `df.Flow*` class bakes its own icon on load, so an author never sets these. |
 
-> An **unknown ID renders nothing** — use a token from the verified set above (or any valid SLDS icon name) or leave `href` empty. Note: the minimal href is **expanded to the full SVG on load**, so a generated file and its loaded/saved form are not byte-identical — this matches how in-app icon drops are already stored, and `contentSignature` (used for import dedup) reflects the resolved full href.
+> These tables are the **complete allowed set** — do **not** use an ID that is not listed, even if it sounds like a plausible SLDS name (an unknown ID renders an invisible blank, with no error). If no listed token fits the concept, leave `href` as `""`. Note: the minimal href is **expanded to the full SVG on load**, so a generated file and its loaded/saved form are not byte-identical — this matches how in-app icon drops are already stored, and `contentSignature` (used for import dedup) reflects the resolved full href.
 
 ### sf.Container
 
@@ -900,8 +911,8 @@ Database table / Salesforce object with coloured header and dynamic field rows. 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `label` | string | Display name |
-| `apiName` | string | API/column name (shown in the field row) |
+| `label` | string | Display name - **the primary text drawn on each field row** (v1.20.0, label-first); an empty label falls back to `apiName` |
+| `apiName` | string | API/column name - the stable field identity (CSV round-trips and mapping links key off it); drawn in parentheses after the label when `showLabels` is on and it differs |
 | `type` | string | Data type (e.g., `"Text"`, `"Number"`, `"Lookup"`, `"ID"`, `"Picklist"`, `"Date"`, `"Boolean"`, `"Currency"`, `"Formula"`) |
 | `keyType` | `"pk"` / `"fk"` / `"fqk"` / `null` | Key marker badge — Primary key (amber), Foreign key (blue), or **Fully Qualified Key** (`"fqk"`, **brand red** — Data Cloud, v1.15.0). Cycled None → PK → FK → FQK in the field editor. Setting `"pk"` or `"fqk"` auto-sets `required: true` (a key is inherently mandatory). Any non-null `keyType` also forces the field's left/right mapping ports to render. |
 | `length` | number / null | Field length (shown if `showFieldLengths` is true) |
@@ -914,7 +925,7 @@ Database table / Salesforce object with coloured header and dynamic field rows. 
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `showLabels` | `false` | Show the human-readable `label` alongside `apiName` in each row |
+| `showLabels` | `false` | Show the `apiName` in parentheses after the label where they differ (v1.20.0 - the "API Names" View toggle; pre-1.20 the same flag appended the label to an apiName-first row, so old saves render both names either way) |
 | `showFieldLengths` | `false` | Show `(length)` suffix next to the type |
 | `keyFieldsOnly` | `false` | When `true`, only fields with `keyType` (PK/FK) are rendered; the object height shrinks to fit |
 | `collapsed` | `false` | When `true`, the object renders **header-only** (all field rows hidden, height = `32 + 18`); a bottom toggle row flips it. Mapping links converge to the header while collapsed. Top-level prop; omit it for a normal expanded object. |
@@ -1390,6 +1401,87 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 }
 ```
 
+### Flow Shapes (Salesforce Flow Diagrams)
+
+`diagramType: "flow"`. These 34 `df.Flow*` classes document a **Salesforce Flow** with its real element vocabulary. They are DISTINCT from the generic `sf.Flow*` flowchart shapes (which belong to `process`). Every element is the **same uniform card** - a rounded body with a coloured icon chip (left) and a label - so you distinguish elements by their `type` and icon, and express branching with the outgoing `standard.Link`s, not by the shape.
+
+**Shared structure (identical for all 19).** Default size `210 x 56`. Persisted data lives in TOP-LEVEL props, NOT `attrs`:
+
+- `name` (string) - the visible card label. Seed it; it drives `attrs.label.text` via the model.
+- `apiName` (string, optional) - renders as a mono subtitle under the label (hidden when blank). Use the Flow element's API name.
+- `description` (string, optional) - free text.
+- per-kind fields (see the table) - all FREE TEXT, never validated.
+
+**Omit `attrs.icon.href`** - each class bakes its own white SLDS glyph on load. You may omit the `attrs` block entirely; a minimal cell is just `type` + `id` + `position` + `size` + `name` (+ any per-kind fields). Connect elements with `standard.Link` between the four baked-in ports (`port-top`/`port-right`/`port-bottom`/`port-left`).
+
+| `type` | Card label | Flow metadata element | Per-kind fields (free text) |
+|---|---|---|---|
+| `df.FlowStart` | Start | `start` | `processType`, `triggerType`, `object`, `filters`, `configuration` |
+| `df.FlowEnd` | End | *(UI-only; no metadata element)* | *(none)* |
+| `df.FlowScreen` | Screen | `screens` | `components` |
+| `df.FlowAction` | Action | `actionCalls` | `actionName`, `actionType` |
+| `df.FlowSubflow` | Subflow | `subflows` | `flowName` |
+| `df.FlowSendToFlow` | Send to a Flow | `subflows` | `flowName` |
+| `df.FlowSendEmail` | Send Email Message | `actionCalls` | `template` (panel label "Email") |
+| `df.FlowSendSms` | Send SMS Message | `actionCalls` | `template` (panel label "SMS") |
+| `df.FlowSendWhatsApp` | Send WhatsApp Message | `actionCalls` | `template` (panel label "Message") |
+| `df.FlowSendToData360` | Send to Data 360 Activation | `actionCalls` | `activation` |
+| `df.FlowSendMobileApp` | Send Mobile App Message | `actionCalls` | `template` (panel label "Push Notification Message") |
+| `df.FlowSendMobileInApp` | Send Mobile In-App Message | `actionCalls` | `template` (panel label "In-App Message") |
+| `df.FlowForwardToBot` | Forward to Bot or Agent | `actionCalls` | `actionName` |
+| `df.FlowRunAgent` | Run Agent | `actionCalls` (GENERATE_AI_AGENT_RESPONSE) | `actionName` |
+| `df.FlowCreateCampaignMember` | Create Campaign Member | `actionCalls` | `actionName`, `object` |
+| `df.FlowCreateTask` | Create Task | `actionCalls` | `actionName` |
+| `df.FlowExit` | Exit from a Flow | *(UI-only; REMOVE_FROM_FLOW)* | *(none)* |
+| `df.FlowAssignment` | Assignment | `assignments` | `assignmentItems` |
+| `df.FlowDecision` | Decision | `decisions` | `outcomes` |
+| `df.FlowLoop` | Loop | `loops` | `collectionReference` |
+| `df.FlowTransform` | Transform | `transforms` | `transformTarget` |
+| `df.FlowPathExperiment` | Path Experiment | `experiments` | `outcomes` |
+| `df.FlowCollectionSort` | Collection Sort | `collectionProcessors` (Sort) | `collectionReference` |
+| `df.FlowCollectionFilter` | Collection Filter | `collectionProcessors` (Filter) | `collectionReference`, `conditions` |
+| `df.FlowWait` | Wait for Amount of Time | `waits` | `waitEvents` |
+| `df.FlowWaitUntilDate` | Wait Until Date | `waits` | `waitEvents` |
+| `df.FlowWaitUntilEvent` | Wait Until Event | `waits` | `waitEvents` |
+| `df.FlowEinsteinDecision` | Einstein Decision | `actionCalls` | `actionName` |
+| `df.FlowDetermineCrmRecord` | Determine CRM Record for Individual | `actionCalls` | `actionName` |
+| `df.FlowGetRecords` | Get Records | `recordLookups` | `object`, `filters` |
+| `df.FlowCreateRecords` | Create Records | `recordCreates` | `object` |
+| `df.FlowUpdateRecords` | Update Records | `recordUpdates` | `object`, `filters` |
+| `df.FlowDeleteRecords` | Delete Records | `recordDeletes` | `object`, `filters` |
+| `df.FlowRollback` | Roll Back Records | `recordRollbacks` *(record-triggered / autolaunched)* | *(none)* |
+
+> **Field-key note.** Where a real 1:1 Metadata API field exists the key IS that field name (`triggerType`, `object`, `filters`, `actionName`, `actionType`, `flowName`, `waitEvents`, `assignmentItems`, `collectionReference`, `conditions`). The rest are pragmatic summary keys (`components`, `outcomes`, `transformTarget`, `message`, `template`, `activation`, `configuration`) - a short human summary, not the raw metadata. The messaging sends store their content reference in `template` (the panel labels it per channel: Email / SMS / Message / Push Notification Message / In-App Message); Send to Data 360 uses `activation` (an API-activation reference, not message content). Start carries a free-text `configuration` (arbitrary setup notes - schedule cadence, entry conditions, etc.). `processType` is a Flow-level field parked on the Start card for convenience. (The Transform summary key is `transformTarget`, not `target`, to avoid colliding with a link's built-in `target` endpoint.)
+
+**One element (minimal + with fields):**
+
+```json
+{
+  "id": "get-lead",
+  "type": "df.FlowGetRecords",
+  "position": { "x": 400, "y": 150 },
+  "size": { "width": 210, "height": 56 },
+  "z": 2000,
+  "name": "Get Lead",
+  "apiName": "Get_Lead",
+  "object": "Lead",
+  "filters": "Id equals {!$Record.Id}"
+}
+```
+
+**Flow connectors (Standard / Fault / Go To).** A flow link is a plain `standard.Link` between two `df.Flow*` cells. There are THREE types (Salesforce's terms): **Standard**, **Fault**, and **Go To** - a shortcut over the normal connector styling, NOT a separate prop. The loader DERIVES the type from `(stroke, dash)`. You do NOT need to set `router`/`connector` - the loader defaults every flow link to orthogonal `sfManhattan` + rounded routing (omitting them renders a diagonal straight line until load).
+
+- **Standard** (the default): emit just `source`/`target` (endpoints). The loader paints it grey `#5C5C5C` with "None" line-continuation stub ends so it TOUCHES the cards. You do not set `line`/`attrs`.
+- **Fault**: set `attrs.line.stroke` to the fault red `#EA001E`. The loader recognises the red, dashes the line (`lineStyle` `"8 4"`), and applies the stub ends. (A fault path originates from a data/action element - Get/Create/Update/Delete Records, Action, Subflow - never from `df.FlowStart`.)
+- **Go To** ("Outgoing Go To" - a jump to an existing element, e.g. a loop-back or a shared downstream target): blue `#0B5CAB` + dotted. Set `attrs.line.stroke` to `#0B5CAB` (like a Fault authors via red) - the loader dots the line and seeds a BLUE ITALIC reference label "*&lt;destination name&gt;* →" (SLDS blue-40, matching Flow Builder), falling back to "Go To". You don't author the label; it derives from the target.
+- **Labels** (a decision outcome name, "For Each"/"After Last" on a loop, a Go To's destination, etc.) are yours to add via `labels` - the loader seeds text only for Fault ("Fault") and Go To (destination name). A label's colour tracks the line (grey / red).
+
+```json
+{ "id": "l1",      "type": "standard.Link", "source": { "id": "dec" }, "target": { "id": "email" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
+{ "id": "l-fault", "type": "standard.Link", "source": { "id": "get" }, "target": { "id": "err" }, "attrs": { "line": { "stroke": "#EA001E" } } },
+{ "id": "l-goto",  "type": "standard.Link", "source": { "id": "dec" }, "target": { "id": "start" }, "attrs": { "line": { "stroke": "#0B5CAB" } } }
+```
+
 ### Gantt Shapes
 
 > A Gantt chart is **authored as data**: describe the schedule (tasks with dates) and the app computes every pixel. A **`sf.GanttTimeline`** is the date-ruler backbone; each task is a **`sf.GanttTask`** bar embedded in it, **positioned and sized from its dates** — you do **not** set a bar's `position`/`size`/`progressBar` width (all derived on load). Add the timeline, then the bars.
@@ -1739,20 +1831,22 @@ This section is the authoritative guide for producing **valid Salesforce Data Cl
 
 > **Mental model:** a Data Cloud mapping diagram is a **left → right pipeline**. Source systems on the left, harmonized Data Model Objects toward the right, optional activation targets at the far right. **Objects live inside labelled layer Zones**; **field-level mapping links** carry attributes from one layer to the next; optional **object-level relationship links** show ER cardinality between whole tables.
 
-### 1. The four layers (`sf.Zone` with `layerStage`)
+### 1. The layer Zones (`sf.Zone` with `layerStage`)
 
 A layer is an `sf.Zone` carrying a `layerStage` property. **Place every DataObject inside its layer by embedding it** — set the object's `parent` to the Zone id AND list the object id in the Zone's `embeds` array (geometry alone is not enough: the table view's *Data Layer* column reads the object's `parent`, so a loose object reports `[No Mapping Layer]`). Lay the layers out as vertical columns, left → right in pipeline order:
 
 | Layer (Zone `label`) | `layerStage` | Accent (`body/stroke` + `label/fill`, `body/fill` = same at ~5% alpha) | Role |
 |---|---|---|---|
 | `Source` | `"source"` | `#1D73C9` (blue) | External/origin systems as they exist (CRM, ERP, S3, Marketing Cloud, DB). Native source data types. |
+| `Data Stream` | `"datastream"` | `#1D73C9` (blue — same as Source; the stencil's Data Stream preset and the stacked-in-the-Source-column layout make the two zones read as one ingestion column) | The OOTB Data Stream mapping step — statics + calculated key + system timestamp (see below). **Not its own column**: stack this Zone in the Source column, below the Source Zone. |
 | `Data Lake Object` | `"dlo"` | `#F6B355` (amber) | Raw ingestion — data as landed in Data Cloud, one DLO per source stream. |
 | `Data Model Object` | `"dmo"` | `#DA4E55` (red) | Harmonized target entities unified by Identity Resolution (Individual, Account Contact Point, …). |
 | `Activation` | `"activation"` | `#27AE60` (green) | Outbound targets where harmonized data is pushed (Email, SMS, Ad Audience, Snowflake share, webhook). |
 
 - **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO — omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
-- **Coordinates:** give each layer its own column. A workable grid: object width 260, ~200 px between columns ⇒ column pitch ≈ 480. e.g. Source objects at `x:80`, DLO at `x:560`, DMO at `x:1040`, Activation at `x:1520`. Make each Zone ≈ `60` px wider/taller than the objects it wraps, with the objects inset ~`40` px. Or omit `viewport` and let the user run **Auto Layout** (it re-columns layers with a 200 px lane gap, 36 px between objects, top-aligned).
-- A generic `Layer` Zone (no `layerStage`) is available for grouping that isn't one of the four canonical tiers; it reports its own label as the Data Layer.
+- **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do.
+- **Coordinates:** give each layer its own column. A workable grid: object width 260, ~200 px between columns ⇒ column pitch ≈ 480. e.g. Source objects at `x:80`, DLO at `x:560`, DMO at `x:1040`, Activation at `x:1520`. When objects are ~480 px wide (both label and API name shown — the Data Cloud norm, §3), keep **at least ~140 px clear between columns**, more if many links fan out of one object. Make each Zone ≈ `60` px wider/taller than the objects it wraps, with the objects inset ~`40` px. Or omit `viewport` and let the user run **Auto Layout** (it re-columns layers with a 200 px lane gap, 36 px between objects, top-aligned).
+- A generic `Layer` Zone (no `layerStage`) is available for grouping that isn't one of the canonical tiers; it reports its own label as the Data Layer.
 
 ### 2. Objects — `category` is mandatory for DLO/DMO
 
@@ -1782,7 +1876,7 @@ Populate `fields` as an array of field **objects** (never bare strings); see the
   | `"Date"` / `"Date Time"` | date, datetime, timestamp |
   | `"Boolean"` | true/false flags |
 
-  Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation.
+  Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** — real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
 
 ### 4. Field-level mapping links (`linkKind: "mapping"`)
 
@@ -1813,6 +1907,8 @@ That is the **minimal** correct form. On load the app **auto-heals the rest** fr
 
 For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` — it surfaces in the link inspector and the table's *Expression / Rule* column. (`mappingType`/`expressionRule` superseded the pre-release `mapsTo`/`mappingLabel`, still read as fallbacks.)
 
+**Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column — e.g. a Source object feeding the Data Stream Zone stacked below it — anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
+
 ### 5. Object-level relationships (ER, optional)
 
 To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER model in the Source layer) draw an ordinary relationship link — **no `linkKind`** — between the objects' **header ports** (`er-left` / `er-right`, the round relationship anchors), or the pre-seeded `port-top` / `port-bottom`. Use `sfManhattan` routing and crow's-foot cardinality markers (see [Marker Types](#marker-types)):
@@ -1832,13 +1928,18 @@ To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER mo
 
 Keep the two link kinds distinct: **field-level = `linkKind:"mapping"`, amber, field ports**; **object-level = no `linkKind`, grey, header ports, crow's-foot**. Don't mix them on one link.
 
+Two composition rules that make a large mapping read well:
+
+- **Pair overlay: one grey ER link per mapped object pair.** For every object pair that exchanges field mappings, also draw a single header-level relationship link (`er-right → er-left`, grey, ONE at the feeding object, MANY into the fed object; skip `→ Activation` pairs and source→Data-Stream key inputs). The diagram then reads at two levels — object relationships at a glance, field lineage in detail. Derive the pair list from the mapping links themselves so it can't drift.
+- **Identity Resolution is a relationship, never a field mapping.** IR *generates* the Unified records — their keys and attributes are reconciled, not copied — so **no mapping link may point into Unified Individual** (a `Batch Transform` into the unified PK is the tell-tale mistake). Draw the identity spine `Individual → Unified Link Individual → Unified Individual` as grey ER relationship links (no `linkKind`, labelled "Identity Resolution", `port-top`/`port-bottom` when the three are stacked in one column), and give the unified objects no Source/DLO feed.
+
 ### 6. Worked example — Contact → DLO → DMO
 
 A complete, importable three-layer mapping (Source CRM Contact → Contact DLO → Individual DMO), with one `Formula` mapping. Copy, import, then run Auto Layout to tidy.
 
 ```json
 {
-  "version": 1, "appVersion": "1.19.5", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.20.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -1892,10 +1993,27 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 }
 ```
 
-### 7. Validation checklist (avoid the common mistakes)
+### 7. Connectivity completeness (audit before delivering)
+
+A syntactically valid mapping can still be **incomplete** — a box or field with no lineage reads as a mistake, not a footnote. Audit connectivity at both levels before delivering:
+
+- **Object level: no object may sit unconnected.** Even reference DMOs (Consent Status, Data Use Purpose, …) get their `Name` seeded from a DLO value (a normalising `Formula` link) rather than floating linkless.
+- **Field level**, per layer:
+
+  | Layer | Rule |
+  |---|---|
+  | Source | Every field maps somewhere — including key fields feeding the Data Stream's calculated key (draw the `src → Data Stream` input). |
+  | Data Stream | Every field maps into the DLO. |
+  | DLO | Every field has ≥1 link (in or out). |
+  | DMO | The only layer where fields *may* be unmapped — but **not keys** (next rule). |
+  | Activation | Every field receives a mapping. |
+
+- **A keyed DMO field is unmapped only with a stated reason.** The DLO record key maps into each fed DMO's **PK** (and PartyId where present); reference DMO PKs derive from the driving value (`Formula`, e.g. "Key derived from <Name>"); resolvable FKs get a `Formula` "Resolve X by Y" link. The legitimate exceptions: the **IR-generated identity spine** (Unified Individual / Unified Link — never source-mapped, §5), **FKs to objects outside the diagram's scope**, and **reference-only FKs with no source**.
+
+### 8. Validation checklist (avoid the common mistakes)
 
 - ✅ `"diagramType": "datamapping"` — **not** `"mapping"` or `"data"`.
-- ✅ Layers are `sf.Zone` with `layerStage` (`source`/`dlo`/`dmo`/`activation`) — **not** a `sf.Container` named "Source".
+- ✅ Layers are `sf.Zone` with `layerStage` (`source`/`datastream`/`dlo`/`dmo`/`activation`) — **not** a `sf.Container` named "Source".
 - ✅ Every DataObject is **embedded** in its layer Zone: object `parent` = zone id **and** zone `embeds` includes the object id.
 - ✅ Object typing is `category` = `Profile`/`Engagement`/`Other` (top-level, set on every DLO/DMO) — **not** `objectCategory`.
 - ✅ Field links reference ports via the endpoint **`port`** key as `field-right-<fid>` / `field-left-<fid>` — **not** `<fid>#fieldRight`. Source side uses `field-right-…`, target side `field-left-…`.
@@ -1903,7 +2021,11 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 - ✅ ER relationship links: **no** `linkKind`, header ports (`er-left`/`er-right`), `sfManhattan` router, crow's-foot markers.
 - ✅ Mark any field you connect with a `fid`; never list field ports in `ports.items`.
 - ✅ Keep every OOTB port — **never** drop ports that have no connector. They are the user's attachment points for edits made after generation.
-- ✅ Normalize DLO/DMO field `type` to `Text`/`Number`/`Date`/`Date Time`/`Boolean`; keep native types only on Source objects.
+- ✅ Normalize DLO/DMO field `type` to `Text`/`Number`/`Date`/`Date Time`/`Boolean`; keep native types only on Source objects (and remember standard DMO flags are `Text`, not `Boolean` — §3).
+- ✅ Every `data-icon-id` token comes from the **Icon ID reference** tables — never invent an SLDS-sounding name (an unknown ID renders an invisible blank). No fitting token → `href: ""`. Icons are all-or-none per diagram: a mix of iconed and icon-less objects reads as a bug.
+- ✅ No unconnected objects; field-level connectivity audited per §7 (Source/Data Stream/DLO/Activation fields all linked; keyed DMO fields mapped or exempted with a reason).
+- ✅ No mapping link points into Unified Individual — the identity spine is grey ER links (§5).
+- ✅ Same-column pairs (Source → Data Stream) anchor both link ends on the outer side (`field-left` at both); `field-right → field-left` is for left-to-right pairs only (§4).
 
 ---
 
@@ -1920,7 +2042,7 @@ their cadence on the line. *(Validated with `npm run validate`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -1952,7 +2074,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2079,7 +2201,7 @@ swaps port direction. *(Validated with `npm run validate`; rendered in-app.)*
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2109,7 +2231,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2142,7 +2264,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2178,6 +2300,38 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 }
 ```
 
+### Flow (Salesforce Flow)
+
+A **segment-triggered marketing flow**: a Data Cloud segment membership starts it, a Get Records reads the contact (with a fault path to a Notify-admin Action), a Decision branches on engagement, and each branch runs a Send-message Action before ending. Every element is the SAME uniform `210 x 56` card - branching is expressed by the `standard.Link`s, not by the shapes. Element name/apiName/per-kind fields are TOP-LEVEL; `attrs` and `icon` are omitted (each class self-iconizes on load). *(Validated with `npm run validate`; rendered in-app.)*
+
+```json
+{
+  "version": 1,
+  "appVersion": "1.20.0",
+  "title": "Welcome Campaign (segment-triggered)",
+  "diagramType": "flow",
+  "graph": {
+    "cells": [
+      { "id": "start", "type": "df.FlowStart", "position": { "x": 360, "y": 20 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "New segment member", "apiName": "Start", "processType": "AutoLaunchedFlow", "triggerType": "Segment", "object": "Campaign Member" },
+      { "id": "get", "type": "df.FlowGetRecords", "position": { "x": 360, "y": 120 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "Get Contact", "apiName": "Get_Contact", "object": "Contact", "filters": "Id equals {!$Record.ContactId}" },
+      { "id": "dec", "type": "df.FlowDecision", "position": { "x": 360, "y": 220 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "Engaged in last 30 days?", "apiName": "Is_Engaged", "outcomes": "Engaged; Default (not engaged)" },
+      { "id": "email", "type": "df.FlowAction", "position": { "x": 180, "y": 330 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "Send welcome email", "apiName": "Send_Welcome_Email", "actionName": "emailSimple", "actionType": "emailSimple" },
+      { "id": "sms", "type": "df.FlowAction", "position": { "x": 540, "y": 330 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "Send SMS nudge", "apiName": "Send_SMS_Nudge", "actionName": "sendSms", "actionType": "apex" },
+      { "id": "err", "type": "df.FlowAction", "position": { "x": 620, "y": 120 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "Notify admin", "apiName": "Notify_Admin", "actionName": "emailSimple", "actionType": "emailAlert" },
+      { "id": "end", "type": "df.FlowEnd", "position": { "x": 360, "y": 440 }, "size": { "width": 210, "height": 56 }, "z": 2000, "name": "End" },
+
+      { "id": "l1", "type": "standard.Link", "source": { "id": "start", "port": "port-bottom" }, "target": { "id": "get", "port": "port-top" } },
+      { "id": "l2", "type": "standard.Link", "source": { "id": "get", "port": "port-bottom" }, "target": { "id": "dec", "port": "port-top" } },
+      { "id": "l3", "type": "standard.Link", "source": { "id": "get", "port": "port-right" }, "target": { "id": "err", "port": "port-left" }, "attrs": { "line": { "stroke": "#EA001E" } } },
+      { "id": "l4", "type": "standard.Link", "source": { "id": "dec", "port": "port-left" }, "target": { "id": "email", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
+      { "id": "l5", "type": "standard.Link", "source": { "id": "dec", "port": "port-right" }, "target": { "id": "sms", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Default" } } } ] },
+      { "id": "l6", "type": "standard.Link", "source": { "id": "email", "port": "port-bottom" }, "target": { "id": "end", "port": "port-left" } },
+      { "id": "l7", "type": "standard.Link", "source": { "id": "sms", "port": "port-bottom" }, "target": { "id": "end", "port": "port-right" } }
+    ]
+  }
+}
+```
+
 ### Org Chart
 
 This is the classic mis-pick: "two teams working on a project" is an **`org`** diagram, NOT `architecture` (people,
@@ -2193,7 +2347,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.19.5",
+  "appVersion": "1.20.0",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

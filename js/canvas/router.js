@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.19.5.8';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.20.0.63';
 
 // ── Routing geometry constants ──
 const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)

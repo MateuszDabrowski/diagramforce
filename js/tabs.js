@@ -1,25 +1,25 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.19.5.8';
-import { tbctx } from './tabs/context.js?v=1.19.5.8';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.19.5.8';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.19.5.8';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.19.5.8';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.19.5.8';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.20.0.63';
+import { tbctx } from './tabs/context.js?v=1.20.0.63';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.20.0.63';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.20.0.63';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.20.0.63';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.20.0.63';
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.19.5.8';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.19.5.8';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.5.8';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.19.5.8';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.19.5.8';
-import { wireMenuDismiss } from './menu.js?v=1.19.5.8';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.19.5.8';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.19.5.8';
-import { getPalette } from './brand-palette.js?v=1.19.5.8';
-import { getAllIcons } from './icons.js?v=1.19.5.8';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.5.8';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.20.0.63';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.20.0.63';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.20.0.63';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.20.0.63';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.20.0.63';
+import { wireMenuDismiss } from './menu.js?v=1.20.0.63';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.20.0.63';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.20.0.63';
+import { getPalette } from './brand-palette.js?v=1.20.0.63';
+import { getAllIcons } from './icons.js?v=1.20.0.63';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.20.0.63';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -1316,8 +1316,9 @@ function openNewDiagramMenu(anchorEl) {
 // Clone glyph — the same line-art "duplicate" mark the canvas context menu + properties pane use (self-styled
 // inside the <g> so it renders regardless of the menu icon's CSS).
 const CLONE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/></g>';
-// Matches the toolbar "Compare with" icon (a list + a change arrow).
-const COMPARE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h6M3 8h4M3 12h7"/><path d="M12 3v8M12 3l-2 2M12 3l2 2"/></g>';
+// Two side-by-side panels — a "compare A vs B / diff view" mark (distinct from CLONE_GLYPH's OVERLAPPING
+// rects). Kept in sync with the toolbar "Compare with" button icon in index.html.
+const COMPARE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="5" height="10" rx="1.4"/><rect x="9" y="3" width="5" height="10" rx="1.4"/></g>';
 
 // Right-click a tab → clone / export / share it, or assign it to a group (ungroup / create a new group).
 function openTabGroupMenu(anchorEl, tab) {

@@ -3,11 +3,11 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.19.5.8';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.19.5.8';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.19.5.8';
-import { normalizeDiagramType } from '../persistence.js?v=1.19.5.8';
-import { showError } from '../feedback.js?v=1.19.5.8';
+import { tbctx } from './context.js?v=1.20.0.63';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.20.0.63';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.20.0.63';
+import { normalizeDiagramType } from '../persistence.js?v=1.20.0.63';
+import { showError } from '../feedback.js?v=1.20.0.63';
 
 export function showNewDiagramModal(targetGroupId = null) {
   const { tabs } = tbctx;                                            // shared array ref (read length for dismiss-guard)
@@ -73,6 +73,19 @@ export function showNewDiagramModal(targetGroupId = null) {
           <span class="df-new-modal__card-title">Data Mapping</span>
           <span class="df-new-modal__card-desc">Map end-to-end data journey from source systems through Data Cloud pipelines to Activations.</span>
         </button>
+        <button class="df-new-modal__card" data-type="flow">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
+            <circle cx="32" cy="8" r="6" fill="var(--color-primary)"/>
+            <path d="M30.3 5 L35.3 8 L30.3 11 Z" fill="#fff"/>
+            <line x1="32" y1="14" x2="32" y2="19" stroke="var(--text-muted)" stroke-width="1.6"/>
+            <rect x="16" y="19" width="32" height="11" rx="3" fill="none" stroke="var(--color-primary)" stroke-width="2"/>
+            <line x1="32" y1="30" x2="32" y2="35" stroke="var(--text-muted)" stroke-width="1.6"/>
+            <circle cx="32" cy="41" r="6" fill="var(--color-primary)" opacity="0.6"/>
+            <rect x="29.4" y="38.4" width="5.2" height="5.2" rx="1" fill="#fff"/>
+          </svg>
+          <span class="df-new-modal__card-title">Flow</span>
+          <span class="df-new-modal__card-desc">Document Salesforce Flows and map marketing customer journeys.</span>
+        </button>
         <button class="df-new-modal__card" data-type="process">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <circle cx="10" cy="24" r="6" fill="none" stroke="var(--color-primary)" stroke-width="2"/>
@@ -83,7 +96,7 @@ export function showNewDiagramModal(targetGroupId = null) {
             <line x1="42" y1="24" x2="48" y2="24" stroke="var(--text-muted)" stroke-width="1.5"/>
           </svg>
           <span class="df-new-modal__card-title">Process</span>
-          <span class="df-new-modal__card-desc">Design business processes, flows, and BPMN workflows.</span>
+          <span class="df-new-modal__card-desc">Design generic business processes and BPMN workflows.</span>
         </button>
         <button class="df-new-modal__card" data-type="sequence">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
@@ -145,15 +158,6 @@ export function showNewDiagramModal(targetGroupId = null) {
           <span class="df-new-modal__card-title">Browser Storage</span>
           <span class="df-new-modal__card-desc">Open a diagram you saved in this browser.</span>
         </button>
-        <button class="df-new-modal__card" data-action="import-json">
-          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
-            <path d="M18 4h20l10 10v30a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
-            <path d="M38 4v10h10" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
-            <text x="32" y="38" text-anchor="middle" font-size="11" font-family="var(--font-family)" fill="var(--color-primary)" opacity="0.9">{ }</text>
-          </svg>
-          <span class="df-new-modal__card-title">JSON or DGF File</span>
-          <span class="df-new-modal__card-desc">Open a Diagramforce .dgf or .json file from your computer.</span>
-        </button>
         <button class="df-new-modal__card df-new-modal__card--paste" data-action="paste">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
             <rect x="15" y="6" width="34" height="40" rx="4" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
@@ -164,6 +168,15 @@ export function showNewDiagramModal(targetGroupId = null) {
           </svg>
           <span class="df-new-modal__card-title">Paste</span>
           <span class="df-new-modal__card-desc">Paste Diagramforce JSON or Mermaid code - the format is detected automatically.</span>
+        </button>
+        <button class="df-new-modal__card" data-action="import-json">
+          <svg class="df-new-modal__icon" viewBox="0 0 64 48">
+            <path d="M18 4h20l10 10v30a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <path d="M38 4v10h10" fill="none" stroke="var(--color-primary)" stroke-width="2.5"/>
+            <text x="32" y="38" text-anchor="middle" font-size="11" font-family="var(--font-family)" fill="var(--color-primary)" opacity="0.9">{ }</text>
+          </svg>
+          <span class="df-new-modal__card-title">JSON or DGF File</span>
+          <span class="df-new-modal__card-desc">Open a Diagramforce .dgf or .json file from your computer.</span>
         </button>
       </div>
       </div>
@@ -186,18 +199,21 @@ export function showNewDiagramModal(targetGroupId = null) {
       <svg class="df-new-modal__icon" viewBox="0 0 48 48" aria-hidden="true"><use href="#icon-gdrive"></use></svg>
       <span class="df-new-modal__card-title">Google Drive</span>
       <span class="df-new-modal__card-desc">Open a diagram you saved to your Google Drive, on any device.</span>`;
-    // Insert as the 2nd card (right after Browser Storage): row 1 = Browser / Drive / File, row 2 = File + Paste.
+    // Append LAST: row 1 = Browser / Paste / File (no sign-in needed), row 2 = Google Drive (the only
+    // account-based source). Everyone gets the top row; the signed-in option sits on its own below.
     const openGrid = overlay.querySelector('.df-new-modal__grid--open');
-    openGrid?.insertBefore(card, openGrid.children[1] || null);
+    openGrid?.appendChild(card);
   }
 
   // Tab switcher: "Create" (diagram types) vs "Open" (existing diagrams from Browser / Drive / File / Paste).
+  let hydrateTemplateThumbs = null;   // assigned by the Templates block below; fires on FIRST tab activation
   const showPanel = (which) => {
     overlay.querySelectorAll('.df-new-modal__tab').forEach((t) => {
       const on = t.dataset.tab === which;
       t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     overlay.querySelectorAll('.df-new-modal__panel').forEach((p) => { p.hidden = p.dataset.tab !== which; });
+    if (which === 'templates') hydrateTemplateThumbs?.();
   };
   overlay.querySelectorAll('.df-new-modal__tab').forEach((t) => t.addEventListener('click', () => showPanel(t.dataset.tab)));
 
@@ -229,10 +245,41 @@ export function showNewDiagramModal(targetGroupId = null) {
     overlay.querySelector('.df-new-modal__panel[data-tab="templates"]')?.remove();
   } else if (tmplGrid) {
     const typeShort = (t) => DIAGRAM_TYPES[normalizeDiagramType(t)]?.short || 'Diagram';
+    const thumbCards = [];   // { meta, thumb, card } — hydrated on the Templates tab's FIRST activation
+
+    // Diagram-type filter chips (owner ask) — built from the types actually present, only when
+    // there is more than one. "All" is the default; a chip narrows the grid to that type.
+    const presentTypes = [...new Set(tmplMetas.map((m) => normalizeDiagramType(m.diagramType)))];
+    if (presentTypes.length > 1) {
+      const bar = document.createElement('div');
+      bar.className = 'df-new-modal__filter';
+      const chip = (label, value) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'df-new-modal__filter-chip' + (value === null ? ' is-active' : '');
+        b.textContent = label;
+        b.addEventListener('click', () => {
+          bar.querySelectorAll('.df-new-modal__filter-chip').forEach((c) => c.classList.toggle('is-active', c === b));
+          tmplGrid.querySelectorAll('.df-new-modal__card--template').forEach((card) => {
+            card.style.display = (!value || card.dataset.diagramType === value) ? '' : 'none';
+          });
+          // Always reset the scroll to the top on filter, so the results read from the first card. (Otherwise a
+          // filter whose remaining cards are still taller than the viewport keeps the old scroll position - the
+          // reported "Data Mapping filters but doesn't scroll up"; only a short result set auto-clamps to 0.)
+          tmplGrid.closest('.df-new-modal__panel')?.scrollTo({ top: 0 });
+        });
+        return b;
+      };
+      bar.appendChild(chip('All', null));
+      for (const t of presentTypes) bar.appendChild(chip(typeShort(t), t));
+      tmplGrid.parentElement.insertBefore(bar, tmplGrid);
+    }
+
     tmplMetas.forEach((meta) => {
       const card = document.createElement('button');
       card.className = 'df-new-modal__card df-new-modal__card--template';
       card.dataset.templateId = meta.id;
+      card.dataset.diagramType = normalizeDiagramType(meta.diagramType);   // filter-chip target
       const thumb = document.createElement('div');
       thumb.className = 'df-new-modal__thumb';
       thumb.innerHTML = '<span class="df-new-modal__thumb-loading" aria-hidden="true"></span>';
@@ -248,11 +295,7 @@ export function showNewDiagramModal(targetGroupId = null) {
       card.append(thumb, badge, title, desc);
       tmplGrid.appendChild(card);
 
-      // Lazy thumbnail: fetch the cells (same-origin) + render a mini-paper. Best-effort - on
-      // failure the placeholder stays (the card still opens via the cached/fresh fetch on click).
-      renderOfficialThumbnail(meta.id).then((el) => {
-        if (el && card.isConnected) { thumb.innerHTML = ''; thumb.appendChild(el); }
-      }).catch(() => { /* keep the placeholder */ });
+      thumbCards.push({ meta, thumb, card });
 
       // Open → a fresh tab seeded with the template (you edit your copy; the official file is untouched).
       card.addEventListener('click', async () => {
@@ -271,6 +314,32 @@ export function showNewDiagramModal(targetGroupId = null) {
         if (targetGroupId && getGroup(targetGroupId)) setTabGroup(id, targetGroupId);
       });
     });
+
+    // Deferred thumbnails (1.20.0, measured): rendering at modal BUILD fetched all 7 templates
+    // (~1.3MB JSON, gzips to ~55KB but parses in full) and spun up 7 throwaway mini-papers — three
+    // of them ~100-link mapping diagrams — on EVERY modal open, including "I just want a blank
+    // canvas". Hydrate once, on the Templates tab's first activation; loadOfficialTemplate's
+    // per-session cache keeps repeat opens free. Best-effort per card — on failure the placeholder
+    // stays (the card still opens via the cached/fresh fetch on click).
+    let thumbsHydrated = false;
+    hydrateTemplateThumbs = async () => {
+      if (thumbsHydrated) return;
+      thumbsHydrated = true;
+      // SEQUENTIAL with a frame-yield between cards: firing all 7 renders in one turn stacked
+      // three ~100-link mini-paper renders into a single long frame (the "Templates tab lags"
+      // report). Cards fill progressively instead; repeat opens hit the rendered-SVG cache and
+      // are instant either way.
+      for (const { meta, thumb, card } of thumbCards) {
+        const t = performance.now();
+        try {
+          const el = await renderOfficialThumbnail(meta.id);
+          if (el && card.isConnected) { thumb.innerHTML = ''; thumb.appendChild(el); }
+        } catch { /* keep the placeholder */ }
+        // Yield only after a REAL render (cache hits are ~0ms): keeps first-open input-responsive
+        // without letting background-tab timer throttling (>=1s per setTimeout) crawl cached opens.
+        if (performance.now() - t > 8) await new Promise((r) => setTimeout(r, 0));
+      }
+    };
   }
 
   // Only allow dismissal when at least one tab already exists

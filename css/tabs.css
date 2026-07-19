@@ -780,6 +780,11 @@
   padding: 32px;
   max-width: 920px;
   width: 90vw;
+  /* The panels area reserves the TALLEST panel's height (tabs.css __panel[hidden] rule, so switching
+     tabs never jumps) - with enough template cards that exceeds a short viewport and pushed the tab
+     strip off-screen. Cap at the viewport and scroll inside, like the mobile rule always has. */
+  max-height: min(92vh, 100dvh);
+  overflow-y: auto;
 }
 
 .df-new-modal__title {
@@ -793,7 +798,14 @@
 /* Create / Open — a centred segmented toggle: a grey track with the active pill in the brand colour. */
 .df-new-modal__tabs {
   display: flex; width: fit-content; margin: 0 auto 22px; gap: 2px; padding: 3px;
-  background: rgba(127, 127, 127, 0.14); border-radius: 999px;
+  border-radius: 999px;
+  /* Opaque + z-lifted so on the Templates tab the cards scrolling UP behind it (see the templates panel's
+     top:-65px) are cleanly occluded and the pill reads as a floating control. Was a translucent grey track. */
+  position: relative;
+  z-index: 3;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
 }
 .df-new-modal__tab {
   padding: 7px 24px; border: 0; border-radius: 999px; cursor: pointer;
@@ -803,9 +815,72 @@
 .df-new-modal__tab.is-active { background: var(--color-primary); color: #fff; }
 /* Stack both panels in ONE grid cell so the container always reserves the TALLER (Create) panel's
    height — switching tabs no longer jumps the modal. The inactive panel stays laid out but hidden. */
-.df-new-modal__panels { display: grid; }
-.df-new-modal__panel { grid-area: 1 / 1; }
-.df-new-modal__panel[hidden] { display: block; visibility: hidden; }   /* override the UA display:none so it keeps reserving height */
+/* Panel sizing (1.20.0, third iteration - owner call): the dialog is anchored to the CREATE tab's
+   dimensions, always. The Create panel stays in flow even when hidden (visibility:hidden) so it
+   alone sizes the panels box; Load/Templates overlay that exact box absolutely and scroll inside
+   it. No dead space (the old reserve-tallest rule stretched every tab to the 7-card template
+   grid), and no size jumps between tabs or when the Templates type-filter changes the row count. */
+.df-new-modal__panels { position: relative; }
+/* display:block beats the UA's [hidden]{display:none} so the Create panel keeps sizing the box. */
+.df-new-modal__panel[data-tab="create"][hidden] { display: block; visibility: hidden; }
+.df-new-modal__panel:not([data-tab="create"]) {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  /* Room for a card's :hover ring (3px box-shadow) + 2px lift — otherwise overflow-y (which also clips the x
+     axis) cuts the top/side of the ring on the edge cards (the reported Load-tab hover clip). */
+  padding: 8px 10px;
+}
+.df-new-modal__panel:not([data-tab="create"])[hidden] { display: none; }
+/* Templates: FULLY floating header. The scroll viewport is pulled up past the tab strip to the midpoint between
+   the "New Diagram" title and the Create/Load/Templates pill (top:-65px, derived from the fixed title/tab
+   heights), so on scroll the cards rise almost to the title - BOTH the tab pill and the filter pill float over
+   them. The filter pill's 49px top offset (margin + sticky top, kept equal so there's no jump) parks it just
+   below the tab pill; the tab pill itself is made opaque + z-lifted below so the centre card scrolling behind it
+   stays occluded. */
+.df-new-modal__panel[data-tab="templates"] { padding-top: 0; top: -65px; }
+
+/* Diagram-type filter chips on the Templates tab: a centred, floating PILL (matching the Create/Load/Templates
+   tab-switcher above it) rather than a full-width band. Sticky at the top of the scroll; the cards flow up behind
+   and beside it (bg-app is opaque, so the chips stay readable over whatever scrolls under them). The 14px bottom
+   margin is the transparent gap that keeps the first card row's :hover ring from being clipped by the pill. */
+.df-new-modal__filter {
+  position: sticky;
+  top: 49px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 49px auto 14px;
+  padding: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+
+.df-new-modal__filter-chip {
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.df-new-modal__filter-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.df-new-modal__filter-chip.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
 /* The Open panel: 3 cards per row (Browser / Drive / File), then 2 (Paste JSON / Paste Mermaid). */
 .df-new-modal__grid--open .df-new-modal__card { flex: 0 1 248px; }
 
@@ -867,9 +942,15 @@
 /* ── Templates tab cards (official-templates.js) — a live mini-paper thumbnail of the actual
    diagram, a type badge, name + description. Left-aligned so a single card reads intentionally
    and more cards wrap into a tidy grid. ── */
-.df-new-modal__grid--templates { justify-content: flex-start; }
+/* Fill the dialog width instead of leaving a right-hand gap: a 1fr grid that auto-fits 3 columns on the wide
+   dialog (~836px inner), 2 as it narrows, 1 on mobile. auto-fit (not auto-fill) collapses empty tracks so
+   the cards always stretch edge-to-edge. Overrides the base __grid flex layout. */
+.df-new-modal__grid--templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  justify-content: stretch;
+}
 .df-new-modal__card--template {
-  flex: 0 1 268px;
   gap: 8px;
   padding: 12px 12px 16px;
   align-items: stretch;
@@ -925,6 +1006,12 @@
     font-size: 16px;
     margin-bottom: 16px;
   }
+
+  /* The desktop "floating header" (templates panel top:-65px + the filter pill's 49px offset) is tuned to the
+     desktop title/tab heights; on the full-screen mobile modal it drags the first card up behind the pills.
+     Reset to a plain stacked layout - the whole dialog scrolls here, so the sticky float isn't needed. */
+  .df-new-modal__panel[data-tab="templates"] { top: 0; }
+  .df-new-modal__filter { position: static; margin: 0 auto 12px; top: auto; }
 
   .df-new-modal__grid {
     gap: 10px;

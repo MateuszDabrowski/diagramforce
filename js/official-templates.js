@@ -13,12 +13,13 @@
 // Offline: templates/*.json are SW-precached (sw.js), and the versioned cache name busts them on
 // every release/dev bump, so no `?v=` query is needed on the fetch.
 
-import { renderTemplateThumbnail } from './templates.js?v=1.19.5.8';
+import { renderTemplateThumbnail } from './templates.js?v=1.20.0.63';
 
 // ── Manifest (small; the cells are fetched lazily) ──────────────────────────
 const OFFICIAL_TEMPLATES = [
   {
     id: 'official-data360-contact-mapping',
+    shapes: 13,
     name: 'Data 360 Contact Mapping',
     description: 'Base Data 360 mapping of Contact data from Source, through DLO to DMO',
     diagramType: 'datamapping',
@@ -26,6 +27,7 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mce-email-data-views',
+    shapes: 11,
     name: 'MCE Email Data Views',
     description: 'Marketing Cloud Engagement data model for email channel System Data Views',
     diagramType: 'datamodel',
@@ -33,10 +35,43 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mce-mobile-data-views',
+    shapes: 7,
     name: 'MCE Mobile Data Views',
     description: 'Marketing Cloud Engagement data model for MobileConnect SMS channel System Data Views',
     diagramType: 'datamodel',
     file: 'templates/mce-mobile-data-views.json',
+  },
+  {
+    id: 'official-mcn-consent-data-model',
+    shapes: 25,
+    name: 'MCN Consent Data Model',
+    description: 'Marketing Cloud Next consent, subscription and engagement DMOs around the Unified Individual',
+    diagramType: 'datamodel',
+    file: 'templates/mcn-consent-data-model.json',
+  },
+  {
+    id: 'official-mcn-email-data-mapping',
+    shapes: 30,
+    name: 'MCN Email Data Mapping',
+    description: 'Marketing Cloud Next email channel mapping from sources through Data Streams and DLOs to DMOs',
+    diagramType: 'datamapping',
+    file: 'templates/mcn-email-data-mapping.json',
+  },
+  {
+    id: 'official-mcn-push-data-mapping',
+    shapes: 31,
+    name: 'MCN Push Data Mapping',
+    description: 'Marketing Cloud Next mobile push mapping from sources through Data Streams and DLOs to DMOs',
+    diagramType: 'datamapping',
+    file: 'templates/mcn-push-data-mapping.json',
+  },
+  {
+    id: 'official-mcn-sms-data-mapping',
+    shapes: 26,
+    name: 'MCN SMS Data Mapping',
+    description: 'Marketing Cloud Next SMS and WhatsApp mapping from sources through Data Streams and DLOs to DMOs',
+    diagramType: 'datamapping',
+    file: 'templates/mcn-sms-data-mapping.json',
   },
 ];
 
@@ -78,11 +113,27 @@ export async function loadOfficialTemplate(id) {
   return out;
 }
 
-/** Render a self-contained mini-paper thumbnail for an official template (lazy-loads its cells).
- *  Returns a wrapper <div> (the same shape renderTemplateThumbnail returns), or null on failure. */
+// Rendered-SVG cache (1.20.0 perf): the templates are IMMUTABLE per session, but the modal is
+// rebuilt on every open, and re-rendering 7 mini-papers (three of them ~100-link routed mapping
+// diagrams) each time made the Templates tab visibly lag. Cache the final SVG markup per id+size;
+// repeat opens clone it instantly instead of spinning up throwaway papers again.
+const _thumbSvgCache = new Map();   // `${id}@${size}x${height}` → svg outerHTML
+
+/** Render a self-contained mini-paper thumbnail for an official template (lazy-loads its cells;
+ *  the RENDERED SVG is cached per id+size for the session). Returns a wrapper <div> (the same
+ *  shape renderTemplateThumbnail returns), or null on failure. */
 export async function renderOfficialThumbnail(id, size = 200, height = 120) {
+  const key = `${id}@${size}x${height}`;
+  if (_thumbSvgCache.has(key)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'df-template-thumb';
+    wrap.innerHTML = _thumbSvgCache.get(key);   // our own generated SVG markup, not user input
+    return wrap;
+  }
   const loaded = await loadOfficialTemplate(id);
   if (!loaded || !loaded.cells.length) return null;
   // renderTemplateThumbnail only needs a { cells } shape; it sanitises + fits the content itself.
-  return renderTemplateThumbnail({ cells: loaded.cells }, size, height);
+  const wrap = renderTemplateThumbnail({ cells: loaded.cells }, size, height);
+  if (wrap && wrap.firstElementChild) _thumbSvgCache.set(key, wrap.innerHTML);
+  return wrap;
 }

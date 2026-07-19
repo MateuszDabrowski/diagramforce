@@ -1,0 +1,5230 @@
+{
+  "version": 1,
+  "appVersion": "1.19.5",
+  "timestamp": 1784213576106,
+  "title": "MCN Consent Data Model",
+  "diagramType": "datamodel",
+  "mappingMode": false,
+  "graph": {
+    "cells": [
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 560,
+          "height": 1290
+        },
+        "z": 0,
+        "position": {
+          "x": 20,
+          "y": 90
+        },
+        "id": "z-cp",
+        "embeds": [
+          "obj-cpe",
+          "obj-cpp",
+          "obj-cpa"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(29,115,201,0.04)"
+          },
+          "label": {
+            "fill": "#1D73C9",
+            "text": "Contact Points"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 560,
+          "height": 1290
+        },
+        "z": 0,
+        "position": {
+          "x": 780,
+          "y": 90
+        },
+        "id": "z-prof",
+        "embeds": [
+          "obj-uind",
+          "obj-ulink",
+          "obj-ind",
+          "obj-dev",
+          "obj-app"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(29,115,201,0.04)"
+          },
+          "label": {
+            "fill": "#1D73C9",
+            "text": "Profile / Identity (activation anchor: Unified Individual)"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 2780,
+          "height": 780
+        },
+        "z": 0,
+        "position": {
+          "x": 20,
+          "y": 1400
+        },
+        "id": "z-con",
+        "embeds": [
+          "rel-34",
+          "rel-26",
+          "obj-cpc",
+          "obj-cs",
+          "obj-csc",
+          "obj-stat",
+          "obj-dup",
+          "obj-dulb",
+          "obj-pc",
+          "obj-csct"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(127,43,130,0.04)",
+            "stroke": "#7F2B82"
+          },
+          "label": {
+            "fill": "#7F2B82",
+            "text": "Consent & Subscription"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 1260,
+          "height": 1180
+        },
+        "z": 0,
+        "position": {
+          "x": 1540,
+          "y": 90
+        },
+        "id": "z-eng",
+        "embeds": [
+          "rel-22",
+          "rel-20",
+          "rel-14",
+          "rel-10",
+          "rel-15",
+          "obj-ee",
+          "obj-ep",
+          "obj-dae",
+          "obj-me",
+          "obj-ect"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(218,78,85,0.04)",
+            "stroke": "#DA4E55"
+          },
+          "label": {
+            "fill": "#DA4E55",
+            "text": "Engagement Events"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 138
+        },
+        "z": 2000,
+        "objectName": "Unified Individual",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Unified Individual Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "uind_id",
+            "required": true
+          },
+          {
+            "label": "Individual Id",
+            "apiName": "ssot__IndividualId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "uind_ind"
+          },
+          {
+            "label": "First Name",
+            "apiName": "ssot__FirstName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "uind_fn"
+          },
+          {
+            "label": "Last Name",
+            "apiName": "ssot__LastName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "uind_ln"
+          }
+        ],
+        "position": {
+          "x": 820,
+          "y": 620
+        },
+        "id": "obj-uind",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-prof",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"individual\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Unified Individual"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 116
+        },
+        "z": 2000,
+        "objectName": "Unified Link Individual",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "ulink_id",
+            "required": true
+          },
+          {
+            "label": "Source Record Id",
+            "apiName": "ssot__SourceRecordId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ulink_src"
+          },
+          {
+            "label": "Unified Record Id",
+            "apiName": "ssot__UnifiedRecordId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ulink_uni"
+          }
+        ],
+        "position": {
+          "x": 820,
+          "y": 430
+        },
+        "id": "obj-ulink",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-prof",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"data_mapping\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Unified Link Individual"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 248
+        },
+        "z": 2000,
+        "objectName": "Individual",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "ind_id",
+            "required": true
+          },
+          {
+            "label": "First Name",
+            "apiName": "ssot__FirstName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_fn"
+          },
+          {
+            "label": "Last Name",
+            "apiName": "ssot__LastName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_ln"
+          },
+          {
+            "label": "Birth Date",
+            "apiName": "ssot__BirthDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "ind_bd"
+          },
+          {
+            "label": "Global Party Id",
+            "apiName": "ssot__GlobalPartyId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_gp"
+          },
+          {
+            "label": "Primary Account Id",
+            "apiName": "ssot__PrimaryAccountId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_acc"
+          },
+          {
+            "label": "Internal Organization Id",
+            "apiName": "ssot__InternalOrganizationId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_org"
+          },
+          {
+            "label": "Is Anonymous",
+            "apiName": "ssot__IsAnonymous__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_anon"
+          },
+          {
+            "label": "Data Source Id",
+            "apiName": "ssot__DataSourceId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ind_ds"
+          }
+        ],
+        "position": {
+          "x": 820,
+          "y": 120
+        },
+        "id": "obj-ind",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-prof",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"individual\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Individual"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "Contact Point Email",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "cpe_id",
+            "required": true
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpe_party"
+          },
+          {
+            "label": "Email Address",
+            "apiName": "ssot__EmailAddress__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_email"
+          },
+          {
+            "label": "Email Domain",
+            "apiName": "ssot__EmailDomain__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_dom"
+          },
+          {
+            "label": "Is Active",
+            "apiName": "ssot__IsActive__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_act"
+          },
+          {
+            "label": "Is Undeliverable",
+            "apiName": "ssot__IsUndeliverable__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_und"
+          },
+          {
+            "label": "Primary Flag",
+            "apiName": "ssot__PrimaryFlag__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_pri"
+          },
+          {
+            "label": "Email Latest Bounce Date Time",
+            "apiName": "ssot__EmailLatestBouncedateTime__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "cpe_bdt"
+          },
+          {
+            "label": "Email Latest Bounce Reason Text",
+            "apiName": "ssot__EmailLatestBounceReasontext__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpe_brt"
+          },
+          {
+            "label": "Preference Rank Number",
+            "apiName": "ssot__PreferenceRankNumber__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "cpe_rank"
+          }
+        ],
+        "position": {
+          "x": 60,
+          "y": 120
+        },
+        "id": "obj-cpe",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-cp",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"email\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Contact Point Email"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 292
+        },
+        "z": 2000,
+        "objectName": "Contact Point Phone",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "cpp_id",
+            "required": true
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpp_party"
+          },
+          {
+            "label": "Device Id",
+            "apiName": "ssot__DeviceId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpp_dev"
+          },
+          {
+            "label": "Telephone Number",
+            "apiName": "ssot__Telephonenumber__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_tel"
+          },
+          {
+            "label": "Formatted E164 Phone Number",
+            "apiName": "ssot__FormattedE164Phonenumber__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_e164"
+          },
+          {
+            "label": "Phone Country Code",
+            "apiName": "ssot__PhoneCountryCode__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_cc"
+          },
+          {
+            "label": "Is SMS Capable",
+            "apiName": "ssot__IsSMSCapable__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_sms"
+          },
+          {
+            "label": "Is Voice Capable",
+            "apiName": "ssot__IsVoiceCapable__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_voice"
+          },
+          {
+            "label": "Is Active",
+            "apiName": "ssot__IsActive__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_act"
+          },
+          {
+            "label": "Primary Flag",
+            "apiName": "ssot__PrimaryFlag__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_pri"
+          },
+          {
+            "label": "Short Code",
+            "apiName": "ssot__ShortCode__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpp_sc"
+          }
+        ],
+        "position": {
+          "x": 60,
+          "y": 460
+        },
+        "id": "obj-cpp",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-cp",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"sms\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Contact Point Phone"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 248
+        },
+        "z": 2000,
+        "objectName": "Device",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "dev_id",
+            "required": true
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_nm"
+          },
+          {
+            "label": "Model Name",
+            "apiName": "ssot__ModelName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_mod"
+          },
+          {
+            "label": "Manufacturer Name",
+            "apiName": "ssot__ManufacturerName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_man"
+          },
+          {
+            "label": "OS Name",
+            "apiName": "ssot__OSName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_os"
+          },
+          {
+            "label": "OS Version Number",
+            "apiName": "ssot__OSVersionNumber__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_osv"
+          },
+          {
+            "label": "Device System Token Text",
+            "apiName": "ssot__DeviceSystemTokentext__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_tok"
+          },
+          {
+            "label": "GCM Sender Id",
+            "apiName": "ssot__GCMSenderId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_gcm"
+          },
+          {
+            "label": "Advertiser Id",
+            "apiName": "ssot__AdvertiserId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dev_adv"
+          }
+        ],
+        "position": {
+          "x": 820,
+          "y": 830
+        },
+        "id": "obj-dev",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-prof",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"phone_portrait\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Device"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 160
+        },
+        "z": 2000,
+        "objectName": "Software Application",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "app_id",
+            "required": true
+          },
+          {
+            "label": "Software Application Name",
+            "apiName": "ssot__SoftwareApplicationName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "app_nm"
+          },
+          {
+            "label": "Product Id",
+            "apiName": "ssot__ProductId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "app_prod"
+          },
+          {
+            "label": "Provider Token Text",
+            "apiName": "ssot__ProviderTokenText__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "app_tok"
+          },
+          {
+            "label": "Internal Organization Id",
+            "apiName": "ssot__InternalOrganizationId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "app_org"
+          }
+        ],
+        "position": {
+          "x": 820,
+          "y": 1130
+        },
+        "id": "obj-app",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-prof",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"connected_apps\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Software Application"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "Contact Point Consent",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "cpc_id",
+            "required": true
+          },
+          {
+            "label": "Contact Point Id",
+            "apiName": "ssot__ContactPointId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpc_cp"
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpc_party"
+          },
+          {
+            "label": "Data Use Purpose Id",
+            "apiName": "ssot__DataUsePurposeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpc_dup"
+          },
+          {
+            "label": "Consent Status Id",
+            "apiName": "ssot__ConsentStatusId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpc_stat"
+          },
+          {
+            "label": "Consent Captured Date Time",
+            "apiName": "ssot__ConsentCaptureddateTime__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "cpc_cap"
+          },
+          {
+            "label": "Consent Captured Source Name",
+            "apiName": "ssot__ConsentCapturedSourceName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpc_src"
+          },
+          {
+            "label": "Double Consent Capture Date Time",
+            "apiName": "ssot__DoubleConsentCapturedateTime__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "cpc_dbl"
+          },
+          {
+            "label": "Effective From Date",
+            "apiName": "ssot__EffectiveFromDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "cpc_from"
+          },
+          {
+            "label": "Effective To Date",
+            "apiName": "ssot__EffectiveToDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "cpc_to"
+          }
+        ],
+        "position": {
+          "x": 660,
+          "y": 1450
+        },
+        "id": "obj-cpc",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerLabel": {
+            "text": "Contact Point Consent"
+          },
+          "headerIcon": {
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record_consent\"/>"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 138
+        },
+        "z": 2000,
+        "objectName": "Communication Subscription",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "cs_id",
+            "required": true
+          },
+          {
+            "label": "Data Use Purpose Id",
+            "apiName": "ssot__DataUsePurposeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cs_dup"
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cs_nm"
+          },
+          {
+            "label": "Data Source Id",
+            "apiName": "ssot__DataSourceId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cs_ds"
+          }
+        ],
+        "position": {
+          "x": 1860,
+          "y": 1450
+        },
+        "id": "obj-cs",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"broadcast\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Communication Subscription"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "Comm Subscription Consent",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "csc_id",
+            "required": true
+          },
+          {
+            "label": "Communication Subscription Id",
+            "apiName": "ssot__CommunicationSubscriptionId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_cs"
+          },
+          {
+            "label": "Consent Status Id",
+            "apiName": "ssot__ConsentStatusId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_stat"
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_party"
+          },
+          {
+            "label": "Contact Point Id",
+            "apiName": "ssot__ContactPointId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_cp"
+          },
+          {
+            "label": "Contact Point Consent Id",
+            "apiName": "ssot__ContactPointConsentId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_cpc"
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csc_ect"
+          },
+          {
+            "label": "Consent Captured Date Time",
+            "apiName": "ssot__ConsentCaptureddateTime__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "csc_cap"
+          },
+          {
+            "label": "Effective From Date",
+            "apiName": "ssot__EffectiveFromDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "csc_from"
+          },
+          {
+            "label": "Effective To Date",
+            "apiName": "ssot__EffectiveToDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "csc_to"
+          }
+        ],
+        "position": {
+          "x": 1260,
+          "y": 1450
+        },
+        "id": "obj-csc",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerLabel": {
+            "text": "Comm Subscription Consent"
+          },
+          "headerIcon": {
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record_consent\"/>"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 116
+        },
+        "z": 2000,
+        "objectName": "Consent Status",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "stat_id",
+            "required": true
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "stat_nm"
+          },
+          {
+            "label": "Data Source Id",
+            "apiName": "ssot__DataSourceId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "stat_ds"
+          }
+        ],
+        "position": {
+          "x": 60,
+          "y": 1450
+        },
+        "id": "obj-stat",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Consent Status"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 204
+        },
+        "z": 2000,
+        "objectName": "Data Use Purpose",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "dup_id",
+            "required": true
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dup_nm"
+          },
+          {
+            "label": "Description",
+            "apiName": "ssot__Description__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dup_desc"
+          },
+          {
+            "label": "Legal Basis Id",
+            "apiName": "ssot__LegalBasisId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dup_lb"
+          },
+          {
+            "label": "Can Data Subject Opt Out",
+            "apiName": "ssot__CanDataSubjectOptOut__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dup_opt"
+          },
+          {
+            "label": "Can Maintain Per Contact Point",
+            "apiName": "ssot__CanMaintainPerContactPoint__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dup_cp"
+          },
+          {
+            "label": "Can Maintain Per Party",
+            "apiName": "ssot__CanMaintainPerParty__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dup_party"
+          }
+        ],
+        "position": {
+          "x": 1860,
+          "y": 1720
+        },
+        "id": "obj-dup",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Data Use Purpose"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 138
+        },
+        "z": 2000,
+        "objectName": "Data Use Legal Basis",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "dulb_id",
+            "required": true
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dulb_nm"
+          },
+          {
+            "label": "Description",
+            "apiName": "ssot__Description__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dulb_desc"
+          },
+          {
+            "label": "Source",
+            "apiName": "ssot__Source__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dulb_src"
+          }
+        ],
+        "position": {
+          "x": 1860,
+          "y": 2000
+        },
+        "id": "obj-dulb",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Data Use Legal Basis"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 248
+        },
+        "z": 2000,
+        "objectName": "Party Consent",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "pc_id",
+            "required": true
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "pc_party"
+          },
+          {
+            "label": "Consent Status Id",
+            "apiName": "ssot__ConsentStatusId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "pc_stat"
+          },
+          {
+            "label": "Privacy Consent Status Id",
+            "apiName": "ssot__PrivacyConsentStatusId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "pc_priv"
+          },
+          {
+            "label": "Consent Captured Source Name",
+            "apiName": "ssot__ConsentCapturedSourceName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "pc_src"
+          },
+          {
+            "label": "Consent Captured Contact Point Type",
+            "apiName": "ssot__ConsentCapturedContactPointType__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "pc_cpt"
+          },
+          {
+            "label": "Consent Grantors",
+            "apiName": "ssot__ConsentGrantors__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "pc_grant"
+          },
+          {
+            "label": "Effective From Date",
+            "apiName": "ssot__EffectiveFromDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "pc_from"
+          },
+          {
+            "label": "Effective To Date",
+            "apiName": "ssot__EffectiveToDate__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "pc_to"
+          }
+        ],
+        "position": {
+          "x": 660,
+          "y": 1780
+        },
+        "id": "obj-pc",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerLabel": {
+            "text": "Party Consent"
+          },
+          "headerIcon": {
+            "href": "data:image/svg+xml,<svg data-icon-id=\"record_consent\"/>"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 336
+        },
+        "z": 2000,
+        "objectName": "Email Engagement",
+        "headerColor": "#DA4E55",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "ee_id",
+            "required": true
+          },
+          {
+            "label": "Individual Id",
+            "apiName": "ssot__IndividualId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ee_ind"
+          },
+          {
+            "label": "Contact Point Id",
+            "apiName": "ssot__ContactPointId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ee_cp"
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ee_ect"
+          },
+          {
+            "label": "Engagement Publication Id",
+            "apiName": "ssot__EngagementPublicationId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ee_pub"
+          },
+          {
+            "label": "Engagement Asset Id",
+            "apiName": "ssot__EngagementAssetId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ee_asset"
+          },
+          {
+            "label": "Engagement Channel Action Id",
+            "apiName": "ssot__EngagementChannelActionId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ee_act"
+          },
+          {
+            "label": "Engagement Date Time",
+            "apiName": "ssot__EngagementDateTm__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "ee_dt"
+          },
+          {
+            "label": "Sent Date Time",
+            "apiName": "ssot__SentDateTm__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "ee_sdt"
+          },
+          {
+            "label": "Subject Line Text",
+            "apiName": "ssot__SubjectLineTxt__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ee_subj"
+          },
+          {
+            "label": "Email From Address",
+            "apiName": "ssot__EmailFromAddr__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ee_from"
+          },
+          {
+            "label": "Link URL",
+            "apiName": "ssot__LinkURL__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ee_url"
+          },
+          {
+            "label": "Is Test Send",
+            "apiName": "ssot__IsTestSend__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ee_test"
+          }
+        ],
+        "position": {
+          "x": 1580,
+          "y": 120
+        },
+        "id": "obj-ee",
+        "category": "Engagement",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-eng",
+        "attrs": {
+          "header": {
+            "fill": "#DA4E55"
+          },
+          "headerCover": {
+            "fill": "#DA4E55"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"email\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Email Engagement"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 314
+        },
+        "z": 2000,
+        "objectName": "Email Publication",
+        "headerColor": "#DA4E55",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "ep_id",
+            "required": true
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "ep_ect"
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ep_nm"
+          },
+          {
+            "label": "Open Pct",
+            "apiName": "ssot__OpenPct__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_open"
+          },
+          {
+            "label": "Click Through Pct",
+            "apiName": "ssot__ClickThroughPct__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_ctr"
+          },
+          {
+            "label": "Delivery Pct",
+            "apiName": "ssot__DeliveryPct__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_del"
+          },
+          {
+            "label": "Total Sent Qty",
+            "apiName": "ssot__TotalSentQty__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_sent"
+          },
+          {
+            "label": "Total Delivered Qty",
+            "apiName": "ssot__TotalDeliveredQty__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_deliv"
+          },
+          {
+            "label": "Total Hard Bounce Qty",
+            "apiName": "ssot__TotalHardBounceQty__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_hb"
+          },
+          {
+            "label": "Total Soft Bounce Qty",
+            "apiName": "ssot__TotalSoftBounceQty__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_sb"
+          },
+          {
+            "label": "Unique Opens Qty",
+            "apiName": "ssot__UniqueOpensQty__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ep_uo"
+          },
+          {
+            "label": "Scheduled Dt",
+            "apiName": "ssot__ScheduledDt__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "ep_sch"
+          }
+        ],
+        "position": {
+          "x": 2280,
+          "y": 120
+        },
+        "id": "obj-ep",
+        "category": "Engagement",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-eng",
+        "attrs": {
+          "header": {
+            "fill": "#DA4E55"
+          },
+          "headerCover": {
+            "fill": "#DA4E55"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"email\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Email Publication"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 358
+        },
+        "z": 2000,
+        "objectName": "Device Application Engagement",
+        "headerColor": "#DA4E55",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "dae_id",
+            "required": true
+          },
+          {
+            "label": "Individual Id",
+            "apiName": "ssot__IndividualId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_ind"
+          },
+          {
+            "label": "Contact Point Id",
+            "apiName": "ssot__ContactPointId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_cp"
+          },
+          {
+            "label": "Device Id",
+            "apiName": "ssot__DeviceId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_dev"
+          },
+          {
+            "label": "Software Application Id",
+            "apiName": "ssot__SoftwareApplicationId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_app"
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_ect"
+          },
+          {
+            "label": "Engagement Publication Id",
+            "apiName": "ssot__EngagementPublicationId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_pub"
+          },
+          {
+            "label": "Engagement Asset Id",
+            "apiName": "ssot__EngagementAssetId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "dae_asset"
+          },
+          {
+            "label": "Engagement Channel Action Id",
+            "apiName": "ssot__EngagementChannelActionId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dae_act"
+          },
+          {
+            "label": "Engagement Date Time",
+            "apiName": "ssot__EngagementDateTm__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "dae_dt"
+          },
+          {
+            "label": "Screen Name",
+            "apiName": "ssot__ScreenName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dae_scr"
+          },
+          {
+            "label": "Geofence Name",
+            "apiName": "ssot__GeofenceName__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dae_geo"
+          },
+          {
+            "label": "Time In App Seconds Ct",
+            "apiName": "ssot__TimeInAppSecondsCt__c",
+            "type": "Number",
+            "keyType": null,
+            "fid": "dae_tia"
+          },
+          {
+            "label": "SDK Version Nbr",
+            "apiName": "ssot__SdkVersionNbr__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "dae_sdk"
+          }
+        ],
+        "position": {
+          "x": 1580,
+          "y": 860
+        },
+        "id": "obj-dae",
+        "category": "Engagement",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-eng",
+        "attrs": {
+          "header": {
+            "fill": "#DA4E55"
+          },
+          "headerCover": {
+            "fill": "#DA4E55"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"push\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Device Application Engagement"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 358
+        },
+        "z": 2000,
+        "objectName": "Message Engagement",
+        "headerColor": "#DA4E55",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "me_id",
+            "required": true
+          },
+          {
+            "label": "Individual Id",
+            "apiName": "ssot__IndividualId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "me_ind"
+          },
+          {
+            "label": "Contact Point Id",
+            "apiName": "ssot__ContactPointId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "me_cp"
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "me_ect"
+          },
+          {
+            "label": "Engagement Publication Id",
+            "apiName": "ssot__EngagementPublicationId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "me_pub"
+          },
+          {
+            "label": "Engagement Asset Id",
+            "apiName": "ssot__EngagementAssetId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "me_asset"
+          },
+          {
+            "label": "Session Id",
+            "apiName": "ssot__SessionId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_sess"
+          },
+          {
+            "label": "Engagement Channel Action Id",
+            "apiName": "ssot__EngagementChannelActionId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_act"
+          },
+          {
+            "label": "Engagement Date Time",
+            "apiName": "ssot__EngagementDateTm__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "me_dt"
+          },
+          {
+            "label": "Sent Date Time",
+            "apiName": "ssot__SentDateTm__c",
+            "type": "Date Time",
+            "keyType": null,
+            "fid": "me_sdt"
+          },
+          {
+            "label": "Keyword Text",
+            "apiName": "ssot__KeywordTxt__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_kw"
+          },
+          {
+            "label": "Message Delivery Short Code",
+            "apiName": "ssot__MessageDeliveryShortCd__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_sc"
+          },
+          {
+            "label": "Send Time Social Id",
+            "apiName": "ssot__SendTimeSocialId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_soc"
+          },
+          {
+            "label": "Is Test Send",
+            "apiName": "ssot__IsTestSend__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "me_test"
+          }
+        ],
+        "position": {
+          "x": 1580,
+          "y": 479
+        },
+        "id": "obj-me",
+        "category": "Engagement",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-eng",
+        "attrs": {
+          "header": {
+            "fill": "#DA4E55"
+          },
+          "headerCover": {
+            "fill": "#DA4E55"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"sms\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Message Engagement"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 160
+        },
+        "z": 2000,
+        "objectName": "Engagement Channel Type",
+        "headerColor": "#DA4E55",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "ect_id",
+            "required": true
+          },
+          {
+            "label": "Name",
+            "apiName": "ssot__Name__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ect_nm"
+          },
+          {
+            "label": "Can Capture Consent",
+            "apiName": "ssot__CanCaptureConsent__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ect_cap"
+          },
+          {
+            "label": "Is Direct Activation Channel",
+            "apiName": "ssot__IsDirectActivationChannel__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ect_dir"
+          },
+          {
+            "label": "Data Source Id",
+            "apiName": "ssot__DataSourceId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ect_ds"
+          }
+        ],
+        "position": {
+          "x": 2280,
+          "y": 560
+        },
+        "id": "obj-ect",
+        "category": "Engagement",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-eng",
+        "attrs": {
+          "header": {
+            "fill": "#DA4E55"
+          },
+          "headerCover": {
+            "fill": "#DA4E55"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"topic2\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Engagement Channel Type"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 116
+        },
+        "z": 2000,
+        "objectName": "Comm Subscription Channel Type",
+        "headerColor": "#7F2B82",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "csct_id",
+            "required": true
+          },
+          {
+            "label": "Communication Subscription Id",
+            "apiName": "ssot__CommunicationSubscriptionId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csct_cs"
+          },
+          {
+            "label": "Engagement Channel Type Id",
+            "apiName": "ssot__EngagementChannelTypeId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "csct_ect"
+          }
+        ],
+        "position": {
+          "x": 1260,
+          "y": 1780
+        },
+        "id": "obj-csct",
+        "category": "Other",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-con",
+        "attrs": {
+          "header": {
+            "fill": "#7F2B82"
+          },
+          "headerCover": {
+            "fill": "#7F2B82"
+          },
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"topic2\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Comm Subscription Channel Type"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 480,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "Contact Point App",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "Id",
+            "apiName": "ssot__Id__c",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "cpa_id",
+            "required": true
+          },
+          {
+            "label": "Party Id",
+            "apiName": "ssot__PartyId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpa_party"
+          },
+          {
+            "label": "Device Id",
+            "apiName": "ssot__DeviceId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpa_dev"
+          },
+          {
+            "label": "Software Application Id",
+            "apiName": "ssot__SoftwareApplicationId__c",
+            "type": "Text",
+            "keyType": "fk",
+            "fid": "cpa_app"
+          },
+          {
+            "label": "Application Login Id",
+            "apiName": "ssot__ApplicationLoginId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_login"
+          },
+          {
+            "label": "Device End Point Id",
+            "apiName": "ssot__DeviceEndPointId__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_ep"
+          },
+          {
+            "label": "Badge Count",
+            "apiName": "ssot__BadgeCount__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_badge"
+          },
+          {
+            "label": "Is Active",
+            "apiName": "ssot__IsActive__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_act"
+          },
+          {
+            "label": "Is Undeliverable",
+            "apiName": "ssot__IsUndeliverable__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_und"
+          },
+          {
+            "label": "Primary Flag",
+            "apiName": "ssot__PrimaryFlag__c",
+            "type": "Text",
+            "keyType": null,
+            "fid": "cpa_pri"
+          }
+        ],
+        "position": {
+          "x": 60,
+          "y": 830
+        },
+        "id": "obj-cpa",
+        "category": "Profile",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "parent": "z-cp",
+        "attrs": {
+          "headerIcon": {
+            "width": 16,
+            "height": 16,
+            "href": "data:image/svg+xml,<svg data-icon-id=\"push\"/>"
+          },
+          "headerLabel": {
+            "x": 32,
+            "text": "Contact Point App"
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ulink",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "port-bottom"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-0",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ulink",
+          "magnet": "circle",
+          "port": "port-bottom"
+        },
+        "target": {
+          "id": "obj-uind",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-1",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpe",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-2",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpp",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-3",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 648,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpp",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-dev",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-4",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 648,
+            "y": 846
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpa",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-5",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 648,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpa",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-dev",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-6",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 648,
+            "y": 846
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpa",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-app",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-7",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 648,
+            "y": 1146
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ee",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-10",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 2052,
+            "y": 576
+          }
+        ],
+        "parent": "z-eng",
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ee",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ep",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-11",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-me",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-14",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 2052,
+            "y": 576
+          }
+        ],
+        "parent": "z-eng",
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-me",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ep",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-15",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 2052,
+            "y": 136
+          }
+        ],
+        "parent": "z-eng",
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-app",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-19",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 1146
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-20",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 2052,
+            "y": 576
+          }
+        ],
+        "parent": "z-eng",
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ep",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-21",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 2052,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-dup",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-24",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1200,
+            "y": 1466
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpc",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-stat",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-25",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csct",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-cs",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-27",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1796,
+            "y": 1466
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-cs",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-29",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csc",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-stat",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-30",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csc",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-31",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1200,
+            "y": 1312
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csc",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-cpc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-32",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-pc",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-stat",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-36",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-pc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-35",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1200,
+            "y": 1312
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cpc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-23",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1200,
+            "y": 1312
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-cpa",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-17",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 876
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-me",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-cpp",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-13",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 506
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ee",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-cpe",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-9",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ee",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-8",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 136
+          },
+          {
+            "x": 1060,
+            "y": 88
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-16",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-me",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-ind",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-12",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 136
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dae",
+          "magnet": "circle",
+          "port": "er-left"
+        },
+        "target": {
+          "id": "obj-dev",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-18",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1348,
+            "y": 876
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csc",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-33",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1796,
+            "y": 1240
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-csct",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "er-right"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-28",
+        "z": 3000,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [
+          {
+            "x": 1796,
+            "y": 1240
+          }
+        ],
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-ep",
+          "magnet": "circle",
+          "port": "port-bottom"
+        },
+        "target": {
+          "id": "obj-ect",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-22",
+        "z": 3001,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "vertices": [],
+        "parent": "z-eng",
+        "attrs": {
+          "line": {
+            "stroke": "#DA4E55",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#DA4E55",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-cs",
+          "magnet": "circle",
+          "port": "port-bottom"
+        },
+        "target": {
+          "id": "obj-dup",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-26",
+        "z": 3002,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "parent": "z-con",
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "source": {
+          "id": "obj-dup",
+          "magnet": "circle",
+          "port": "port-bottom"
+        },
+        "target": {
+          "id": "obj-dulb",
+          "magnet": "circle",
+          "port": "port-top"
+        },
+        "defaultLabel": {
+          "markup": [
+            {
+              "tagName": "rect",
+              "selector": "body"
+            },
+            {
+              "tagName": "text",
+              "selector": "text"
+            }
+          ],
+          "attrs": {
+            "text": {
+              "fill": "#888888",
+              "fontSize": 13,
+              "fontWeight": 600,
+              "fontFamily": "system-ui, -apple-system, sans-serif",
+              "textAnchor": "middle",
+              "textVerticalAnchor": "middle"
+            },
+            "body": {
+              "ref": "text",
+              "refWidth": 12,
+              "refHeight": 4,
+              "refX": -6,
+              "refY": -2,
+              "fill": "var(--bg-canvas, #FFFFFF)",
+              "stroke": "none",
+              "rx": 2,
+              "ry": 2
+            }
+          },
+          "position": {
+            "distance": 0.5
+          }
+        },
+        "id": "rel-34",
+        "z": 3003,
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "parent": "z-con",
+        "attrs": {
+          "line": {
+            "stroke": "#7F2B82",
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "sourceMarker": {
+              "type": "path",
+              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#7F2B82",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "viewport": {
+    "zoom": 0.40516199675233056,
+    "translate": {
+      "tx": 143.92239436369414,
+      "ty": 272.8040710019652
+    }
+  },
+  "group": {
+    "name": "Data 360",
+    "icon": "data_cloud",
+    "color": "#1d73c9"
+  }
+}

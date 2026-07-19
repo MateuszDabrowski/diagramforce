@@ -12,8 +12,8 @@
 //
 // Reads cctx.graph/paper + cctx.getMappingMode; imports the apply* stylers from link-styles.js.
 
-import { cctx } from './context.js?v=1.19.5.8';
-import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle } from './link-styles.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
+import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle } from './link-styles.js?v=1.20.0.63';
 
 export function registerLinkClassifier(cctx) {
   const { graph, paper } = cctx;
@@ -46,6 +46,14 @@ export function registerLinkClassifier(cctx) {
         link.prop('linkKind', 'ganttDep');
         applyGanttDepLinkStyle(link);
       }
+      return;
+    }
+    // Flow connector: a link OUT of a flow element becomes a plain Standard connector (grey, "None" stub ends so it
+    // TOUCHES the cards). Types are just Standard/Fault, set from the panel later; there is no connectorKind prop.
+    // The stub-marker presence is the guard - a re-route (already a flow connector) keeps the user's Standard/Fault
+    // choice instead of resetting it. df.Flow* never appears on non-flow diagrams, so this self-gates to flow.
+    if (String(srcCell.get('type')).startsWith('df.Flow')) {
+      if (link.attr('line/targetMarker/d') !== 'M 0 0 L -12 0') applyFlowLinkStyle(link, { fault: false });
       return;
     }
     // The remaining classifiers (mapping / ER / sequence) all key off the specific port → require both.
@@ -102,7 +110,7 @@ export function registerLinkClassifier(cctx) {
     // arrowhead marker on Safari.
     const currentStyle = link.prop('lineStyle');
     if (currentStyle && currentStyle !== 'none') return;
-    link.prop('lineStyle', '6 4');
+    link.prop('lineStyle', '8 4');   // the panel's LINK_LINE_STYLE_OPTS "Dashed" value, so the Line Style control shows Dashed (not a '6 4' that reads as Solid)
   });
 
   // A mapping link connecting/disconnecting changes its DataObjects' mapped-field count

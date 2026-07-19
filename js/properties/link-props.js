@@ -7,11 +7,11 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.19.5.8';
-import { prctx } from './context.js?v=1.19.5.8';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.19.5.8';
-import { ER_MARKER_D } from '../er-markers.js?v=1.19.5.8';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.19.5.8';
+import * as history from '../history.js?v=1.20.0.63';
+import { prctx } from './context.js?v=1.20.0.63';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.20.0.63';
+import { ER_MARKER_D } from '../er-markers.js?v=1.20.0.63';
+import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.20.0.63';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -125,6 +125,14 @@ export const GANTT_DEP_TYPE_OPTS = [
   { value: 'SS', label: 'Start → Start (SS)' },
   { value: 'FF', label: 'Finish → Finish (FF)' },
   { value: 'SF', label: 'Start → Finish (SF)' },
+];
+
+// Flow connector types (Salesforce's terms): Standard | Fault | Go To. A shortcut over the standard connector
+// props (colour / line style / label). Go To = an "Outgoing Go To" jump to an existing element (grey + dotted).
+export const FLOW_CONNECTOR_TYPES = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'fault', label: 'Fault' },
+  { value: 'goto', label: 'Go To' },
 ];
 
 // Connection type for a field→field link: mapping ↔ relationship. Swaps `linkKind` and the
@@ -284,8 +292,12 @@ export function renderLinkProps(cell) {
     const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';
     // Keep the non-user labels (mapping badge + frequency overlay) when the label changes.
     const others = (cell.labels() || []).filter(l => isBadge(l) || isFreq(l));
+    const isFlowDiagram = document.getElementById('canvas-container')?.dataset.diagramType === 'flow';
     const arr = [];
-    if (v) arr.push({
+    // Flow connectors use the bordered PILL label (Flow Builder look); every other diagram keeps the plain
+    // white-rect label. `flowLabelAttrs` forces fontSize 13, so a per-label font-size override is flow-exempt.
+    if (v && isFlowDiagram) arr.push(flowLabelAttrs(v, fillColor));
+    else if (v) arr.push({
       markup: [
         { tagName: 'rect', selector: 'body' },
         { tagName: 'text', selector: 'text' },
@@ -332,6 +344,28 @@ export function renderLinkProps(cell) {
     const depSec = section(prctx.bodyEl, 'Dependency');
     addSelect(depSec, 'Type', cell.prop('depType') || 'FS', GANTT_DEP_TYPE_OPTS, v => cell.prop('depType', v));
     addNumber(depSec, 'Lag (days)', cell.prop('lag') ?? 0, v => cell.prop('lag', Math.round(v || 0)));
+  }
+
+  // Flow connector: Standard | Fault | Go To (Salesforce's terms). A pure shortcut over the standard connector props
+  // below - Fault sets red + dashed, Go To sets grey + dotted, Standard resets to grey + solid. No separate stored
+  // prop: the current type is DERIVED from (stroke, dash) via flowConnectorType. One undo step; gated to flow.
+  const isFlow = document.getElementById('canvas-container')?.dataset.diagramType === 'flow';
+  if (isFlow) {
+    const connSec = section(prctx.bodyEl, 'Connector');
+    addSegmented(connSec, 'Type', flowConnectorType(cell), FLOW_CONNECTOR_TYPES, v => {
+      history.startBatch();
+      try {
+        applyFlowLinkStyle(cell, { type: v });
+        // The Type toggle OWNS the label: Fault OVERWRITES it to a single "Fault" pill; Go To OVERWRITES it to the
+        // destination element's name (falling back to "Go To"); Standard CLEARS it (a former fault/go-to no longer
+        // carries its seeded text). One undo step with the restyle.
+        const color = cell.attr('line/stroke') || '#5C5C5C';
+        if (v === 'fault') cell.labels([flowLabelAttrs('Fault', color)]);
+        else if (v === 'goto') cell.labels([flowGoToLabelAttrs(flowGoToDestName(cell))]);   // blue italic "Name →" (no pill)
+        else cell.labels([]);
+      } finally { history.endBatch(); }
+      prctx.refresh?.();
+    });
   }
 
   // Appearance

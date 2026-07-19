@@ -1,13 +1,14 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.19.5.8';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.19.5.8';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.19.5.8';
-import { sanitizeCssColor } from './util.js?v=1.19.5.8';
+import { getIconDataUri } from './icons.js?v=1.20.0.63';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.20.0.63';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.20.0.63';
+import { sanitizeCssColor } from './util.js?v=1.20.0.63';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.19.5.8';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.20.0.63';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.20.0.63';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -479,461 +480,6 @@ export const DATAMODEL_CATEGORIES = [
     label: 'Generic Shapes',
     components: GENERIC_SHAPES,
   },
-  {
-    id: 'dm-mc-dataviews',
-    label: 'Marketing Cloud Data Views',
-    collapsed: true,
-    components: [
-      {
-        type: 'sf.DataObject', label: 'Subscribers', objectName: '_Subscribers', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "pk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EmailAddress", apiName: "EmailAddress", type: "Email", keyType: null, fid: "f_emailaddress", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain" },
-          { label: "DateJoined", apiName: "DateJoined", type: "DateTime", keyType: null, fid: "f_datejoined" },
-          { label: "DateUnsubscribed", apiName: "DateUnsubscribed", type: "DateTime", keyType: null, fid: "f_dateunsubscribed" },
-          { label: "DateUndeliverable", apiName: "DateUndeliverable", type: "DateTime", keyType: null, fid: "f_dateundeliverable" },
-          { label: "BounceCount", apiName: "BounceCount", type: "Number", keyType: null, fid: "f_bouncecount", required: true },
-          { label: "SubscriberType", apiName: "SubscriberType", type: "Text", keyType: null, fid: "f_subscribertype", required: true },
-          { label: "Status", apiName: "Status", type: "Text", keyType: null, fid: "f_status" },
-          { label: "Locale", apiName: "Locale", type: "Text", keyType: null, fid: "f_locale" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Job', objectName: '_Job', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "pk", fid: "f_jobid", required: true },
-          { label: "EmailID", apiName: "EmailID", type: "Number", keyType: null, fid: "f_emailid" },
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid" },
-          { label: "AccountUserID", apiName: "AccountUserID", type: "Number", keyType: null, fid: "f0t4pmz6" },
-          { label: "FromName", apiName: "FromName", type: "Text", keyType: null, fid: "f_fromname" },
-          { label: "FromEmail", apiName: "FromEmail", type: "Email", keyType: null, fid: "f_fromemail" },
-          { label: "SchedTime", apiName: "SchedTime", type: "DateTime", keyType: null, fid: "f_schedtime" },
-          { label: "PickupTime", apiName: "PickupTime", type: "DateTime", keyType: null, fid: "f7of2hsf" },
-          { label: "DeliveredTime", apiName: "DeliveredTime", type: "DateTime", keyType: null, fid: "f_deliveredtime" },
-          { label: "EventID", apiName: "EventID", type: "Text", keyType: null, fid: "fdlkyxh7" },
-          { label: "IsMultipart", apiName: "IsMultipart", type: "Boolean", keyType: null, fid: "f_ismultipart", required: true },
-          { label: "JobType", apiName: "JobType", type: "Text", keyType: null, fid: "f_jobtype" },
-          { label: "JobStatus", apiName: "JobStatus", type: "Text", keyType: null, fid: "f_jobstatus" },
-          { label: "ModifiedBy", apiName: "ModifiedBy", type: "Text", keyType: null, fid: "ffpx95cm" },
-          { label: "ModifiedDate", apiName: "ModifiedDate", type: "DateTime", keyType: null, fid: "flcs7jp5" },
-          { label: "EmailName", apiName: "EmailName", type: "Text", keyType: null, fid: "f_emailname" },
-          { label: "EmailSubject", apiName: "EmailSubject", type: "Text", keyType: null, fid: "f_emailsubject" },
-          { label: "IsWrapped", apiName: "IsWrapped", type: "Boolean", keyType: null, fid: "fhit6xu8", required: true },
-          { label: "TestEmailAddr", apiName: "TestEmailAddr", type: "Email", keyType: null, fid: "fx5bfv07" },
-          { label: "Category", apiName: "Category", type: "Text", keyType: null, fid: "f_category", required: true },
-          { label: "BccEmail", apiName: "BccEmail", type: "Email", keyType: null, fid: "f2rqauzr" },
-          { label: "OriginalSchedTime", apiName: "OriginalSchedTime", type: "DateTime", keyType: null, fid: "fx4rhjeg" },
-          { label: "CreatedDate", apiName: "CreatedDate", type: "DateTime", keyType: null, fid: "f_createddate", required: true },
-          { label: "CharacterSet", apiName: "CharacterSet", type: "Text", keyType: null, fid: "fbd3s9t1" },
-          { label: "IPAddress", apiName: "IPAddress", type: "Text", keyType: null, fid: "f7s8bq2l" },
-          { label: "SalesforceTotalSubscriberCount", apiName: "SalesforceTotalSubscriberCount", type: "Number", keyType: null, fid: "f_salesforcetotalsubscribercount", required: true },
-          { label: "SalesforceErrorSubscriberCount", apiName: "SalesforceErrorSubscriberCount", type: "Number", keyType: null, fid: "fo3jzzft", required: true },
-          { label: "SendType", apiName: "SendType", type: "Text", keyType: null, fid: "f_sendtype", required: true },
-          { label: "DynamicEmailSubject", apiName: "DynamicEmailSubject", type: "Text", keyType: null, fid: "fce5oips" },
-          { label: "SuppressTracking", apiName: "SuppressTracking", type: "Boolean", keyType: null, fid: "fo6ikzlo", required: true },
-          { label: "SendClassificationType", apiName: "SendClassificationType", type: "Text", keyType: null, fid: "f9avxs8m" },
-          { label: "SendClassification", apiName: "SendClassification", type: "Text", keyType: null, fid: "ffc9iglq" },
-          { label: "ResolveLinksWithCurrentData", apiName: "ResolveLinksWithCurrentData", type: "Boolean", keyType: null, fid: "flkuxz7o", required: true },
-          { label: "EmailSendDefinition", apiName: "EmailSendDefinition", type: "Text", keyType: null, fid: "f64521kx" },
-          { label: "DeduplicateByEmail", apiName: "DeduplicateByEmail", type: "Boolean", keyType: null, fid: "frqswthg", required: true },
-          { label: "TriggererSendDefinitionObjectID", apiName: "TriggererSendDefinitionObjectID", type: "Text", keyType: null, fid: "fwb7v4vx" },
-          { label: "TriggeredSendCustomerKey", apiName: "TriggeredSendCustomerKey", type: "Text", keyType: null, fid: "f6le7n1d" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Sent', objectName: '_Sent', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "fnq181tu" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-          { label: "TriggererSendDefinitionObjectID", apiName: "TriggererSendDefinitionObjectID", type: "Text", keyType: null, fid: "fl1lru8e" },
-          { label: "TriggeredSendCustomerKey", apiName: "TriggeredSendCustomerKey", type: "Text", keyType: null, fid: "fu6075q4" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Open', objectName: '_Open', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "fi54tr72" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-          { label: "IsUnique", apiName: "IsUnique", type: "Boolean", keyType: null, fid: "f_isunique" },
-          { label: "TriggererSendDefinitionObjectID", apiName: "TriggererSendDefinitionObjectID", type: "Text", keyType: null, fid: "fes9vcr3", required: true },
-          { label: "TriggeredSendCustomerKey", apiName: "TriggeredSendCustomerKey", type: "Text", keyType: null, fid: "fkx9vjf0", required: true },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Click', objectName: '_Click', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "fz77ke0v" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-          { label: "URL", apiName: "URL", type: "Text", keyType: null, fid: "f_url" },
-          { label: "LinkName", apiName: "LinkName", type: "Text", keyType: null, fid: "f_linkname" },
-          { label: "LinkContent", apiName: "LinkContent", type: "Text", keyType: null, fid: "f_linkcontent" },
-          { label: "IsUnique", apiName: "IsUnique", type: "Boolean", keyType: null, fid: "f_isunique", required: true },
-          { label: "TriggererSendDefinitionObjectID", apiName: "TriggererSendDefinitionObjectID", type: "Text", keyType: null, fid: "f1ixut7q" },
-          { label: "TriggeredSendCustomerKey", apiName: "TriggeredSendCustomerKey", type: "Text", keyType: null, fid: "fexinpq0" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Bounce', objectName: '_Bounce', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "fgj9ii40" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "IsUnique", apiName: "IsUnique", type: "Boolean", keyType: null, fid: "f_isunique", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-          { label: "BounceCategoryID", apiName: "BounceCategoryID", type: "Number", keyType: null, fid: "f0gabij0", required: true },
-          { label: "BounceCategory", apiName: "BounceCategory", type: "Text", keyType: null, fid: "f_bouncecategory" },
-          { label: "BounceSubcategoryID", apiName: "BounceSubcategoryID", type: "Number", keyType: null, fid: "fs88m5il" },
-          { label: "BounceSubcategory", apiName: "BounceSubcategory", type: "Text", keyType: null, fid: "faav55bo" },
-          { label: "BounceTypeID", apiName: "BounceTypeID", type: "Number", keyType: null, fid: "fy8vvpbw", required: true },
-          { label: "BounceType", apiName: "BounceType", type: "Text", keyType: null, fid: "f_bouncetype" },
-          { label: "SMTPBounceReason", apiName: "SMTPBounceReason", type: "Text", keyType: null, fid: "f_smtpbouncereason" },
-          { label: "SMTPMessage", apiName: "SMTPMessage", type: "Text", keyType: null, fid: "fdo0teff" },
-          { label: "SMTPCode", apiName: "SMTPCode", type: "Number", keyType: null, fid: "f_smtpcode" },
-          { label: "TriggererSendDefinitionObjectID", apiName: "TriggererSendDefinitionObjectID", type: "Text", keyType: null, fid: "f4od06h8" },
-          { label: "TriggeredSendCustomerKey", apiName: "TriggeredSendCustomerKey", type: "Text", keyType: null, fid: "frtvq9uy" },
-          { label: "IsFalseBounce", apiName: "IsFalseBounce", type: "Boolean", keyType: null, fid: "f6b9b12e", required: true },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Unsubscribe', objectName: '_Unsubscribe', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "ff9efbw3" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "IsUnique", apiName: "IsUnique", type: "Boolean", keyType: null, fid: "f_isunique", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Complaint', objectName: '_Complaint', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AccountID", apiName: "AccountID", type: "Number", keyType: null, fid: "f_accountid", required: true },
-          { label: "OYBAccountID", apiName: "OYBAccountID", type: "Number", keyType: null, fid: "fy9icbey" },
-          { label: "JobID", apiName: "JobID", type: "Number", keyType: "fqk", fid: "f_jobid", required: true },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid", required: true },
-          { label: "BatchID", apiName: "BatchID", type: "Number", keyType: null, fid: "f_batchid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "EventDate", apiName: "EventDate", type: "DateTime", keyType: null, fid: "f_eventdate", required: true },
-          { label: "IsUnique", apiName: "IsUnique", type: "Boolean", keyType: null, fid: "f_isunique", required: true },
-          { label: "Domain", apiName: "Domain", type: "Text", keyType: null, fid: "f_domain", required: true },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'BU Unsubscribes', objectName: '_BusinessUnitUnsubscribes', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "BusinessUnitID", apiName: "BusinessUnitID", type: "Number", keyType: null, fid: "f_businessunitid", required: true },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "UnsubDateUTC", apiName: "UnsubDateUTC", type: "DateTime", keyType: null, fid: "f_unsubdateutc" },
-          { label: "UnsubReason", apiName: "UnsubReason", type: "Text", keyType: null, fid: "f_unsubreason" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'List Subscribers', objectName: '_ListSubscribers', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "AddedBy", apiName: "AddedBy", type: "Number", keyType: null, fid: "f_addedby", required: true },
-          { label: "AddMethod", apiName: "AddMethod", type: "Text", keyType: null, fid: "f_addmethod", required: true },
-          { label: "CreatedDate", apiName: "CreatedDate", type: "DateTime", keyType: null, fid: "f_createddate" },
-          { label: "DateUnsubscribed", apiName: "DateUnsubscribed", type: "DateTime", keyType: null, fid: "f_dateunsubscribed" },
-          { label: "EmailAddress", apiName: "EmailAddress", type: "Text", keyType: null, fid: "f_emailaddress" },
-          { label: "ListID", apiName: "ListID", type: "Number", keyType: null, fid: "f_listid" },
-          { label: "ListName", apiName: "ListName", type: "Text", keyType: null, fid: "f_listname" },
-          { label: "ListType", apiName: "ListType", type: "Text", keyType: null, fid: "f_listtype", required: true },
-          { label: "Status", apiName: "Status", type: "Text", keyType: null, fid: "f_status" },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "f_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "f_subscriberkey", required: true },
-          { label: "SubscriberType", apiName: "SubscriberType", type: "Text", keyType: null, fid: "fkwwxka0" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Journey', objectName: '_Journey', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "VersionID", apiName: "VersionID", type: "Text", keyType: "pk", fid: "jrn_versionid", required: true },
-          { label: "JourneyID", apiName: "JourneyID", type: "Text", keyType: null, fid: "jrn_journeyid" },
-          { label: "JourneyName", apiName: "JourneyName", type: "Text", keyType: null, fid: "jrn_journeyname" },
-          { label: "VersionNumber", apiName: "VersionNumber", type: "Number", keyType: null, fid: "jrn_versionnumber" },
-          { label: "CreatedDate", apiName: "CreatedDate", type: "DateTime", keyType: null, fid: "jrn_createddate" },
-          { label: "LastPublishedDate", apiName: "LastPublishedDate", type: "DateTime", keyType: null, fid: "jrn_lastpublisheddate" },
-          { label: "ModifiedDate", apiName: "ModifiedDate", type: "DateTime", keyType: null, fid: "jrn_modifieddate" },
-          { label: "JourneyStatus", apiName: "JourneyStatus", type: "Text", keyType: null, fid: "jrn_journeystatus" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Journey Activity', objectName: '_JourneyActivity', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "VersionID", apiName: "VersionID", type: "Text", keyType: "fqk", fid: "jact_versionid", required: true },
-          { label: "ActivityID", apiName: "ActivityID", type: "Text", keyType: "pk", fid: "jact_activityid", required: true },
-          { label: "ActivityName", apiName: "ActivityName", type: "Text", keyType: null, fid: "jact_activityname" },
-          { label: "ActivityExternalKey", apiName: "ActivityExternalKey", type: "Text", keyType: null, fid: "jact_activityexternalkey" },
-          { label: "JourneyActivityObjectID", apiName: "JourneyActivityObjectID", type: "Text", keyType: "fqk", fid: "jact_journeyactivityobjectid", required: true },
-          { label: "ActivityType", apiName: "ActivityType", type: "Text", keyType: null, fid: "jact_activitytype" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'SMS Message Tracking', objectName: '_SMSMessageTracking', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "MobileMessageTrackingID", apiName: "MobileMessageTrackingID", type: "Number", keyType: "pk", fid: "smt_mobilemessagetrackingid", required: true },
-          { label: "EID", apiName: "EID", type: "Number", keyType: null, fid: "smt_eid" },
-          { label: "MID", apiName: "MID", type: "Number", keyType: null, fid: "smt_mid" },
-          { label: "Mobile", apiName: "Mobile", type: "Phone", keyType: "fqk", fid: "smt_mobile", required: true },
-          { label: "MessageID", apiName: "MessageID", type: "Number", keyType: null, fid: "smt_messageid", required: true },
-          { label: "KeywordID", apiName: "KeywordID", type: "Text", keyType: null, fid: "smt_keywordid" },
-          { label: "CodeID", apiName: "CodeID", type: "Text", keyType: null, fid: "smt_codeid" },
-          { label: "ConversationID", apiName: "ConversationID", type: "Text", keyType: null, fid: "smt_conversationid" },
-          { label: "ConversationStateID", apiName: "ConversationStateID", type: "Text", keyType: null, fid: "smt_conversationstateid" },
-          { label: "CampaignID", apiName: "CampaignID", type: "Number", keyType: null, fid: "smt_campaignid" },
-          { label: "Sent", apiName: "Sent", type: "Boolean", keyType: null, fid: "smt_sent", required: true },
-          { label: "Delivered", apiName: "Delivered", type: "Boolean", keyType: null, fid: "smt_delivered" },
-          { label: "Undelivered", apiName: "Undelivered", type: "Boolean", keyType: null, fid: "smt_undelivered" },
-          { label: "Outbound", apiName: "Outbound", type: "Boolean", keyType: null, fid: "smt_outbound" },
-          { label: "Inbound", apiName: "Inbound", type: "Boolean", keyType: null, fid: "smt_inbound" },
-          { label: "CreateDateTime", apiName: "CreateDateTime", type: "DateTime", keyType: null, fid: "smt_createdatetime", required: true },
-          { label: "ModifiedDateTime", apiName: "ModifiedDateTime", type: "DateTime", keyType: null, fid: "smt_modifieddatetime", required: true },
-          { label: "ActionDateTime", apiName: "ActionDateTime", type: "DateTime", keyType: null, fid: "smt_actiondatetime", required: true },
-          { label: "MessageText", apiName: "MessageText", type: "Text", keyType: null, fid: "smt_messagetext" },
-          { label: "IsTest", apiName: "IsTest", type: "Boolean", keyType: null, fid: "smt_istest" },
-          { label: "MobileMessageRecurrenceID", apiName: "MobileMessageRecurrenceID", type: "Number", keyType: null, fid: "smt_mobilemessagerecurrenceid" },
-          { label: "ResponseToMobileMessageTrackingID", apiName: "ResponseToMobileMessageTrackingID", type: "Number", keyType: null, fid: "smt_responsetomobilemessagetrackingid" },
-          { label: "IsValid", apiName: "IsValid", type: "Boolean", keyType: null, fid: "smt_isvalid" },
-          { label: "InvalidationCode", apiName: "InvalidationCode", type: "Number", keyType: null, fid: "smt_invalidationcode" },
-          { label: "SMSJobID", apiName: "SMSJobID", type: "Text", keyType: null, fid: "smt_smsjobid" },
-          { label: "SMSBatchID", apiName: "SMSBatchID", type: "Number", keyType: null, fid: "smt_smsbatchid" },
-          { label: "SendID", apiName: "SendID", type: "Number", keyType: null, fid: "smt_sendid" },
-          { label: "SendSplitID", apiName: "SendSplitID", type: "Number", keyType: null, fid: "smt_sendsplitid" },
-          { label: "SendSegmentID", apiName: "SendSegmentID", type: "Number", keyType: null, fid: "smt_sendsegmentid" },
-          { label: "SendJobID", apiName: "SendJobID", type: "Number", keyType: null, fid: "smt_sendjobid" },
-          { label: "SendGroupID", apiName: "SendGroupID", type: "Number", keyType: null, fid: "smt_sendgroupid" },
-          { label: "SendPersonID", apiName: "SendPersonID", type: "Number", keyType: null, fid: "smt_sendpersonid" },
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "smt_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "smt_subscriberkey" },
-          { label: "SMSStandardStatusCodeId", apiName: "SMSStandardStatusCodeId", type: "Number", keyType: null, fid: "smt_smsstandardstatuscodeid" },
-          { label: "Description", apiName: "Description", type: "Text", keyType: null, fid: "smt_description" },
-          { label: "Name", apiName: "Name", type: "Text", keyType: null, fid: "smt_name" },
-          { label: "ShortCode", apiName: "ShortCode", type: "Text", keyType: null, fid: "smt_shortcode" },
-          { label: "SharedKeyword", apiName: "SharedKeyword", type: "Text", keyType: null, fid: "smt_sharedkeyword" },
-          { label: "Ordinal", apiName: "Ordinal", type: "Number", keyType: null, fid: "smt_ordinal" },
-          { label: "FromName", apiName: "FromName", type: "Text", keyType: null, fid: "smt_fromname" },
-          { label: "JBDefinitionID", apiName: "JBDefinitionID", type: "Text", keyType: null, fid: "smt_jbdefinitionid" },
-          { label: "JBActivityID", apiName: "JBActivityID", type: "Text", keyType: null, fid: "smt_jbactivityid" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Subscriber SMS', objectName: '_SubscriberSMS', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "SubscriberID", apiName: "SubscriberID", type: "Number", keyType: "fqk", fid: "ssms_subscriberid", required: true },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: null, fid: "ssms_subscriberkey", required: true },
-          { label: "MobileNumber", apiName: "MobileNumber", type: "Phone", keyType: "fqk", fid: "ssms_mobilenumber", required: true },
-          { label: "TransactionalOptIn", apiName: "TransactionalOptIn", type: "Boolean", keyType: null, fid: "ssms_transactionaloptin", required: true },
-          { label: "TransactionalOptInDate", apiName: "TransactionalOptInDate", type: "DateTime", keyType: null, fid: "ssms_transactionaloptindate", required: true },
-          { label: "TransactionalOptOutDate", apiName: "TransactionalOptOutDate", type: "DateTime", keyType: null, fid: "ssms_transactionaloptoutdate" },
-          { label: "MarketingOptIn", apiName: "MarketingOptIn", type: "Boolean", keyType: null, fid: "ssms_marketingoptin", required: true },
-          { label: "MarketingOptInDate", apiName: "MarketingOptInDate", type: "DateTime", keyType: null, fid: "ssms_marketingoptindate", required: true },
-          { label: "MarketingOptOutDate", apiName: "MarketingOptOutDate", type: "DateTime", keyType: null, fid: "ssms_marketingoptoutdate" },
-          { label: "SMSCarrierName", apiName: "SMSCarrierName", type: "Text", keyType: null, fid: "ssms_smscarriername" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'SMS Subscription Log', objectName: '_SMSSubscriptionLog', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "LogDate", apiName: "LogDate", type: "DateTime", keyType: null, fid: "slog_logdate" },
-          { label: "SubscriberKey", apiName: "SubscriberKey", type: "Text", keyType: "fqk", fid: "slog_subscriberkey", required: true },
-          { label: "MobileSubscriptionID", apiName: "MobileSubscriptionID", type: "Number", keyType: "pk", fid: "slog_mobilesubscriptionid", required: true },
-          { label: "SubscriptionDefinitionID", apiName: "SubscriptionDefinitionID", type: "Text", keyType: null, fid: "slog_subscriptiondefinitionid", required: true },
-          { label: "MobileNumber", apiName: "MobileNumber", type: "Phone", keyType: "fqk", fid: "slog_mobilenumber", required: true },
-          { label: "OptOutStatusID", apiName: "OptOutStatusID", type: "Number", keyType: null, fid: "slog_optoutstatusid" },
-          { label: "OptOutMethodID", apiName: "OptOutMethodID", type: "Number", keyType: null, fid: "slog_optoutmethodid" },
-          { label: "OptOutDate", apiName: "OptOutDate", type: "Date", keyType: null, fid: "slog_optoutdate" },
-          { label: "OptInStatusID", apiName: "OptInStatusID", type: "Number", keyType: null, fid: "slog_optinstatusid", required: true },
-          { label: "OptInMethodID", apiName: "OptInMethodID", type: "Number", keyType: null, fid: "slog_optinmethodid" },
-          { label: "OptInDate", apiName: "OptInDate", type: "Date", keyType: null, fid: "slog_optindate" },
-          { label: "Source", apiName: "Source", type: "Number", keyType: null, fid: "slog_source" },
-          { label: "CreatedDate", apiName: "CreatedDate", type: "Date", keyType: null, fid: "slog_createddate", required: true },
-          { label: "ModifiedDate", apiName: "ModifiedDate", type: "Date", keyType: null, fid: "slog_modifieddate", required: true },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Undeliverable SMS', objectName: '_UndeliverableSMS', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "MobileNumber", apiName: "MobileNumber", type: "Phone", keyType: "pk", fid: "und_mobilenumber", required: true },
-          { label: "Undeliverable", apiName: "Undeliverable", type: "Boolean", keyType: null, fid: "und_undeliverable", required: true },
-          { label: "BounceCount", apiName: "BounceCount", type: "Number", keyType: null, fid: "und_bouncecount", required: true },
-          { label: "FirstBounceDate", apiName: "FirstBounceDate", type: "DateTime", keyType: null, fid: "und_firstbouncedate", required: true },
-          { label: "HoldDate", apiName: "HoldDate", type: "DateTime", keyType: null, fid: "und_holddate" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Mobile Address', objectName: '_MobileAddress', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "_MobileID", apiName: "_MobileID", type: "Number", keyType: "pk", fid: "ma_mobileid", required: true },
-          { label: "_ContactID", apiName: "_ContactID", type: "Number", keyType: null, fid: "ma_contactid", required: true },
-          { label: "_MobileNumber", apiName: "_MobileNumber", type: "Text", keyType: "fqk", fid: "ma_mobilenumber", required: true },
-          { label: "_Status", apiName: "_Status", type: "Number", keyType: null, fid: "ma_status" },
-          { label: "_Source", apiName: "_Source", type: "Number", keyType: null, fid: "ma_source" },
-          { label: "_SourceObjectId", apiName: "_SourceObjectId", type: "Text", keyType: null, fid: "ma_sourceobjectid" },
-          { label: "_Priority", apiName: "_Priority", type: "Number", keyType: null, fid: "ma_priority" },
-          { label: "_Channel", apiName: "_Channel", type: "Text", keyType: null, fid: "ma_channel" },
-          { label: "_CarrierID", apiName: "_CarrierID", type: "Number", keyType: null, fid: "ma_carrierid", required: true },
-          { label: "_CountryCode", apiName: "_CountryCode", type: "Text", keyType: null, fid: "ma_countrycode", required: true },
-          { label: "_CreatedDate", apiName: "_CreatedDate", type: "DateTime", keyType: null, fid: "ma_createddate", required: true },
-          { label: "_CreatedBy", apiName: "_CreatedBy", type: "Text", keyType: null, fid: "ma_createdby", required: true },
-          { label: "_ModifiedDate", apiName: "_ModifiedDate", type: "DateTime", keyType: null, fid: "ma_modifieddate", required: true },
-          { label: "_ModifiedBy", apiName: "_ModifiedBy", type: "Text", keyType: null, fid: "ma_modifiedby" },
-          { label: "_City", apiName: "_City", type: "Text", keyType: null, fid: "ma_city" },
-          { label: "_State", apiName: "_State", type: "Text", keyType: null, fid: "ma_state" },
-          { label: "_ZipCode", apiName: "_ZipCode", type: "Text", keyType: null, fid: "ma_zipcode" },
-          { label: "_FirstName", apiName: "_FirstName", type: "Text", keyType: null, fid: "ma_firstname" },
-          { label: "_LastName", apiName: "_LastName", type: "Text", keyType: null, fid: "ma_lastname" },
-          { label: "_UTCOffset", apiName: "_UTCOffset", type: "Number", keyType: null, fid: "ma_utcoffset" },
-          { label: "_IsHonorDST", apiName: "_IsHonorDST", type: "Boolean", keyType: null, fid: "ma_ishonordst" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Mobile Subscription', objectName: '_MobileSubscription', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "_SubscriptionDefinitionID", apiName: "_SubscriptionDefinitionID", type: "Text", keyType: "pk", fid: "msub_subscriptiondefinitionid", required: true },
-          { label: "_MobileNumber", apiName: "_MobileNumber", type: "Text", keyType: "fqk", fid: "msub_mobilenumber", required: true },
-          { label: "_OptOutStatusID", apiName: "_OptOutStatusID", type: "Text", keyType: null, fid: "msub_optoutstatusid" },
-          { label: "_OptOutMethodID", apiName: "_OptOutMethodID", type: "Text", keyType: null, fid: "msub_optoutmethodid" },
-          { label: "_OptOutDate", apiName: "_OptOutDate", type: "DateTime", keyType: null, fid: "msub_optoutdate" },
-          { label: "_OptInStatusID", apiName: "_OptInStatusID", type: "Text", keyType: null, fid: "msub_optinstatusid", required: true },
-          { label: "_OptInMethodID", apiName: "_OptInMethodID", type: "Text", keyType: null, fid: "msub_optinmethodid" },
-          { label: "_OptInDate", apiName: "_OptInDate", type: "DateTime", keyType: null, fid: "msub_optindate" },
-          { label: "_Source", apiName: "_Source", type: "Text", keyType: null, fid: "msub_source" },
-          { label: "_CreatedDate", apiName: "_CreatedDate", type: "DateTime", keyType: null, fid: "msub_createddate", required: true },
-          { label: "_CreatedBy", apiName: "_CreatedBy", type: "Text", keyType: null, fid: "msub_createdby" },
-          { label: "_ModifiedDate", apiName: "_ModifiedDate", type: "DateTime", keyType: null, fid: "msub_modifieddate", required: true },
-          { label: "_ModifiedBy", apiName: "_ModifiedBy", type: "Text", keyType: null, fid: "msub_modifiedby" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Push Address', objectName: '_PushAddress', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "_ContactID", apiName: "_ContactID", type: "Text", keyType: null, fid: "pa_contactid", required: true },
-          { label: "_DeviceID", apiName: "_DeviceID", type: "Text", keyType: "fqk", fid: "pa_deviceid", required: true },
-          { label: "_APID", apiName: "_APID", type: "Text", keyType: "pk", fid: "pa_apid", required: true },
-          { label: "_Status", apiName: "_Status", type: "Text", keyType: null, fid: "pa_status" },
-          { label: "_Source", apiName: "_Source", type: "Text", keyType: null, fid: "pa_source" },
-          { label: "_SourceObjectId", apiName: "_SourceObjectId", type: "Text", keyType: null, fid: "pa_sourceobjectid" },
-          { label: "_Platform", apiName: "_Platform", type: "Text", keyType: null, fid: "pa_platform" },
-          { label: "_PlatformVersion", apiName: "_PlatformVersion", type: "Text", keyType: null, fid: "pa_platformversion" },
-          { label: "_Alias", apiName: "_Alias", type: "Text", keyType: null, fid: "pa_alias" },
-          { label: "_OptOutStatusID", apiName: "_OptOutStatusID", type: "Text", keyType: null, fid: "pa_optoutstatusid" },
-          { label: "_OptOutMethodID", apiName: "_OptOutMethodID", type: "Text", keyType: null, fid: "pa_optoutmethodid" },
-          { label: "_OptOutDate", apiName: "_OptOutDate", type: "DateTime", keyType: null, fid: "pa_optoutdate" },
-          { label: "_OptInStatusID", apiName: "_OptInStatusID", type: "Text", keyType: null, fid: "pa_optinstatusid", required: true },
-          { label: "_OptInMethodID", apiName: "_OptInMethodID", type: "Text", keyType: null, fid: "pa_optinmethodid" },
-          { label: "_OptInDate", apiName: "_OptInDate", type: "DateTime", keyType: null, fid: "pa_optindate" },
-          { label: "_Channel", apiName: "_Channel", type: "Text", keyType: null, fid: "pa_channel" },
-          { label: "_CreatedDate", apiName: "_CreatedDate", type: "DateTime", keyType: null, fid: "pa_createddate", required: true },
-          { label: "_CreatedBy", apiName: "_CreatedBy", type: "Text", keyType: null, fid: "pa_createdby" },
-          { label: "_ModifiedDate", apiName: "_ModifiedDate", type: "DateTime", keyType: null, fid: "pa_modifieddate", required: true },
-          { label: "_ModifiedBy", apiName: "_ModifiedBy", type: "Text", keyType: null, fid: "pa_modifiedby" },
-          { label: "_City", apiName: "_City", type: "Text", keyType: null, fid: "pa_city" },
-          { label: "_State", apiName: "_State", type: "Text", keyType: null, fid: "pa_state" },
-          { label: "_ZipCode", apiName: "_ZipCode", type: "Text", keyType: null, fid: "pa_zipcode" },
-          { label: "_FirstName", apiName: "_FirstName", type: "Text", keyType: null, fid: "pa_firstname" },
-          { label: "_LastName", apiName: "_LastName", type: "Text", keyType: null, fid: "pa_lastname" },
-          { label: "_UTCOffset", apiName: "_UTCOffset", type: "Number", keyType: null, fid: "pa_utcoffset" },
-          { label: "_IsHonorDST", apiName: "_IsHonorDST", type: "Boolean", keyType: null, fid: "pa_ishonordst" },
-          { label: "_SystemToken", apiName: "_SystemToken", type: "Text", keyType: null, fid: "pa_systemtoken" },
-          { label: "_ProviderToken", apiName: "_ProviderToken", type: "Text", keyType: null, fid: "pa_providertoken" },
-          { label: "_Badge", apiName: "_Badge", type: "Number", keyType: null, fid: "pa_badge" },
-          { label: "_LocationEnabled", apiName: "_LocationEnabled", type: "Boolean", keyType: null, fid: "pa_locationenabled" },
-          { label: "_TimeZone", apiName: "_TimeZone", type: "Text", keyType: null, fid: "pa_timezone" },
-          { label: "_Device", apiName: "_Device", type: "Text", keyType: null, fid: "pa_device" },
-          { label: "_HardwareId", apiName: "_HardwareId", type: "Text", keyType: null, fid: "pa_hardwareid" },
-          { label: "_DeviceType", apiName: "_DeviceType", type: "Text", keyType: null, fid: "pa_devicetype" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Push Tag', objectName: '_PushTag', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "_DeviceID", apiName: "_DeviceID", type: "Text", keyType: "fqk", fid: "pt_deviceid", required: true },
-          { label: "_APID", apiName: "_APID", type: "Text", keyType: "fqk", fid: "pt_apid", required: true },
-          { label: "_Value", apiName: "_Value", type: "Text", keyType: null, fid: "pt_value" },
-          { label: "_CreatedDate", apiName: "_CreatedDate", type: "DateTime", keyType: null, fid: "pt_createddate", required: true },
-          { label: "_CreatedBy", apiName: "_CreatedBy", type: "Text", keyType: null, fid: "pt_createdby" },
-          { label: "_ModifiedDate", apiName: "_ModifiedDate", type: "DateTime", keyType: null, fid: "pt_modifieddate", required: true },
-          { label: "_ModifiedBy", apiName: "_ModifiedBy", type: "Text", keyType: null, fid: "pt_modifiedby" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Automation Instance', objectName: '_AutomationInstance', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "MemberID", apiName: "MemberID", type: "Number", keyType: null, fid: "ai_memberid" },
-          { label: "AutomationName", apiName: "AutomationName", type: "Text", keyType: null, fid: "ai_automationname" },
-          { label: "AutomationCustomerKey", apiName: "AutomationCustomerKey", type: "Text", keyType: "fqk", fid: "ai_automationcustomerkey", required: true },
-          { label: "AutomationDescription", apiName: "AutomationDescription", type: "Text", keyType: null, fid: "ai_automationdescription" },
-          { label: "AutomationType", apiName: "AutomationType", type: "Text", keyType: null, fid: "ai_automationtype" },
-          { label: "AutomationNotificationRecipient_Complete", apiName: "AutomationNotificationRecipient_Complete", type: "Text", keyType: null, fid: "ai_automationnotificationrecipientcomplete" },
-          { label: "AutomationNotificationRecipient_Error", apiName: "AutomationNotificationRecipient_Error", type: "Text", keyType: null, fid: "ai_automationnotificationrecipienterror" },
-          { label: "AutomationNotificationRecipient_Skip", apiName: "AutomationNotificationRecipient_Skip", type: "Text", keyType: null, fid: "ai_automationnotificationrecipientskip" },
-          { label: "AutomationStepCount", apiName: "AutomationStepCount", type: "Number", keyType: null, fid: "ai_automationstepcount" },
-          { label: "AutomationInstanceID", apiName: "AutomationInstanceID", type: "Text", keyType: "pk", fid: "ai_automationinstanceid", required: true },
-          { label: "AutomationInstanceIsRunOnce", apiName: "AutomationInstanceIsRunOnce", type: "Boolean", keyType: null, fid: "ai_automationinstanceisrunonce" },
-          { label: "FilenameFromTrigger", apiName: "FilenameFromTrigger", type: "Text", keyType: null, fid: "ai_filenamefromtrigger" },
-          { label: "AutomationInstanceScheduledTime_UTC", apiName: "AutomationInstanceScheduledTime_UTC", type: "DateTime", keyType: null, fid: "ai_automationinstancescheduledtimeutc" },
-          { label: "AutomationInstanceStartTime_UTC", apiName: "AutomationInstanceStartTime_UTC", type: "DateTime", keyType: null, fid: "ai_automationinstancestarttimeutc" },
-          { label: "AutomationInstanceEndTime_UTC", apiName: "AutomationInstanceEndTime_UTC", type: "DateTime", keyType: null, fid: "ai_automationinstanceendtimeutc" },
-          { label: "AutomationInstanceStatus", apiName: "AutomationInstanceStatus", type: "Text", keyType: null, fid: "ai_automationinstancestatus" },
-          { label: "AutomationInstanceActivityErrorDetails", apiName: "AutomationInstanceActivityErrorDetails", type: "Text", keyType: null, fid: "ai_automationinstanceactivityerrordetails" },
-        ],
-      },
-      {
-        type: 'sf.DataObject', label: 'Automation Activity Instance', objectName: '_AutomationActivityInstance', headerColor: '#E07D1A', stencilSvg: SVG.dataTable,
-        fields: [
-          { label: "MemberID", apiName: "MemberID", type: "Number", keyType: null, fid: "aai_memberid" },
-          { label: "AutomationName", apiName: "AutomationName", type: "Text", keyType: null, fid: "aai_automationname" },
-          { label: "AutomationCustomerKey", apiName: "AutomationCustomerKey", type: "Text", keyType: "fqk", fid: "aai_automationcustomerkey", required: true },
-          { label: "AutomationInstanceID", apiName: "AutomationInstanceID", type: "Text", keyType: "fqk", fid: "aai_automationinstanceid", required: true },
-          { label: "ActivityType", apiName: "ActivityType", type: "Number", keyType: null, fid: "aai_activitytype" },
-          { label: "ActivityName", apiName: "ActivityName", type: "Text", keyType: null, fid: "aai_activityname" },
-          { label: "ActivityDescription", apiName: "ActivityDescription", type: "Text", keyType: null, fid: "aai_activitydescription" },
-          { label: "ActivityCustomerKey", apiName: "ActivityCustomerKey", type: "Text", keyType: "fqk", fid: "aai_activitycustomerkey", required: true },
-          { label: "ActivityInstanceStep", apiName: "ActivityInstanceStep", type: "Text", keyType: null, fid: "aai_activityinstancestep" },
-          { label: "ActivityInstanceID", apiName: "ActivityInstanceID", type: "Text", keyType: "pk", fid: "aai_activityinstanceid", required: true },
-          { label: "ActivityInstanceStartTime_UTC", apiName: "ActivityInstanceStartTime_UTC", type: "DateTime", keyType: null, fid: "aai_activityinstancestarttimeutc" },
-          { label: "ActivityInstanceEndTime_UTC", apiName: "ActivityInstanceEndTime_UTC", type: "DateTime", keyType: null, fid: "aai_activityinstanceendtimeutc" },
-          { label: "ActivityInstanceStatus", apiName: "ActivityInstanceStatus", type: "Text", keyType: null, fid: "aai_activityinstancestatus" },
-          { label: "ActivityInstanceStatusDetails", apiName: "ActivityInstanceStatusDetails", type: "Text", keyType: null, fid: "aai_activityinstancestatusdetails" },
-        ],
-      },
-    ],
-  },
 ];
 
 // Data Mapping reuses the Data Model Object stencil, but drops the Marketing Cloud
@@ -976,6 +522,24 @@ export const DATAMAPPING_CATEGORIES = [
       },
     ],
   },
+];
+
+// ── Flow (Salesforce Flow) components ──────────────────────────────
+// Built from the shared FLOW_ELEMENTS table (js/shapes/flow.js) so the palette and the shape classes can never
+// drift. Each tile carries `iconName` (a verified SLDS utility symbol) — buildComponentItem renders it via
+// <use href="#id">, and createElementFromComponent bakes the same icon (white) onto the dropped card's chip.
+// `accent` rides along so the stencil tile can paint the icon on the same category chip the canvas card uses
+// (real Flow Builder shows colourful chips in the palette too; a bare white standard glyph would be invisible).
+const flowStencil = (cls) => {
+  const e = FLOW_ELEMENTS.find((x) => x.cls === cls);
+  return { type: 'df.Flow' + e.cls, label: e.label, iconName: e.icon, accent: e.accent, round: !!e.round };
+};
+export const FLOW_CATEGORIES = [
+  { id: 'flow-startend',    label: 'Start & End',   components: ['Start', 'End'].map(flowStencil) },
+  { id: 'flow-interaction', label: 'Interaction',   components: ['Screen', 'Action', 'Subflow', 'SendToFlow', 'SendEmail', 'SendSms', 'SendWhatsApp', 'SendToData360', 'SendMobileApp', 'SendMobileInApp', 'ForwardToBot', 'RunAgent', 'CreateCampaignMember', 'CreateTask', 'Exit'].map(flowStencil) },
+  { id: 'flow-logic',       label: 'Logic',         components: ['Assignment', 'Decision', 'Loop', 'Transform', 'PathExperiment', 'CollectionSort', 'CollectionFilter', 'Wait', 'WaitUntilDate', 'WaitUntilEvent', 'EinsteinDecision', 'DetermineCrmRecord'].map(flowStencil) },
+  { id: 'flow-data',        label: 'Data',          components: ['GetRecords', 'CreateRecords', 'UpdateRecords', 'DeleteRecords', 'Rollback'].map(flowStencil) },
+  { id: 'flow-generic',     label: 'Generic Shapes', components: GENERIC_SHAPES },
 ];
 
 // Helper: resize a DataObject element to fit its fields. If the element is
@@ -1031,6 +595,14 @@ export function getAllStencilSvgs() {
     seenSvg.add(svg);
     stencilSvgToId.set(svg, id);
   }
+
+  // Flow Start uses a custom EQUILATERAL play triangle (no SLDS token is a true equilateral triangle). Filled
+  // via an explicit `fill` that overrides registerStencilIcons' stroke wrapper; shared by the canvas card
+  // (getIconDataUri) and the stencil chip (<use href>). Base (2,2)-(2,22) = 20; both slants to apex (19.32,12) = 20.
+  const startTri = '<path fill="currentColor" stroke="none" d="M2 2 L2 22 L19.32 12 Z"/>';
+  result.push({ id: 'df-flow-start', name: 'Flow Start', svg: startTri, viewBox: '0 0 24 24' });
+  seenSvg.add(startTri);
+  stencilSvgToId.set(startTri, 'df-flow-start');
 
   // 2. Inline stencilSvg from all component categories
   const allCats = [...COMPONENT_CATEGORIES, ...BPMN_CATEGORIES, ...GANTT_CATEGORIES, ...ORG_CATEGORIES, ...DATAMODEL_CATEGORIES];
@@ -1165,6 +737,15 @@ export function createGanttBarsFor(timeline) {
 
 export function createElementFromComponent(component, position = { x: 100, y: 100 }) {
   const { type, label, iconName, bg, accentColor, subtitle } = component;
+
+  // Flow elements (df.Flow*) — all 19 share one construction: instantiate the class and seed `name` (drives the
+  // card label via the shape's model-level sync). The chip colour and the white SLDS icon are baked by the shape's
+  // own initialize() (self-iconizing), so nothing else is set here.
+  if (type.startsWith('df.Flow')) {
+    const Ctor = joint.shapes.df[type.slice(3)];
+    if (!Ctor) { console.warn('SF Diagrams: Unknown flow element:', type); return null; }
+    return new Ctor(label ? { position, name: label } : { position });
+  }
 
   switch (type) {
     case 'sf.SimpleNode': {

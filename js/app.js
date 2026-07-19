@@ -1,32 +1,37 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.19.5.8';
-import * as icons       from './icons.js?v=1.19.5.8';
-import { getAllStencilSvgs } from './components.js?v=1.19.5.8';
-import * as shapes      from './shapes.js?v=1.19.5.8';
-import * as canvas      from './canvas.js?v=1.19.5.8';
-import * as stencil     from './stencil.js?v=1.19.5.8';
-import * as selection   from './selection.js?v=1.19.5.8';
-import * as history     from './history.js?v=1.19.5.8';
-import * as clipboard   from './clipboard.js?v=1.19.5.8';
-import * as templates    from './templates.js?v=1.19.5.8';
-import * as keyboard    from './keyboard.js?v=1.19.5.8';
-import * as toolbar     from './toolbar.js?v=1.19.5.8';
-import * as properties  from './properties.js?v=1.19.5.8';
-import * as persistence from './persistence.js?v=1.19.5.8';
-import * as tabs        from './tabs.js?v=1.19.5.8';
-import * as mermaidImport from './mermaid-import.js?v=1.19.5.8';
-import * as tableView    from './table-view.js?v=1.19.5.8';
-import * as walkthrough  from './walkthrough.js?v=1.19.5.8';
-import * as whatsNew     from './whats-new.js?v=1.19.5.8';
-import * as a11y         from './a11y.js?v=1.19.5.8';
-import { seedDefaultPalette } from './brand-palette.js?v=1.19.5.8';
+import * as theme       from './theme.js?v=1.20.0.63';
+import * as icons       from './icons.js?v=1.20.0.63';
+import { getAllStencilSvgs } from './components.js?v=1.20.0.63';
+import * as shapes      from './shapes.js?v=1.20.0.63';
+import * as canvas      from './canvas.js?v=1.20.0.63';
+import * as stencil     from './stencil.js?v=1.20.0.63';
+import * as selection   from './selection.js?v=1.20.0.63';
+import * as history     from './history.js?v=1.20.0.63';
+import * as clipboard   from './clipboard.js?v=1.20.0.63';
+import * as templates    from './templates.js?v=1.20.0.63';
+import * as keyboard    from './keyboard.js?v=1.20.0.63';
+import * as toolbar     from './toolbar.js?v=1.20.0.63';
+import * as properties  from './properties.js?v=1.20.0.63';
+import * as persistence from './persistence.js?v=1.20.0.63';
+import * as tabs        from './tabs.js?v=1.20.0.63';
+import * as mermaidImport from './mermaid-import.js?v=1.20.0.63';
+import * as tableView    from './table-view.js?v=1.20.0.63';
+import * as walkthrough  from './walkthrough.js?v=1.20.0.63';
+import * as whatsNew     from './whats-new.js?v=1.20.0.63';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.20.0.63';
+import * as a11y         from './a11y.js?v=1.20.0.63';
+import { seedDefaultPalette } from './brand-palette.js?v=1.20.0.63';
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
-// Scoped to the production origin so local dev and embedded previews still work.
-if (window.top !== window.self && location.hostname === 'diagramforce.mateuszdabrowski.pl') {
+// Scoped to the production origins so local dev and embedded previews still work.
+// The diagramforce.com entry is DORMANT on the old host (the check is simply never
+// true there, so behaviour on diagramforce.mateuszdabrowski.pl is unchanged) and
+// only activates once this same code is served from the new host after the move.
+const FRAME_BUST_HOSTS = ['diagramforce.mateuszdabrowski.pl', 'diagramforce.com'];
+if (window.top !== window.self && FRAME_BUST_HOSTS.includes(location.hostname)) {
   try {
     window.top.location = window.self.location.href;
   } catch {
@@ -219,15 +224,20 @@ async function main() {
   // recorded (the walkthrough owns their onboarding). Decision is synchronous so
   // we can skip the backup reminder this session and never stack two dialogs.
   whatsNew.init(persistence.APP_VERSION);
+  whatsNew.setMigrationHandler(migrationBridge.startDomainMigration);   // wire the "Bring my diagrams over" button
+  // Domain move: on diagramforce.com only, force-show the "we've moved - bring your diagrams over" card once. A pure
+  // no-op on the old host (and once migrated/prompted). Folded into showedWhatsNew so the deferred backup reminder and
+  // first-run tour defer to it, and so the normal What's-New path is skipped when the moved card takes the screen.
+  const showedMoved = migrationBridge.maybeShowMovedEntry();
   // If the session was restored from an older release, hand What's-New the OLD session version as the baseline - a
   // user updating in from a pre-What's-New release has no seen-key yet, but they're returning, not brand-new (this is
   // why they used to get the old inline "Session Restored" notice instead of What's New). A MAJOR update already shows
   // the Compatibility Warning (a reset decision), so skip What's New there to avoid stacking two dialogs (it stays
   // reachable from the About modal's version chip).
   const sessionUpdate = tabs.getSessionUpdate ? tabs.getSessionUpdate() : null;
-  const showedWhatsNew = sessionUpdate && sessionUpdate.diff === 'major'
+  const showedWhatsNew = showedMoved || (sessionUpdate && sessionUpdate.diff === 'major'
     ? false
-    : whatsNew.maybeShowWhatsNew(sessionUpdate ? sessionUpdate.fromVersion : null);
+    : whatsNew.maybeShowWhatsNew(sessionUpdate ? sessionUpdate.fromVersion : null));
 
   // --- Phase 9c: Periodic backup reminder ---
   // Deferred (setTimeout 0), mirroring the storage-pressure gauge, so it never

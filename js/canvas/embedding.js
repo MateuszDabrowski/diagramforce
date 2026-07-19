@@ -12,8 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.19.5.8';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.20.0.63';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -768,12 +768,16 @@ export function registerEmbedding(cctx) {
     fitNow(parentId);
   });
 
-  // Trigger 3: an embedded child moves. Cascaded moves (parent dragging its
-  // children along) don't change relative geometry, so fit is a no-op there —
-  // but a user dragging the child within the parent should tighten/expand it,
-  // ON DROP (deferred) rather than per-frame.
-  graph.on('change:position', (cell) => {
+  // Trigger 3: an embedded child moves. Only a move the CHILD itself initiated may refit the
+  // parent — a cascaded move (the parent zone/container being dragged, children translated along
+  // by JointJS with opt.translateBy = the initiator's id) leaves relative geometry unchanged, and
+  // queueing the parent from those cascades made a mere zone CLICK (with >=1px of jitter, which
+  // sets _dragMoved) snap a roomy authored zone down to its children on release (owner report:
+  // "zones sometimes fit to objects when I just click them"). Auto-fit now runs ONLY on captured-
+  // shape movement, ON DROP (deferred) rather than per-frame.
+  graph.on('change:position', (cell, _pos, opt) => {
     if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
+    if (opt && opt.translateBy && opt.translateBy !== cell.id) return;   // cascaded from an ancestor's drag
     const parentId = cell.get('parent');
     if (!parentId) return;
     if (_dragActive) { _pendingParents.add(parentId); return; }

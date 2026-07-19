@@ -5,7 +5,7 @@
 // every element's icon (current normalized viewBoxes). registerIconRefresh(cctx) exposes
 // refreshAllIconHrefs + freqClockUri (the frequency-label clock-glyph builder used by the inline
 // link-styles frequency label) on cctx. Reads the live graph via cctx.
-import { cctx } from './context.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
 
 let _iconDataUriFn = null;
 export function setIconDataUriFn(fn) { _iconDataUriFn = fn; }
@@ -52,6 +52,12 @@ function refreshAllIconHrefs() {
       // full SVG (it rendered empty). Re-resolve it from label/fill (the note text colour). An empty href -
       // i.e. a user-cleared icon - no-ops in _refreshElementIcon, so cleared notes stay cleared. (item 1.2)
       _refreshElementIcon(el, 'icon/href', 'label/fill');
+    } else if (type.startsWith('df.Flow')) {
+      // Flow element icons are ALWAYS white on the coloured/circular chip (intrinsic to the element type). The save
+      // slims the baked data URI to a `data-icon-id` placeholder; without this branch it never re-resolved on load
+      // (the shape's initialize() only bakes when the href is EMPTY, and a placeholder isn't) - so every flow icon
+      // rendered broken after a reload until the element was re-dropped. Re-resolve it to white here.
+      _refreshElementIcon(el, 'icon/href', null, '#FFFFFF');
     }
   }
 }

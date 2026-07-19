@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.19.5.8';
-import { escHtml } from './util.js?v=1.19.5.8';
+import { trapFocus } from './feedback.js?v=1.20.0.63';
+import { escHtml } from './util.js?v=1.20.0.63';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -82,7 +82,7 @@ const BASE_TOUR = [
   {
     target: '#btn-display', placement: 'below-start',
     title: 'Context-Aware View',
-    body: 'The View menu adapts to the active diagram type - auto-layout, focus dimming to trace connections, snap-to-grid, plus type-specific toggles (field labels & lengths, swimlane fit, participant labels, and more).',
+    body: 'The View menu adapts to the active diagram type - auto-layout, focus dimming to trace connections, snap-to-grid, plus type-specific toggles (API names, field lengths, swimlane fit, participant labels, and more).',
   },
   {
     target: '#stencil-panel', placement: 'left',
@@ -130,6 +130,11 @@ const TYPE_STEP = {
     target: '#view-switch-group', placement: 'below',
     title: 'Diagram vs. Table Views',
     body: 'One plan, two views. Flip between the visual timeline and a project-plan table - edit task names, dates, progress, assignees, groups, and dependencies inline, and add, reorder, or delete tasks right in the spreadsheet.',
+  },
+  flow: {
+    target: '#btn-display', placement: 'below',
+    title: 'Document a Salesforce Flow',
+    body: 'Drag the real Flow elements - Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records - and connect them. Connectors carry their role (decision outcome, default, fault, loop), and one-click **Auto Layout** in the View menu straightens the whole flow into a clean vertical tree. Great for screen, record-triggered, and marketing/campaign flows.',
   },
 };
 

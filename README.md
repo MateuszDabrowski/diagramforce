@@ -1,6 +1,6 @@
 # Diagramforce
 
-Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, Data Cloud field mappings, process flows, org charts, Gantt charts, and UML sequence diagrams - all in your browser, with no account and no Diagramforce backend. Your diagrams stay in your browser; optionally connect your own Google Drive to auto-save, share, and browse version history - your files live in your own Drive, never on a Diagramforce server.
+Free browser-based visual diagramming tool for Salesforce architects and consultants. Create architecture diagrams, data models, Data Cloud field mappings, process flows, Salesforce Flow documentation (including marketing and campaign flows), org charts, Gantt charts, and UML sequence diagrams - all in your browser, with no account and no Diagramforce backend. Your diagrams stay in your browser; optionally connect your own Google Drive to auto-save, share, and browse version history - your files live in your own Drive, never on a Diagramforce server.
 
 **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl)**
 
@@ -12,6 +12,7 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Data Model Diagrams** - Define objects, fields, and relationships with ER notation (crow's foot, one, zero-or-one, etc.); tag objects with optional SLDS header icons (contact / account / email / third-party such as Snowflake)
 - **Data Mapping Diagrams (Salesforce Data Cloud / Data 360)** - Map the end-to-end data journey from source systems → Data Lake / Data Model Objects → Activations, with field-level source→target mappings, mapping types (Standard, Formula, Streaming/Batch Transform, Calculated Insight), a synced table view, and CSV field import/export. One click turns an existing Data Model into a Data Mapping diagram
 - **Process Diagrams** - Design business processes with BPMN and flowchart shapes
+- **Flow Diagrams** - Document Salesforce Flows (screen, record-triggered, and marketing/campaign flows) with their real elements - Start, Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records, Subflow, and more - plus first-class connectors (decision outcome, default, fault, loop) and a one-click vertical tree layout
 - **Organisation Charts** - Document team hierarchy with person cards, departments, and teams, plus a RACI toolkit (Task and Task Group shapes for responsibility matrices)
 - **Gantt Charts** - Plan project timelines with tasks, milestones, phases, and dependencies
 - **Sequence Diagrams** - UML sequence diagrams with participants, actors, activation boxes, and alt/loop fragments; reply-style messages default to dashed

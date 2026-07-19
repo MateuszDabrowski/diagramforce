@@ -1,6 +1,6 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.19.5.8';
-import { btn, tctx } from './context.js?v=1.19.5.8';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.20.0.63';
+import { btn, tctx } from './context.js?v=1.20.0.63';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
 
@@ -105,7 +105,9 @@ export function updateDisplayMenuVisibility() {
   // Org RE-PROMOTED (v1.19.0.27): the earlier weave was the fan-out gap bump sitting the chief too high (since
   // removed in .26); with the default gap, barycentre routes the chief->pillar connectors cleanly (one
   // distribution bar + clean drops), so Org joins the promoted set.
-  const layeredPromoted = isDataModel || type === 'architecture' || type === 'org';
+  // Flow joins the promoted set: a SINGLE "Auto Layout" entry (Horizontal/Vertical hidden). It routes to the
+  // type-owned vertical tree layout via runAutoLayout's `flow` branch, not the barycentre core.
+  const layeredPromoted = isDataModel || type === 'architecture' || type === 'org' || type === 'flow';
   const autoH = document.getElementById('btn-auto-layout-h');
   const autoV = document.getElementById('btn-auto-layout-v');
   if (autoH) autoH.style.display = (hideAutoLayout || layeredPromoted) ? 'none' : '';

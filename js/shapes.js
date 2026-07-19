@@ -6,13 +6,14 @@
 // (written into sctx), the field-helper re-exports (so components/canvas/properties/field-editor import them from
 // shapes.js unchanged), and the register() orchestrator.
 
-import { sctx } from './shapes/context.js?v=1.19.5.8';
-import { registerCore } from './shapes/core.js?v=1.19.5.8';
-import { registerBpmnFlow } from './shapes/bpmn-flow.js?v=1.19.5.8';
-import { registerDataObject } from './shapes/data-object.js?v=1.19.5.8';
-import { registerGantt } from './shapes/gantt.js?v=1.19.5.8';
-import { registerOrg } from './shapes/org.js?v=1.19.5.8';
-import { registerTaskSequence } from './shapes/task-sequence.js?v=1.19.5.8';
+import { sctx } from './shapes/context.js?v=1.20.0.63';
+import { registerCore } from './shapes/core.js?v=1.20.0.63';
+import { registerBpmnFlow } from './shapes/bpmn-flow.js?v=1.20.0.63';
+import { registerDataObject } from './shapes/data-object.js?v=1.20.0.63';
+import { registerGantt } from './shapes/gantt.js?v=1.20.0.63';
+import { registerOrg } from './shapes/org.js?v=1.20.0.63';
+import { registerTaskSequence } from './shapes/task-sequence.js?v=1.20.0.63';
+import { registerFlow } from './shapes/flow.js?v=1.20.0.63';
 
 // Data Cloud mapping mode / undo batcher / auto-fit getters — wired from app.js, written into the shapes runtime
 // context (sctx) so the DataObject registrar reads them via sctx.*. The field helpers live in shapes/fields.js;
@@ -21,7 +22,7 @@ import { registerTaskSequence } from './shapes/task-sequence.js?v=1.19.5.8';
 export function setMappingModeGetter(fn) { sctx.mappingModeGetter = fn; }
 export function setDataObjectHistoryBatcher(fn) { sctx.dataObjectHistoryBatcher = fn; }
 export function setAutoFitGetter(fn) { sctx.autoFitGetter = fn; }
-export { newFid, ensureFieldFids, getVisibleDataObjectFields } from './shapes/fields.js?v=1.19.5.8';
+export { newFid, ensureFieldFids, getVisibleDataObjectFields } from './shapes/fields.js?v=1.20.0.63';
 
 // Register every custom shape + view. registerCore MUST run first (its first define creates the joint.shapes.sf /
 // joint.shapes.df namespaces that every later View attachment reads).
@@ -32,4 +33,5 @@ export function register() {
   registerGantt();
   registerOrg();
   registerTaskSequence();
+  registerFlow();   // Salesforce Flow elements (df.Flow*) — after core (needs joint.shapes.df)
 }

@@ -88,6 +88,14 @@ const CONTENT_PROPS = [
   'manualWidth',
   // Gantt dependency link (Phase 3): typed predecessor relationship props (linkKind has its own handler)
   'depType', 'lag',
+  // Flow elements (df.Flow*): the uniform trio + every per-kind free-text field. Keep in step with FLOW_ELEMENTS
+  // in js/shapes/flow.js (its FLOW_CONTENT_PROPS is the derived source; listed literally here to keep history.js
+  // import-free). `name` drives the card label; `apiName` the subtitle. NB: NONE of these may collide with a
+  // JointJS built-in cell attribute (`source`/`target`/`vertices`/`router`/… on links) — `target` was renamed to
+  // `transformTarget` because a `change:target` listener misfired on every link re-route during auto-layout/undo.
+  'name', 'apiName', 'description', 'processType', 'triggerType', 'object', 'filters', 'components',
+  'actionName', 'actionType', 'flowName', 'waitEvents', 'assignmentItems', 'outcomes',
+  'collectionReference', 'conditions', 'transformTarget', 'message',
 ];
 
 function schedulePendingDragCommit() {

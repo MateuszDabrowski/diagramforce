@@ -2,11 +2,11 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.19.5.8';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.19.5.8';
-import { nodeContrastText } from '../util.js?v=1.19.5.8';
-import { getIconDataUri } from '../icons.js?v=1.19.5.8';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.20.0.63';
+import { nodeContrastText } from '../util.js?v=1.20.0.63';
+import { getIconDataUri } from '../icons.js?v=1.20.0.63';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.20.0.63';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -128,6 +128,25 @@ export function migrateLinks() {
       if ((link.get('z') ?? 0) >= 3000) link.set('z', 1900);
     }
 
+    // Flow connector: re-apply the connector style on load so the "None" stub ends bridge the sfConnectionPoint
+    // offset and the line TOUCHES the cards (a slim save can drop the end markers). Standard/Fault/Go To derives from
+    // the persisted (stroke, dash) via flowConnectorType. A legacy pre-1.20.0 `connectorKind` (a since-removed prop)
+    // → derive fault from it, then drop it. Identify a flow connector by its endpoints (no dedicated linkKind).
+    {
+      const sCell = graph.getCell(link.get('source')?.id), tCell = graph.getCell(link.get('target')?.id);
+      const isFlowLink = String(sCell?.get('type') || '').startsWith('df.Flow') || String(tCell?.get('type') || '').startsWith('df.Flow');
+      const legacyKind = link.prop('connectorKind');
+      if (isFlowLink || legacyKind != null) {
+        const type = legacyKind != null ? (legacyKind === 'fault' ? 'fault' : 'standard') : (cctx.flowConnectorType?.(link) || 'standard');
+        cctx.applyFlowLinkStyle?.(link, { type });
+        if (legacyKind != null) link.removeProp('connectorKind');
+        // Default to ORTHOGONAL routing — a drawn flow link gets sfManhattan from the link factory, but a spec/LLM
+        // link that omits `router` would otherwise render as a diagonal straight line. Idempotent.
+        if (link.router()?.name !== 'sfManhattan') link.router({ name: 'sfManhattan' });
+        if (link.connector()?.name !== 'rounded') link.connector('rounded', { radius: 8 });
+      }
+    }
+
     // Rebuild the Architecture connection-frequency overlay from its prop. A JSON/LLM
     // spec may set `connectionFrequency` without the derived clock label, so derive it
     // here. Idempotent + a no-op when the prop is unset (keeps non-freq labels intact).
@@ -243,6 +262,10 @@ export function migrateLinks() {
 
     const labels = link.labels();
     if (!labels || !labels.length) continue;
+    // Flow connectors already got their bordered PILL labels from the flow block above (applyFlowLinkStyle) — skip
+    // the generic white-rect normalization so it doesn't clobber the pill back to a borderless body.
+    const lblSrc = graph.getCell(link.get('source')?.id), lblTgt = graph.getCell(link.get('target')?.id);
+    if (String(lblSrc?.get('type') || '').startsWith('df.Flow') || String(lblTgt?.get('type') || '').startsWith('df.Flow')) continue;
     const lineColor = link.attr('line/stroke') || '#888888';
     const newLabels = labels.map(lbl => {
       const text = lbl.attrs?.text?.text || lbl.attrs?.label?.text || '';

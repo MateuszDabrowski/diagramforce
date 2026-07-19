@@ -15,11 +15,11 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.19.5.8';
-import { pctx } from './context.js?v=1.19.5.8';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.19.5.8';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.19.5.8';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.19.5.8';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.20.0.63';
+import { pctx } from './context.js?v=1.20.0.63';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.20.0.63';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.20.0.63';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.20.0.63';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -46,6 +46,13 @@ const GOOGLE_CONFIG = {
   // Drive testing the creds come from a GITIGNORED `dev/dev-config.json` (loaded by ensureDriveConfig below) so they
   // work on localhost without being committed/shipped; fall back to per-browser localStorage. E2E seeds a placeholder.
   'diagramforce.mateuszdabrowski.pl': {
+    clientId: '873718407054-pag1jhjql4f96l7u8vsv195uvadppfuf.apps.googleusercontent.com',
+    apiKey: 'AIzaSyC56ShCUdPEll_aaMs0JjqDnOCBUWkS3wQ',
+  },
+  // Domain move (2026): the SAME creds are re-authorized for diagramforce.com in the Google console (added as an
+  // OAuth JS origin + API-key HTTP-referrer, done 2026-07-19). Keyed by location.hostname, so Drive self-gates ON
+  // automatically once the app is served from the new host. Dormant on the old host (its own key still resolves).
+  'diagramforce.com': {
     clientId: '873718407054-pag1jhjql4f96l7u8vsv195uvadppfuf.apps.googleusercontent.com',
     apiKey: 'AIzaSyC56ShCUdPEll_aaMs0JjqDnOCBUWkS3wQ',
   },

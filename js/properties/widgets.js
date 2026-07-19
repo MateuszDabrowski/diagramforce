@@ -2,17 +2,17 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.19.5.8';
-import * as history from '../history.js?v=1.19.5.8';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.19.5.8';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.19.5.8';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.19.5.8';
-import { confirmModal, showToast } from '../feedback.js?v=1.19.5.8';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.19.5.8';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.19.5.8';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.19.5.8';
-import { escHtml } from '../util.js?v=1.19.5.8';
-import { saveCellAsShape } from '../templates.js?v=1.19.5.8';
+import { prctx, asUndoBatch } from './context.js?v=1.20.0.63';
+import * as history from '../history.js?v=1.20.0.63';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.20.0.63';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.20.0.63';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.20.0.63';
+import { confirmModal, showToast } from '../feedback.js?v=1.20.0.63';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.20.0.63';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.20.0.63';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.20.0.63';
+import { escHtml } from '../util.js?v=1.20.0.63';
+import { saveCellAsShape } from '../templates.js?v=1.20.0.63';
 
 export function section(parent, title, open = true) {
   const wrap = document.createElement('div');
@@ -1391,6 +1391,132 @@ export function addSelect(parent, label, value, options, onChange, opts = {}) {
   });
   sel.addEventListener('change', () => onChange(sel.value));
   f.appendChild(sel);
+}
+
+// A FREE-TEXT combobox with a filtered suggestions dropdown — pick a common value or type anything (lossless).
+// Preferred over addSelect when the value set is a long open enum (e.g. Flow processType/triggerType — 35/19
+// values would be an unusable picklist). Built on a `contenteditable` div, NOT an `<input>`: a contenteditable is
+// not a form control, so NO browser applies its autofill overlay (the sticky, unreadable grey background Chrome
+// AND Safari painted on the old <input>+datalist). `suggestions` is an array of strings; `onChange(value)` fires
+// on every edit and on picking a suggestion.
+let _datalistSeq = 0;
+export function addTextWithSuggestions(parent, label, value, suggestions, onChange, opts = {}) {
+  const f = field(parent, label);
+  const uid = `df-suggest-${++_datalistSeq}`;
+  const wrap = document.createElement('div');
+  wrap.className = 'df-suggest';
+  const box = document.createElement('div');
+  box.className = 'df-properties__input df-suggest__box';
+  box.contentEditable = 'true';
+  box.setAttribute('role', 'combobox');
+  box.setAttribute('aria-autocomplete', 'list');
+  box.setAttribute('aria-expanded', 'false');
+  box.setAttribute('aria-controls', `${uid}-menu`);
+  box.setAttribute('spellcheck', 'false');
+  box.setAttribute('aria-label', label || 'value');
+  if (opts.placeholder) box.dataset.placeholder = opts.placeholder;
+  box.textContent = value ?? '';
+
+  const menu = document.createElement('div');
+  menu.className = 'df-suggest__menu';
+  menu.id = `${uid}-menu`;
+  menu.setAttribute('role', 'listbox');
+  menu.hidden = true;
+
+  const readVal = () => box.textContent.replace(/[\r\n]+/g, '').trim();
+  let cur = value ?? '';
+  const commit = () => { const v = readVal(); if (v !== cur) { cur = v; onChange(v); } };
+
+  let itemEls = [];        // the current option divs (rebuilt on every renderMenu)
+  let activeIndex = -1;    // keyboard/hover highlight; -1 = none
+  const setOpen = (open) => box.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+  // Highlight one option (keyboard arrows or mouse hover share this), keep it in view, and mirror to ARIA.
+  const setActive = (i) => {
+    activeIndex = i;
+    itemEls.forEach((el, idx) => {
+      const on = idx === i;
+      el.classList.toggle('df-suggest__item--active', on);
+      el.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (itemEls[i]) { box.setAttribute('aria-activedescendant', itemEls[i].id); itemEls[i].scrollIntoView({ block: 'nearest' }); }
+    else box.removeAttribute('aria-activedescendant');
+  };
+
+  const pick = (s) => { box.textContent = s; cur = s; onChange(s); menu.hidden = true; setOpen(false); activeIndex = -1; };
+
+  // Flip the menu ABOVE the box when there isn't room below inside the scrollable panel body (whose overflow
+  // would otherwise clip the lower options behind the sticky footer). Cap the height to the space it lands in.
+  const placeMenu = () => {
+    const clipEl = box.closest('.df-properties__body');
+    const cr = clipEl ? clipEl.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const br = box.getBoundingClientRect();
+    const spaceBelow = cr.bottom - br.bottom;
+    const spaceAbove = br.top - cr.top;
+    const want = Math.min(menu.scrollHeight, 200);          // scrollHeight = full option list, ignoring max-height
+    const up = spaceBelow < want && spaceAbove > spaceBelow;
+    menu.classList.toggle('df-suggest__menu--up', up);
+    menu.style.maxHeight = `${Math.max(96, Math.min(200, (up ? spaceAbove : spaceBelow) - 8))}px`;
+  };
+
+  const renderMenu = () => {
+    const q = readVal().toLowerCase();
+    const all = suggestions || [];
+    // If the box already holds an exact suggestion (a value that was picked/seeded, not a partial query), offer the
+    // WHOLE list so the user can switch away from it. Otherwise filter to substring matches of what they typed.
+    const exact = all.some((s) => s.toLowerCase() === q);
+    const list = (!q || exact) ? all : all.filter((s) => s.toLowerCase().includes(q));
+    menu.textContent = '';
+    itemEls = [];
+    activeIndex = -1;
+    if (!list.length) { menu.hidden = true; setOpen(false); return; }
+    list.forEach((s, idx) => {
+      const it = document.createElement('div');
+      it.className = 'df-suggest__item';
+      it.id = `${uid}-opt-${idx}`;
+      it.setAttribute('role', 'option');
+      it.textContent = s;
+      // mousedown (not click) fires BEFORE the box's blur, so the selection lands before the menu closes.
+      it.addEventListener('mousedown', (e) => { e.preventDefault(); pick(s); });
+      it.addEventListener('mouseenter', () => setActive(idx));
+      itemEls.push(it);
+      menu.appendChild(it);
+    });
+    menu.hidden = false;
+    setOpen(true);
+    placeMenu();          // choose up/down + cap height now that the options are laid out
+  };
+
+  box.addEventListener('input', () => { commit(); renderMenu(); });
+  box.addEventListener('focus', renderMenu);
+  box.addEventListener('blur', () => { commit(); setTimeout(() => { menu.hidden = true; setOpen(false); }, 120); });
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (menu.hidden) { renderMenu(); setActive(0); }        // open + land on the first option
+      else setActive(Math.min(activeIndex + 1, itemEls.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!menu.hidden) setActive(Math.max(activeIndex - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!menu.hidden && activeIndex >= 0 && itemEls[activeIndex]) pick(itemEls[activeIndex].textContent);
+      else { menu.hidden = true; setOpen(false); box.blur(); }   // no highlight → just commit the free-text
+    } else if (e.key === 'Escape') {
+      menu.hidden = true; setOpen(false); box.blur();
+    }
+  });
+  // Keep it single-line + plain: strip any rich markup / newlines on paste.
+  box.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData)?.getData('text')?.replace(/[\r\n]+/g, ' ') || '';
+    document.execCommand('insertText', false, t);
+  });
+
+  wrap.appendChild(box);
+  wrap.appendChild(menu);
+  f.appendChild(wrap);
+  return box;
 }
 
 

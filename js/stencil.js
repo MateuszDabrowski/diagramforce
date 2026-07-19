@@ -1,17 +1,19 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.19.5.8';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.19.5.8';
-import { getAllIcons, getCategories } from './icons.js?v=1.19.5.8';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.19.5.8';
-import { startImageAddFlow } from './image-component.js?v=1.19.5.8';
-import * as history from './history.js?v=1.19.5.8';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.19.5.8';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.19.5.8';
-import { confirmModal } from './feedback.js?v=1.19.5.8';
-import { escHtml } from './util.js?v=1.19.5.8';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.19.5.8'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.20.0.63';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.20.0.63';
+import { getAllIcons, getCategories } from './icons.js?v=1.20.0.63';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.20.0.63';
+import { startImageAddFlow } from './image-component.js?v=1.20.0.63';
+import * as history from './history.js?v=1.20.0.63';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.20.0.63';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.20.0.63';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.20.0.63';
+import { SVG } from './components/stencil-kit.js?v=1.20.0.63';
+import { confirmModal } from './feedback.js?v=1.20.0.63';
+import { escHtml } from './util.js?v=1.20.0.63';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.20.0.63'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -114,19 +116,23 @@ function renderCategories() {
   const shortOf = (t) => DIAGRAM_TYPES[t]?.short || t || 'Other';
   const curShort = shortOf(currentDiagramType);
 
-  // ── Group 1: {Type} Templates — the type's starting points + the user's own saved content.
-  // "Official Templates" (1.19.5) LEADS the band: the New-Diagram modal's curated starters for THIS type as
-  // drag-to-INSERT rows (drop the whole template into the CURRENT canvas, fresh ids), unlike the modal which
-  // opens one as a new tab. Collapsed by default; metas only at build time — the heavy cells JSON + thumbnails
-  // lazy-load on first reveal. Then My Shapes (grid tiles) + My Templates (rows). ──
+  // ── Group 1: {Type} Templates — multi-shape STARTERS only (owner call, 1.20.0): Official Templates
+  // (the New-Diagram modal's curated starters as drag-to-INSERT rows — drop the whole template into the
+  // CURRENT canvas with fresh ids, unlike the modal which opens a new tab) + the user's My Templates.
+  // Single-shape content (official packs + My Shapes) lives in the "{Type} Shapes" band below — the
+  // Templates/Shapes split IS the band semantics. ──
   const allOfficials = getOfficialTemplates();
+  const allPacks = getOfficialShapePacks();
   const officialMetas = allOfficials.filter((t) => t.diagramType === currentDiagramType);
+  // Official shape packs (P2, 1.20.0): curated prebuilt DataObjects fetched from shapes/*.json catalogs.
+  // A pack appears in every stencil its diagramTypes lists (e.g. the MCN DMOs serve Data Model AND Data
+  // Mapping — mapping diagrams need the DMO layer); tiles render from manifest names, fields lazy-load.
+  const curPacks = allPacks.filter((p) => p.diagramTypes.includes(currentDiagramType));
   const curShapes = myShapes.filter((t) => t.diagramType === currentDiagramType);
   const curTemplates = myTemplates.filter((t) => t.diagramType === currentDiagramType);
-  if (officialMetas.length || curShapes.length || curTemplates.length) {
+  if (officialMetas.length || curTemplates.length) {
     bodyEl.appendChild(buildGroupHeader(`${curShort} Templates`));
     if (officialMetas.length) bodyEl.appendChild(buildOfficialTemplatesSection(officialMetas, 'Official Templates', `official-templates-${currentDiagramType}`));
-    if (curShapes.length) bodyEl.appendChild(buildTemplatesSection('My Shapes', `my-shapes-${currentDiagramType}`, curShapes));
     if (curTemplates.length) bodyEl.appendChild(buildTemplatesSection('My Templates', `my-templates-${currentDiagramType}`, curTemplates, false, 'rows'));
   }
 
@@ -138,6 +144,7 @@ function renderCategories() {
                       : currentDiagramType === 'gantt' ? GANTT_CATEGORIES
                       : currentDiagramType === 'org' ? ORG_CATEGORIES
                       : currentDiagramType === 'sequence' ? SEQUENCE_CATEGORIES
+                      : currentDiagramType === 'flow' ? FLOW_CATEGORIES
                       : COMPONENT_CATEGORIES;
 
   // Pin "Generic Shapes" to the top across every diagram type, but present it COLLAPSED by default everywhere EXCEPT
@@ -146,7 +153,7 @@ function renderCategories() {
   // "Objects" group, Mapping Layers, …), so the generic group folds away to keep those prominent. (Data Model/Mapping
   // joined this set in v1.17.1 once the DataObject moved OUT of Generic Shapes into its own "Objects" group — before
   // that, datamodel was left expanded because the DataObject led the generic group.)
-  const TYPES_GENERIC_COLLAPSED = new Set(['process', 'gantt', 'org', 'sequence', 'datamodel', 'datamapping']);
+  const TYPES_GENERIC_COLLAPSED = new Set(['process', 'gantt', 'org', 'sequence', 'datamodel', 'datamapping', 'flow']);
   // Preset libraries that open COLLAPSED (item 4) — the Gantt project starter lists are long; expand on demand.
   const CATEGORIES_COLLAPSED_BY_DEFAULT = new Set(['gantt-phases', 'gantt-tasks', 'gantt-milestones']);
   const isGeneric = (c) => /generic/i.test(c.id || '') || c.label === 'Generic Shapes';
@@ -165,9 +172,16 @@ function renderCategories() {
       ]
     : others;
 
+  // My Shapes LEADS the "{Type} Shapes" band (owner call: the user's own saved shapes above the
+  // generic kit), then the built-in categories, then the official shape packs. All are SINGLE-shape
+  // drops - multi-shape starters live in the Templates band above.
+  if (curShapes.length) bodyEl.appendChild(buildTemplatesSection('My Shapes', `my-shapes-${currentDiagramType}`, curShapes));
+
   for (const category of categories) {
     bodyEl.appendChild(buildComponentSection(category));
   }
+
+  for (const pack of curPacks) bodyEl.appendChild(buildShapePackSection(pack, pack.label, `official-shapes-${pack.id}`));
 
   // SLDS icon categories only for architecture diagrams
   if (currentDiagramType === 'architecture') {
@@ -188,15 +202,23 @@ function renderCategories() {
   let otherShown = false;
   for (const type of [...knownTypes.filter((t) => t !== currentDiagramType), ...unknownTypes]) {
     const tOfficials = allOfficials.filter((t) => t.diagramType === type);
+    // A pack surfaces cross-type under its HOME type's run only (diagramTypes[0]) — a multi-type pack
+    // already shown in the current band never repeats down here.
+    const tPacks = allPacks.filter((p) => p.diagramTypes[0] === type && !p.diagramTypes.includes(currentDiagramType));
     const tShapes = myShapes.filter((t) => t.diagramType === type);
     const tTemplates = myTemplates.filter((t) => t.diagramType === type);
     const cross = knownTypes.includes(type) ? buildCrossTypeSection(type) : null;
-    if (!tOfficials.length && !tShapes.length && !tTemplates.length && !cross) continue;
+    if (!tOfficials.length && !tPacks.length && !tShapes.length && !tTemplates.length && !cross) continue;
     if (!otherShown) { bodyEl.appendChild(buildGroupHeader('Other Shapes')); otherShown = true; }
     const s = shortOf(type);
-    if (tOfficials.length) bodyEl.appendChild(buildOfficialTemplatesSection(tOfficials, `${s} · Official Templates`, `official-templates-${type}`));
-    if (tShapes.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Shapes`, `my-shapes-${type || 'untyped'}`, tShapes, true));
-    if (tTemplates.length) bodyEl.appendChild(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true, 'rows'));
+    // Every Other-Shapes section shares the --cross label muting (opacity 0.82) so the band reads as
+    // one quiet block — without this, the template/pack sections sat full-brightness among the muted
+    // built-in cross-type sections (the "mixed label colours" report).
+    const cx = (el) => { el.classList.add('df-stencil__category--cross'); return el; };
+    if (tOfficials.length) bodyEl.appendChild(cx(buildOfficialTemplatesSection(tOfficials, `${s} · Official Templates`, `official-templates-${type}`)));
+    for (const pack of tPacks) bodyEl.appendChild(cx(buildShapePackSection(pack, `${s} · ${pack.label}`, `official-shapes-${pack.id}`)));
+    if (tShapes.length) bodyEl.appendChild(cx(buildTemplatesSection(`${s} · My Shapes`, `my-shapes-${type || 'untyped'}`, tShapes, true)));
+    if (tTemplates.length) bodyEl.appendChild(cx(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true, 'rows')));
     if (cross) bodyEl.appendChild(cross);
   }
 }
@@ -245,6 +267,7 @@ function categoriesForType(type) {
        : type === 'gantt' ? GANTT_CATEGORIES
        : type === 'org' ? ORG_CATEGORIES
        : type === 'sequence' ? SEQUENCE_CATEGORIES
+       : type === 'flow' ? FLOW_CATEGORIES
        : COMPONENT_CATEGORIES;
 }
 function buildCrossTypeSection(type) {
@@ -355,12 +378,13 @@ function buildTemplateDeleteBtn(template) {
 
 const PREVIEW_EYE_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>`;
 
-/** "N shapes · M connectors" for a template's serialized cells (links carry source+target). */
+/** "N shapes" for a template's serialized cells (links carry source+target; connector counts were
+ *  dropped from the sub-line - owner call: not worthy information). */
 function templateCountsLine(cells) {
   const total = Array.isArray(cells) ? cells.length : 0;
   const links = (cells || []).filter((c) => c && c.source && c.target).length;
   const shapes = total - links;
-  return `${shapes} shape${shapes === 1 ? '' : 's'} · ${links} connector${links === 1 ? '' : 's'}`;
+  return `${shapes} shape${shapes === 1 ? '' : 's'}`;
 }
 
 /** Row chrome: [thumb | name + sub-line | (buttons appended by caller)] + a hidden preview box below. */
@@ -403,8 +427,9 @@ function buildTemplateRowBase({ name, sub, title }) {
 
 /** Eye toggle → inline preview under the row. One open per items container (like Drive history); the large
  *  thumbnail renders at the box's real width so the fitted diagram is crisp. `getCells` may be async
- *  (officials fetch on demand); a loading line shows until it resolves. */
-function wireRowPreview(row, main, previewBox, getCells) {
+ *  (officials fetch on demand); a loading line shows until it resolves. `detailText` (optional) renders the
+ *  FULL description above the thumbnail — the row's sub-line ellipsizes, the preview is where it all fits. */
+function wireRowPreview(row, main, previewBox, getCells, detailText = '') {
   const eye = document.createElement('button');
   eye.type = 'button';
   eye.className = 'df-template-preview';
@@ -429,6 +454,12 @@ function wireRowPreview(row, main, previewBox, getCells) {
     if (!Array.isArray(cells) || !cells.length) {
       previewBox.innerHTML = '<span class="df-template-preview-loading">Could not load this template.</span>';
       return;
+    }
+    if (detailText) {
+      const desc = document.createElement('div');
+      desc.className = 'df-template-preview-desc';
+      desc.textContent = detailText;
+      previewBox.appendChild(desc);
     }
     const w = Math.max(180, (previewBox.clientWidth || row.clientWidth || 240) - 8);
     const h = Math.min(Math.round(w * 0.7), 240);
@@ -494,13 +525,16 @@ function buildOfficialTemplatesSection(metas, label, categoryId) {
   });
 
   for (const meta of metas) {
+    // Sub-line = the manifest's authored shape count (owner call - the truncated description read
+    // poorly here); the FULL description lives in the eye preview. A unit test pins each manifest
+    // count to its template file so they can't drift.
     const { row, main, thumb, previewBox } = buildTemplateRowBase({
       name: meta.name,
-      sub: meta.description || '',
+      sub: meta.shapes ? `${meta.shapes} shape${meta.shapes === 1 ? '' : 's'}` : (meta.description || ''),
       title: meta.description ? `${meta.name} - ${meta.description}` : meta.name,
     });
     placeholders.set(meta.id, thumb);
-    wireRowPreview(row, main, previewBox, async () => (await loadOfficialTemplate(meta.id))?.cells || []);
+    wireRowPreview(row, main, previewBox, async () => (await loadOfficialTemplate(meta.id))?.cells || [], meta.description || '');
 
     // Touch long-press drag reads these (setupTouchDrag), mirroring _sfTemplateId on My Templates rows.
     row._sfOfficialTemplateId = meta.id;
@@ -533,6 +567,107 @@ function insertOfficialTemplateAt(id, point) {
   loadOfficialTemplate(id).then((loaded) => {
     if (loaded?.cells?.length) insertTemplateCells({ cells: loaded.cells }, point);
   });
+}
+
+// ── Official shape packs (P2, 1.20.0) — curated prebuilt DataObjects from shapes/*.json catalogs ──
+// Tiles render from MANIFEST names only (searchable immediately, the standard component-tile look);
+// the heavy field schemas fetch once on first reveal (header expand OR search auto-expand, via the
+// same IntersectionObserver trick the template sections use) and hydrate each tile's `_sfComponent`
+// — from then on drag / dblclick / touch take the ordinary built-in component paths. A cold-start
+// drag (before the fetch lands) falls back to a pack-ref MIME the drop handler resolves async.
+function buildShapePackSection(pack, label, categoryId) {
+  const section = document.createElement('div');
+  section.className = 'df-stencil__category df-stencil__category--collapsed';
+  section.dataset.categoryId = categoryId;
+
+  const items = document.createElement('div');
+  items.className = 'df-stencil__items';
+
+  const tiles = new Map();   // objectName → tile, for post-fetch hydration
+  let loadRequested = false;
+  const ensureLoaded = () => {
+    if (loadRequested) return;
+    loadRequested = true;
+    loadOfficialShapePack(pack.id).then((comps) => {
+      if (!comps) { loadRequested = false; return; }   // fetch failed → a later reveal retries
+      for (const comp of comps) {
+        const tile = tiles.get(comp.objectName);
+        if (tile) tile._sfComponent = comp;
+      }
+    });
+  };
+
+  const header = buildCategoryHeader(label, pack.items.length);
+  header.addEventListener('click', () => {
+    section.classList.toggle('df-stencil__category--collapsed');
+    ensureLoaded();
+  });
+
+  for (const entry of pack.items) {
+    const item = document.createElement('div');
+    item.className = 'df-stencil__item';
+    item.draggable = true;
+    item.dataset.label = (entry.label || '').toLowerCase();
+    item.innerHTML = `<svg class="df-stencil__item-icon df-stencil__item-icon--svg" viewBox="0 0 20 20">${SVG.dataTable}</svg>`;
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'df-stencil__item-label';
+    labelSpan.textContent = entry.label || entry.objectName;
+    item.appendChild(labelSpan);
+    tiles.set(entry.objectName, item);
+
+    item.addEventListener('dragstart', (evt) => {
+      const comp = item._sfComponent;
+      if (comp) {
+        // Hydrated → the ordinary component drag (full descriptor in the payload, ghost included).
+        evt.dataTransfer.setData('application/sf-diagrams', JSON.stringify(comp));
+        setDragPreview(evt, comp);
+        beginDropGhost(comp);
+      } else {
+        // Cold start → a light pack ref; the drop handler resolves it asynchronously.
+        evt.dataTransfer.setData('application/sf-diagrams-pack-shape', JSON.stringify({ packId: pack.id, objectName: entry.objectName }));
+        ensureLoaded();
+      }
+      evt.dataTransfer.effectAllowed = 'copy';
+    });
+    item.addEventListener('dragend', endDropGhost);
+    item.addEventListener('dblclick', () => {
+      if (item._sfComponent) { addToCenter(item._sfComponent); return; }
+      loadOfficialShapePack(pack.id).then((comps) => {
+        const comp = comps?.find((c) => c.objectName === entry.objectName);
+        if (comp) addToCenter(comp);
+      });
+    });
+    items.appendChild(item);
+  }
+
+  // Search auto-expand bypasses the header click — observing the items container catches ANY first reveal.
+  const io = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { ensureLoaded(); io.disconnect(); }
+  });
+  io.observe(items);
+
+  section.appendChild(header);
+  section.appendChild(items);
+  return section;
+}
+
+/** Insert a resolved pack component at `localPoint` exactly like the generic component-drop tail:
+ *  fresh element, inherited display flags, grid snap, layout no-ops, Zone/Container capture. Packs
+ *  contain only sf.DataObjects, so the gantt-specific drop branches don't apply. */
+function insertComponentAt(component, localPoint) {
+  const gridSize = paper.options.gridSize || 4;
+  const element = createElementFromComponent(component, { x: 0, y: 0 });
+  if (!element) return;
+  applyDisplayFlags(element);
+  const size = element.size();
+  element.position(
+    Math.round((localPoint.x - size.width / 2) / gridSize) * gridSize,
+    Math.round((localPoint.y - size.height / 2) / gridSize) * gridSize,
+  );
+  graph.addCell(element);
+  updateSimpleNodeLayout(element);
+  updateContainerHeaderLayout(element);
+  tryEmbed(element);
 }
 
 function buildIconSection(cat, icons, displayLabel) {
@@ -610,8 +745,13 @@ function buildComponentItem(template) {
 
   // stencilSvg takes priority — allows custom logos even when iconName is set for the dropped element
   const safeIconName = (template.iconName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  // Flow tiles (template.accent set) paint the icon as a WHITE glyph on the element's category chip — the
+  // canvas card does the same, and the real Flow Builder palette shows colour chips too. Without the chip a
+  // standard-sprite glyph (white-filled) would render invisible on the light stencil.
   const iconHtml = template.stencilSvg
     ? `<svg class="df-stencil__item-icon df-stencil__item-icon--svg" viewBox="0 0 20 20">${template.stencilSvg}</svg>`
+    : template.accent && safeIconName
+    ? `<span class="df-stencil__item-icon df-stencil__item-icon--chip${template.round ? ' df-stencil__item-icon--round' : ''}${safeIconName === 'df-flow-start' ? ' df-stencil__item-icon--tri' : ''}" style="background:${/^#[0-9a-fA-F]{3,8}$/.test(template.accent) ? template.accent : '#032D60'}"><svg viewBox="0 0 52 52"><use href="#${safeIconName}"></use></svg></span>`
     : safeIconName
     ? `<svg class="df-stencil__item-icon"><use href="#${safeIconName}"></use></svg>`
     : `<div class="df-stencil__item-icon df-stencil__item-icon--placeholder"></div>`;
@@ -760,6 +900,20 @@ function setupDropZone() {
       try { info = JSON.parse(officialData); } catch { return; }
       const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
       insertOfficialTemplateAt(info.id, localPoint);
+      return;
+    }
+
+    // Official shape-pack drop (cold start: the tile hadn't hydrated yet) — resolve the pack ref
+    // (cached after the first fetch), then insert like a built-in component.
+    const packData = evt.dataTransfer.getData('application/sf-diagrams-pack-shape');
+    if (packData) {
+      let ref;
+      try { ref = JSON.parse(packData); } catch { return; }
+      const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
+      loadOfficialShapePack(ref.packId).then((comps) => {
+        const comp = comps?.find((c) => c.objectName === ref.objectName);
+        if (comp) insertComponentAt(comp, localPoint);
+      });
       return;
     }
 

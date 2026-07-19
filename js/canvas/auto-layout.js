@@ -3,9 +3,12 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.19.5.8';
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.20.0.63';
+// Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
+import { computeFlowLayout } from './flow-layout.js?v=1.20.0.63';
+import { flowConnectorType } from './link-styles.js?v=1.20.0.63';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -339,6 +342,66 @@ export function applyDataMappingLayout() {
   }
 
   fitContent();
+}
+
+// ── Flow Auto Layout (S3) ────────────────────────────────────────────
+// A type-owned vertical tree layout for the 'flow' diagram type. Reads df.Flow* elements + their standard.Link
+// edges (fault edges — derived from the red style — route off to the side), computes positions with the PURE
+// tree layout (computeFlowLayout — NOT the
+// barycentre core), and writes element positions ONLY (never link vertices). Anchored at the current top-left so
+// the layout doesn't teleport; the toolbar wraps this in recordPositionsBatch (one undo entry) + snapLinksToPorts
+// (facing-port attach) + a re-fit. Links re-route through sfManhattan on the next render.
+export function applyFlowLayout() {
+  const { graph } = cctx;
+  const elements = graph.getElements().filter((e) => String(e.get('type')).startsWith('df.Flow'));
+  if (elements.length < 2) return;
+  const ids = new Set(elements.map((e) => e.id));
+  // Pass each node's CURRENT centre-x so the layout keeps sibling branches in the left-to-right order the user
+  // arranged them (rather than re-ordering by link-creation order).
+  const nodes = elements.map((e) => ({ id: e.id, w: e.size().width, h: e.size().height, cx: e.position().x + e.size().width / 2 }));
+  const edges = [];
+  const flowLinks = [];
+  for (const l of graph.getLinks()) {
+    const s = l.get('source')?.id, t = l.get('target')?.id;
+    if (ids.has(s) && ids.has(t)) {
+      // Classify by connector TYPE: Fault = lateral, Go To = a cross-reference that must NOT shape the tree (a
+      // forward Go To would otherwise drag its target down like a real edge), Standard = the spine.
+      const t3 = flowConnectorType(l);
+      edges.push({ source: s, target: t, kind: t3 === 'fault' ? 'fault' : t3 === 'goto' ? 'goto' : 'regular' });
+      flowLinks.push(l);
+    }
+  }
+  const pos = computeFlowLayout({ nodes, edges });
+  // Anchor at the current bounding-box top-left so the tree lands roughly where the flow already is.
+  let ox = Infinity, oy = Infinity;
+  for (const e of elements) { const p = e.position(); if (p.x < ox) ox = p.x; if (p.y < oy) oy = p.y; }
+  for (const e of elements) {
+    const p = pos.get(e.id);
+    if (p) e.position(Math.round(ox + p.x), Math.round(oy + p.y));
+  }
+  // Re-snap each flow link's ports + clear stale vertices + re-centre its label. A flow is a strict TOP-DOWN
+  // tree, so a link snaps by VERTICAL direction (parent above child → source-bottom / target-top), NOT by the
+  // generic "facing port" heuristic which, when a branch sits a full column to the side, wrongly picks the side
+  // ports (the reported decision-fork side-attach). A GO TO is a free cross-reference — leave its user-set ports.
+  for (const l of flowLinks) {
+    if ((l.get('vertices') || []).length) l.set('vertices', []);
+    const labels = l.labels?.() || [];
+    if (labels.length) l.labels(labels.map((lb) => ({ ...lb, position: { distance: 0.5, offset: 0 } })));
+    if (flowConnectorType(l) === 'goto') continue;
+    const s = graph.getCell(l.get('source')?.id), t = graph.getCell(l.get('target')?.id);
+    if (!s || !t) continue;
+    const down = (t.position().y + t.size().height / 2) >= (s.position().y + s.size().height / 2);
+    const sp = down ? 'port-bottom' : 'port-top', tp = down ? 'port-top' : 'port-bottom';
+    if (s.getPort?.(sp)) l.source({ id: s.id, port: sp });
+    if (t.getPort?.(tp)) l.target({ id: t.id, port: tp });
+  }
+  // Frame by the ELEMENTS bbox via fitToCells — NOT paper.getContentBBox, which returns a degenerate zero box
+  // when a link view (a loop back-edge) resolves late, slamming the zoom. Fit now AND on the next frame: the
+  // immediate fit can read a not-yet-laid-out paper rect (→ a clamped-min zoom), the rAF fit corrects it once
+  // the paper has its real size. The element positions are final, so the bbox is stable across both.
+  const fit = () => { const bb = graph.getCellsBBox(elements); if (bb && cctx.fitToCells) cctx.fitToCells(bb); };
+  fit();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fit);
 }
 
 // ── Sequence Auto Layout ─────────────────────────────────────────────

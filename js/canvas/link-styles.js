@@ -8,8 +8,8 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.19.5.8';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.19.5.8';
+import { cctx } from './context.js?v=1.20.0.63';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.20.0.63';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -331,6 +331,102 @@ export function applyGanttDepLinkStyle(link) {
 }
 
 
+// ── Flow connectors ──────────────────────────────────────────────────
+// A flow connector is a PLAIN standard.Link between two df.Flow* cells with THREE types (Salesforce's own terms):
+// Standard, Fault, and Go To ("Outgoing Go To" - a jump to an existing element). There is NO separate stored prop -
+// the type is a pure SHORTCUT over the normal connector options (line colour + line style + label colour), so
+// `flowConnectorType` DERIVES it from the STROKE COLOUR: red = Fault (dashed); blue = Go To (dotted); grey =
+// Standard (solid). (flow_ref_connectors). Both ends use the panel's "None" ending (a `M 0 0 L -12 0` line-
+// continuation stub, NOT an empty marker): the paper's `sfConnectionPoint` holds each endpoint ~16px off the
+// boundary (room a real arrow fills), and the stub bridges that gap so the line TOUCHES the card.
+const FLOW_LINK_COLOR = '#5C5C5C';   // Salesforce standard connector grey (export-measured rgb(92,92,92))
+const FLOW_FAULT_COLOR = '#EA001E';  // Salesforce fault red (export-measured) — the fault path is RED + DASHED
+const FLOW_GOTO_COLOR = '#0B5CAB';   // SLDS blue-40 (--slds-g-color-palette-blue-40, export-measured) — a Go To's LINE + label are both this blue
+const FLOW_FAULT_DASH = '8 4';       // panel LINK_LINE_STYLE_OPTS "Dashed" — so the Line Style control reads "Dashed"
+const FLOW_GOTO_DASH = '2 4';        // panel LINK_LINE_STYLE_OPTS "Dotted" — a Go To is blue + DOTTED
+
+/** Derive the connector TYPE from its STROKE COLOUR (no stored prop), symmetric with Fault: red = Fault; blue =
+ *  Go To (Salesforce "Outgoing Go To" — a jump to an existing element, drawn blue + dotted); else Standard. */
+export function flowConnectorType(link) {
+  const stroke = String(link.attr('line/stroke') || '').toUpperCase();
+  if (stroke === FLOW_FAULT_COLOR) return 'fault';
+  if (stroke === FLOW_GOTO_COLOR) return 'goto';
+  return 'standard';
+}
+/** Back-compat shim (migration + older callers): true iff the connector is a Fault. */
+export function isFlowFaultLink(link) { return flowConnectorType(link) === 'fault'; }
+
+/** The destination element's name, for seeding a Go To connector's label (Salesforce labels an Outgoing Go To with
+ *  the target element's name). Empty when the target has no name or isn't resolvable yet. */
+export function flowGoToDestName(link) {
+  const t = link.get('target');
+  const cell = t && t.id ? cctx.graph?.getCell(t.id) : null;
+  const n = cell?.get?.('name');
+  return typeof n === 'string' && n.trim() ? n.trim() : '';
+}
+
+// A flow connector label is a white PILL with a thin rounded border (Flow Builder look) — the PERSISTENT form of
+// the pill that selection-viz draws on hover (a rect with `rx` = half its height). Neutral border; the text tracks
+// the connector colour (grey / fault red). `rx/ry` clamp to a pill on the short sides at the runtime rect height.
+const FLOW_LABEL_BORDER = 'var(--border-color, #C9C9C9)';
+export function flowLabelAttrs(text, color, position) {
+  return {
+    markup: [{ tagName: 'rect', selector: 'body' }, { tagName: 'text', selector: 'text' }],
+    attrs: {
+      text: { text, fill: color, fontSize: 13, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+      body: { ref: 'text', refWidth: 20, refHeight: 12, refX: -10, refY: -6, fill: 'var(--bg-canvas, #FFFFFF)', stroke: FLOW_LABEL_BORDER, 'stroke-width': 1, rx: 12, ry: 12 },
+    },
+    position: position || { distance: 0.5, offset: 0 },
+  };
+}
+
+// A Go To connector's label is NOT the bordered pill — Flow Builder renders an "Outgoing Go To" as BLUE ITALIC text
+// carrying the DESTINATION element's name + a "→" arrow (measured: `.text-*-goto { color: blue-40; font-style:
+// italic }`). No border; just a canvas-bg mask so the dotted line breaks behind the text. `name` is the raw
+// destination name (the arrow is appended here; a trailing arrow in `name` is stripped so it never doubles).
+export function flowGoToLabelAttrs(name, position) {
+  const base = String(name || '').replace(/\s*→\s*$/, '').trim() || 'Go To';
+  return {
+    markup: [{ tagName: 'rect', selector: 'body' }, { tagName: 'text', selector: 'text' }],
+    attrs: {
+      text: { text: `${base} →`, fill: FLOW_GOTO_COLOR, fontStyle: 'italic', fontSize: 13, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+      body: { ref: 'text', refWidth: 12, refHeight: 6, refX: -6, refY: -3, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
+    },
+    position: position || { distance: 0.5, offset: 0 },
+  };
+}
+
+/** Apply a flow connector preset — a shortcut over the standard connector props (line colour + line style + label
+ *  colour) plus the "None" stub ends. Standard = grey solid; Fault = red dashed; Go To = grey dotted (a jump to an
+ *  existing element). Accepts { type: 'standard'|'fault'|'goto' } (preferred) or the legacy { fault } boolean.
+ *  Idempotent. */
+export function applyFlowLinkStyle(link, opts = {}) {
+  const type = opts.type || (opts.fault ? 'fault' : 'standard');
+  const color = type === 'fault' ? FLOW_FAULT_COLOR : type === 'goto' ? FLOW_GOTO_COLOR : FLOW_LINK_COLOR;
+  const dash = type === 'fault' ? FLOW_FAULT_DASH : type === 'goto' ? FLOW_GOTO_DASH : null;
+  const width = link.attr('line/strokeWidth') ?? 2;
+  const noneEnd = { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke: color, 'stroke-width': width, 'stroke-dasharray': 'none' };
+  link.attr('line/stroke', color);
+  link.attr('line/targetMarker', noneEnd);
+  link.attr('line/sourceMarker', noneEnd);
+  // Dash via the `lineStyle` overlay prop — NEVER line/strokeDasharray (it bleeds into the open-stroke marker on
+  // Safari; the overlay manager owns the dash render, gotcha 1.1). Fault = Dashed ('8 4'), Go To = Dotted ('2 4'),
+  // Standard = Solid (null). Uses the panel's OWN dash values so the Line Style control shows the matching option.
+  link.prop('lineStyle', dash);
+  // Labels. Go To is special: its label IS the destination reference, rendered as blue italic "Name →" (no pill) —
+  // preserve an authored label's text (arrow-stripped), else derive the target's name. Standard/Fault restyle to the
+  // bordered PILL in the type colour; Fault seeds "Fault" when unlabelled; Standard seeds nothing.
+  const existing = link.labels() || [];
+  if (type === 'goto') {
+    const authored = existing.find((l) => l?.attrs?.text?.text)?.attrs?.text?.text;
+    link.labels([flowGoToLabelAttrs(authored || flowGoToDestName(link), existing[0]?.position)]);
+  } else {
+    const styled = existing.map((l) => (l?.attrs?.text?.text ? flowLabelAttrs(l.attrs.text.text, color, l.position) : l));
+    if (type === 'fault' && !styled.some((l) => l?.attrs?.text?.text)) styled.push(flowLabelAttrs('Fault', color));
+    if (styled.length) link.labels(styled);
+  }
+}
+
 // ── Object-relationship (ER) link visibility — the Data Mapping "Object Relationships"
 // Display toggle. A pure VIEW filter (never persisted, never mutates the model): hides
 // every ER relationship link (linkKind !== 'mapping') so architects can audit field-level
@@ -356,4 +452,9 @@ export function registerLinkStyles(cctx) {
   // migration.js re-tokenizes mapping links + rebuilds the frequency overlay on load.
   cctx.syncMappingTypeBadge = syncMappingTypeBadge;
   cctx.syncFrequencyLabel = syncFrequencyLabel;
+  // migration.js re-applies the flow connector style on load (so the "None" stub ends touch the cards) + upgrades
+  // any legacy connectorKind. flowConnectorType derives Standard/Fault/Go To from the persisted (stroke, dash).
+  cctx.applyFlowLinkStyle = applyFlowLinkStyle;
+  cctx.isFlowFaultLink = isFlowFaultLink;
+  cctx.flowConnectorType = flowConnectorType;
 }

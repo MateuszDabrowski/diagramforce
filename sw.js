@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.19.5.8';
+const CACHE_VERSION = '1.20.0.63';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -52,6 +52,7 @@ const PRECACHE_URLS = [
   `./js/canvas/link-classifier.js?v=${CACHE_VERSION}`,
   `./js/canvas/auto-layout.js?v=${CACHE_VERSION}`,
   `./js/canvas/layout-core.js?v=${CACHE_VERSION}`,
+  `./js/canvas/flow-layout.js?v=${CACHE_VERSION}`,
   `./js/canvas/migration.js?v=${CACHE_VERSION}`,
   `./js/canvas/crossing-bumps.js?v=${CACHE_VERSION}`,
   `./js/canvas/review-overlay.js?v=${CACHE_VERSION}`,
@@ -83,6 +84,7 @@ const PRECACHE_URLS = [
   `./js/markdown.js?v=${CACHE_VERSION}`,
   `./js/menu.js?v=${CACHE_VERSION}`,
   `./js/mermaid-import.js?v=${CACHE_VERSION}`,
+  `./js/official-shapes.js?v=${CACHE_VERSION}`,
   `./js/official-templates.js?v=${CACHE_VERSION}`,
   `./js/persistence.js?v=${CACHE_VERSION}`,
   `./js/persistence/context.js?v=${CACHE_VERSION}`,
@@ -90,6 +92,7 @@ const PRECACHE_URLS = [
   `./js/persistence/diagram-schema.js?v=${CACHE_VERSION}`,
   `./js/persistence/drive-sync-logic.js?v=${CACHE_VERSION}`,
   `./js/persistence/image-export.js?v=${CACHE_VERSION}`,
+  `./js/persistence/migration-bridge.js?v=${CACHE_VERSION}`,
   `./js/persistence/remote-store.js?v=${CACHE_VERSION}`,
   `./js/persistence/share-orchestration.js?v=${CACHE_VERSION}`,
   `./js/persistence/versioning.js?v=${CACHE_VERSION}`,
@@ -103,6 +106,7 @@ const PRECACHE_URLS = [
   `./js/properties/link-props.js?v=${CACHE_VERSION}`,
   `./js/properties/render-core.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-core.js?v=${CACHE_VERSION}`,
+  `./js/properties/renderers-flow.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-gantt.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-org.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-process.js?v=${CACHE_VERSION}`,
@@ -121,6 +125,7 @@ const PRECACHE_URLS = [
   `./js/shapes/org.js?v=${CACHE_VERSION}`,
   `./js/shapes/gantt.js?v=${CACHE_VERSION}`,
   `./js/shapes/data-object.js?v=${CACHE_VERSION}`,
+  `./js/shapes/flow.js?v=${CACHE_VERSION}`,
   `./js/shapes/bpmn-flow.js?v=${CACHE_VERSION}`,
   `./js/shapes/core.js?v=${CACHE_VERSION}`,
   `./js/share-codec.js?v=${CACHE_VERSION}`,
@@ -168,6 +173,14 @@ const PRECACHE_URLS = [
   './templates/data360-contact-mapping.json',
   './templates/mce-email-data-views.json',
   './templates/mce-mobile-data-views.json',
+  './templates/mcn-consent-data-model.json',
+  './templates/mcn-email-data-mapping.json',
+  './templates/mcn-push-data-mapping.json',
+  './templates/mcn-sms-data-mapping.json',
+  // Official shape-pack catalogs (P2) — like templates/*.json: no `?v=`, the versioned cache name
+  // busts them on every bump. Add a line here per new shapes/*.json.
+  './shapes/mce-data-views.json',
+  './shapes/mcn-data-model-objects.json',
 ];
 
 self.addEventListener('install', (event) => {

@@ -34,21 +34,33 @@ export const ALLOWED_CELL_TYPES = new Set([
   // Sequence
   'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation',
   'sf.SequenceFragment',
+  // Flow (Salesforce Flow elements; net-new df.* — distinct from the legacy sf.Flow* flowchart family above)
+  'df.FlowStart', 'df.FlowEnd', 'df.FlowScreen', 'df.FlowAction', 'df.FlowSubflow',
+  'df.FlowSendToFlow', 'df.FlowSendEmail', 'df.FlowSendSms', 'df.FlowSendWhatsApp',
+  'df.FlowSendToData360', 'df.FlowSendMobileApp', 'df.FlowSendMobileInApp', 'df.FlowForwardToBot',
+  'df.FlowRunAgent', 'df.FlowCreateCampaignMember', 'df.FlowCreateTask', 'df.FlowExit',
+  'df.FlowAssignment', 'df.FlowDecision', 'df.FlowLoop', 'df.FlowTransform', 'df.FlowPathExperiment',
+  'df.FlowCollectionSort', 'df.FlowCollectionFilter',
+  'df.FlowWait', 'df.FlowWaitUntilDate', 'df.FlowWaitUntilEvent',
+  'df.FlowEinsteinDecision', 'df.FlowDetermineCrmRecord',
+  'df.FlowGetRecords', 'df.FlowCreateRecords', 'df.FlowUpdateRecords', 'df.FlowDeleteRecords',
+  'df.FlowRollback',
   // Generic (df.* net-new shapes; sf.* legacy kept for save back-compat)
   'df.Pill', 'df.Legend', 'df.Table',
   // JointJS link
   'standard.Link',
 ]);
 
-const VALID_DIAGRAM_TYPES = new Set(['architecture', 'process', 'datamodel', 'datamapping', 'org', 'gantt', 'sequence']);
+const VALID_DIAGRAM_TYPES = new Set(['architecture', 'process', 'datamodel', 'datamapping', 'org', 'gantt', 'sequence', 'flow']);
 // Aliases the loader normalises (kept lenient).
-const DIAGRAM_TYPE_ALIASES = { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping' };
+const DIAGRAM_TYPE_ALIASES = { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping', salesforceflow: 'flow', flowbuilder: 'flow', sfflow: 'flow' };
 
 /** The diagram type(s) a TYPE-SPECIFIC shape belongs to. Cross-type generics (Note/TextLabel/Line/Image/Pill/Legend/
  *  Table/Link/Container/Zone/SimpleNode/Annotation/Task) return null - they're valid anywhere, so no warning. */
 export function shapeHomeTypes(cellType) {
   if (typeof cellType !== 'string') return null;
   if (cellType.startsWith('sf.Bpmn') || cellType.startsWith('sf.Flow')) return ['process'];
+  if (cellType.startsWith('df.Flow')) return ['flow'];   // net-new Salesforce Flow elements (distinct namespace from sf.Flow*)
   if (cellType === 'sf.DataObject') return ['datamodel', 'datamapping'];
   if (cellType === 'sf.OrgPerson') return ['org'];
   if (cellType.startsWith('sf.Gantt')) return ['gantt'];

@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.19.5.8';
-import { buildModal } from './feedback.js?v=1.19.5.8';
+import { compareSemver } from './util.js?v=1.20.0.63';
+import { buildModal } from './feedback.js?v=1.20.0.63';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,23 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.20.0 — the catch-up entry: 1.19.2-1.19.5 were PATCH releases, so this overlay never fired for
+  // them and users got no in-app notice of their user-facing changes. This entry deliberately covers
+  // the best of the whole 1.19.x train PLUS 1.20.0. (The diagramforce.com domain may still join at cut.)
+  {
+    version: '1.20.0',
+    title: "What's new in Diagramforce",
+    intro: 'The headline is a whole new diagram type: <strong>Flow</strong>, for documenting Salesforce Flows. It is also a big catch-up - the recent 1.19.x updates shipped quietly, so this note covers the best of those too.',
+    highlights: [
+      { icon: 'flow', text: '<strong>New: Flow Diagrams.</strong> Document a Salesforce Flow with its real elements - Screen, Decision, Assignment, Loop, Get / Create / Update / Delete Records, Subflow and more. Connectors carry their role - a decision outcome, the default path, a fault path (shown in red), or a loop - and one-click <strong>Auto Layout</strong> straightens the whole flow into a clean vertical tree. Great for screen, record-triggered, and marketing / campaign flows.' },
+      { icon: 'rows', text: '<strong>Readable field names.</strong> Data Object rows now show the field Label first (the API name fills in when there is no label). Need API names? Flip on <strong>API Names</strong> in the View menu to show them alongside - only where they differ.' },
+      { icon: 'open_folder', text: '<strong>Seven official templates.</strong> Marketing Cloud Engagement Email and Mobile Data Views, Marketing Cloud Next Consent Data Model plus Email, Push and SMS Data Mappings, and Data 360 Contact Mapping. Open one from the New Diagram window, or drag it from the stencil straight into your current canvas - template tiles show the full name, a description, and an eye that previews the diagram.' },
+      { icon: 'apps', text: '<strong>Ready-made objects.</strong> Official shape packs in the stencil: all MCE Data Views (verified field schemas) and the new MCN Data Model Objects - searchable, and one drag away in Data Model and Data Mapping diagrams.' },
+      { icon: 'edit', text: '<strong>Save as Template from right-click.</strong> Select several shapes and the context menu offers Save as Template, right where Save Shape lives for a single shape. My Templates render one per row with a preview too.' },
+      { icon: 'check', text: '<strong>Connector power-ups.</strong> Highlight State (Added / Changed / Removed / Deferred) now works on connectors, and selecting several connectors bulk-edits colours, line styles, widths, fonts and both arrowheads at once - fields that differ show "Mixed" instead of guessing.' },
+      { icon: 'layers', text: '<strong>Grouping and layout that behave.</strong> Group and Ungroup on right-click, stickier drag-capture into containers, shapes no longer fall out of their container on drag, copy-paste keeps groups together (a copied container brings everything inside it), and Auto Layout lines things up more cleanly with connectors attaching on the facing side.' },
+    ],
+  },
   {
     version: '1.19.0',
     title: "What's new in Diagramforce",
@@ -63,6 +80,17 @@ export const WHATS_NEW = [
   },
 ];
 
+// Domain move (2026): on the NEW host only, prepend a "we've moved - bring your diagrams over" item to the current
+// release entry so it rides the What's-New overlay. The button's click handler is injected via setMigrationHandler
+// (from app.js) and wired in showWhatsNewModal - inline onclick is CSP-blocked. Absent on the old host and in tests
+// (the hostname never matches), so WHATS_NEW is unmutated there and the whats-new unit tests are unaffected.
+if (typeof location !== 'undefined' && location.hostname === 'diagramforce.com' && WHATS_NEW[0]) {
+  WHATS_NEW[0].highlights.unshift({
+    icon: 'share_link',
+    text: '<strong>Welcome to diagramforce.com - our new home.</strong> If you saved diagrams in your browser on the old address, bring them across in one click (allow pop-ups if your browser asks). Everything on Google Drive is already here. <button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate" style="margin-top:10px">Bring my diagrams over</button>',
+  });
+}
+
 // ── Pure decision helpers (unit-tested in tests/whats-new.test.js) ───────────
 
 /** The [major, minor] of a version string, e.g. "1.17.0" -> [1, 17]. */
@@ -96,6 +124,11 @@ export function entriesSince(lastSeen, current, log = WHATS_NEW) {
 
 let _appVersion = null;
 export function init(appVersion) { _appVersion = appVersion; }
+
+// Domain-move (2026): the "Bring my diagrams over" button in the current release entry (new host only) calls this
+// handler, injected from app.js - so whats-new.js needs no import of the migration bridge. No-op until set.
+let _migrationHandler = null;
+export function setMigrationHandler(fn) { _migrationHandler = fn; }
 
 /**
  * Decide (synchronously) whether to show the What's-New overlay this session and,
@@ -158,7 +191,7 @@ function showWhatsNewModal(entries) {
   // Title carries the release version after "Diagramforce" (e.g. "What's new in Diagramforce v1.18.0") - but only when
   // a SINGLE entry shows; with multiple, the per-version subtitles carry the versions instead.
   const titleText = head.title ? `${head.title}${(!multi && head.version) ? ` v${head.version}` : ''}` : "What's new";
-  const { footer, close } = buildModal({
+  const { body, footer, close } = buildModal({
     title: titleText,
     className: 'df-whatsnew-modal',
     width: '480px',
@@ -169,4 +202,7 @@ function showWhatsNewModal(entries) {
     footerHtml: '<button class="df-modal__btn df-modal__btn--primary" data-action="ok" style="margin-left:auto">Got it</button>',
   });
   footer.querySelector('[data-action="ok"]').addEventListener('click', () => close());
+  // Domain-move: the "Bring my diagrams over" button only exists in the injected entry on the new host; the optional
+  // chaining makes this a no-op for every other release/entry (and everywhere the button isn't present).
+  body.querySelector('[data-action="df-migrate"]')?.addEventListener('click', () => { if (_migrationHandler) _migrationHandler(); });
 }

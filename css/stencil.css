@@ -236,6 +236,33 @@
   stroke-linejoin: round;
 }
 
+/* Flow element tile: white SLDS glyph on the element's category chip (matches the canvas card + Flow Builder). */
+.df-stencil__item-icon--chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  padding: 3px;
+  overflow: hidden;
+}
+.df-stencil__item-icon--chip svg {
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+  color: #fff;
+}
+/* Start / End terminal nodes use a circular chip, not the element squircle. Extra padding shrinks the white
+   glyph to a small square/triangle inside the circle, leaving the circle full size. */
+.df-stencil__item-icon--round {
+  border-radius: 50%;
+  padding: 4px;
+}
+/* The play triangle's bbox-centre sits left of its optical centre; nudge it right (the canvas card does the
+   same via iconDx, but the stencil <use> can't). Applies only to the Start triangle, not the End square. */
+.df-stencil__item-icon--tri svg {
+  transform: translateX(1px);
+}
+
 /* Cross-type Shape sections read slightly dimmer than the current type's own sections. */
 .df-stencil__category--cross .df-stencil__category-label { opacity: 0.82; }
 
@@ -343,7 +370,9 @@
   min-width: 0;
 }
 
-.df-stencil__item--row .df-template-thumb {
+/* Scoped to the row MAIN line only — the eye-preview box below the row also contains a
+   .df-template-thumb wrap, which must NOT inherit the tiny row-thumb footprint. */
+.df-stencil__row-main > .df-template-thumb {
   width: 44px;
   height: 36px;
   flex: none;
@@ -409,6 +438,20 @@
   overflow: hidden;
 }
 
+/* The LARGE fitted preview: fill the box width, keep the render's aspect ratio (the SVG carries
+   its width/height attributes; the global __svg 100%x100% rule would otherwise letterbox it into
+   the base 42px-tall thumb footprint). */
+.df-template-preview-box .df-template-thumb {
+  width: 100%;
+  height: auto;
+}
+
+.df-template-preview-box .df-template-thumb__svg {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+}
+
 .df-template-preview-box[hidden] {
   display: none;
 }
@@ -418,6 +461,14 @@
   padding: 8px;
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* Full description above the preview thumbnail — the row sub-line ellipsizes, this doesn't. */
+.df-template-preview-desc {
+  padding: 8px 10px 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary, var(--text-muted));
 }
 
 .df-template-delete {

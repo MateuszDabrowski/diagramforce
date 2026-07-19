@@ -7,10 +7,10 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.19.5.8';
-import { pctx } from './context.js?v=1.19.5.8';
-import { compactGraphForSave } from './json-pipeline.js?v=1.19.5.8';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.19.5.8';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.20.0.63';
+import { pctx } from './context.js?v=1.20.0.63';
+import { compactGraphForSave } from './json-pipeline.js?v=1.20.0.63';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.20.0.63';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';

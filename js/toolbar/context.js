@@ -2,8 +2,8 @@
 // toolbar.init(); the manager-modal slices read tctx.modules.X INSIDE function bodies (never at module top, which
 // runs before init). btn/setupDropdown/renderDriveSignIn moved here FIRST because init + several slices share them
 // — keeping them on the facade would force a slice→facade import cycle.
-import { escHtml } from '../util.js?v=1.19.5.8';
-import { showError } from '../feedback.js?v=1.19.5.8';
+import { escHtml } from '../util.js?v=1.20.0.63';
+import { showError } from '../feedback.js?v=1.20.0.63';
 
 export const tctx = { modules: null };
 

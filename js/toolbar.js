@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.19.5.8';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.19.5.8';
-import { resizeDataObjectToFit } from './components.js?v=1.19.5.8';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.19.5.8';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.19.5.8';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.19.5.8';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.19.5.8';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.19.5.8';
-import { renderTemplateThumbnail } from './templates.js?v=1.19.5.8';
-import { showWhatsNewNow } from './whats-new.js?v=1.19.5.8';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.19.5.8';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.19.5.8';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.19.5.8';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.19.5.8';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.19.5.8';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.19.5.8';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.19.5.8';
+import { diagramHasImage } from './image-component.js?v=1.20.0.63';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.20.0.63';
+import { resizeDataObjectToFit } from './components.js?v=1.20.0.63';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.20.0.63';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.20.0.63';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.20.0.63';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.20.0.63';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.20.0.63';
+import { renderTemplateThumbnail } from './templates.js?v=1.20.0.63';
+import { showWhatsNewNow } from './whats-new.js?v=1.20.0.63';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.20.0.63';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.20.0.63';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.20.0.63';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.20.0.63';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.20.0.63';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.20.0.63';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.20.0.63';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.19.5.8';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.19.5.8';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.19.5.8';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.20.0.63';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.20.0.63';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.20.0.63';
 
 let modules = {};
 export function init(_modules) {
@@ -368,6 +368,12 @@ export function init(_modules) {
         // Dedicated lane layout: top-aligned lanes + 36px-spaced objects inside Layer
         // zones. Mapping links are field-port anchored, so DON'T snap them to side ports.
         modules.canvas.applyDataMappingLayout();
+      } else if (type === 'flow') {
+        // Flow (S3): a type-owned vertical tree layout (positions only; NOT the barycentre core; it frames itself
+        // via fitToCells). applyFlowLayout ALSO snaps each link's ports (bottom→top by vertical direction, Go To
+        // excepted) + re-centres labels — it must NOT go through the generic snapLinksToPorts, whose "facing port"
+        // heuristic side-attaches a decision's off-column branches (the reported fork side-attach).
+        modules.canvas.applyFlowLayout();
       } else if (type === 'process') {
         // Process uses the barycentre layered layout (now WITH full-spine straightening, auto-layout.js), in
         // the chosen direction. Full-spine keeps a flow's SPINE straight - including the branch that CONTINUES
