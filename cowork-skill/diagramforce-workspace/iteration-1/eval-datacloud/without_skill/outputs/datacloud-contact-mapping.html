@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Cloud Field Mapping — Contact to Individual</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --ink: #16325c;
+    --muted: #5c6b82;
+    --line: #c9d4e6;
+    --source: #1589ee;
+    --source-bg: #e8f3ff;
+    --dlo: #7f56d9;
+    --dlo-bg: #f1ebff;
+    --dmo: #2e844a;
+    --dmo-bg: #e7f5ec;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 20px 56px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .diagram { width: 100%; height: auto; background: var(--card);
+             border: 1px solid var(--line); border-radius: 14px;
+             padding: 8px; box-shadow: 0 2px 10px rgba(22,50,92,.06); }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; margin: 20px 0 26px; font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px;
+          background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  caption { text-align: left; font-weight: 600; margin-bottom: 10px; font-size: 15px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  th { background: #eef2f9; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td code { background: #eef2f9; padding: 2px 7px; border-radius: 5px; font-size: 13px; }
+  .arrow { color: var(--muted); }
+  footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Data Cloud Field Mapping — Salesforce Contact &rarr; Individual</h1>
+  <p class="sub">Source object ingested into a Data Lake Object (DLO), then mapped to the Individual Data Model Object (DMO).</p>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--source)"></i> Source object (Salesforce CRM)</span>
+    <span><i class="dot" style="background:var(--dlo)"></i> Data Lake Object (DLO)</span>
+    <span><i class="dot" style="background:var(--dmo)"></i> Data Model Object (DMO)</span>
+  </div>
+
+  <svg class="diagram" viewBox="0 0 1000 470" role="img"
+       aria-label="Three-stage Data Cloud mapping from Salesforce Contact through the Contact data lake object to the Individual data model object">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#8a99b5"/>
+      </marker>
+    </defs>
+
+    <!-- Stage band labels -->
+    <text x="150" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#1589ee">SOURCE OBJECT</text>
+    <text x="500" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#7f56d9">DATA LAKE OBJECT</text>
+    <text x="850" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#2e844a">DATA MODEL OBJECT</text>
+
+    <!-- Stage relationship pills -->
+    <rect x="290" y="52" width="120" height="22" rx="11" fill="#eef2f9"/>
+    <text x="350" y="67" text-anchor="middle" font-size="11" fill="#5c6b82">ingest &rarr;</text>
+    <rect x="640" y="52" width="120" height="22" rx="11" fill="#eef2f9"/>
+    <text x="700" y="67" text-anchor="middle" font-size="11" fill="#5c6b82">map &rarr;</text>
+
+    <!-- ===== SOURCE box: Salesforce Contact ===== -->
+    <rect x="30" y="90" width="240" height="340" rx="12" fill="#e8f3ff" stroke="#1589ee" stroke-width="1.5"/>
+    <rect x="30" y="90" width="240" height="44" rx="12" fill="#1589ee"/>
+    <rect x="30" y="118" width="240" height="16" fill="#1589ee"/>
+    <text x="150" y="112" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Contact</text>
+    <text x="150" y="127" text-anchor="middle" font-size="11" fill="#d6eaff">Salesforce object</text>
+
+    <!-- ===== DLO box: Contact ===== -->
+    <rect x="380" y="90" width="240" height="340" rx="12" fill="#f1ebff" stroke="#7f56d9" stroke-width="1.5"/>
+    <rect x="380" y="90" width="240" height="44" rx="12" fill="#7f56d9"/>
+    <rect x="380" y="118" width="240" height="16" fill="#7f56d9"/>
+    <text x="500" y="112" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Contact</text>
+    <text x="500" y="127" text-anchor="middle" font-size="11" fill="#e6dcff">Data Lake Object</text>
+
+    <!-- ===== DMO box: Individual ===== -->
+    <rect x="730" y="90" width="240" height="340" rx="12" fill="#e7f5ec" stroke="#2e844a" stroke-width="1.5"/>
+    <rect x="730" y="90" width="240" height="44" rx="12" fill="#2e844a"/>
+    <rect x="730" y="118" width="240" height="16" fill="#2e844a"/>
+    <text x="850" y="112" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Individual</text>
+    <text x="850" y="127" text-anchor="middle" font-size="11" fill="#d5efdd">Data Model Object</text>
+
+    <!-- Field rows: 5 rows starting y=150, step 56, row height 44 -->
+    <!-- Row centers: 172, 228, 284, 340, 396 -->
+
+    <!-- SOURCE fields -->
+    <g font-size="13" fill="#16325c">
+      <rect x="44" y="150" width="212" height="44" rx="7" fill="#ffffff" stroke="#bcdcff"/>
+      <text x="58" y="177">Id</text>
+      <rect x="44" y="206" width="212" height="44" rx="7" fill="#ffffff" stroke="#bcdcff"/>
+      <text x="58" y="233">FirstName</text>
+      <rect x="44" y="262" width="212" height="44" rx="7" fill="#ffffff" stroke="#bcdcff"/>
+      <text x="58" y="289">LastName</text>
+      <rect x="44" y="318" width="212" height="44" rx="7" fill="#ffffff" stroke="#bcdcff"/>
+      <text x="58" y="345">Email</text>
+      <rect x="44" y="374" width="212" height="44" rx="7" fill="#ffffff" stroke="#bcdcff"/>
+      <text x="58" y="401">Phone</text>
+    </g>
+
+    <!-- DLO fields (mirror the source after ingestion) -->
+    <g font-size="13" fill="#16325c">
+      <rect x="394" y="150" width="212" height="44" rx="7" fill="#ffffff" stroke="#d3c4f5"/>
+      <text x="408" y="177">Id</text>
+      <rect x="394" y="206" width="212" height="44" rx="7" fill="#ffffff" stroke="#d3c4f5"/>
+      <text x="408" y="233">FirstName</text>
+      <rect x="394" y="262" width="212" height="44" rx="7" fill="#ffffff" stroke="#d3c4f5"/>
+      <text x="408" y="289">LastName</text>
+      <rect x="394" y="318" width="212" height="44" rx="7" fill="#ffffff" stroke="#d3c4f5"/>
+      <text x="408" y="345">Email</text>
+      <rect x="394" y="374" width="212" height="44" rx="7" fill="#ffffff" stroke="#d3c4f5"/>
+      <text x="408" y="401">Phone</text>
+    </g>
+
+    <!-- DMO fields -->
+    <g font-size="13" fill="#16325c">
+      <rect x="744" y="150" width="212" height="44" rx="7" fill="#ffffff" stroke="#bfe4c9"/>
+      <text x="758" y="177">Id</text>
+      <rect x="744" y="206" width="212" height="44" rx="7" fill="#ffffff" stroke="#bfe4c9"/>
+      <text x="758" y="233">First Name</text>
+      <rect x="744" y="262" width="212" height="44" rx="7" fill="#ffffff" stroke="#bfe4c9"/>
+      <text x="758" y="289">Last Name</text>
+      <rect x="744" y="318" width="212" height="44" rx="7" fill="#ffffff" stroke="#bfe4c9"/>
+      <text x="758" y="345">Email Address</text>
+      <rect x="744" y="374" width="212" height="44" rx="7" fill="#ffffff" stroke="#bfe4c9"/>
+      <text x="758" y="401">Phone Number</text>
+    </g>
+
+    <!-- Connectors SOURCE -> DLO (ingest) -->
+    <g stroke="#8a99b5" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <line x1="256" y1="172" x2="394" y2="172"/>
+      <line x1="256" y1="228" x2="394" y2="228"/>
+      <line x1="256" y1="284" x2="394" y2="284"/>
+      <line x1="256" y1="340" x2="394" y2="340"/>
+      <line x1="256" y1="396" x2="394" y2="396"/>
+    </g>
+
+    <!-- Connectors DLO -> DMO (map) -->
+    <g stroke="#8a99b5" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <line x1="606" y1="172" x2="744" y2="172"/>
+      <line x1="606" y1="228" x2="744" y2="228"/>
+      <line x1="606" y1="284" x2="744" y2="284"/>
+      <line x1="606" y1="340" x2="744" y2="340"/>
+      <line x1="606" y1="396" x2="744" y2="396"/>
+    </g>
+  </svg>
+
+  <table>
+    <caption>Field mapping — Contact (DLO) &rarr; Individual (DMO)</caption>
+    <thead>
+      <tr><th>Source field (Salesforce Contact)</th><th></th><th>Target field (Individual DMO)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>Id</code></td><td class="arrow">&rarr;</td><td><code>Id</code></td></tr>
+      <tr><td><code>FirstName</code></td><td class="arrow">&rarr;</td><td><code>First Name</code></td></tr>
+      <tr><td><code>LastName</code></td><td class="arrow">&rarr;</td><td><code>Last Name</code></td></tr>
+      <tr><td><code>Email</code></td><td class="arrow">&rarr;</td><td><code>Email Address</code></td></tr>
+      <tr><td><code>Phone</code></td><td class="arrow">&rarr;</td><td><code>Phone Number</code></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Flow: Salesforce <strong>Contact</strong> object &rarr; ingested into the <strong>Contact</strong> Data Lake Object &rarr; mapped to the <strong>Individual</strong> Data Model Object. Field names normalize during the DLO&rarr;DMO mapping step.
+  </footer>
+</div>
+</body>
+</html>

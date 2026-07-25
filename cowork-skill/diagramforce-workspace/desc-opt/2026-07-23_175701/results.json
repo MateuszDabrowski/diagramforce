@@ -1,0 +1,1390 @@
+{
+  "exit_reason": "max_iterations (5)",
+  "original_description": "Author an importable Diagramforce diagram from a description, from work already in the conversation, or from an existing diagram the user hands you (a pasted screenshot or whiteboard photo, or a draw.io / Mermaid / other source) - then give them a file to open in the Diagramforce web app (https://diagramforce.mateuszdabrowski.pl). Diagramforce is a no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data Cloud / Data 360 field mappings, process flows, Salesforce Flows, org charts, Gantt project timelines, and UML sequence diagrams. Use this skill whenever the user wants to VISUALIZE, DIAGRAM, MAP, MODEL, DRAW, or REDRAW/REGENERATE any of those as an editable Diagramforce diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context - even when they don't name Diagramforce, and INCLUDING recreating an existing diagram they show you. Triggers include \"diagram how these systems connect\", \"turn this into an ERD\", \"map these Contact fields into the Individual DMO\", \"visualize this approval process\", \"document this Flow\", \"org chart for my team\", \"gantt for the rollout\", \"sequence diagram for this API call\", \"redraw this architecture screenshot as an editable diagram\", \"convert this Mermaid flow into Diagramforce\". It authors diagram JSON validated against the bundled spec, so the diagram imports intact - no account, no backend. Do NOT use it for data charts/graphs or dashboards (bar/line/pie/KPI = data visualization, a different tool), for writing code, or for explaining or reviewing a design without producing a diagram.",
+  "best_description": "Author an importable Diagramforce diagram from a description, from work already in the conversation, or from an existing diagram the user hands you (a pasted screenshot or whiteboard photo, or a draw.io / Mermaid / other source) - then give them a file to open in the Diagramforce web app (https://diagramforce.mateuszdabrowski.pl). Diagramforce is a no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data Cloud / Data 360 field mappings, process flows, Salesforce Flows, org charts, Gantt project timelines, and UML sequence diagrams. Use this skill whenever the user wants to VISUALIZE, DIAGRAM, MAP, MODEL, DRAW, or REDRAW/REGENERATE any of those as an editable Diagramforce diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context - even when they don't name Diagramforce, and INCLUDING recreating an existing diagram they show you. Triggers include \"diagram how these systems connect\", \"turn this into an ERD\", \"map these Contact fields into the Individual DMO\", \"visualize this approval process\", \"document this Flow\", \"org chart for my team\", \"gantt for the rollout\", \"sequence diagram for this API call\", \"redraw this architecture screenshot as an editable diagram\", \"convert this Mermaid flow into Diagramforce\". It authors diagram JSON validated against the bundled spec, so the diagram imports intact - no account, no backend. Do NOT use it for data charts/graphs or dashboards (bar/line/pie/KPI = data visualization, a different tool), for writing code, or for explaining or reviewing a design without producing a diagram.",
+  "best_score": "4/8",
+  "best_train_score": "6/12",
+  "best_test_score": "4/8",
+  "final_description": "Use this skill any time the user asks for a diagram, chart of boxes-and-arrows, or visual map they can edit later - including a plain \"make me an org chart\" or \"draw our architecture.\" Covers: org / team / reporting charts, Gantt timelines and rollout schedules, process and approval flowcharts, system and integration architecture (Salesforce, Marketing Cloud, Snowflake, warehouses), ERD data models, Data Cloud / Data 360 field mappings (source field to DMO/DLO), Salesforce Flows, and UML sequence diagrams. Also use when they hand you an existing diagram to recreate - a screenshot, whiteboard photo, slide, draw.io, or Mermaid - and want an editable version. You deliver it as a Diagramforce file (a free browser editor), so trigger even when they never name Diagramforce; the intent is a real editable diagram, not ASCII or prose. Do NOT use for data charts (bar/line/pie/KPI/dashboards - that's data visualization), for writing code, or for reviewing a design without drawing it.",
+  "iterations_run": 5,
+  "holdout": 0.4,
+  "train_size": 12,
+  "test_size": 8,
+  "history": [
+    {
+      "iteration": 1,
+      "description": "Author an importable Diagramforce diagram from a description, from work already in the conversation, or from an existing diagram the user hands you (a pasted screenshot or whiteboard photo, or a draw.io / Mermaid / other source) - then give them a file to open in the Diagramforce web app (https://diagramforce.mateuszdabrowski.pl). Diagramforce is a no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data Cloud / Data 360 field mappings, process flows, Salesforce Flows, org charts, Gantt project timelines, and UML sequence diagrams. Use this skill whenever the user wants to VISUALIZE, DIAGRAM, MAP, MODEL, DRAW, or REDRAW/REGENERATE any of those as an editable Diagramforce diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context - even when they don't name Diagramforce, and INCLUDING recreating an existing diagram they show you. Triggers include \"diagram how these systems connect\", \"turn this into an ERD\", \"map these Contact fields into the Individual DMO\", \"visualize this approval process\", \"document this Flow\", \"org chart for my team\", \"gantt for the rollout\", \"sequence diagram for this API call\", \"redraw this architecture screenshot as an editable diagram\", \"convert this Mermaid flow into Diagramforce\". It authors diagram JSON validated against the bundled spec, so the diagram imports intact - no account, no backend. Do NOT use it for data charts/graphs or dashboards (bar/line/pie/KPI = data visualization, a different tool), for writing code, or for explaining or reviewing a design without producing a diagram.",
+      "train_passed": 6,
+      "train_failed": 6,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 4,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "build a live dashboard showing Data Cloud ingestion throughput and error rates",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "create a bar chart of our monthly qualified-lead volume for the last 12 months",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 6,
+      "total": 12,
+      "results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "description": "Build the user an editable diagram in Diagramforce (https://diagramforce.mateuszdabrowski.pl), a no-backend browser diagram editor. Use whenever the user wants to draw, sketch, map, model, visualize, document, or recreate something they can open and keep editing: system/integration architecture (e.g. Salesforce to Marketing Cloud, Snowflake, warehouses), data models / ERDs, Data Cloud / Data 360 field mappings (source field to DMO/DLO), business process flows and approval flowcharts, Salesforce Flows, org / team / reporting charts, Gantt project timelines and rollout schedules, or UML sequence / API-call diagrams. Also use when they hand you an existing diagram to redraw - a screenshot, whiteboard photo, slide, draw.io, or Mermaid. Trigger even when they never name Diagramforce; the intent is a real, editable diagram. Do NOT use for data charts (bar/line/pie/KPI/dashboards - that's data visualization), for writing code, or for reviewing a design without producing a diagram.",
+      "train_passed": 6,
+      "train_failed": 6,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 4,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "create a bar chart of our monthly qualified-lead volume for the last 12 months",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "build a live dashboard showing Data Cloud ingestion throughput and error rates",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 6,
+      "total": 12,
+      "results": [
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 3,
+      "description": "Use whenever the user wants you to make a diagram they can open and keep editing - draw, sketch, map, model, visualize, document, chart, or recreate a picture of something. This covers org / reporting / team charts, Gantt timelines and rollout schedules, process and approval flowcharts, system and integration architecture (e.g. Salesforce to Marketing Cloud, Snowflake), data models / ERDs, Data Cloud / Data 360 field mappings (source field to DMO/DLO), Salesforce Flows, and UML sequence / API diagrams. Also use when they hand you a diagram to redraw - a screenshot, whiteboard photo, slide, draw.io, or Mermaid. You build it in Diagramforce (https://diagramforce.mateuszdabrowski.pl), a free no-backend browser editor, so reach for this even when they never name Diagramforce: the goal is a real editable diagram file, not an ASCII sketch or a prose description. Do NOT use for data charts (bar/line/pie/KPI/dashboards - that's data visualization), for writing code, or for critiquing a design without drawing it.",
+      "train_passed": 6,
+      "train_failed": 6,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 4,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "create a bar chart of our monthly qualified-lead volume for the last 12 months",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "build a live dashboard showing Data Cloud ingestion throughput and error rates",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 6,
+      "total": 12,
+      "results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 4,
+      "description": "Use whenever the user wants a real, editable diagram file - something to draw, sketch, map, model, visualize, document, or recreate as boxes-and-arrows (not a data chart). Fits org / reporting / team charts, Gantt timelines and roadmaps, process and approval flowcharts, system / integration architecture (Salesforce, Marketing Cloud, Snowflake, warehouses), ER data models, Data Cloud / Data 360 field mappings (source -> DMO/DLO), Salesforce Flows, and UML sequence diagrams. Also use when they hand you a diagram to redraw - screenshot, whiteboard photo, slide, draw.io, or Mermaid. You build it in Diagramforce, a free browser editor, so reach for this even when they never name it and even for a plain \"make me an org chart\" - deliver an editable file, not an ASCII sketch or prose. Do NOT use for data charts (bar/line/pie/KPI/dashboards = data visualization), for writing code, or for reviewing a design without drawing it.",
+      "train_passed": 6,
+      "train_failed": 6,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 4,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "build a live dashboard showing Data Cloud ingestion throughput and error rates",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "create a bar chart of our monthly qualified-lead volume for the last 12 months",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 6,
+      "total": 12,
+      "results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 5,
+      "description": "Use this skill any time the user asks for a diagram, chart of boxes-and-arrows, or visual map they can edit later - including a plain \"make me an org chart\" or \"draw our architecture.\" Covers: org / team / reporting charts, Gantt timelines and rollout schedules, process and approval flowcharts, system and integration architecture (Salesforce, Marketing Cloud, Snowflake, warehouses), ERD data models, Data Cloud / Data 360 field mappings (source field to DMO/DLO), Salesforce Flows, and UML sequence diagrams. Also use when they hand you an existing diagram to recreate - a screenshot, whiteboard photo, slide, draw.io, or Mermaid - and want an editable version. You deliver it as a Diagramforce file (a free browser editor), so trigger even when they never name Diagramforce; the intent is a real editable diagram, not ASCII or prose. Do NOT use for data charts (bar/line/pie/KPI/dashboards - that's data visualization), for writing code, or for reviewing a design without drawing it.",
+      "train_passed": 6,
+      "train_failed": 6,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "test_passed": 4,
+      "test_failed": 4,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "create a bar chart of our monthly qualified-lead volume for the last 12 months",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "build a live dashboard showing Data Cloud ingestion throughput and error rates",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ],
+      "passed": 6,
+      "failed": 6,
+      "total": 12,
+      "results": [
+        {
+          "query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases",
+          "should_trigger": true,
+          "trigger_rate": 0.3333333333333333,
+          "triggers": 1,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "add a mermaid sequence diagram to our markdown docs for the login flow",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "review my Salesforce data model and flag any normalization or naming problems",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field",
+          "should_trigger": true,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": false
+        },
+        {
+          "query": "is Diagramforce free, and do I need to sign in to use it?",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        },
+        {
+          "query": "set up a validation rule requiring Email on the Contact object before save",
+          "should_trigger": false,
+          "trigger_rate": 0.0,
+          "triggers": 0,
+          "runs": 3,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

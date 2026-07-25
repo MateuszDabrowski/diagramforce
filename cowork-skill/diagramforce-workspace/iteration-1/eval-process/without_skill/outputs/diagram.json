@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "appVersion": "1.20.1",
+  "timestamp": 1784332800000,
+  "title": "Expense Approval Process",
+  "diagramType": "process",
+  "graph": {
+    "cells": [
+      { "id": "header", "type": "sf.TextLabel", "position": { "x": 40, "y": 30 }, "size": { "width": 700, "height": 36 }, "z": 2000, "attrs": { "label": { "x": "calc(0.5 * w)", "y": "calc(0.5 * h)", "textAnchor": "middle", "textVerticalAnchor": "middle", "fontSize": 18, "fontFamily": "system-ui, -apple-system, sans-serif", "fill": "var(--text-primary)", "fontWeight": "600", "text": "Expense Approval Process - from submission to employee notification" } } },
+
+      { "id": "start", "type": "sf.BpmnEvent", "eventType": "start", "position": { "x": 40, "y": 294 }, "size": { "width": 52, "height": 52 }, "z": 2000, "attrs": { "label": { "text": "Expense report submitted" } } },
+
+      { "id": "t1", "type": "sf.BpmnTask", "taskType": "user", "position": { "x": 140, "y": 286 }, "size": { "width": 180, "height": 68 }, "z": 2000, "attrs": { "label": { "text": "1. Manager reviews report" } } },
+
+      { "id": "gw1", "type": "sf.BpmnGateway", "gatewayType": "exclusive", "position": { "x": 390, "y": 292 }, "size": { "width": 56, "height": 56 }, "z": 2000, "attrs": { "marker": { "text": "×" }, "label": { "text": "Under $500?" } } },
+
+      { "id": "t2", "type": "sf.BpmnTask", "taskType": "service", "position": { "x": 500, "y": 130 }, "size": { "width": 190, "height": 68 }, "z": 2000, "attrs": { "label": { "text": "2a. Auto-approve" } } },
+
+      { "id": "t3", "type": "sf.BpmnTask", "taskType": "user", "position": { "x": 540, "y": 286 }, "size": { "width": 170, "height": 68 }, "z": 2000, "attrs": { "label": { "text": "2b. Finance reviews" } } },
+
+      { "id": "gw2", "type": "sf.BpmnGateway", "gatewayType": "exclusive", "position": { "x": 770, "y": 292 }, "size": { "width": 56, "height": 56 }, "z": 2000, "attrs": { "marker": { "text": "×" }, "label": { "text": "Finance approves?" } } },
+
+      { "id": "gw3", "type": "sf.BpmnGateway", "gatewayType": "exclusive", "position": { "x": 920, "y": 292 }, "size": { "width": 56, "height": 56 }, "z": 2000, "attrs": { "marker": { "text": "×" }, "label": { "text": "Outcome" } } },
+
+      { "id": "notify", "type": "sf.BpmnTask", "taskType": "send", "position": { "x": 1030, "y": 286 }, "size": { "width": 200, "height": 68 }, "z": 2000, "attrs": { "label": { "text": "3. Notify employee of outcome" } } },
+
+      { "id": "end", "type": "sf.BpmnEvent", "eventType": "end", "position": { "x": 1290, "y": 294 }, "size": { "width": 52, "height": 52 }, "z": 2000, "attrs": { "body": { "fill": "#FFFFFF", "stroke": "#222222", "strokeWidth": 4 }, "icon": { "fill": "#222222" }, "label": { "text": "Complete" } } },
+
+      { "id": "f1", "type": "standard.Link", "z": 3001, "source": { "id": "start", "port": "port-right" }, "target": { "id": "t1", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f2", "type": "standard.Link", "z": 3002, "source": { "id": "t1", "port": "port-right" }, "target": { "id": "gw1", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f3", "type": "standard.Link", "z": 3003, "source": { "id": "gw1", "port": "port-top" }, "target": { "id": "t2", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "Yes (< $500)" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f4", "type": "standard.Link", "z": 3004, "source": { "id": "gw1", "port": "port-right" }, "target": { "id": "t3", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "No (>= $500)" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f5", "type": "standard.Link", "z": 3005, "source": { "id": "t2", "port": "port-right" }, "target": { "id": "gw3", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Auto-approved" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f6", "type": "standard.Link", "z": 3006, "source": { "id": "t3", "port": "port-right" }, "target": { "id": "gw2", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f7", "type": "standard.Link", "z": 3007, "source": { "id": "gw2", "port": "port-right" }, "target": { "id": "gw3", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "Approved" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f8", "type": "standard.Link", "z": 3008, "source": { "id": "gw2", "port": "port-bottom" }, "target": { "id": "gw3", "port": "port-bottom" }, "labels": [ { "attrs": { "text": { "text": "Rejected" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f9", "type": "standard.Link", "z": 3009, "source": { "id": "gw3", "port": "port-right" }, "target": { "id": "notify", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f10", "type": "standard.Link", "z": 3010, "source": { "id": "notify", "port": "port-right" }, "target": { "id": "end", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } }
+    ]
+  }
+}

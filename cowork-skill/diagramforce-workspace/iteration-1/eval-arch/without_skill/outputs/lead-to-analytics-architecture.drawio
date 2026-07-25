@@ -1,0 +1,109 @@
+<mxfile host="app.diagrams.net" agent="architecture-diagram" version="24.0.0">
+  <diagram name="Lead-to-Analytics Architecture" id="lead-to-analytics">
+    <mxGraphModel dx="1100" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===================== TITLE ===================== -->
+        <mxCell id="title" value="Lead Capture to Analytics - Reference Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="24" width="620" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== GROUPING BOUNDARIES (drawn first = behind) ===================== -->
+        <mxCell id="bg_salesforce" value="Salesforce Platform" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=6 4;fillColor=#f0f6ff;strokeColor=#6c8ebf;verticalAlign=top;align=left;spacingLeft=12;spacingTop=8;fontStyle=1;fontSize=12;fontColor=#4a6fa5;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="250" y="80" width="770" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="bg_analytics" value="Data &amp; Analytics Platform" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=6 4;fillColor=#faf5ff;strokeColor=#9673a6;verticalAlign=top;align=left;spacingLeft=12;spacingTop=8;fontStyle=1;fontSize=12;fontColor=#7d5b96;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="520" y="330" width="560" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== NODES ===================== -->
+        <!-- Marketing Website / Contact Form -->
+        <mxCell id="n_website" value="Marketing Website&#10;&#10;Contact Form" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;verticalAlign=middle;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="170" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Salesforce Sales Cloud -->
+        <mxCell id="n_salescloud" value="Sales Cloud&#10;(CRM)&#10;&#10;Lead capture &amp; qualification" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;verticalAlign=middle;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="120" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Marketing Cloud Connect (connector) -->
+        <mxCell id="n_mcc" value="Marketing Cloud&#10;Connect&#10;(connector)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=0;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="130" width="150" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Marketing Cloud Engagement -->
+        <mxCell id="n_mce" value="Marketing Cloud&#10;Engagement (MCE)&#10;&#10;Journeys &amp; email" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;verticalAlign=middle;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="790" y="120" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Snowflake Data Warehouse -->
+        <mxCell id="n_snowflake" value="Snowflake&#10;Data Warehouse&#10;&#10;Central analytics store" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=14;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="360" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- BI Dashboards -->
+        <mxCell id="n_bi" value="BI Dashboards&#10;&#10;Reporting &amp; analytics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;verticalAlign=middle;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="850" y="375" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== EDGES ===================== -->
+        <!-- Website -> Sales Cloud (real-time) -->
+        <mxCell id="e_web_sc" value="Lead capture&#10;Web-to-Lead / REST API&#10;(real-time)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeWidth=2;strokeColor=#4a6fa5;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n_website" target="n_salescloud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Sales Cloud -> Marketing Cloud Connect (near real-time) -->
+        <mxCell id="e_sc_mcc" value="Qualified leads&#10;synced" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeWidth=2;strokeColor=#4a6fa5;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n_salescloud" target="n_mcc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Marketing Cloud Connect -> MCE -->
+        <mxCell id="e_mcc_mce" value="Contacts &amp;&#10;data extensions" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeWidth=2;strokeColor=#d79b00;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n_mcc" target="n_mce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Sales Cloud -> Snowflake (nightly batch) -->
+        <mxCell id="e_sc_snow" value="Nightly replication&#10;(ETL batch)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;dashPattern=8 4;strokeWidth=2;strokeColor=#9673a6;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n_salescloud" target="n_snowflake">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- MCE -> Snowflake (nightly batch) -->
+        <mxCell id="e_mce_snow" value="Nightly replication&#10;(ETL batch)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;dashPattern=8 4;strokeWidth=2;strokeColor=#9673a6;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n_mce" target="n_snowflake">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Snowflake -> BI Dashboards -->
+        <mxCell id="e_snow_bi" value="SQL / BI queries" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeWidth=2;strokeColor=#7d5b96;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n_snowflake" target="n_bi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== LEGEND ===================== -->
+        <mxCell id="legend_box" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontStyle=1;fontSize=11;fontColor=#666666;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_rt_line" style="html=1;endArrow=block;strokeWidth=2;strokeColor=#4a6fa5;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="55" y="400" as="sourcePoint" />
+            <mxPoint x="100" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="legend_rt_label" value="Real-time / event-driven sync" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="108" y="390" width="150" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_batch_line" style="html=1;endArrow=block;dashed=1;dashPattern=8 4;strokeWidth=2;strokeColor=#9673a6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="55" y="435" as="sourcePoint" />
+            <mxPoint x="100" y="435" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="legend_batch_label" value="Nightly batch replication (ETL)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="108" y="425" width="150" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

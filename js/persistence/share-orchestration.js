@@ -5,14 +5,14 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.20.0.63';
-import { diagramHasImage } from '../image-component.js?v=1.20.0.63';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.20.0.63';
-import { escHtml } from '../util.js?v=1.20.0.63';
-import { sharePillHtml } from '../storage-ui.js?v=1.20.0.63';
-import { pctx } from './context.js?v=1.20.0.63';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.20.0.63';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.20.0.63';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.20.1';
+import { diagramHasImage } from '../image-component.js?v=1.20.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.20.1';
+import { escHtml } from '../util.js?v=1.20.1';
+import { sharePillHtml } from '../storage-ui.js?v=1.20.1';
+import { pctx } from './context.js?v=1.20.1';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.20.1';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.20.1';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -178,7 +178,8 @@ export function hasPendingUrlLoad() {
       } catch { /* malformed → normal boot */ }
     }
     const hash = window.location.hash || '';
-    return /[#&]dfg=g\d+\./.test(hash) || /[#&]gd=[A-Za-z0-9_-]+/.test(hash) || hash.includes('diagram=');
+    return /[#&]dfg=g\d+\./.test(hash) || /[#&]gd=[A-Za-z0-9_-]+/.test(hash) || hash.includes('diagram=')
+      || /[#&]import=postmessage\b/.test(hash);   // external-import.js live-import mode — suppress New-Diagram modal while we wait (mirror its TRIGGER)
   } catch { return false; }
 }
 

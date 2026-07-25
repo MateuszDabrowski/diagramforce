@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.20.0.63';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.20.0.63';
-import { resizeDataObjectToFit } from './components.js?v=1.20.0.63';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.20.0.63';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.20.0.63';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.20.0.63';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.20.0.63';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.20.0.63';
-import { renderTemplateThumbnail } from './templates.js?v=1.20.0.63';
-import { showWhatsNewNow } from './whats-new.js?v=1.20.0.63';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.20.0.63';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.20.0.63';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.20.0.63';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.20.0.63';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.20.0.63';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.20.0.63';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.20.0.63';
+import { diagramHasImage } from './image-component.js?v=1.20.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.20.1';
+import { resizeDataObjectToFit } from './components.js?v=1.20.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.20.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.20.1';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.20.1';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.20.1';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.20.1';
+import { renderTemplateThumbnail } from './templates.js?v=1.20.1';
+import { showWhatsNewNow } from './whats-new.js?v=1.20.1';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.20.1';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.20.1';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.20.1';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.20.1';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.20.1';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.20.1';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.20.1';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.20.0.63';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.20.0.63';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.20.0.63';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.20.1';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.20.1';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.20.1';
 
 let modules = {};
 export function init(_modules) {

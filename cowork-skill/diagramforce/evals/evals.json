@@ -1,0 +1,26 @@
+{
+  "skill_name": "diagramforce",
+  "evals": [
+    {
+      "id": 1,
+      "name": "eval-arch",
+      "prompt": "We capture leads from our marketing website's contact form, push them into Salesforce Sales Cloud, sync the qualified ones to Marketing Cloud Engagement through Marketing Cloud Connect, and replicate everything nightly into a Snowflake data warehouse for BI dashboards. I'd like a clean architecture diagram of this that I can open and edit in a diagramming tool.",
+      "expected_output": "An `architecture` diagram: one node per system (Web Form, Salesforce Sales Cloud, Marketing Cloud Engagement, Marketing Cloud Connect, Snowflake) with labeled connectors for each hop; JSON passes scripts/validate-diagram.mjs with 0 errors; paste instructions provided.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "eval-datacloud",
+      "prompt": "I'm setting up a Data Cloud mapping for contacts. The source is the Salesforce Contact object with fields Id, FirstName, LastName, Email, and Phone. It ingests into a Contact data lake object, which then maps to the Individual DMO with fields Id, First Name, Last Name, Email Address, and Phone Number. Can you visualize this Data Cloud field mapping for me?",
+      "expected_output": "A `datamapping` diagram: source Contact + Contact DLO + Individual DMO as DataObjects with field-to-field mapping links; JSON passes the validator with 0 errors; paste instructions provided.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "eval-process",
+      "prompt": "Help me document our expense approval process as a diagram: an employee submits an expense report; their manager reviews it; if it's under $500 it's auto-approved, otherwise it goes to Finance; Finance either approves or rejects it; and finally the employee is notified of the outcome.",
+      "expected_output": "A `process` diagram (BPMN-style) with a start, task/decision nodes for submit -> manager review -> amount gateway -> finance approve/reject -> notify, and an end; JSON passes the validator with 0 errors; paste instructions provided.",
+      "files": []
+    }
+  ]
+}

@@ -6,9 +6,9 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.20.0.63';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.20.0.63';
-import { durationDays } from '../gantt-scale.js?v=1.20.0.63';
+import { keyImpliesRequired } from '../field-model.js?v=1.20.1';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.20.1';
+import { durationDays } from '../gantt-scale.js?v=1.20.1';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))

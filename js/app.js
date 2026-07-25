@@ -1,28 +1,30 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.20.0.63';
-import * as icons       from './icons.js?v=1.20.0.63';
-import { getAllStencilSvgs } from './components.js?v=1.20.0.63';
-import * as shapes      from './shapes.js?v=1.20.0.63';
-import * as canvas      from './canvas.js?v=1.20.0.63';
-import * as stencil     from './stencil.js?v=1.20.0.63';
-import * as selection   from './selection.js?v=1.20.0.63';
-import * as history     from './history.js?v=1.20.0.63';
-import * as clipboard   from './clipboard.js?v=1.20.0.63';
-import * as templates    from './templates.js?v=1.20.0.63';
-import * as keyboard    from './keyboard.js?v=1.20.0.63';
-import * as toolbar     from './toolbar.js?v=1.20.0.63';
-import * as properties  from './properties.js?v=1.20.0.63';
-import * as persistence from './persistence.js?v=1.20.0.63';
-import * as tabs        from './tabs.js?v=1.20.0.63';
-import * as mermaidImport from './mermaid-import.js?v=1.20.0.63';
-import * as tableView    from './table-view.js?v=1.20.0.63';
-import * as walkthrough  from './walkthrough.js?v=1.20.0.63';
-import * as whatsNew     from './whats-new.js?v=1.20.0.63';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.20.0.63';
-import * as a11y         from './a11y.js?v=1.20.0.63';
-import { seedDefaultPalette } from './brand-palette.js?v=1.20.0.63';
+import * as theme       from './theme.js?v=1.20.1';
+import * as icons       from './icons.js?v=1.20.1';
+import { getAllStencilSvgs } from './components.js?v=1.20.1';
+import * as shapes      from './shapes.js?v=1.20.1';
+import * as canvas      from './canvas.js?v=1.20.1';
+import * as stencil     from './stencil.js?v=1.20.1';
+import * as selection   from './selection.js?v=1.20.1';
+import * as history     from './history.js?v=1.20.1';
+import * as clipboard   from './clipboard.js?v=1.20.1';
+import * as templates    from './templates.js?v=1.20.1';
+import * as keyboard    from './keyboard.js?v=1.20.1';
+import * as toolbar     from './toolbar.js?v=1.20.1';
+import * as properties  from './properties.js?v=1.20.1';
+import * as persistence from './persistence.js?v=1.20.1';
+import * as tabs        from './tabs.js?v=1.20.1';
+import * as mermaidImport from './mermaid-import.js?v=1.20.1';
+import * as tableView    from './table-view.js?v=1.20.1';
+import * as walkthrough  from './walkthrough.js?v=1.20.1';
+import * as whatsNew     from './whats-new.js?v=1.20.1';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.20.1';
+import * as externalImport from './persistence/external-import.js?v=1.20.1';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.20.1';
+import { seedDefaultPalette } from './brand-palette.js?v=1.20.1';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.20.1';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -217,6 +219,20 @@ async function main() {
 
   // --- Phase 9: Check for shared diagram in URL hash ---
   persistence.loadFromURL();
+
+  // --- Phase 9a: External-site live import (postMessage). A 3rd-party web app can open us with
+  // `#import=postmessage` (new tab) and hand over a Diagramforce JSON with no backend and no URL
+  // size limit; it routes through loadJSONText — the same sanitize + open-as-tab path as file/paste
+  // import. See js/persistence/external-import.js + DIAGRAM_JSON_SPEC.md. ---
+  if (externalImport.isExternalImportBoot()) {
+    externalImport.startExternalImport({
+      onImportJSON: (json) => persistence.loadJSONText(json),
+      onTimeout: () => {   // nothing arrived (opened directly / opener never posted) — re-offer the
+        // normal flow, but don't stack over a modal or a tab the user opened meanwhile.
+        if (tabs.getAllTabs().length === 0 && !document.querySelector('.df-new-modal')) showNewDiagramModal();
+      },
+    });
+  }
 
   // --- Phase 9b: One-time "What's new" overlay on a new RELEASE (R23) ---
   // Replaces the per-load minor-version notice. Shows ONCE when a returning user

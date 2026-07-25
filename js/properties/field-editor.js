@@ -5,14 +5,14 @@
 // selection ref); never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
 // handler import renderFieldEditor / openFieldEditorModal back; table-view.js keeps importing SF_FIELD_TYPES
 // from properties.js (facade re-export).
-import * as history from '../history.js?v=1.20.0.63';
-import { resizeDataObjectToFit } from '../components.js?v=1.20.0.63';
-import { buildModal, confirmModal } from '../feedback.js?v=1.20.0.63';
-import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.20.0.63';
-import { triggerDownload } from '../persistence.js?v=1.20.0.63';
-import { newFid } from '../shapes.js?v=1.20.0.63';
-import { getActiveTabName } from '../tabs.js?v=1.20.0.63';
-import { sanitizeFilenamePart } from '../util.js?v=1.20.0.63';
+import * as history from '../history.js?v=1.20.1';
+import { resizeDataObjectToFit } from '../components.js?v=1.20.1';
+import { buildModal, confirmModal } from '../feedback.js?v=1.20.1';
+import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.20.1';
+import { triggerDownload } from '../persistence.js?v=1.20.1';
+import { newFid } from '../shapes.js?v=1.20.1';
+import { getActiveTabName } from '../tabs.js?v=1.20.1';
+import { sanitizeFilenamePart } from '../util.js?v=1.20.1';
 
 export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',

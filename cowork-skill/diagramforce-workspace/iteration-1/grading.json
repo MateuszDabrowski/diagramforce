@@ -1,0 +1,70 @@
+[
+  {
+    "eval": "eval-arch",
+    "cond": "with_skill",
+    "files": [
+      "diagram.json",
+      "notes.md"
+    ],
+    "diagramType": "architecture",
+    "cells": 15,
+    "typeMatch": true,
+    "validatorPass": true,
+    "validatorErrors": 0
+  },
+  {
+    "eval": "eval-arch",
+    "cond": "without_skill",
+    "files": [
+      "lead-to-analytics-architecture.drawio",
+      "lead-to-analytics-architecture.mmd"
+    ],
+    "diagramJson": false
+  },
+  {
+    "eval": "eval-datacloud",
+    "cond": "with_skill",
+    "files": [
+      "diagram.json",
+      "notes.md"
+    ],
+    "diagramType": "datamapping",
+    "cells": 18,
+    "typeMatch": true,
+    "validatorPass": true,
+    "validatorErrors": 0
+  },
+  {
+    "eval": "eval-datacloud",
+    "cond": "without_skill",
+    "files": [
+      "datacloud-contact-mapping.html"
+    ],
+    "diagramJson": false
+  },
+  {
+    "eval": "eval-process",
+    "cond": "with_skill",
+    "files": [
+      "diagram.json",
+      "notes.md"
+    ],
+    "diagramType": "process",
+    "cells": 20,
+    "typeMatch": true,
+    "validatorPass": true,
+    "validatorErrors": 0
+  },
+  {
+    "eval": "eval-process",
+    "cond": "without_skill",
+    "files": [
+      "diagram.json"
+    ],
+    "diagramType": "process",
+    "cells": 20,
+    "typeMatch": true,
+    "validatorPass": true,
+    "validatorErrors": 0
+  }
+]

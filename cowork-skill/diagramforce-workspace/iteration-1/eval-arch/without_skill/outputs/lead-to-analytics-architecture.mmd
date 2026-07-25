@@ -1,0 +1,36 @@
+%% Lead Capture to Analytics - Reference Architecture
+%% Editable in any Mermaid-aware tool (mermaid.live, draw.io, Notion, Obsidian, VS Code, etc.)
+%% Solid arrows = real-time / event-driven sync   |   Dotted arrows = nightly batch (ETL)
+
+flowchart LR
+    CF["Marketing Website<br/>Contact Form"]
+
+    subgraph SF["Salesforce Platform"]
+        direction LR
+        SC["Sales Cloud (CRM)<br/>Lead capture &amp; qualification"]
+        MCC{{"Marketing Cloud Connect<br/>(connector)"}}
+        MCE["Marketing Cloud<br/>Engagement (MCE)<br/>Journeys &amp; email"]
+    end
+
+    subgraph AN["Data &amp; Analytics Platform"]
+        direction LR
+        SNOW[("Snowflake<br/>Data Warehouse")]
+        BI["BI Dashboards<br/>Reporting &amp; analytics"]
+    end
+
+    CF -->|"Web-to-Lead / REST API (real-time)"| SC
+    SC -->|"Qualified leads synced"| MCC
+    MCC -->|"Contacts &amp; data extensions"| MCE
+    SC -. "Nightly replication (ETL)" .-> SNOW
+    MCE -. "Nightly replication (ETL)" .-> SNOW
+    SNOW -->|"SQL / BI queries"| BI
+
+    classDef web fill:#dae8fc,stroke:#6c8ebf,color:#173,font-weight:bold;
+    classDef crm fill:#d5e8d4,stroke:#82b366,color:#173,font-weight:bold;
+    classDef mc fill:#ffe6cc,stroke:#d79b00,color:#333,font-weight:bold;
+    classDef data fill:#e1d5e7,stroke:#9673a6,color:#333,font-weight:bold;
+
+    class CF web;
+    class SC crm;
+    class MCC,MCE mc;
+    class SNOW,BI data;

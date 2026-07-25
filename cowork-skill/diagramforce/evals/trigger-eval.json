@@ -1,0 +1,22 @@
+[
+  {"query": "i've got a salesforce org talking to marketing cloud and a snowflake warehouse, can you draw me an architecture diagram of how they connect that i can actually edit later", "should_trigger": true},
+  {"query": "map out the field-level lineage from our Salesforce Contact object into the Data Cloud Individual DMO, source field to DMO field", "should_trigger": true},
+  {"query": "document our existing lead-routing Salesforce Flow as a visual - every element, decision, and outcome", "should_trigger": true},
+  {"query": "turn this into a data model / ERD: Account 1:M Contact, Contact M:M Campaign through CampaignMember, with the key fields", "should_trigger": true},
+  {"query": "can you visualize our expense approval process as a flowchart? submit -> manager review -> under $500 auto-approve else finance -> notify", "should_trigger": true},
+  {"query": "make an org chart for my RevOps team: 1 VP, 3 managers, and 9 reps reporting up to them", "should_trigger": true},
+  {"query": "build a gantt timeline for our Q3 Data Cloud rollout - discovery, build, test, go-live phases", "should_trigger": true},
+  {"query": "I need a sequence diagram of the OAuth token exchange between our web app, Google sign-in, and the Drive API", "should_trigger": true},
+  {"query": "we push web-form leads into Sales Cloud, sync qualified ones to Marketing Cloud via MC Connect, and replicate nightly to a warehouse - diagram it so I can open and tweak it", "should_trigger": true},
+  {"query": "here's a screenshot of our current integration architecture from a slide - recreate it as an editable Diagramforce diagram I can keep updating", "should_trigger": true},
+  {"query": "write the Apex trigger that copies Contact field changes into our Data Cloud DLO on update", "should_trigger": false},
+  {"query": "add a mermaid sequence diagram to our markdown docs for the login flow", "should_trigger": false},
+  {"query": "explain the difference between a Data Lake Object and a Data Model Object in Salesforce Data Cloud", "should_trigger": false},
+  {"query": "our nightly Salesforce-to-Snowflake sync keeps timing out, help me figure out why", "should_trigger": false},
+  {"query": "create a bar chart of our monthly qualified-lead volume for the last 12 months", "should_trigger": false},
+  {"query": "build a live dashboard showing Data Cloud ingestion throughput and error rates", "should_trigger": false},
+  {"query": "is Diagramforce free, and do I need to sign in to use it?", "should_trigger": false},
+  {"query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck", "should_trigger": false},
+  {"query": "review my Salesforce data model and flag any normalization or naming problems", "should_trigger": false},
+  {"query": "set up a validation rule requiring Email on the Contact object before save", "should_trigger": false}
+]

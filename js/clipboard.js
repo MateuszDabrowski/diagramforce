@@ -1,7 +1,7 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.20.0.63';
-import { cloneCellsForInsert } from './clone-cells.js?v=1.20.0.63';
+import * as history from './history.js?v=1.20.1';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.20.1';
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the

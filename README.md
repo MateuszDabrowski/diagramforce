@@ -128,12 +128,25 @@ assets/
   icons/                SLDS SVG sprite files (self-hosted)
   vendor/               JointJS, pako, gifenc (vendored same-origin)
 dev/tests/                  Zero-build characterization tests (Node's native test runner)
-DIAGRAM_JSON_SPEC.md    LLM-facing JSON specification
+DIAGRAM_JSON_SPEC.md    LLM-facing JSON specification (stays at repo root)
+how-to-use/             Using Diagramforce elsewhere: LLM spec, Cowork skill, web-integration
 ```
 
 ## LLM diagram generation
 
 [`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) documents the complete JSON structure for all diagram types - including a dedicated guide for generating Salesforce Data Cloud (Data 360) mappings with valid field types, categories, and DLO/DMO layers. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, Data Cloud field mapping, process flow, etc. The output can be imported directly via *Load & Import → Paste* (or *Load & Import → File* for a `.json` or `.dgf`).
+
+## Open a diagram from your own app
+
+Another web app can add an **"Open in Diagramforce"** button that opens a generated diagram in a new
+Diagramforce tab - with **no backend on either side**. Because Diagramforce is a static site (nothing
+to POST to), the diagram is handed over via the browser's `window.postMessage` channel: your app opens
+`…/#import=postmessage`, Diagramforce replies when ready, and your app sends the diagram JSON. It has
+**no URL size limit**, so even large data-mapping diagrams work.
+
+Full copy-paste snippet and step-by-step guide: [`how-to-use/web-integration.md`](how-to-use/web-integration.md).
+Produce the diagram JSON with [`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) (build it yourself or have an LLM
+generate it). See [`how-to-use/`](how-to-use/README.md) for every way to use Diagramforce from outside the app.
 
 ## Browser support
 

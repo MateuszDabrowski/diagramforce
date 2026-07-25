@@ -11,26 +11,26 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.20.0.63';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.20.0.63';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.20.0.63';
-import { SF_FIELD_TYPES } from './properties.js?v=1.20.0.63';
-import { keyImpliesRequired } from './field-model.js?v=1.20.0.63';
-import { buildModal, showToast, showError } from './feedback.js?v=1.20.0.63';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.20.0.63';
-import { triggerDownload } from './persistence.js?v=1.20.0.63';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.20.0.63';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.20.0.63';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.20.1';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.20.1';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.20.1';
+import { SF_FIELD_TYPES } from './properties.js?v=1.20.1';
+import { keyImpliesRequired } from './field-model.js?v=1.20.1';
+import { buildModal, showToast, showError } from './feedback.js?v=1.20.1';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.20.1';
+import { triggerDownload } from './persistence.js?v=1.20.1';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.20.1';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.20.1';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
-} from './table-view/builders.js?v=1.20.0.63';
+} from './table-view/builders.js?v=1.20.1';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.20.0.63';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.20.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view

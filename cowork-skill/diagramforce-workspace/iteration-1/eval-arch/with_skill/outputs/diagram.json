@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "appVersion": "1.20.1",
+  "timestamp": 1753228800000,
+  "title": "Lead Capture to Analytics - System Landscape",
+  "diagramType": "architecture",
+  "graph": {
+    "cells": [
+      {
+        "id": "title",
+        "type": "sf.TextLabel",
+        "position": { "x": 40, "y": 28 },
+        "size": { "width": 820, "height": 28 },
+        "z": 2000,
+        "attrs": {
+          "label": { "text": "**Lead Capture to Analytics** - website form to Salesforce, Marketing Cloud, and Snowflake BI" }
+        }
+      },
+
+      {
+        "id": "contactform",
+        "type": "sf.SimpleNode",
+        "position": { "x": 40, "y": 176 },
+        "size": { "width": 240, "height": 68 },
+        "z": 2000,
+        "attrs": {
+          "body": { "stroke": "#F6B355", "strokeWidth": 2 },
+          "icon": { "href": "data:image/svg+xml,<svg data-icon-id=\"page\"/>" },
+          "label": { "text": "Contact Form" },
+          "subtitle": { "text": "Marketing website", "visibility": "visible" }
+        }
+      },
+
+      {
+        "id": "container-sf",
+        "type": "sf.Container",
+        "position": { "x": 340, "y": 120 },
+        "size": { "width": 280, "height": 250 },
+        "z": 1000,
+        "attrs": {
+          "accent": { "fill": "#1D73C9" },
+          "accentFill": { "fill": "#1D73C9" },
+          "headerIcon": { "href": "data:image/svg+xml,<svg data-icon-id=\"custom-platform\"/>" },
+          "headerLabel": { "text": "Salesforce Platform" }
+        },
+        "embeds": ["salescloud", "mce"]
+      },
+      {
+        "id": "salescloud",
+        "type": "sf.SimpleNode",
+        "parent": "container-sf",
+        "position": { "x": 360, "y": 176 },
+        "size": { "width": 240, "height": 64 },
+        "z": 2000,
+        "attrs": {
+          "icon": { "href": "data:image/svg+xml,<svg data-icon-id=\"custom-sales\"/>" },
+          "label": { "text": "Sales Cloud" },
+          "subtitle": { "text": "Leads & CRM", "visibility": "visible" }
+        }
+      },
+      {
+        "id": "mce",
+        "type": "sf.SimpleNode",
+        "parent": "container-sf",
+        "position": { "x": 360, "y": 284 },
+        "size": { "width": 240, "height": 64 },
+        "z": 2000,
+        "attrs": {
+          "icon": { "href": "data:image/svg+xml,<svg data-icon-id=\"custom-marketing\"/>" },
+          "label": { "text": "Marketing Cloud Engagement" },
+          "subtitle": { "text": "Journeys & email", "visibility": "visible" }
+        }
+      },
+
+      {
+        "id": "snowflake",
+        "type": "sf.SimpleNode",
+        "position": { "x": 780, "y": 230 },
+        "size": { "width": 210, "height": 68 },
+        "z": 2000,
+        "attrs": {
+          "body": { "stroke": "#F6B355", "strokeWidth": 2 },
+          "icon": { "href": "data:image/svg+xml,<svg data-icon-id=\"custom-snowflake\"/>" },
+          "label": { "text": "Snowflake" },
+          "subtitle": { "text": "Cloud data warehouse", "visibility": "visible" }
+        }
+      },
+
+      {
+        "id": "bi",
+        "type": "sf.SimpleNode",
+        "position": { "x": 1080, "y": 230 },
+        "size": { "width": 210, "height": 68 },
+        "z": 2000,
+        "attrs": {
+          "icon": { "href": "data:image/svg+xml,<svg data-icon-id=\"custom-tableau\"/>" },
+          "label": { "text": "BI Dashboards" },
+          "subtitle": { "text": "Analytics & reporting", "visibility": "visible" }
+        }
+      },
+
+      {
+        "id": "l1",
+        "type": "standard.Link",
+        "z": 3000,
+        "source": { "id": "contactform", "port": "port-right" },
+        "target": { "id": "salescloud", "port": "port-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "connectionFrequency": "Real-time",
+        "labels": [ { "position": 0.5, "attrs": { "text": { "text": "Push new leads" } } } ]
+      },
+      {
+        "id": "l2",
+        "type": "standard.Link",
+        "z": 3000,
+        "source": { "id": "salescloud", "port": "port-bottom" },
+        "target": { "id": "mce", "port": "port-top" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "connectionFrequency": "Scheduled",
+        "labels": [ { "position": 0.5, "attrs": { "text": { "text": "Qualified leads (MC Connect)" } } } ]
+      },
+      {
+        "id": "l3",
+        "type": "standard.Link",
+        "z": 3000,
+        "source": { "id": "salescloud", "port": "port-right" },
+        "target": { "id": "snowflake", "port": "port-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "connectionFrequency": "Nightly",
+        "labels": [ { "position": 0.5, "attrs": { "text": { "text": "All CRM records" } } } ]
+      },
+      {
+        "id": "l4",
+        "type": "standard.Link",
+        "z": 3000,
+        "source": { "id": "mce", "port": "port-right" },
+        "target": { "id": "snowflake", "port": "port-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "connectionFrequency": "Nightly",
+        "labels": [ { "position": 0.5, "attrs": { "text": { "text": "Engagement data" } } } ]
+      },
+      {
+        "id": "l5",
+        "type": "standard.Link",
+        "z": 3000,
+        "source": { "id": "snowflake", "port": "port-right" },
+        "target": { "id": "bi", "port": "port-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "labels": [ { "position": 0.5, "attrs": { "text": { "text": "Query & visualize" } } } ]
+      },
+
+      {
+        "id": "note",
+        "type": "sf.Note",
+        "position": { "x": 780, "y": 356 },
+        "size": { "width": 260, "height": 120 },
+        "z": 2000,
+        "attrs": {
+          "label": { "text": "Nightly replication" },
+          "subtitle": { "text": "A nightly batch copies all Sales Cloud and Marketing Cloud data into Snowflake, powering the BI dashboards." }
+        }
+      },
+
+      {
+        "id": "leg1",
+        "type": "df.Legend",
+        "position": { "x": 40, "y": 430 },
+        "z": 2000,
+        "attrs": { "swatch": { "fill": "#1D73C9" }, "label": { "text": "Salesforce platform" } }
+      },
+      {
+        "id": "leg2",
+        "type": "df.Legend",
+        "position": { "x": 40, "y": 466 },
+        "z": 2000,
+        "attrs": { "swatch": { "fill": "#F6B355" }, "label": { "text": "External system (website form, warehouse)" } }
+      }
+    ]
+  }
+}

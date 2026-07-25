@@ -2,17 +2,17 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.20.0.63';
-import * as history from '../history.js?v=1.20.0.63';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.20.0.63';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.20.0.63';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.20.0.63';
-import { confirmModal, showToast } from '../feedback.js?v=1.20.0.63';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.20.0.63';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.20.0.63';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.20.0.63';
-import { escHtml } from '../util.js?v=1.20.0.63';
-import { saveCellAsShape } from '../templates.js?v=1.20.0.63';
+import { prctx, asUndoBatch } from './context.js?v=1.20.1';
+import * as history from '../history.js?v=1.20.1';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.20.1';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.20.1';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.20.1';
+import { confirmModal, showToast } from '../feedback.js?v=1.20.1';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.20.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.20.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.20.1';
+import { escHtml } from '../util.js?v=1.20.1';
+import { saveCellAsShape } from '../templates.js?v=1.20.1';
 
 export function section(parent, title, open = true) {
   const wrap = document.createElement('div');

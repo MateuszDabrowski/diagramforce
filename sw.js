@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.20.0.63';
+const CACHE_VERSION = '1.20.1';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -91,6 +91,7 @@ const PRECACHE_URLS = [
   `./js/persistence/df-format.js?v=${CACHE_VERSION}`,
   `./js/persistence/diagram-schema.js?v=${CACHE_VERSION}`,
   `./js/persistence/drive-sync-logic.js?v=${CACHE_VERSION}`,
+  `./js/persistence/external-import.js?v=${CACHE_VERSION}`,
   `./js/persistence/image-export.js?v=${CACHE_VERSION}`,
   `./js/persistence/migration-bridge.js?v=${CACHE_VERSION}`,
   `./js/persistence/remote-store.js?v=${CACHE_VERSION}`,

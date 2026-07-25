@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "appVersion": "1.20.1",
+  "title": "Contact Data Cloud Field Mapping (Source -> DLO -> Individual DMO)",
+  "diagramType": "datamapping",
+  "graph": {
+    "cells": [
+      {
+        "id": "zone-src",
+        "type": "sf.Zone",
+        "position": { "x": 40, "y": 40 },
+        "size": { "width": 400, "height": 260 },
+        "z": 0,
+        "layerStage": "source",
+        "embeds": ["obj-src"],
+        "attrs": {
+          "body": { "fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9", "strokeWidth": 1, "strokeDasharray": "8 4" },
+          "label": { "text": "Source", "fill": "#1D73C9" }
+        }
+      },
+      {
+        "id": "obj-src",
+        "type": "sf.DataObject",
+        "position": { "x": 80, "y": 100 },
+        "size": { "width": 320, "height": 160 },
+        "z": 2000,
+        "parent": "zone-src",
+        "objectName": "Salesforce Contact",
+        "headerColor": "#1D73C9",
+        "showLabels": true,
+        "fields": [
+          { "label": "Id", "apiName": "Id", "type": "Id", "keyType": "pk", "fid": "s_id", "required": true },
+          { "label": "FirstName", "apiName": "FirstName", "type": "varchar(40)", "keyType": null, "fid": "s_fname" },
+          { "label": "LastName", "apiName": "LastName", "type": "varchar(80)", "keyType": null, "fid": "s_lname" },
+          { "label": "Email", "apiName": "Email", "type": "varchar(255)", "keyType": null, "fid": "s_email" },
+          { "label": "Phone", "apiName": "Phone", "type": "varchar(40)", "keyType": null, "fid": "s_phone" }
+        ],
+        "attrs": {
+          "header": { "fill": "#1D73C9" },
+          "headerCover": { "fill": "#1D73C9" },
+          "headerLabel": { "text": "Salesforce Contact" }
+        }
+      },
+
+      {
+        "id": "zone-dlo",
+        "type": "sf.Zone",
+        "position": { "x": 540, "y": 40 },
+        "size": { "width": 400, "height": 260 },
+        "z": 0,
+        "layerStage": "dlo",
+        "embeds": ["obj-dlo"],
+        "attrs": {
+          "body": { "fill": "rgba(246,179,85,0.05)", "stroke": "#F6B355", "strokeWidth": 1, "strokeDasharray": "8 4" },
+          "label": { "text": "Data Lake Object", "fill": "#F6B355" }
+        }
+      },
+      {
+        "id": "obj-dlo",
+        "type": "sf.DataObject",
+        "position": { "x": 580, "y": 100 },
+        "size": { "width": 320, "height": 160 },
+        "z": 2000,
+        "parent": "zone-dlo",
+        "objectName": "Contact",
+        "headerColor": "#F6B355",
+        "category": "Profile",
+        "showLabels": true,
+        "fields": [
+          { "label": "Id", "apiName": "Id__c", "type": "Text", "keyType": "fqk", "fid": "d_id", "required": true },
+          { "label": "FirstName", "apiName": "FirstName__c", "type": "Text", "keyType": null, "fid": "d_fname" },
+          { "label": "LastName", "apiName": "LastName__c", "type": "Text", "keyType": null, "fid": "d_lname" },
+          { "label": "Email", "apiName": "Email__c", "type": "Text", "keyType": null, "fid": "d_email" },
+          { "label": "Phone", "apiName": "Phone__c", "type": "Text", "keyType": null, "fid": "d_phone" }
+        ],
+        "attrs": {
+          "header": { "fill": "#F6B355" },
+          "headerCover": { "fill": "#F6B355" },
+          "headerLabel": { "text": "Contact" }
+        }
+      },
+
+      {
+        "id": "zone-dmo",
+        "type": "sf.Zone",
+        "position": { "x": 1040, "y": 40 },
+        "size": { "width": 400, "height": 260 },
+        "z": 0,
+        "layerStage": "dmo",
+        "embeds": ["obj-dmo"],
+        "attrs": {
+          "body": { "fill": "rgba(218,78,85,0.05)", "stroke": "#DA4E55", "strokeWidth": 1, "strokeDasharray": "8 4" },
+          "label": { "text": "Data Model Object", "fill": "#DA4E55" }
+        }
+      },
+      {
+        "id": "obj-dmo",
+        "type": "sf.DataObject",
+        "position": { "x": 1080, "y": 100 },
+        "size": { "width": 320, "height": 160 },
+        "z": 2000,
+        "parent": "zone-dmo",
+        "objectName": "Individual",
+        "headerColor": "#DA4E55",
+        "category": "Profile",
+        "showLabels": true,
+        "fields": [
+          { "label": "Id", "apiName": "Id", "type": "Text", "keyType": "fqk", "fid": "m_id", "required": true },
+          { "label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "m_fname" },
+          { "label": "Last Name", "apiName": "LastName", "type": "Text", "keyType": null, "fid": "m_lname" },
+          { "label": "Email Address", "apiName": "EmailAddress", "type": "Text", "keyType": null, "fid": "m_email" },
+          { "label": "Phone Number", "apiName": "PhoneNumber", "type": "Text", "keyType": null, "fid": "m_phone" }
+        ],
+        "attrs": {
+          "header": { "fill": "#DA4E55" },
+          "headerCover": { "fill": "#DA4E55" },
+          "headerLabel": { "text": "Individual" }
+        }
+      },
+
+      { "id": "map-sd-id", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "field-right-s_id" }, "target": { "id": "obj-dlo", "port": "field-left-d_id" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-sd-fname", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "field-right-s_fname" }, "target": { "id": "obj-dlo", "port": "field-left-d_fname" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-sd-lname", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "field-right-s_lname" }, "target": { "id": "obj-dlo", "port": "field-left-d_lname" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-sd-email", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "field-right-s_email" }, "target": { "id": "obj-dlo", "port": "field-left-d_email" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-sd-phone", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "field-right-s_phone" }, "target": { "id": "obj-dlo", "port": "field-left-d_phone" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+
+      { "id": "map-dm-id", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "field-right-d_id" }, "target": { "id": "obj-dmo", "port": "field-left-m_id" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-dm-fname", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "field-right-d_fname" }, "target": { "id": "obj-dmo", "port": "field-left-m_fname" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-dm-lname", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "field-right-d_lname" }, "target": { "id": "obj-dmo", "port": "field-left-m_lname" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-dm-email", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "field-right-d_email" }, "target": { "id": "obj-dmo", "port": "field-left-m_email" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      { "id": "map-dm-phone", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "field-right-d_phone" }, "target": { "id": "obj-dmo", "port": "field-left-m_phone" },
+        "linkKind": "mapping", "mappingType": "Standard",
+        "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+
+      { "id": "rel-src-dlo", "type": "standard.Link",
+        "source": { "id": "obj-src", "port": "er-right" }, "target": { "id": "obj-dlo", "port": "er-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "attrs": { "line": { "stroke": "#888888", "strokeWidth": 2,
+          "sourceMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888" },
+          "targetMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888" } } } },
+      { "id": "rel-dlo-dmo", "type": "standard.Link",
+        "source": { "id": "obj-dlo", "port": "er-right" }, "target": { "id": "obj-dmo", "port": "er-left" },
+        "router": { "name": "sfManhattan" },
+        "connector": { "name": "rounded", "args": { "radius": 8 } },
+        "attrs": { "line": { "stroke": "#888888", "strokeWidth": 2,
+          "sourceMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888" },
+          "targetMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888" } } } }
+    ]
+  }
+}
