@@ -5,16 +5,16 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.21.0';
-import { prctx } from './context.js?v=1.21.0';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.0';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.21.0';
-import { startImageAddFlow } from '../image-component.js?v=1.21.0';
-import { recolorCellIcon } from './color-schema.js?v=1.21.0';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.0';
-import { renderFieldEditor } from './field-editor.js?v=1.21.0';
-import { finishStandardProps } from './render-core.js?v=1.21.0';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.21.0';
+import * as history from '../history.js?v=1.21.1';
+import { prctx } from './context.js?v=1.21.1';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.1';
+import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.21.1';
+import { startImageAddFlow } from '../image-component.js?v=1.21.1';
+import { recolorCellIcon } from './color-schema.js?v=1.21.1';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.1';
+import { renderFieldEditor } from './field-editor.js?v=1.21.1';
+import { finishStandardProps } from './render-core.js?v=1.21.1';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.21.1';
 
 export function renderSimpleNodeProps(cell) {
   const isIcon = cell.get('iconMode');

@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.21.0** — matches the app's current `appVersion`; set `"appVersion": "1.21.0"` in generated files.
+> **Spec snapshot: v1.21.1** — matches the app's current `appVersion`; set `"appVersion": "1.21.1"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.21.0"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.21.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.0", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.0" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.1", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.1" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.0", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.1", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.0" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.1" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -1977,7 +1977,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.21.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.21.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2080,7 +2080,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2112,7 +2112,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2239,7 +2239,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2269,7 +2269,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2302,7 +2302,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2345,7 +2345,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2391,7 +2391,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.21.1",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

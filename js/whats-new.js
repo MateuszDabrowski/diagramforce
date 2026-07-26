@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.21.0';
-import { buildModal } from './feedback.js?v=1.21.0';
+import { compareSemver } from './util.js?v=1.21.1';
+import { buildModal } from './feedback.js?v=1.21.1';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -122,7 +122,10 @@ if (typeof location !== 'undefined' && location.hostname === 'diagramforce.com')
   // the migration route would have silently vanished for every new arrival.
   const home = WHATS_NEW.find((e) => e.domainMove)?.highlights?.find((h) => h.text.includes('diagramforce.com'));
   if (home) {
-    home.text += ' <button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate" style="margin-top:10px">Bring my diagrams over</button>';
+    // Block-level, centred CTA rather than an inline button. Appended inline it wrapped onto a ragged
+    // line after the last word ("...one click. [button]"), which buried the single action this card exists
+    // to prompt. Its own centred line makes it read as the call to action it is.
+    home.text += '<span class="df-whatsnew__cta"><button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate">Bring my diagrams over</button></span>';
   }
 }
 

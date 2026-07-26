@@ -18,10 +18,10 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.21.0';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.21.0';
-import { importTemplatesArray } from '../templates.js?v=1.21.0';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.0';
+import { showToast } from '../feedback.js?v=1.21.1';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.21.1';
+import { importTemplatesArray } from '../templates.js?v=1.21.1';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.1';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
@@ -40,7 +40,16 @@ const SETTINGS_KEYS = [
   'sfdiag::brandColors', 'sfdiag::brandColorsSeeded',
   'sfdiag::connectorGrouping', 'sfdiag::focusDimming', 'sfdiag::crossingBumps', 'sfdiag::autoSizing',
   'df.showGroupLabels',
-  'df.gdrive.autosync', 'df.gdrive.folderId', 'df.gdrive.templatesFileId',
+  // Drive FILE/FOLDER ids are global to Drive, so they are meaningful on any origin and carry across.
+  // `df.gdrive.autosync` deliberately does NOT: it is connection state, not a preference. isDriveConnected()
+  // reads `isSignedIn() || isAutosyncOn()`, and the access token is per-origin and in-memory - so carrying the
+  // flag lands the new origin in "connected with no token", the exact state drive-no-autopopup.spec.js seeds as
+  // broken. The Drive control then routes the first click to syncNow() instead of signIn(), which requests a
+  // token from inside a save path (doSave swallows the failure to null) and skips everything signIn() does after
+  // a grant - so the user approves Google, nothing visibly happens, and only a second, explicit Sign In works.
+  // Dropping it costs nothing: getToken's callback sets autosync back to '1' when the key is unset, so the very
+  // first sign-in on the new origin restores the preference by itself.
+  'df.gdrive.folderId', 'df.gdrive.templatesFileId',
 ];
 
 export function isNewHost() { return typeof location !== 'undefined' && location.hostname === NEW_HOST; }
@@ -82,9 +91,12 @@ export function maybeShowMovedEntry() {
  */
 export function startDomainMigration() {
   if (!isNewHost()) return;
-  const win = window.open(OLD_ORIGIN + '/migrate', 'df-migrate', 'width=460,height=340');
+  // UNIQUE window name per attempt. A fixed name made a failed attempt sticky: the dead window
+  // stayed open under that name, so "try again" could re-target it instead of opening a fresh
+  // one - which made the retry the toast tells you to do a no-op.
+  const win = window.open(OLD_ORIGIN + '/migrate', 'df-migrate-' + Date.now(), 'width=460,height=340');
   if (!win) {
-    showToast('Please allow pop-ups for diagramforce.com, then click "Bring my diagrams over" again.', 'warning', { duration: 6000 });
+    showToast('Your browser blocked the transfer window. Allow pop-ups for diagramforce.com, then try again.', 'warning', { duration: 6000 });
     return;
   }
   let done = false;
@@ -96,10 +108,13 @@ export function startDomainMigration() {
     try { win.close(); } catch { /* ignore */ }
     finishMigration(ev.data.store && typeof ev.data.store === 'object' ? ev.data.store : {});
   };
+  // The window OPENED (a block already returned above), so this branch is "it never answered" -
+  // the old wording blamed pop-up blocking, which sent people to a setting that was never the
+  // problem. Say what actually happened, and lead with the reassurance that nothing was lost.
   const timer = setTimeout(() => {
     if (done) return;
     cleanup();
-    showToast('Could not reach the old site. Please try again, or allow pop-ups first.', 'warning', { duration: 6000 });
+    showToast('The transfer window did not answer. Nothing was lost - your diagrams are still at the old address. Try again, or try another browser.', 'warning', { duration: 8000 });
   }, 30000);
   function cleanup() { clearTimeout(timer); window.removeEventListener('message', onMessage); }
   window.addEventListener('message', onMessage);
@@ -113,10 +128,17 @@ function finishMigration(store) {
     return;
   }
   lsSet(MIGRATED_KEY, '1');     // set LAST, after every data key is written
+  // Count the RESTORED SESSION too. It used to be tracked as a bare boolean and never mentioned, so a
+  // migration that carried 5 named saves plus an 11-tab working session announced "Brought over 5 saved
+  // diagrams" and then reloaded into 11 tabs - the tally contradicted what the user was looking at.
+  // Open tabs lead: they are the most visible result of the reload.
   const parts = [];
+  if (summary.sessionTabs) parts.push(`${summary.sessionTabs} open tab${summary.sessionTabs === 1 ? '' : 's'}`);
   if (summary.saves) parts.push(`${summary.saves} saved diagram${summary.saves === 1 ? '' : 's'}`);
   if (summary.templates) parts.push(`${summary.templates} template${summary.templates === 1 ? '' : 's'}`);
-  showToast(`Brought over ${parts.join(' and ') || 'your work'} - reloading...`, 'success', { duration: 2500 });
+  // "a", "a and b", "a, b and c" - `join(' and ')` produced "a and b and c" once there were three parts.
+  const listed = parts.length > 2 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts.join(' and ');
+  showToast(`Brought over ${listed || 'your work'} - reloading...`, 'success', { duration: 2500 });
   setTimeout(() => location.reload(), 900);   // reboot so the restored session/saves take effect
 }
 
@@ -124,7 +146,7 @@ function finishMigration(store) {
  *  collision-safe for named saves + templates; the session blob is overwritten only
  *  when this origin is still a fresh empty Draft (never clobbers real new-origin work). */
 function applyMigration(store) {
-  let saves = 0, templates = 0, session = false;
+  let saves = 0, templates = 0, session = false, sessionTabs = 0;
   // 1. Preferences - adopt the old origin's choices verbatim.
   for (const k of SETTINGS_KEYS) if (store[k] != null) lsSet(k, store[k]);
   // 2. Custom templates - union-merge (dedup by content, rename on name clash). Carry the delete tombstones.
@@ -147,9 +169,18 @@ function applyMigration(store) {
     }
     saves++;
   }
-  // 4. Working session - overwrite ONLY if this origin is still an empty Draft.
-  if (store[SESSION_KEY] && sessionIsFresh()) { lsSet(SESSION_KEY, store[SESSION_KEY]); session = true; }
-  return { saves, templates, session };
+  // 4. Working session - overwrite ONLY if this origin is still an empty Draft. Count its tabs so the
+  //    completion toast can name the thing the user is about to be looking at; `session` stays a boolean
+  //    because the "nothing came across" check reads it and a restored-but-empty session still counts.
+  if (store[SESSION_KEY] && sessionIsFresh()) {
+    lsSet(SESSION_KEY, store[SESSION_KEY]);
+    session = true;
+    try {
+      const s = JSON.parse(store[SESSION_KEY]);
+      sessionTabs = Array.isArray(s?.tabs) ? s.tabs.length : 0;
+    } catch { /* malformed - the blob is still carried across, just not counted */ }
+  }
+  return { saves, templates, session, sessionTabs };
 }
 
 /** Find a free "<name> (N)" key for a same-name-different-content save clash, and

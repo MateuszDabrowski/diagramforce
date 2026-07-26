@@ -2044,6 +2044,14 @@
 }
 .df-whatsnew__item a:hover,
 .df-whatsnew__item a:focus-visible { text-decoration: underline; }
+/* Call-to-action inside a highlight (the domain-move "Bring my diagrams over" button). Appended inline it
+   wrapped onto a ragged line after the last word, burying the one action the card exists to prompt. Block +
+   centred gives it its own line. Generic on purpose -- any future highlight CTA gets the same treatment. */
+.df-whatsnew__cta {
+  display: block;
+  text-align: center;
+  margin: 14px 0 2px;
+}
 .df-whatsnew__icon {
   flex: 0 0 auto;
   width: 20px;

@@ -1,9 +1,9 @@
 // Per-type colour-field schema + icon recolour (CLEANUP S2, slice 1) — extracted from properties.js so the
 // style-clip helpers (copyCellStyle/pasteCellStyle, which read COLOR_SCHEMA) can later move to properties/widgets.js
 // without a cycle back to the facade. Never imports properties.js.
-import { getIconDataUri } from '../icons.js?v=1.21.0';
-import { sanitizeCssColor } from '../util.js?v=1.21.0';
-import { contrastTextColor } from '../components.js?v=1.21.0';
+import { getIconDataUri } from '../icons.js?v=1.21.1';
+import { sanitizeCssColor } from '../util.js?v=1.21.1';
+import { contrastTextColor } from '../components.js?v=1.21.1';
 
 /** Re-colour a cell's icon to match a new colour (used for fill/label colour changes). */
 export function recolorCellIcon(cell, newColor) {
