@@ -1,42 +1,66 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.20.1';
-import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.20.1';
-import { pctx } from './persistence/context.js?v=1.20.1';
-export { assertPctxWired } from './persistence/context.js?v=1.20.1';   // S8 wiring self-check (app.js calls it at end of init)
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.21.0';
+import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.21.0';
+import { pctx } from './persistence/context.js?v=1.21.0';
+export { assertPctxWired } from './persistence/context.js?v=1.21.0';   // S8 wiring self-check (app.js calls it at end of init)
 
 // ── Facade (Phase 3, Slice 1): image export + share orchestration now live in
 // sub-modules; re-exported here so the public surface is unchanged. ──
-export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.20.1';
-export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.20.1';
+export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.21.0';
+export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.21.0';
 // remote-store: user-owned cloud storage (Google Drive). Reads pctx like the other
 // sub-modules; no separate init needed. Phase 1 = saveToDrive / openFromDrive.
-export { ensureDriveConfig, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.20.1';
+export { ensureDriveConfig, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.21.0';
 // versioning: contentSignature + classifyVersionDiff are public (tests/templates use them);
 // checkVersionWarning is imported for internal use (loadNamedSave/loadJSONText) + pctx wiring.
 // Local bindings (the re-export above doesn't create them) so init() can wire the Drive-aware backup gate.
-import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.20.1';
-import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.20.1';
+import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.21.0';
+import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.21.0';
 export { contentSignature, classifyVersionDiff };
 // Multi-load version-warning coalescing (item 3): wrap a Load-Selected loop in these so a shared old version
 // prompts once, not per file.
-export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.20.1';
+export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.21.0';
 // json-pipeline: sanitizeGraphJSON is public AND used internally (loadNamedSave);
 // importJSON is a public entry point; loadJSONText + describePastedJSON back the unified Load-from-Paste modal.
-import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.20.1';
+import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.21.0';
+import { importFlowSource, looksLikeFlowXml, looksLikeFlowJson } from './persistence/flow-import.js?v=1.21.0';
 export { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON };
+export { looksLikeFlowXml, looksLikeFlowJson };
+
+// Salesforce Flow import (1.21.0): convert real Flow metadata (Tooling API JSON or a .flow-meta.xml
+// source file) into a `flow` diagram, then load it through the SAME loadJSONText path every other import
+// uses - so the result is sanitised, version-checked and tab-managed identically. The converter's
+// warnings are surfaced to the user rather than swallowed: they are the only place it can say what it
+// could not represent faithfully (an element type with no dedicated shape, a flow with no entry point,
+// connectors pointing at deleted elements), and the validator cannot tell you any of that.
+export function isFlowSourceText(text) {
+  return looksLikeFlowXml(text) || looksLikeFlowJson(text);
+}
+export async function loadFlowSource(text, name) {
+  let diagram, stats;
+  try { ({ diagram, stats } = importFlowSource(text)); }
+  catch (e) { showToast(e.message || 'Could not read that Salesforce Flow.', 'error'); return false; }
+  if (name) diagram.title = diagram.title || name;
+  const ok = await loadJSONText(JSON.stringify(diagram), diagram.title);
+  if (!ok) return false;
+  const n = stats.warnings.length;
+  if (n) showToast(`Flow imported with ${n} note${n === 1 ? '' : 's'}: ${stats.warnings[0]}${n > 1 ? ` (+${n - 1} more)` : ''}`, 'warning', { duration: 9000 });
+  else showToast(`Imported ${stats.elements} elements and ${stats.links} connectors.`, 'success');
+  return true;
+}
 // storage: getNamedSaves/readNamedSave/NAMED_SAVE_PREFIX feed pctx (read by
 // json-pipeline); the rest are the public storage surface.
-import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.20.1';
+import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.21.0';
 export {
   namedSave, isQuotaError, getStorageFootprint, getStorageBreakdown, STORAGE_WARNING_BYTES, evictRedundantArchives, forgetArchivesForDriveFile,
   requestPersistentStorage, getNamedSaves, loadNamedSave, deleteNamedSave, getLastBackupAt,
   exportSelection, exportEverything, maybeShowBackupReminder, markFullBackup,
-} from './persistence/storage.js?v=1.20.1';
+} from './persistence/storage.js?v=1.21.0';
 
 let graph, paper, canvasModule;
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.21.0';
 export { APP_VERSION };
 // Wire the version into pctx at module-eval (it's a constant) so the extracted
 // version helpers work even before init() runs — e.g. unit tests calling

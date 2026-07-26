@@ -9,7 +9,7 @@
 
 # Test suite + its tooling (the app itself is build-free & dependency-free)
 tests/
-scripts/
+/scripts/
 playwright.config.js
 package.json
 package-lock.json

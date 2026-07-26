@@ -1,16 +1,17 @@
 ---
 name: diagramforce
 description: >-
-  Author an importable Diagramforce diagram - from a description, or from an existing diagram the user
-  hands you (a screenshot, draw.io, or Mermaid source) - then hand them a file to open in Diagramforce.
-  Diagramforce is a no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data
-  Cloud field mappings, process flows, Salesforce Flows, org charts, Gantt timelines, and UML sequence
-  diagrams. Use it whenever the user wants to visualize, diagram, map, model, draw, or recreate any of
-  those as an editable diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context, and
-  even when they don't name Diagramforce (e.g. 'turn this into an ERD', 'map these fields into the
-  Individual DMO', 'redraw this architecture screenshot', 'convert this Mermaid flow'). It outputs diagram
-  JSON validated to import intact - no account, no backend. Do NOT use it for data charts or dashboards
-  (data visualization), for writing code, or for reviewing a design without drawing it.
+  Author an importable Diagramforce diagram - from a description, from an existing diagram (a screenshot,
+  draw.io, or Mermaid), or from real Salesforce Flow metadata (Tooling API JSON) - then hand the user a
+  file to open in Diagramforce. Diagramforce is a no-backend browser editor for Salesforce/CRM
+  architecture, data models (ERD), Data Cloud field mappings, process flows, Salesforce Flows, org
+  charts, Gantt timelines, and UML sequence diagrams. Use it whenever the user wants to visualize,
+  diagram, map, model, draw, or recreate any of those as an editable diagram - especially in a
+  Salesforce, Marketing Cloud, or Data Cloud context, and even when they don't name Diagramforce (e.g. 'turn
+  this into an ERD', 'map these fields into the Individual DMO', 'diagram this Flow from my org', 'redraw
+  this architecture screenshot'). It outputs diagram JSON validated to import intact - no account, no
+  backend. Do NOT use it for data charts or dashboards, for writing code, or for reviewing a design
+  without drawing it.
 ---
 
 # Diagramforce diagram authoring
@@ -32,6 +33,51 @@ source is **Mermaid**, Diagramforce imports it natively - the user can paste the
 -> Process, `erDiagram` -> Data Model, `sequenceDiagram` -> Sequence), so you may not need to author
 JSON at all. Author JSON yourself when they want a type Mermaid can't express, or edits beyond a
 straight conversion.
+
+**Starting from a real Salesforce Flow? Convert it - do not redraw it.** If the flow exists in an org,
+its metadata already holds every element, connector, decision outcome and fault path, so hand-authoring
+it would be slower AND less accurate. Ask the user for the Tooling API response:
+
+1. In **Setup -> Flows**, open the flow; the URL carries `flowId=301...`. (This works for flows the org
+   authored. A packaged flow shows a namespaced name like `ns__Flow_Name-1` instead, and its metadata is
+   usually withheld from subscribers - say so rather than guessing at it.)
+2. They fetch `GET /services/data/vXX.0/tooling/sobjects/Flow/301...` and paste the response. Use the
+   org's **latest** API version, not a fixed one - the Tooling API shapes its response to the version you
+   ask for, so an older `vXX.0` silently omits any element type or field added since. An unauthenticated
+   `GET /services/data/` on the instance URL lists the versions; take the highest.
+
+   Any route that returns that JSON works - pick whichever the user already has:
+   [Workbench](https://workbench.developerforce.com) -> **utilities -> REST Explorer** (no install, but
+   third-party and blocked by some org policies), `sf api request rest` from the Salesforce CLI, or the
+   Developer Console's **Query Editor**. The whole response or just its `Metadata` object both work.
+
+Then run the bundled converter and validate as usual:
+
+```bash
+node scripts/flow-to-diagramforce.mjs flow-response.json diagram.json
+node scripts/validate-diagram.mjs diagram.json
+```
+
+It maps each metadata collection to its `df.Flow*` class, carries decision outcomes / fault paths (red)
+/ Go To jumps (blue) with their branch labels, synthesises the End cards the metadata has no element
+for, fills each card's **`details`** rows with the documentation detail that will not fit on a card (the
+fields a Create/Update writes, what a Get reads out and into which variables, a screen's components with
+their types, each outcome's condition, an action's parameters), emits a **`df.Table` above Start** holding
+the flow-level facts (status, API version, run mode, description, resource counts), and either honours the flow's own `locationX/Y` or - when the builder stored none (as Marketing
+Cloud Next journeys do) or stored only some - computes the same tidy tree the app's Auto Layout uses.
+
+**Read its warnings out to the user - always.** They are the part a clean validator cannot tell you:
+the validator proves the diagram LOADS, while the warnings are where the converter says what it could
+not represent faithfully. An element type it has no dedicated shape for still gets drawn (as a generic
+Action card, so the graph stays connected and nothing pointing at it breaks) and named in a warning -
+Orchestrator/approval **stages** and **Custom Error** are the two you will meet most. Other warnings
+flag a flow with no entry point, connectors pointing at deleted elements, and metadata whose canvas
+coordinates were missing or incomplete.
+
+**If the converter ERRORS saying the metadata is not readable, that is the answer, not a failure.** A
+managed-package flow returns `Metadata: null` to a subscriber org - Salesforce withholds a packaged flow's
+internals. Tell the user their org cannot read that flow's definition and suggest converting one their own
+org authored, rather than retrying or hand-drawing an approximation from the element names.
 
 ## Workflow
 
@@ -57,7 +103,7 @@ For the genuinely tricky calls (e.g. process vs flow, datamodel vs datamapping),
 
 ### 2. Read the spec section for that type - do not guess shape names
 
-The full contract is [`references/DIAGRAM_JSON_SPEC.md`](references/DIAGRAM_JSON_SPEC.md) (~2400 lines).
+The full contract is [`references/DIAGRAM_JSON_SPEC.md`](references/DIAGRAM_JSON_SPEC.md).
 It is large, so read the **Top-Level Structure** plus the **specific type's shape reference** (each
 shape lists its `type`, mandatory fields, port definitions, and link rules) rather than the whole
 file. Shape `type` strings, field keys, and port ids are exact - the app silently drops a cell whose
@@ -70,14 +116,14 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
 }
 ```
 
-- Set `appVersion` to the value in the spec's **"Spec snapshot: vX"** marker (currently `1.20.1`).
+- Set `appVersion` to the value in the spec's **"Spec snapshot: vX"** marker.
 - **You place the nodes.** There is no server-side auto-layout - every element carries its own
   `position` (x/y). Lay the diagram out so it reads well: a clear direction (left-to-right or
   top-down), no overlapping shapes, and room for the connectors. A diagram that validates but is a
@@ -111,7 +157,7 @@ handing it over.
 Save the final, validated JSON as a file (`.json`, or Diagramforce's own `.dgf` extension - the
 content is identical). Then give the user the file **and** these steps:
 
-1. Open **https://diagramforce.mateuszdabrowski.pl**
+1. Open **https://diagramforce.com**
 2. Click **Load & Import**, choose the **Paste** tab, paste the JSON, and click **Load**
    (or use the **File** tab to open the `.json` / `.dgf` you saved).
 3. That's it - the diagram opens as a new tab. No sign-in; nothing leaves the browser.
@@ -132,10 +178,24 @@ Input: "Map the standard Contact fields into a Data Cloud Individual DMO."
 Output: a `datamapping` diagram with source and DMO DataObjects in their layer zones and field-to-field
 mapping links, authored from the spec's `datamapping` section and Data 360 guidance, validated clean.
 
+**Example 3**
+Input: "Here's the Tooling API JSON for our Case routing flow - diagram it." *(response pasted)*
+Output: run `scripts/flow-to-diagramforce.mjs` on it, validate the result, hand over the file plus the
+paste steps, and pass on any converter warning (e.g. Orchestrator stages shown as Action cards).
+
 ## Staying in sync (for maintainers)
 
-`references/DIAGRAM_JSON_SPEC.md` and `scripts/diagram-schema.js` are verbatim copies of the app's
-`DIAGRAM_JSON_SPEC.md` and `js/persistence/diagram-schema.js`, snapshotted at the version in the spec's
-"Spec snapshot" marker. Re-copy both from the repo on each Diagramforce release so the shape allowlist
-the validator enforces matches the renderer. The validator is the guard: if a diagram targets a newer
-app, a shape the copy doesn't know is flagged rather than silently accepted.
+Three files are **verbatim copies** of the app's, snapshotted at the version in the spec's "Spec
+snapshot" marker. Re-copy them from the repo on each Diagramforce release:
+
+| Bundled copy | Source in the app |
+|---|---|
+| `references/DIAGRAM_JSON_SPEC.md` | `DIAGRAM_JSON_SPEC.md` |
+| `scripts/diagram-schema.js` | `js/persistence/diagram-schema.js` |
+| `scripts/flow-layout.js` | `js/canvas/flow-layout.js` |
+
+Keeping the schema current is what stops the validator drifting from the renderer - it is the guard: a
+shape the copy doesn't know is flagged rather than silently accepted. `flow-layout.js` matters less
+often (only the computed-layout path uses it) but should track the app so converted flows keep looking
+like Flow Builder. `flow-to-diagramforce.mjs` reads its `appVersion` straight from the bundled spec, so
+re-syncing the spec is enough to stamp the right version.

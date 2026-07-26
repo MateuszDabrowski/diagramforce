@@ -1,9 +1,9 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.20.1';
-import { portGroups, portItems } from './ports.js?v=1.20.1';
-import { sanitizeCssColor } from '../util.js?v=1.20.1';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.0';
+import { portGroups, portItems } from './ports.js?v=1.21.0';
+import { sanitizeCssColor } from '../util.js?v=1.21.0';
 
 export function registerCore() {
   // --- SimpleNode ---

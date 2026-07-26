@@ -8,8 +8,8 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.20.1';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.20.1';
+import { cctx } from './context.js?v=1.21.0';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.21.0';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -396,6 +396,26 @@ export function flowGoToLabelAttrs(name, position) {
   };
 }
 
+// Default placement for an UNPOSITIONED flow connector label (flow diagrams only — authored/dragged positions are
+// always preserved). Every outcome of a decision leaves the SAME port, so the branches share their first stub:
+// anything anchored near the source piles the sibling pills on top of each other (32 px STUB + a 13 px pill is not
+// enough room for two). A branch label therefore rides near its TARGET, where each branch owns its own column.
+// Two exceptions stay near the source, both because "leaves here" is the thing being said:
+//   • Fault / Go To — matches Flow Builder's pill sitting right beside the element it exits.
+//   • A branch that SKIPS ranks (an empty outcome dropping to a distant merge) — near-target would strand its
+//     label rows below the decision it belongs to, and having no neighbouring rank it has nothing to collide with.
+const FLOW_LABEL_NEAR_SOURCE = { distance: 44, offset: 0 };
+const FLOW_LABEL_NEAR_TARGET = { distance: -40, offset: 0 };
+const FLOW_RANK_SKIP = 192;   // > ~1.5 rows (56 px card + 72 px ROW_GAP) ⇒ the target is not the next rank down
+function defaultFlowLabelPosition(link, type) {
+  if (type !== 'standard') return FLOW_LABEL_NEAR_SOURCE;
+  const g = cctx.graph;
+  const s = g?.getCell(link.get('source')?.id), t = g?.getCell(link.get('target')?.id);
+  if (!s?.position || !t?.position) return FLOW_LABEL_NEAR_SOURCE;
+  const dy = t.position().y - s.position().y;
+  return dy > 0 && dy <= FLOW_RANK_SKIP ? FLOW_LABEL_NEAR_TARGET : FLOW_LABEL_NEAR_SOURCE;
+}
+
 /** Apply a flow connector preset — a shortcut over the standard connector props (line colour + line style + label
  *  colour) plus the "None" stub ends. Standard = grey solid; Fault = red dashed; Go To = grey dotted (a jump to an
  *  existing element). Accepts { type: 'standard'|'fault'|'goto' } (preferred) or the legacy { fault } boolean.
@@ -417,12 +437,13 @@ export function applyFlowLinkStyle(link, opts = {}) {
   // preserve an authored label's text (arrow-stripped), else derive the target's name. Standard/Fault restyle to the
   // bordered PILL in the type colour; Fault seeds "Fault" when unlabelled; Standard seeds nothing.
   const existing = link.labels() || [];
+  const fallbackPos = defaultFlowLabelPosition(link, type);
   if (type === 'goto') {
     const authored = existing.find((l) => l?.attrs?.text?.text)?.attrs?.text?.text;
-    link.labels([flowGoToLabelAttrs(authored || flowGoToDestName(link), existing[0]?.position)]);
+    link.labels([flowGoToLabelAttrs(authored || flowGoToDestName(link), existing[0]?.position || fallbackPos)]);
   } else {
-    const styled = existing.map((l) => (l?.attrs?.text?.text ? flowLabelAttrs(l.attrs.text.text, color, l.position) : l));
-    if (type === 'fault' && !styled.some((l) => l?.attrs?.text?.text)) styled.push(flowLabelAttrs('Fault', color));
+    const styled = existing.map((l) => (l?.attrs?.text?.text ? flowLabelAttrs(l.attrs.text.text, color, l.position || fallbackPos) : l));
+    if (type === 'fault' && !styled.some((l) => l?.attrs?.text?.text)) styled.push(flowLabelAttrs('Fault', color, fallbackPos));
     if (styled.length) link.labels(styled);
   }
 }

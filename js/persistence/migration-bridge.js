@@ -18,10 +18,10 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.20.1';
-import { showWhatsNewNow } from '../whats-new.js?v=1.20.1';
-import { importTemplatesArray } from '../templates.js?v=1.20.1';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.20.1';
+import { showToast } from '../feedback.js?v=1.21.0';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.21.0';
+import { importTemplatesArray } from '../templates.js?v=1.21.0';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.0';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
@@ -44,6 +44,13 @@ const SETTINGS_KEYS = [
 ];
 
 export function isNewHost() { return typeof location !== 'undefined' && location.hostname === NEW_HOST; }
+
+/** True while this browser is on the new host and has NOT yet pulled its old-origin data across. Drives the
+ *  What's-New overlay: while a migration is outstanding the move card is shown ALONGSIDE the current release's
+ *  notes, so Help -> What's New stays a working route to the diagrams still stranded on the old origin. Without
+ *  this the route existed only while the move WAS the current release - the moment any later release shipped, anyone who
+ *  had dismissed the once-per-browser prompt was left with no way back to them. */
+export function isMigrationPending() { return isNewHost() && !lsGet(MIGRATED_KEY); }
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode / quota */ } }
 
@@ -57,8 +64,14 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private mo
 export function maybeShowMovedEntry() {
   if (!isNewHost()) return false;
   if (lsGet(MIGRATED_KEY) || lsGet(PROMPTED_KEY)) return false;
+  // Render the DOMAIN-MOVE entry explicitly - not "the current release's notes", and not WHATS_NEW[0].
+  // Those two were the same thing only while the move was the newest release; the moment any later release ships, a
+  // first-time arrival on the new host would be shown that release's changelog (for a version they had
+  // never run) with no migration button on it at all, and their browser-only diagrams would have been
+  // stranded on the old origin with no route across and no second prompt - PROMPTED_KEY is already set.
+  // Only mark as prompted if the card actually rendered.
+  if (!showDomainMoveNotice()) return false;
   lsSet(PROMPTED_KEY, '1');   // show once automatically; re-openable from the Help menu
-  showWhatsNewNow();          // renders WHATS_NEW[0] incl. the injected "moved" highlight + button
   return true;
 }
 

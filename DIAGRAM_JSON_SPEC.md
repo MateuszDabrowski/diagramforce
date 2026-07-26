@@ -2,18 +2,18 @@
 
 > Reference for LLMs and developers generating importable diagram JSON files for **Diagramforce**.
 >
-> The app lives at **[diagramforce.mateuszdabrowski.pl](https://diagramforce.mateuszdabrowski.pl/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. There is **no** `diagramforce.app` / `diagramforce.com`.
+> The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.20.1** — matches the app's current `appVersion`; set `"appVersion": "1.20.1"` in generated files.
+> **Spec snapshot: v1.21.0** — matches the app's current `appVersion`; set `"appVersion": "1.21.0"` in generated files.
 >
-> **Validate before importing.** Run `npm run validate -- your-diagram.json` (a zero-dependency dev CLI) to catch the
+> **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
 > on load), a link pointing at a missing cell id (dropped), duplicate cell ids, a missing/wrong `diagramType`, and a
 > type-specific shape used in the wrong diagram type. It exits non-zero on errors, so it doubles as a CI gate. The CLI
 > shares the **same shape allowlist** the app loads with (`js/persistence/diagram-schema.js`), so it can't drift.
 
 > **Agent self-correction loop.** When you generate a diagram programmatically (e.g. from an LLM CLI like Claude
-> Code), don't stop at "it parsed as JSON". Run the loop: **generate -> `npm run validate -- file.json` -> fix every
+> Code), don't stop at "it parsed as JSON". Run the loop: **generate -> `validate-diagram.mjs file.json` -> fix every
 > ERROR and re-run until the file is clean -> then open it in the app (Load > Import) and eyeball the render.**
 > ERRORS mean cells or links will silently vanish on load; WARNINGS are quiet-degrade traps (a shape that loads but
 > renders wrong - a one-sided embed, a name in the wrong field, a stale field-port id, a gateway with no glyph). The
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.20.1"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.21.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.20.1", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.20.1" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.20.1", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.20.1" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -190,7 +190,7 @@ adds a concrete rule.
 ## Common authoring mistakes (per type)
 
 The traps below are **type-specific** - things the loader silently heals, drops, or derives, so emitting them wrong
-fails quietly. `npm run validate` catches the generic mistakes (unknown shape `type`, a link to a missing id,
+fails quietly. `validate-diagram.mjs` catches the generic mistakes (unknown shape `type`, a link to a missing id,
 duplicate ids, a wrong `diagramType`) **plus the five highest-frequency type-specific traps below** - a one-sided
 embed, a duplicate Gantt `order`, an OrgPerson missing top-level `personName`, a stale DataObject field-port `<fid>`,
 and a BpmnGateway with no marker glyph. The rest still fail quietly, so this section stays your guide. Each rule is
@@ -1408,12 +1408,20 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 
 ### Flow Shapes (Salesforce Flow Diagrams)
 
-`diagramType: "flow"`. These 34 `df.Flow*` classes document a **Salesforce Flow** with its real element vocabulary. They are DISTINCT from the generic `sf.Flow*` flowchart shapes (which belong to `process`). Every element is the **same uniform card** - a rounded body with a coloured icon chip (left) and a label - so you distinguish elements by their `type` and icon, and express branching with the outgoing `standard.Link`s, not by the shape.
+`diagramType: "flow"`. These `df.Flow*` classes document a **Salesforce Flow** with its real element vocabulary. They are DISTINCT from the generic `sf.Flow*` flowchart shapes (which belong to `process`). Every element is the **same uniform card** - a rounded body with a coloured icon chip (left) and a label - so you distinguish elements by their `type` and icon, and express branching with the outgoing `standard.Link`s, not by the shape.
 
-**Shared structure (identical for all 19).** Default size `210 x 56`. Persisted data lives in TOP-LEVEL props, NOT `attrs`:
+**Shared structure (identical for every `df.Flow*` class).** Default size `210 x 56`. Persisted data lives in TOP-LEVEL props, NOT `attrs`:
 
 - `name` (string) - the visible card label. Seed it; it drives `attrs.label.text` via the model.
 - `apiName` (string, optional) - renders as a mono subtitle under the label (hidden when blank). Use the Flow element's API name.
+- `details` (array, optional, since v1.21.0) - `[{ "label": "...", "value": "..." }]` rows rendered as a
+  read-only **Metadata** table in the property panel, never on the card. This is where the long tail goes: the
+  fields a Create/Update actually WRITES, the fields a Get reads out and into which variables, a screen's full
+  component list with types, each decision outcome's condition, an action's input parameters. Both sides are
+  FREE TEXT - nothing is parsed or validated, and nothing in the app keys off these rows, so use whatever
+  labels read best. Keep the per-kind `fields` above for the one-line facts that belong on the card and use
+  `details` for everything that would not fit on one; a row list beyond ~20 entries is better truncated with a
+  final `{"label": "+N more"}` row than dumped in full.
 - `description` (string, optional) - free text.
 - per-kind fields (see the table) - all FREE TEXT, never validated.
 
@@ -1479,12 +1487,37 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 - **Standard** (the default): emit just `source`/`target` (endpoints). The loader paints it grey `#5C5C5C` with "None" line-continuation stub ends so it TOUCHES the cards. You do not set `line`/`attrs`.
 - **Fault**: set `attrs.line.stroke` to the fault red `#EA001E`. The loader recognises the red, dashes the line (`lineStyle` `"8 4"`), and applies the stub ends. (A fault path originates from a data/action element - Get/Create/Update/Delete Records, Action, Subflow - never from `df.FlowStart`.)
 - **Go To** ("Outgoing Go To" - a jump to an existing element, e.g. a loop-back or a shared downstream target): blue `#0B5CAB` + dotted. Set `attrs.line.stroke` to `#0B5CAB` (like a Fault authors via red) - the loader dots the line and seeds a BLUE ITALIC reference label "*&lt;destination name&gt;* →" (SLDS blue-40, matching Flow Builder), falling back to "Go To". You don't author the label; it derives from the target.
-- **Labels** (a decision outcome name, "For Each"/"After Last" on a loop, a Go To's destination, etc.) are yours to add via `labels` - the loader seeds text only for Fault ("Fault") and Go To (destination name). A label's colour tracks the line (grey / red).
+- **Labels** (a decision outcome name, "For Each"/"After Last" on a loop, etc.) are yours to add via `labels` - the loader seeds text only for Fault ("Fault") and Go To (the destination name). A label's colour tracks the line (grey / red / blue).
+  - ⚠️ **Author the label's TEXT only - never its `position`.** The loader places an unpositioned flow label for you, and it can do it better than you can from here because it knows the route the router actually resolved: a branch label rides near its **target**, where that branch owns its own column, while a Fault, a Go To, or an empty outcome dropping several ranks to a merge stays near the source. Placing them yourself is a trap with no good answer - at the link midpoint a decision's outcomes drift apart down their own branches, and near the source they pile on top of each other, because every outcome leaves the **same** port and shares that first 32 px stub. Set `position` only to nudge a placement you have actually seen render wrong.
+  - ⚠️ **On a Go To, author the OUTCOME NAME ALONE (`"No"`) - or no label at all.** The loader renders a Go To as blue italic and appends the "→" **itself**, so `"No → Retry Screen"` comes out as `"No → Retry Screen →"` - and at that width it sits on top of the card it just left. Authoring any label REPLACES the auto-seeded destination name, so this is a real trade: `"No"` names the branch and the dotted line shows where it lands; no label names the target instead. Pick one - never pack both into the string.
+
+> **Flow-level metadata goes on a `df.Table`, not on Start.** The Start card holds only what the Start
+> *element* declares (trigger, object, entry filters). Facts about the FLOW - status, API version, run mode,
+> description, the resource inventory - have no element to live on, so put them on a `df.Table` placed above
+> Start (`highlightFirstCol: true`, `highlightFirstRow: false` gives the key/value look; `tableLabel` carries
+> the flow's name). `df.Table` is a generic shape available in every diagram type, so this needs no
+> flow-specific grammar. Give it no connectors - it documents the flow, it is not a step in it.
+
+> ⚠️ **On a `flow` diagram, always set a `port` on both endpoints of every link** (`port-top` / `port-right` /
+> `port-bottom` / `port-left`). This is the single most common way an authored flow diagram comes out looking
+> broken, and it fails QUIETLY: with no port, JointJS anchors the link to the element's CENTRE, the orthogonal
+> router has nothing to work against, and connectors cut diagonally straight across the cards instead of running
+> down the spine. The diagram still validates and still loads - it just looks nothing like Flow Builder.
+>
+> **Which port: a flow reads top-to-bottom, so ANY step to a different row is `port-bottom` → `port-top`.** The
+> orthogonal router draws the horizontal jog for you, so a decision branch that moves further sideways than down
+> still leaves the BOTTOM. Do *not* pick "whichever axis is bigger" - that makes exactly those branches exit the
+> side and curl back on themselves. Sides (`port-right` → `port-left`, or the mirror) are for three cases only:
+> two cards genuinely sharing a row, a **Fault**, and a **Go To** - the last two leave sideways by convention so
+> they read as an aside rather than as the main path.
+>
+> This is flow-specific guidance. Other diagram types have their own connection conventions - see the relevant
+> shape section (e.g. Data Mapping links attach to per-field ports, not these four).
 
 ```json
-{ "id": "l1",      "type": "standard.Link", "source": { "id": "dec" }, "target": { "id": "email" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
-{ "id": "l-fault", "type": "standard.Link", "source": { "id": "get" }, "target": { "id": "err" }, "attrs": { "line": { "stroke": "#EA001E" } } },
-{ "id": "l-goto",  "type": "standard.Link", "source": { "id": "dec" }, "target": { "id": "start" }, "attrs": { "line": { "stroke": "#0B5CAB" } } }
+{ "id": "l1",      "type": "standard.Link", "source": { "id": "dec", "port": "port-bottom" }, "target": { "id": "email", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
+{ "id": "l-fault", "type": "standard.Link", "source": { "id": "get", "port": "port-right" },  "target": { "id": "err",   "port": "port-top" }, "attrs": { "line": { "stroke": "#EA001E" } } },
+{ "id": "l-goto",  "type": "standard.Link", "source": { "id": "dec", "port": "port-right" },  "target": { "id": "start", "port": "port-right" }, "attrs": { "line": { "stroke": "#0B5CAB" } } }
 ```
 
 ### Gantt Shapes
@@ -1944,7 +1977,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.20.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.21.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2042,12 +2075,12 @@ A **System Landscape** (Salesforce framework Level 2): a "Salesforce Core" conta
 system (amber border = "external", per the Legend), two integration connectors carrying **Frequency** labels, a Note,
 and `df.Legend` swatches acting as the Salesforce **Key**. It shows the framework conventions in action - a Header
 (the `title` + a top `sf.TextLabel`), a Key (`df.Legend`), colour as classification, and orthogonal connectors with
-their cadence on the line. *(Validated with `npm run validate`; rendered in-app.)*
+their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2079,7 +2112,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2201,12 +2234,12 @@ exchanging **numbered** messages, with an activation box and an `alt` fragment. 
 carries the same `lifelinePortCount: 10`, so `seq-port-*-<i>` is message slot `i` and ports are rebuilt on load (do
 not serialize `ports.items`). An actor WITH a lifeline must sit 44px ABOVE the participants
 (`position.y = participant.y - 44`) so the lifelines align. The reply (`msg-2`) is dashed (`lineStyle: "6 4"`) and
-swaps port direction. *(Validated with `npm run validate`; rendered in-app.)*
+swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2231,12 +2264,12 @@ the loader derives each bar's x/width/colour and the milestone/marker columns fr
 bars). `taskLabel` is the task name (the loader copies it onto the bar). The timeline's `todayDate` draws the
 full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated marker. A dependency is a
 `standard.Link` with `linkKind:"ganttDep"` + `depType` (`FS`/`SS`/`FF`/`SF`) + optional `lag`. *(Validated with
-`npm run validate`; rendered in-app.)*
+`validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2264,12 +2297,12 @@ A richer BPMN flow: an **exclusive** gateway (`×`) branches on approval; the Ye
 **parallel** gateway (`+`) and joins them; steps are numbered (Salesforce's sequenced-numbering convention); and an
 `sf.Annotation` brace carries an SLA note via a dotted association link (`lineStyle: "2 4"`). A gateway needs
 `attrs.marker.text` (`×` exclusive, `+` parallel, `○` inclusive, `◇` event); a non-start event needs its `body`
-fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated with `npm run validate`; rendered in-app.)*
+fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2307,12 +2340,12 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 
 ### Flow (Salesforce Flow)
 
-A **segment-triggered marketing flow**: a Data Cloud segment membership starts it, a Get Records reads the contact (with a fault path to a Notify-admin Action), a Decision branches on engagement, and each branch runs a Send-message Action before ending. Every element is the SAME uniform `210 x 56` card - branching is expressed by the `standard.Link`s, not by the shapes. Element name/apiName/per-kind fields are TOP-LEVEL; `attrs` and `icon` are omitted (each class self-iconizes on load). *(Validated with `npm run validate`; rendered in-app.)*
+A **segment-triggered marketing flow**: a Data Cloud segment membership starts it, a Get Records reads the contact (with a fault path to a Notify-admin Action), a Decision branches on engagement, and each branch runs a Send-message Action before ending. Every element is the SAME uniform `210 x 56` card - branching is expressed by the `standard.Link`s, not by the shapes. Element name/apiName/per-kind fields are TOP-LEVEL; `attrs` and `icon` are omitted (each class self-iconizes on load). *(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2328,14 +2361,20 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
       { "id": "l1", "type": "standard.Link", "source": { "id": "start", "port": "port-bottom" }, "target": { "id": "get", "port": "port-top" } },
       { "id": "l2", "type": "standard.Link", "source": { "id": "get", "port": "port-bottom" }, "target": { "id": "dec", "port": "port-top" } },
       { "id": "l3", "type": "standard.Link", "source": { "id": "get", "port": "port-right" }, "target": { "id": "err", "port": "port-left" }, "attrs": { "line": { "stroke": "#EA001E" } } },
-      { "id": "l4", "type": "standard.Link", "source": { "id": "dec", "port": "port-left" }, "target": { "id": "email", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
-      { "id": "l5", "type": "standard.Link", "source": { "id": "dec", "port": "port-right" }, "target": { "id": "sms", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Default" } } } ] },
-      { "id": "l6", "type": "standard.Link", "source": { "id": "email", "port": "port-bottom" }, "target": { "id": "end", "port": "port-left" } },
-      { "id": "l7", "type": "standard.Link", "source": { "id": "sms", "port": "port-bottom" }, "target": { "id": "end", "port": "port-right" } }
+      { "id": "l4", "type": "standard.Link", "source": { "id": "dec", "port": "port-bottom" }, "target": { "id": "email", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Engaged" } } } ] },
+      { "id": "l5", "type": "standard.Link", "source": { "id": "dec", "port": "port-bottom" }, "target": { "id": "sms", "port": "port-top" }, "labels": [ { "attrs": { "text": { "text": "Default" } } } ] },
+      { "id": "l6", "type": "standard.Link", "source": { "id": "email", "port": "port-bottom" }, "target": { "id": "end", "port": "port-top" } },
+      { "id": "l7", "type": "standard.Link", "source": { "id": "sms", "port": "port-bottom" }, "target": { "id": "end", "port": "port-top" } }
     ]
   }
 }
 ```
+
+> Read the ports above against the positions: **every link between two different rows is `port-bottom` →
+> `port-top`**, including the two decision branches (`l4`/`l5`) that move sideways more than they move down,
+> and the two that merge back into End (`l6`/`l7`). The orthogonal router draws the horizontal jog. The one
+> link that leaves a side is `l3`, the **fault** - and its target genuinely shares a row with its source.
+> Copying side ports onto a branch is the single most common way a hand-authored flow comes out tangled.
 
 ### Org Chart
 
@@ -2347,12 +2386,12 @@ these props (never hand-write the label `attrs` or a tall `size`). A **Team is a
 `attrs.headerLabel.text` + accent colour) that EMBEDS its people: set BOTH the container `embeds[]` and each person's
 `parent`. Reporting links join `port-bottom` → `port-top`. (Wrap the teams in a Department `sf.Zone` the same way for
 another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead - see their Shape Reference.)
-*(Validated with `npm run validate`; rendered in-app.)*
+*(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.20.1",
+  "appVersion": "1.21.0",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

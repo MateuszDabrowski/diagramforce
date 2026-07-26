@@ -1,12 +1,12 @@
 # Using Diagramforce outside the app
 
-Three ways to get a diagram *into* [Diagramforce](https://diagramforce.mateuszdabrowski.pl) from
+Three ways to get a diagram *into* [Diagramforce](https://diagramforce.com) from
 somewhere else - all no-backend, no account, nothing leaves the browser. Pick by who is driving.
 
 | You are... | Use | What it is |
 |---|---|---|
 | An LLM or a developer authoring diagram JSON by hand | [`DIAGRAM_JSON_SPEC.md`](../DIAGRAM_JSON_SPEC.md) | The complete JSON contract for all diagram types (architecture, data model, Data Cloud mapping, process, Salesforce Flow, org, gantt, sequence). Generate it, validate it, paste it into *Load & Import ▸ Paste*. |
-| Working inside Claude (Cowork / Claude Code / claude.ai) | [`cowork-skill/diagramforce`](../cowork-skill/diagramforce/SKILL.md) | A Claude skill that authors a valid diagram from a description - or from a screenshot, draw.io, or Mermaid source - and hands you a file to open. |
+| Working inside Claude (Cowork / Claude Code / claude.ai) | [`cowork-skill/diagramforce`](../cowork-skill/diagramforce/SKILL.md) | A Claude skill that authors a valid diagram from a description, from a screenshot / draw.io / Mermaid source, or from **real Salesforce Flow metadata** (paste the Tooling API response and it converts the actual flow), then hands you a file to open. |
 | Building a web app that should open Diagramforce | [`web-integration.md`](web-integration.md) | An "Open in Diagramforce" button: `window.postMessage`, new tab, any diagram size. |
 
 All three share the same foundation:
@@ -20,5 +20,5 @@ All three share the same foundation:
   checks a diagram against the app's real shape allowlist before you hand it over.
 
 > Not what you want? To *edit* diagrams, or to save/share from inside the app, just open
-> [Diagramforce](https://diagramforce.mateuszdabrowski.pl) directly - this folder is only about
+> [Diagramforce](https://diagramforce.com) directly - this folder is only about
 > feeding diagrams in from other tools.

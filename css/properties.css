@@ -1478,3 +1478,34 @@
   stroke-dasharray: 0;   /* checkbox border goes solid when selected — the dash now lives on the row */
 }
 .df-shapestate__row.is-selected .df-shapestate__tick { opacity: 1; }
+
+/* Flow element "Metadata" table (1.21.0) — the imported `details` rows, read-only.
+   Two columns: the property name as a row header, the value beside it. Values are
+   free text of unpredictable length (a filter expression, a long formula), so the
+   value column wraps and breaks rather than forcing the panel to scroll sideways. */
+.df-prop-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+  table-layout: fixed;
+}
+.df-prop-detail-table th,
+.df-prop-detail-table td {
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-color);
+  overflow-wrap: anywhere;
+}
+.df-prop-detail-table tr:last-child th,
+.df-prop-detail-table tr:last-child td { border-bottom: 0; }
+.df-prop-detail-table th {
+  width: 42%;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.df-prop-detail-table td {
+  color: var(--text-primary);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.df-prop-detail-table__empty { color: var(--text-muted); font-family: inherit; }

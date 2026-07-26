@@ -1,10 +1,10 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.20.1';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.20.1';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.20.1';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.20.1';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.20.1';
-import { showSaveManagerModal } from './save-manager.js?v=1.20.1';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.21.0';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.21.0';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.0';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.21.0';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.0';
+import { showSaveManagerModal } from './save-manager.js?v=1.21.0';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -473,8 +473,8 @@ function renderFileLoadPane({ pane, footer, close }) {
     <div class="df-load-file" tabindex="0" role="button" aria-label="Choose a file or drop it here">
       <svg class="df-load-file__icon" aria-hidden="true"><use href="#upload"></use></svg>
       <p class="df-load-file__title">Drop a diagram file here, or click to choose</p>
-      <p class="df-load-file__sub">A Diagramforce <strong>.dgf</strong> or <strong>.json</strong> export - single diagram, group bundle, or templates.</p>
-      <input type="file" class="df-load-file__input" accept=".dgf,.json,application/json" hidden>
+      <p class="df-load-file__sub">A Diagramforce <strong>.dgf</strong> or <strong>.json</strong> export - single diagram, group bundle, or templates.<br>Or a Salesforce Flow: a <strong>.flow-meta.xml</strong> source file, or the Tooling API JSON for a flow.</p>
+      <input type="file" class="df-load-file__input" accept=".dgf,.json,.xml,application/json,text/xml" hidden>
     </div>`;
   footer.innerHTML = '<span class="df-load-mgr__foot-hint">Files load into a new tab.</span>';
   const zone = pane.querySelector('.df-load-file');
@@ -484,8 +484,15 @@ function renderFileLoadPane({ pane, footer, close }) {
     if (!f) return;
     let text;
     try { text = await f.text(); } catch { showError('Could not read that file.'); return; }
+    // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
+    // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
+    const base = f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '');
     close();   // close first; loadJSONText handles single/bundle/templates (a bundle reopens the Browser tab with a summary)
-    await tctx.modules.persistence.loadJSONText(text, f.name.replace(/\.(dgf|json)$/i, ''));
+    // A Salesforce Flow goes through the converter; everything else is a Diagramforce document. Detect by
+    // CONTENT, not by extension - a Tooling API response is a .json like any other, and the user may well
+    // have renamed the file.
+    if (tctx.modules.persistence.isFlowSourceText?.(text)) await tctx.modules.persistence.loadFlowSource(text, base);
+    else await tctx.modules.persistence.loadJSONText(text, base);
   };
   zone.addEventListener('click', () => input.click());
   zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
@@ -499,7 +506,7 @@ function renderFileLoadPane({ pane, footer, close }) {
 function renderPasteLoadPane({ pane, footer, close }) {
   pane.innerHTML = `
     <div class="df-paste-modal">
-      <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON or Mermaid code - the format is detected automatically:</p>
+      <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON, a Salesforce Flow, or Mermaid code - the format is detected automatically:</p>
       <textarea class="df-paste-modal__input" spellcheck="false" rows="9"
         placeholder='{ "diagramType": "architecture", "graph": { "cells": [ ... ] } }&#10;&#10;OR&#10;&#10;flowchart TD&#10;  A[Start] --> B[Decision]'
         style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
@@ -508,6 +515,11 @@ function renderPasteLoadPane({ pane, footer, close }) {
         <div class="df-paste-modal__fmt" data-fmt="json">
           <div class="df-paste-modal__fmt-title">Diagramforce JSON</div>
           <div class="df-paste-modal__fmt-sub">A diagram exported via <strong>Save → Export to JSON</strong>, or generated with the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" class="df-paste-modal__fmt-anchor">Diagramforce LLM Spec</a>.</div>
+          <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+        </div>
+        <div class="df-paste-modal__fmt" data-fmt="flow">
+          <div class="df-paste-modal__fmt-title">Salesforce Flow</div>
+          <div class="df-paste-modal__fmt-sub">A flow's <strong>Tooling API</strong> response, or the contents of its <strong>.flow-meta.xml</strong> source file. Converted to a Flow diagram - element cards, decision outcomes, fault and Go To paths.</div>
           <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
         </div>
         <div class="df-paste-modal__fmt" data-fmt="mermaid">
@@ -537,13 +549,17 @@ function renderPasteLoadPane({ pane, footer, close }) {
   const detect = (raw) => {
     const t = raw.trim();
     if (!t) return { kind: 'empty' };
+    // Salesforce Flow FIRST: a Tooling API response is JSON too, so describePastedJSON would claim it and
+    // fail with a confusing "not a diagram" error. isFlowSourceText only matches real Flow metadata (it
+    // rejects anything carrying `graph`/`diagramType`), so a Diagramforce document still falls through.
+    if (tctx.modules.persistence.isFlowSourceText?.(t)) return { kind: 'flow', xml: t[0] === '<' };
     if (t[0] === '{' || t[0] === '[') {
       const d = tctx.modules.persistence.describePastedJSON(t);
       return d.ok ? { kind: 'json', rawType: d.rawType, diagramType: d.diagramType } : { kind: 'error', error: d.error };
     }
     const v = tctx.modules.mermaidImport.validateMermaid(t);
     if (v.ok) return { kind: 'mermaid', mtype: v.type };
-    return { kind: 'error', error: 'Not recognised as Diagramforce JSON or a supported Mermaid diagram.' };
+    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, or a supported Mermaid diagram.' };
   };
   const validate = () => {
     resetHighlight();
@@ -553,6 +569,13 @@ function renderPasteLoadPane({ pane, footer, close }) {
     mode = d.kind;
     loadBtn.disabled = false;
     status.textContent = '';
+    if (d.kind === 'flow') {
+      const col = pane.querySelector('.df-paste-modal__fmt[data-fmt="flow"]');
+      col?.classList.add('is-on');
+      const det = col?.querySelector('.df-paste-modal__fmt-detected');
+      if (det) det.textContent = d.xml ? '.flow-meta.xml -> Flow' : 'Tooling API JSON -> Flow';
+      return;
+    }
     if (d.kind === 'json') {
       jsonCol?.classList.add('is-on');
       // Showcase what the paste will become: "<diagramType from JSON> → <friendly Diagram Type>" in brand green.
@@ -565,7 +588,8 @@ function renderPasteLoadPane({ pane, footer, close }) {
   input.addEventListener('input', validate);
   loadBtn.addEventListener('click', async () => {
     let ok = false;
-    if (mode === 'json') ok = await tctx.modules.persistence.loadJSONText(input.value, 'Pasted');
+    if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
+    else if (mode === 'json') ok = await tctx.modules.persistence.loadJSONText(input.value, 'Pasted');
     else if (mode === 'mermaid') ok = tctx.modules.mermaidImport.importMermaidText(input.value);
     if (ok) close();
   });

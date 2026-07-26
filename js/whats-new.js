@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.20.1';
-import { buildModal } from './feedback.js?v=1.20.1';
+import { compareSemver } from './util.js?v=1.21.0';
+import { buildModal } from './feedback.js?v=1.21.0';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,35 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.21.0 — the DOMAIN MOVE release. This entry is the one users actually read on the new host: arriving
+  // at diagramforce.com means an EMPTY localStorage (storage is per-origin), so `isNewerRelease` sees a null
+  // lastSeen and the normal overlay never fires — `maybeShowMovedEntry()` force-shows THIS entry (index 0)
+  // exactly once instead. So keep index 0 worth reading cold. The new-home highlight is AUTHORED here (it
+  // deserves the same weight as its siblings); only the "Bring my diagrams over" BUTTON is appended to it at
+  // runtime on the new host — see the domain-move block below. Also covers 1.20.1's external import, which
+  // shipped as a PATCH and so was never announced (same catch-up reasoning as the 1.20.0 entry).
+  {
+    version: '1.21.0',
+    // THE DOMAIN-MOVE ENTRY. Found by this flag, never by index or version, because it has a second job that
+    // outlives its release: on diagramforce.com a first-time visitor is shown THIS card - whatever version they
+    // land on - so the "bring my diagrams over" route can never go missing. Keep the flag on exactly one entry
+    // (dev/tests/whats-new.test.js pins that) and do not prune this entry while the old host still redirects.
+    domainMove: true,
+    title: "What's new in Diagramforce",
+    intro: 'Diagramforce has a new home at <strong>diagramforce.com</strong>. Your diagrams, Google Drive sync and shared links all keep working.',
+    highlights: [
+      // The "Bring my diagrams over" button is APPENDED to this item at runtime on the new host (see the
+      // domain-move block below) - it is the only part that needs the new origin, so the item itself is
+      // authored here and carries equal weight to its siblings.
+      { icon: 'share_link', text: '<strong>A new home: diagramforce.com.</strong> Same app, shorter address. Every link you have already shared keeps working - the old address redirects here automatically. Diagrams in your Google Drive are already here. Diagrams saved only in your browser stay on the old address until you bring them across, which takes one click.' },
+      // Flow import leads the feature items: it is the release's biggest new capability and the only one
+      // that needs nothing installed. It sits ABOVE the Claude skill deliberately - the skill item also
+      // mentions flows, so the in-app route should be read first or the two blur together.
+      { icon: 'flow', text: '<strong>Turn a real Salesforce Flow into a diagram.</strong> Drop the flow into <strong>Load &amp; Import</strong> - either its <strong>.flow-meta.xml</strong> source file or the Tooling API response - and Diagramforce draws it from the org\'s own metadata: every element, decision outcome, fault path and Go To jump, positioned the way Flow Builder had it. Each card keeps the detail behind it - the fields a Create or Update actually writes, what a Get reads out and into which variable, a screen\'s components, the condition behind each outcome - and a summary card above Start records the flow\'s status, API version and resources. It all runs in your browser; the flow is never uploaded anywhere.' },
+      { icon: 'einstein', text: '<strong>Build diagrams with Claude.</strong> There is now a free Diagramforce skill for Claude: describe what you want and it hands back a ready-to-open diagram - architecture, data model, Data Cloud field mapping, process, org chart, Gantt or sequence. It can rebuild a diagram from a screenshot too, and it converts a real Salesforce Flow the same way the app does. <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Get the skill</a>.' },
+      { icon: 'apps', text: '<strong>Open Diagramforce from another app.</strong> Any website can now add an "Open in Diagramforce" button that sends a diagram straight into a new tab here - no account, no file to download, and no size limit. Useful if you build a tool that generates flows, data models or mappings and want people to see them on a canvas. <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/how-to-use/web-integration.md" target="_blank" rel="noopener">Copy-paste snippet</a>.' },
+    ],
+  },
   // 1.20.0 — the catch-up entry: 1.19.2-1.19.5 were PATCH releases, so this overlay never fired for
   // them and users got no in-app notice of their user-facing changes. This entry deliberately covers
   // the best of the whole 1.19.x train PLUS 1.20.0. (The diagramforce.com domain may still join at cut.)
@@ -80,15 +109,21 @@ export const WHATS_NEW = [
   },
 ];
 
-// Domain move (2026): on the NEW host only, prepend a "we've moved - bring your diagrams over" item to the current
-// release entry so it rides the What's-New overlay. The button's click handler is injected via setMigrationHandler
-// (from app.js) and wired in showWhatsNewModal - inline onclick is CSP-blocked. Absent on the old host and in tests
-// (the hostname never matches), so WHATS_NEW is unmutated there and the whats-new unit tests are unaffected.
-if (typeof location !== 'undefined' && location.hostname === 'diagramforce.com' && WHATS_NEW[0]) {
-  WHATS_NEW[0].highlights.unshift({
-    icon: 'share_link',
-    text: '<strong>Welcome to diagramforce.com - our new home.</strong> If you saved diagrams in your browser on the old address, bring them across in one click (allow pop-ups if your browser asks). Everything on Google Drive is already here. <button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate" style="margin-top:10px">Bring my diagrams over</button>',
-  });
+// Domain move (2026): on the NEW host only, append the "bring my diagrams over" button to the release's
+// OWN new-home highlight, rather than unshifting a second near-duplicate item above it. The highlight already
+// explains the move and carries the same weight as its siblings; only the BUTTON needs the new origin. Matched
+// on content, not index, so a later release that pushes a different entry to the front can't collect the button
+// by accident. The click handler is injected via setMigrationHandler (app.js) and wired in showWhatsNewModal -
+// an inline onclick is CSP-blocked. Absent on the old host and in tests (the hostname never matches), so
+// WHATS_NEW is unmutated there and the whats-new unit tests are unaffected.
+if (typeof location !== 'undefined' && location.hostname === 'diagramforce.com') {
+  // Search the DOMAIN-MOVE entry, not WHATS_NEW[0]. Index 0 is "the newest release", which stops being the move
+  // entry the moment another release ships - at which point the button would have been appended to nothing and
+  // the migration route would have silently vanished for every new arrival.
+  const home = WHATS_NEW.find((e) => e.domainMove)?.highlights?.find((h) => h.text.includes('diagramforce.com'));
+  if (home) {
+    home.text += ' <button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate" style="margin-top:10px">Bring my diagrams over</button>';
+  }
 }
 
 // ── Pure decision helpers (unit-tested in tests/whats-new.test.js) ───────────
@@ -128,6 +163,11 @@ export function init(appVersion) { _appVersion = appVersion; }
 // Domain-move (2026): the "Bring my diagrams over" button in the current release entry (new host only) calls this
 // handler, injected from app.js - so whats-new.js needs no import of the migration bridge. No-op until set.
 let _migrationHandler = null;
+let _migrationPending = null;
+/** Wired from app.js to migrationBridge.isMigrationPending. Absent on the old host and in tests, where it stays
+ *  null and the overlay behaves exactly as it always did. */
+export function setMigrationPendingCheck(fn) { _migrationPending = fn; }
+
 export function setMigrationHandler(fn) { _migrationHandler = fn; }
 
 /**
@@ -167,10 +207,35 @@ export function maybeShowWhatsNew(fallbackLastSeen = null) {
 /** Force-show the What's-New overlay for the CURRENT release, ignoring the seen-state. Wired to the About modal's
  *  version chip so the release notes stay reachable (re-read anytime, and reviewable before a release). Falls back to
  *  the newest authored entry if the running version isn't listed yet. */
+/** Which entries the Help-menu overlay should render, as a PURE function of the running version and whether a
+ *  domain migration is still outstanding - extracted so it is unit-testable without a DOM (unit-tested in
+ *  dev/tests/whats-new.test.js).
+ *
+ *  While a migration is pending the move card LEADS. That is the only permanent route to the "Bring my diagrams
+ *  over" button: the boot prompt fires once per browser, so a user who dismissed it and then updated to a later
+ *  release would otherwise have no way back to diagrams still sitting on the old origin. The current release's
+ *  notes still follow it - the move card supplements the changelog rather than replacing it. */
+export function overlayEntriesFor(appVersion, migrationPending) {
+  const [cMaj, cMin] = majorMinor(appVersion);
+  const current = WHATS_NEW.find((e) => { const [m, n] = majorMinor(e.version); return m === cMaj && n === cMin; }) || WHATS_NEW[0];
+  const move = migrationPending ? WHATS_NEW.find((e) => e.domainMove) : null;
+  return [move, current].filter((e, i, a) => e && a.indexOf(e) === i);
+}
+
 export function showWhatsNewNow() {
-  const [cMaj, cMin] = majorMinor(_appVersion);
-  const entry = WHATS_NEW.find((e) => { const [m, n] = majorMinor(e.version); return m === cMaj && n === cMin; }) || WHATS_NEW[0];
-  if (entry) showWhatsNewModal([entry]);
+  const entries = overlayEntriesFor(_appVersion, !!_migrationPending?.());
+  if (entries.length) showWhatsNewModal(entries);
+}
+
+/** The domain-move card, whatever release is running. Distinct from showWhatsNewNow, which shows the CURRENT
+ *  release's notes - that is the wrong card for a first-time arrival on the new host, who needs the migration
+ *  route rather than a changelog for a version they have never run. Returns false when no move entry is
+ *  authored (the entry has been pruned), so the caller can fall back rather than show an empty modal. */
+export function showDomainMoveNotice() {
+  const entry = WHATS_NEW.find((e) => e.domainMove);
+  if (!entry) return false;
+  showWhatsNewModal([entry]);
+  return true;
 }
 
 function showWhatsNewModal(entries) {
@@ -194,6 +259,16 @@ function showWhatsNewModal(entries) {
   const { body, footer, close } = buildModal({
     title: titleText,
     className: 'df-whatsnew-modal',
+    // ABOVE the New Diagram picker (z-index 10000, css/tabs.css), BELOW toasts + the skip link (10100).
+    // The two overlays collide on exactly one journey, and it is the one the domain move depends on: a
+    // first arrival at diagramforce.com has an empty per-origin localStorage, so there are zero tabs, so
+    // session-store opens the New Diagram picker during restore - and the "we've moved / bring your
+    // diagrams over" card then rendered BEHIND it at buildModal's default 3000, invisible, while
+    // maybeShowMovedEntry() had already burned its once-per-browser flag. The user never saw the card and
+    // their old-origin diagrams had no route across. Dismissing the card now reveals the picker beneath,
+    // which is the right order to meet them in. (A class rule cannot do this - buildModal sets the
+    // z-index INLINE, so it must be passed here.)
+    zIndex: 10050,
     width: '480px',
     bodyStyle: 'padding:16px 20px',
     bodyHtml: `

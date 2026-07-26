@@ -4,10 +4,11 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.20.1';
-import { finishStandardProps } from './render-core.js?v=1.20.1';
-import { addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.20.1';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.20.1';
+import { prctx } from './context.js?v=1.21.0';
+import { finishStandardProps } from './render-core.js?v=1.21.0';
+import { addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.0';
+import { escHtml } from '../util.js?v=1.21.0';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.0';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -73,6 +74,28 @@ export function renderFlowElementProps(cell) {
       } else if (spec.multiline) addTextarea(details, label, val, write);
       else addText(details, label, val, write);
     }
+  }
+
+  // Metadata — the `details` row array, rendered as a compact two-column table (1.21.0). Where "Flow Details"
+  // above holds the element's KEY facts as one-line fields sized for the card, this holds the long tail the card
+  // has no room for: which fields a Create/Update actually writes, which fields a Get reads out and into what,
+  // a screen's full component list with types, each decision outcome's condition, an action's parameters.
+  //
+  // Read-only on purpose. These rows are IMPORTED FACTS about a real flow - an editable grid would invite them
+  // to drift from the org they describe, and nothing in the app keys off them (unlike a DataObject's typed
+  // fields, which mapping links resolve against - which is why that one needs a full editor and this does not).
+  // Stays inside decision #9: free text, no parsing, no schema.
+  const rows = cell.get('details');
+  if (Array.isArray(rows) && rows.length) {
+    const meta = section(prctx.bodyEl, 'Metadata');
+    const table = document.createElement('table');
+    table.className = 'df-prop-detail-table';
+    table.innerHTML = rows.map((r) => {
+      const label = escHtml(String(r?.label ?? ''));
+      const value = escHtml(String(r?.value ?? ''));
+      return `<tr><th scope="row">${label}</th><td>${value || '<span class="df-prop-detail-table__empty">-</span>'}</td></tr>`;
+    }).join('');
+    meta.appendChild(table);
   }
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });

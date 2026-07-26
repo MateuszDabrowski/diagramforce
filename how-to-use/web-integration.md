@@ -27,7 +27,7 @@ it in Diagramforce).
 Drop this into your web app and call `openInDiagramforce(diagram)` from a button click:
 
 ```js
-const DIAGRAMFORCE_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
+const DIAGRAMFORCE_ORIGIN = 'https://diagramforce.com';
 
 /**
  * Open a diagram in Diagramforce in a new tab.

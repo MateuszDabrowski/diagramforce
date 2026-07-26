@@ -2033,6 +2033,17 @@
   color: var(--text-primary);
 }
 .df-whatsnew__item strong { font-weight: 600; }
+/* Links inside a What's-New highlight. They had NO rule at all, so they fell through to the browser default
+   -- pure blue on a dark panel, effectively unreadable, which is how the 1.21.0 "Get the skill" and
+   "Copy-paste snippet" links shipped. Matches the established modal-link pattern (.df-about__link):
+   brand-primary, underline only on hover. */
+.df-whatsnew__item a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.df-whatsnew__item a:hover,
+.df-whatsnew__item a:focus-visible { text-decoration: underline; }
 .df-whatsnew__icon {
   flex: 0 0 auto;
   width: 20px;

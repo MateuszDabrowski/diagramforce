@@ -2,17 +2,17 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.20.1';
-import * as history from '../history.js?v=1.20.1';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.20.1';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.20.1';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.20.1';
-import { confirmModal, showToast } from '../feedback.js?v=1.20.1';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.20.1';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.20.1';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.20.1';
-import { escHtml } from '../util.js?v=1.20.1';
-import { saveCellAsShape } from '../templates.js?v=1.20.1';
+import { prctx, asUndoBatch } from './context.js?v=1.21.0';
+import * as history from '../history.js?v=1.21.0';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.21.0';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.21.0';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.21.0';
+import { confirmModal, showToast } from '../feedback.js?v=1.21.0';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.21.0';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.21.0';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.21.0';
+import { escHtml } from '../util.js?v=1.21.0';
+import { saveCellAsShape } from '../templates.js?v=1.21.0';
 
 export function section(parent, title, open = true) {
   const wrap = document.createElement('div');
@@ -625,12 +625,20 @@ export function addTextarea(parent, label, value, onChange, opts) {
   ta.className = 'df-properties__input df-properties__textarea';
   ta.value = value ?? '';
   if (opts?.placeholder) ta.placeholder = opts.placeholder;
-  // Auto-size: show one more line than current text
+  // Auto-size to the RENDERED height, not the newline count. Counting `\n` misses WRAPPED lines entirely,
+  // so a long single-line value - a screen's component list, a filter expression, an assignment summary -
+  // sat in a 2-row box you had to drag open to read. Measure scrollHeight instead, which counts wraps.
+  // Bounded so one enormous value cannot push the rest of the panel off-screen; past the cap it scrolls.
+  const TA_MIN_H = 44, TA_MAX_H = 260;
   const autoSize = () => {
-    const lines = (ta.value.match(/\n/g) || []).length + 1;
-    ta.rows = lines + 1;
+    ta.style.height = 'auto';                       // release the previous height so scrollHeight shrinks too
+    const h = Math.min(Math.max(ta.scrollHeight, TA_MIN_H), TA_MAX_H);
+    ta.style.height = `${h}px`;
+    ta.style.overflowY = ta.scrollHeight > TA_MAX_H ? 'auto' : 'hidden';
   };
-  autoSize();
+  ta.rows = 2;                                      // pre-layout floor; autoSize takes over once measurable
+  // scrollHeight is 0 while detached, so size after the node is in the document.
+  requestAnimationFrame(autoSize);
   ta.addEventListener('input', () => { onChange(ta.value); autoSize(); });
   // Coalesce per-keystroke events into one undo entry per focus session.
   let editing = false;
