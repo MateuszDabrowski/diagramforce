@@ -1,8 +1,8 @@
 // Cloud-sync control (CLEANUP S4) — the Drive sync icon + state-aware dropdown (sign-in status row / sync-now / history / auto-sync toggle / disconnect / about). Connecting is the status-row "Sign in" button (signIn), NOT a menu item. Reads tctx.modules; imports btn+setupDropdown (context) + showDriveHistoryModal (drive-history) - one-way slice edges. init calls setupSyncControl.
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.21.1';
-import { formatRelativeTime } from '../util.js?v=1.21.1';
-import { btn, setupDropdown, tctx } from './context.js?v=1.21.1';
-import { showDriveHistoryModal } from './drive-history.js?v=1.21.1';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.21.2';
+import { formatRelativeTime } from '../util.js?v=1.21.2';
+import { btn, setupDropdown, tctx } from './context.js?v=1.21.2';
+import { showDriveHistoryModal } from './drive-history.js?v=1.21.2';
 
 // One icon (left of Share Link) + a state-aware dropdown menu. The Drive icon is
 // colour + glyph coded by sync state via the SLDS sync family; the time text shows

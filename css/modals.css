@@ -1188,6 +1188,28 @@
 .df-save-mgr__loose-text { flex: 1 1 auto; }
 .df-save-mgr__loose-review { flex: 0 0 auto; }
 
+/* ── Diagram with AI (Help → Diagram with AI) ──
+   Two sections, each: title, one-line blurb, an optional "your copy is behind" note, and a View / Download
+   pair. The actions are <a>, not <button> - Download is a same-origin `download` link and View is an external
+   href, so .df-modal__btn has to sit correctly on an anchor: it is authored for <button>, hence the explicit
+   inline-flex + centring + no-underline here rather than relying on the button rules. */
+.df-ai__item { padding: 14px 0; border-bottom: 1px solid var(--border-color); }
+.df-ai__item:first-child { padding-top: 2px; }
+.df-ai__item:last-child { border-bottom: none; padding-bottom: 2px; }
+.df-ai__title { margin: 0 0 5px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.df-ai__blurb { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+/* Advisory, never alarming: it can only know about downloads made in THIS browser, so it is a muted note and
+   not a warning tone - claiming the user's copy IS stale would be a claim we cannot support. */
+.df-ai__stale { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); }
+/* Secondary link left, primary button right. Two side-by-side buttons made View compete with Download for the
+   eye when only one of them is the point of the section. space-between (not margin-left:auto on the button) so
+   the pair still reads correctly if the link ever wraps. */
+.df-ai__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.df-ai__view { font-size: 13px; color: var(--text-secondary); text-decoration: none; }
+.df-ai__view:hover, .df-ai__view:focus-visible { color: var(--color-primary); text-decoration: underline; }
+/* .df-modal__btn is authored for <button>; Download is an <a> so it needs these to sit right. */
+.df-ai__actions .df-modal__btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
 /* ── Keyboard shortcuts reference (Help → Keyboard shortcuts) ── */
 .df-shortcuts__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 28px; }
 .df-shortcuts__group { margin-bottom: 12px; }
@@ -2048,9 +2070,33 @@
    wrapped onto a ragged line after the last word, burying the one action the card exists to prompt. Block +
    centred gives it its own line. Generic on purpose -- any future highlight CTA gets the same treatment. */
 .df-whatsnew__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 2px;
+}
+/* The "nothing to bring over" exit. Deliberately a quiet text button, not a second filled one: transferring is
+   the action worth taking, and this is the escape hatch for people it does not apply to. */
+.df-whatsnew__skip {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.df-whatsnew__skip:hover,
+.df-whatsnew__skip:focus-visible { color: var(--color-primary); }
+/* After dismissing, the CTA row becomes a plain confirmation line - centred like the buttons it replaced. */
+.df-whatsnew__cta--done {
   display: block;
   text-align: center;
-  margin: 14px 0 2px;
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 .df-whatsnew__icon {
   flex: 0 0 auto;

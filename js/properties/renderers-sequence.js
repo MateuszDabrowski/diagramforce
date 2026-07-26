@@ -3,9 +3,9 @@
 // (finishStandardProps from render-core), reading graph/paper/selection + the panel DOM refs + the showProperties
 // dispatch via prctx at CALL time; never imports the facade back. The facade's showProperties() dispatch imports
 // these four back.
-import { prctx } from './context.js?v=1.21.1';
-import { finishStandardProps } from './render-core.js?v=1.21.1';
-import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.21.1';
+import { prctx } from './context.js?v=1.21.2';
+import { finishStandardProps } from './render-core.js?v=1.21.2';
+import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.21.2';
 
 export function renderSequenceParticipantProps(cell) {
   // Content

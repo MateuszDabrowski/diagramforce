@@ -75,6 +75,7 @@ export const TYPE_LABELS = {
   'df.FlowUpdateRecords':        'Update Records',
   'df.FlowDeleteRecords':        'Delete Records',
   'df.FlowRollback':             'Roll Back Records',
+  'df.FlowStage':                'Stage',
   'df.Pill':                'Pill',
   'df.Legend':              'Legend',
   'df.Table':               'Table',
@@ -157,4 +158,5 @@ export const DEFAULT_SIZES = {
   'df.FlowUpdateRecords':        { width: 210, height: 56 },
   'df.FlowDeleteRecords':        { width: 210, height: 56 },
   'df.FlowRollback':             { width: 210, height: 56 },
+  'df.FlowStage':                { width: 210, height: 56 },
 };

@@ -93,13 +93,14 @@ function capRows(out) {
   const extra = out.length - DETAIL_CAP;
   return out.slice(0, DETAIL_CAP).concat([{ label: `+${extra} more`, value: 'not shown' }]);
 }
+// Tolerate a NON-ARRAY. XML has no arrays, so a repeated child that appears exactly once arrives as a bare
+// object unless flow-import.js's schema hint lists it - and a missing hint used to crash the whole import
+// (for..of over an object throws), turning one absent key into a total failure on an ordinary flow.
+// Degrading to a single item keeps a schema-hint gap lossy instead of fatal.
+const asList = (v) => (Array.isArray(v) ? v : (v && typeof v === 'object' ? [v] : []));
 function rows(list, toRow) {
   const out = [];
-  // Tolerate a NON-ARRAY. XML has no arrays, so a repeated child that appears exactly once arrives as a bare
-  // object unless flow-import.js's schema hint lists it - and a missing hint used to crash the whole import
-  // here (for..of over an object throws), turning one absent key into a total failure on an ordinary flow.
-  // Degrading to a single row keeps a schema-hint gap lossy instead of fatal.
-  const items = Array.isArray(list) ? list : (list && typeof list === 'object' ? [list] : []);
+  const items = asList(list);
   for (const item of items) {
     const r = toRow(item);
     if (r && r.label) out.push({ label: String(r.label), value: r.value == null ? '' : String(r.value) });
@@ -138,21 +139,76 @@ const screenFieldLabel = (f) => {
  *  component gated on a variable never appears as a connector, so without this the reader cannot tell a
  *  screen that always shows six fields from one that shows three of six depending on how the flow was
  *  launched. It rides the same row as the component rather than adding a second one. */
-const screenRows = (el) => rows(el.fields, (f) => {
-  const label = screenFieldLabel(f);
-  const shown = summarizeConditions(f.visibilityRule?.conditions, f.visibilityRule?.conditionLogic);
-  return {
-    label,
-    // The API NAME rides along whenever it differs from the label. Labels are not unique the way names are
-    // - two components can legitimately share one - and the name is what every other element references,
-    // so dropping it would make a row impossible to trace back.
-    value: [
-      f.extensionName || f.fieldType || '',
-      label !== f.name ? f.name : null,
-      shown && `shown when ${shown}`,
-    ].filter(Boolean).join(' \u00b7 '),
-  };
-});
+// A screen field can CONTAIN fields: `regionContainerType` Section / Column nest their real inputs one or two
+// levels down. Walking only the top level documented the layout scaffolding ("Section1, Column1") and hid every
+// input the screen actually asks for - and modern screens are sectioned by default, so that is the common case.
+//
+// Recurse on the PRESENCE of `f.fields`, never on the enum: `regionContainerType` appears nowhere in this repo
+// outside a backlog note - no fixture, no test - and this file's own rule (see the header) is that the key set
+// grows with API version, so never assume a fixed shape.
+//
+// The walker must NOT call rows(): rows() applies capRows itself, so per-level calls would cap per level and
+// reproduce the mid-table "+N more" that actionParamRows was fixed for. It appends to ONE flat array which
+// screenRows caps ONCE at the end.
+const SCREEN_DEPTH_CAP = 6;   // Section > Column > field is 2 - this only guards a malformed tree
+function screenFieldRows(list, out, prefix, depth = 0) {
+  if (depth > SCREEN_DEPTH_CAP) return out;
+  for (const f of asList(list)) {
+    const label = screenFieldLabel(f);
+    const kids = asList(f.fields);
+    const shown = summarizeConditions(f.visibilityRule?.conditions, f.visibilityRule?.conditionLogic);
+    // A container is scaffolding, so its children REPLACE it - unless it says something they do not. A section
+    // gated on a variable is real in-screen branching that never appears as a connector (the same argument that
+    // put `shown when` on component rows), and a childless container is only evidenced by its own row.
+    if (label && (!kids.length || shown)) {
+      out.push({
+        label: prefix ? `${prefix} / ${label}` : label,
+        // The API NAME rides along whenever it differs from the label. Labels are not unique the way names are
+        // - two components can legitimately share one - and the name is what every other element references,
+        // so dropping it would make a row impossible to trace back.
+        value: [
+          f.extensionName || f.fieldType || '',
+          label !== f.name ? f.name : null,
+          shown && `shown when ${shown}`,
+        ].filter(Boolean).join(' \u00b7 '),
+      });
+    }
+    // PREFIX, not indent: the panel renders this label through escHtml into a plain <th> with no `white-space`
+    // rule, so leading spaces collapse and an indent is invisible unless U+00A0 is smuggled into the saved JSON
+    // and the share URL - presentation inside data. Only a USER-NAMED container earns one; `label !== f.name` is
+    // the same test the value column already uses, so Flow Builder's auto-generated Section1 / Column1 stay
+    // transparent instead of spending a line of a 42%-wide column on themselves.
+    if (kids.length) {
+      const named = label && label !== f.name ? label : null;
+      screenFieldRows(kids, out, [prefix, named].filter(Boolean).join(' / '), depth + 1);
+    }
+  }
+  return out;
+}
+const screenRows = (el) => capRows(screenFieldRows(el.fields, [], ''));
+/** Leaves only, in order - what the screen actually asks, with the containers dropped. */
+function flattenScreenFields(list, out = [], depth = 0) {
+  if (depth > SCREEN_DEPTH_CAP) return out;
+  for (const f of asList(list)) {
+    const kids = asList(f.fields);
+    if (kids.length) flattenScreenFields(kids, out, depth + 1);
+    else out.push(f);
+  }
+  return out;
+}
+/** Orchestrator / approval stage steps: what each step is, and who it falls to. For an approval flow this IS
+ *  the content - a stage named "Legal Review" says nothing without the assignee and the step kind. */
+const STEP_KIND = { stepApproval: 'approval', stepBackground: 'background', stepInteractive: 'interactive' };
+const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
+  label: st.label || st.name,
+  value: [
+    STEP_KIND[st.actionType] || st.actionType || '',
+    (st.label || st.name) !== st.name ? st.name : null,
+    // assigneeType is User / Group; the reference is the actual user or group. Several assignees are legal.
+    asList(st.assignees).map((a) => a.assignee?.stringValue || a.assignee?.elementReference || a.assigneeType)
+      .filter(Boolean).join(', ') || null,
+  ].filter(Boolean).join(' \u00b7 '),
+}));
 /** Each decision outcome and the condition that selects it. */
 const outcomeRows = (el) => {
   const out = rows(el.rules, (r) => ({
@@ -309,7 +365,10 @@ const COLLECTION_PROCESSOR_SUBTYPE = {
 // Each collection -> [cell type (or resolver), per-kind field extractor].
 const COLLECTIONS = [
   ['screens', () => 'df.FlowScreen', (e) => {
-    const all = e.fields || [];
+    // Leaves, not the top level: on a sectioned screen the top level is Section1 / Column1, so the summary
+    // used to name the scaffolding and never the inputs. Flattening also stops a RegionContainer counting as
+    // "interactive" merely because it has a fieldType.
+    const all = flattenScreenFields(e.fields);
     // DisplayText blocks are prose, not inputs - lead with the interactive fields so the card says what the
     // screen ASKS, and cap the list: a 13-screen flow otherwise writes paragraphs onto a 210px card.
     const interactive = all.filter((f) => f.fieldType && f.fieldType !== 'DisplayText');
@@ -322,9 +381,12 @@ const COLLECTIONS = [
   // Orchestrator stages have NO dedicated df.Flow* class (the spec's Flow Shapes table stops at the
   // standard element set), so they degrade to the generic Action card with their steps as the summary.
   // Recorded as a warning per run - a df.FlowStage shape would be the faithful fix.
-  ['orchestratedStages', () => 'df.FlowAction', (e) => ({
-    actionName: (e.stageSteps || []).map((s) => s.label || s.name).join(' → ') || null,
-    actionType: 'Orchestrator stage',
+  // Orchestrator / ApprovalWorkflow. Connectors need NO special handling: this falls into the generic `else`
+  // below, which already routes `connector` / `connectors[]`, and `faultConnector` is handled for every
+  // collection - which is why stages were never dropped even while they drew as generic Action cards.
+  ['orchestratedStages', () => 'df.FlowStage', (e) => ({
+    stageSteps: asList(e.stageSteps).map((s) => s.label || s.name).join(' → ') || null,
+    details: stageStepRows(e),
   })],
   ['subflows', () => 'df.FlowSubflow', (e) => ({ flowName: e.flowName })],
   ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${pickValue(a.value)}`).join('; ') || null })],
@@ -555,7 +617,6 @@ function convert(input, opts = {}) {
   // warns for collections this converter does not know at all; this warns for the ones it knows but
   // cannot draw faithfully.)
   const NO_SHAPE_YET = [
-    ['orchestratedStages', 'Orchestrator stage', 'df.FlowStage'],
     ['customErrors', 'Custom Error element', 'df.FlowCustomError'],
     ['apexPluginCalls', 'Apex Plugin call', 'df.FlowApexPlugin'],
     ['steps', 'legacy Step element', 'df.FlowStep'],

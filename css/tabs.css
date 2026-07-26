@@ -912,14 +912,25 @@
   font-family: var(--font-family);
 }
 
-.df-new-modal__card:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(29, 115, 201, 0.15);
-  transform: translateY(-2px);
-}
+/* HOVER-CAPABLE POINTERS ONLY. On iOS Safari `:hover` is recomputed for whatever element scrolls under a
+   stationary touch point, so touch-scrolling the New Diagram lists dragged this ring from tile to tile as they
+   passed under the finger - the user has selected nothing, but one card reads as chosen. (Purely cosmetic: the
+   modal has NO card selection state; each tile is a button acting from its own closed-over meta, so a stale ring
+   can never open the wrong thing.) `hover: hover` ALONE - never `and (pointer: fine)`: iOS already reports
+   `hover: none`, so the pointer clause is redundant there and additionally strips the ring from hover-capable
+   coarse pointers (stylus, tablet + mouse). Matches the precedent at the `:hover` gate further down this file.
+   Accepted limit: a touchscreen LAPTOP reports `hover: hover` and still shows the drag - no media query can
+   separate those two. Shared by all three tabs (Create / Load / Templates) - one rule, one fix. */
+@media (hover: hover) {
+  .df-new-modal__card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(29, 115, 201, 0.15);
+    transform: translateY(-2px);
+  }
 
-[data-theme="dark"] .df-new-modal__card:hover {
-  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.15);
+  [data-theme="dark"] .df-new-modal__card:hover {
+    box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.15);
+  }
 }
 
 .df-new-modal__icon {
@@ -1012,6 +1023,21 @@
      Reset to a plain stacked layout - the whole dialog scrolls here, so the sticky float isn't needed. */
   .df-new-modal__panel[data-tab="templates"] { top: 0; }
   .df-new-modal__filter { position: static; margin: 0 auto 12px; top: auto; }
+
+  /* ...and finish the job that comment starts. The Load/Templates panels are `position: absolute; inset: 0;
+     overflow-y: auto` on desktop so the panels area reserves the TALLEST panel's height and a tab switch never
+     jumps. On the full-screen mobile sheet that reserved height IS the phantom scroll space: the dialog already
+     scrolls, so the absolute panel gave a SECOND scroller inside it and reaching the end of a list meant working
+     both. Return them to normal flow - one scroller, the dialog. `[hidden] { display: none }` above still
+     applies. Padding goes too: it exists only to clear the card's :hover ring, which the media gate above
+     removes on touch. DELIBERATE consequence - the sheet's height now follows the ACTIVE panel, so switching
+     tabs on mobile changes height instead of holding the tallest. That is the trade, not a side effect. */
+  .df-new-modal__panel:not([data-tab="create"]) {
+    position: static;
+    inset: auto;
+    overflow: visible;
+    padding: 0;
+  }
 
   .df-new-modal__grid {
     gap: 10px;

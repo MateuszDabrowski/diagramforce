@@ -487,12 +487,30 @@
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
+  /* An `opacity: 0` control is still HIT-TESTABLE, so every My-Templates tile carried an invisible but tappable
+     18x18 delete target. On a mouse that is benign - you can only find it by hovering, which reveals it first.
+     On touch there is no hover, so it was a blind hazard (confirmModal caught the consequence; it should not get
+     that far). Hiding it from hit-testing is only HALF the fix: `:hover` and `:focus-visible` below are the only
+     things that reveal this button, so `pointer-events: none` on its own would make deleting a custom template
+     IMPOSSIBLE on a phone. The touch branch further down shows it instead - visible and tappable beats invisible
+     and tappable, and beats unreachable. Every `opacity: 1` branch must restore `pointer-events`. */
+  pointer-events: none;
   transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
 .df-stencil__item--template:hover .df-template-delete,
 .df-template-delete:focus-visible {
   opacity: 1;
+  pointer-events: auto;
+}
+
+/* TOUCH: no hover exists to reveal it, so show it permanently rather than leaving a control the user cannot
+   reach. Covers both layouts - the absolutely-positioned grid tile and the inline `--row` variant. */
+@media (hover: none) {
+  .df-template-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .df-template-delete:hover {

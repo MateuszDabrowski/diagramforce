@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.21.1';
-import { buildModal } from './feedback.js?v=1.21.1';
+import { compareSemver } from './util.js?v=1.21.2';
+import { buildModal } from './feedback.js?v=1.21.2';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -125,7 +125,14 @@ if (typeof location !== 'undefined' && location.hostname === 'diagramforce.com')
     // Block-level, centred CTA rather than an inline button. Appended inline it wrapped onto a ragged
     // line after the last word ("...one click. [button]"), which buried the single action this card exists
     // to prompt. Its own centred line makes it read as the call to action it is.
-    home.text += '<span class="df-whatsnew__cta"><button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate">Bring my diagrams over</button></span>';
+    // The secondary "nothing to bring over" link is the EXIT. Without it the only way to retire this card was
+    // to run a transfer, so anyone who never clicked - most fresh arrivals, who have nothing on the old origin
+    // at all - saw it prepended to every later release's notes forever. Secondary styling on purpose: bringing
+    // diagrams across is the action worth taking; this is for people it does not apply to.
+    home.text += '<span class="df-whatsnew__cta">'
+      + '<button class="df-modal__btn df-modal__btn--primary" data-action="df-migrate">Bring my diagrams over</button>'
+      + '<button class="df-whatsnew__skip" data-action="df-migrate-skip">I have nothing to bring over</button>'
+      + '</span>';
   }
 }
 
@@ -172,6 +179,10 @@ let _migrationPending = null;
 export function setMigrationPendingCheck(fn) { _migrationPending = fn; }
 
 export function setMigrationHandler(fn) { _migrationHandler = fn; }
+
+/** Wired from app.js to migrationBridge.dismissMigrationPrompt - the "nothing to bring over" exit. */
+let _migrationDismiss = null;
+export function setMigrationDismissHandler(fn) { _migrationDismiss = fn; }
 
 /**
  * Decide (synchronously) whether to show the What's-New overlay this session and,
@@ -277,10 +288,28 @@ function showWhatsNewModal(entries) {
     bodyHtml: `
       ${head.intro ? `<p class="df-whatsnew__intro">${head.intro}</p>` : ''}
       <ul class="df-whatsnew__list">${items}</ul>`,
-    footerHtml: '<button class="df-modal__btn df-modal__btn--primary" data-action="ok" style="margin-left:auto">Got it</button>',
+    // Amber accent, bottom-right, "Got it" - identical to Keyboard shortcuts and Diagram with AI. This was blue
+    // and left-aligned in one of the three, so the ONE Help dropdown offered three different-looking exits.
+    // "Got it" rather than "Done" because all three are modals you READ: downloading the spec or copying a
+    // shortcut does not COMPLETE anything, you still dismiss afterwards. "Done" belongs on a modal where the
+    // button ends a task the user started.
+    footerHtml: '<button class="df-modal__btn df-modal__btn--accent" data-action="ok" style="margin-left:auto">Got it</button>',
   });
   footer.querySelector('[data-action="ok"]').addEventListener('click', () => close());
   // Domain-move: the "Bring my diagrams over" button only exists in the injected entry on the new host; the optional
   // chaining makes this a no-op for every other release/entry (and everywhere the button isn't present).
   body.querySelector('[data-action="df-migrate"]')?.addEventListener('click', () => { if (_migrationHandler) _migrationHandler(); });
+  // Dismiss in place rather than closing the modal: the move card is usually shown ALONGSIDE the current
+  // release's notes, and closing the whole overlay would yank away something the user was reading. The card
+  // is gone on the next open. The confirmation names the old address, because that is what makes this
+  // recoverable - the Worker serves /migrate there indefinitely, so nothing is actually lost by dismissing.
+  body.querySelector('[data-action="df-migrate-skip"]')?.addEventListener('click', (e) => {
+    if (_migrationDismiss && !_migrationDismiss()) return;
+    const cta = e.target.closest('.df-whatsnew__cta');
+    if (cta) {
+      cta.innerHTML = '';
+      cta.textContent = 'Hidden. If you change your mind, diagramforce.mateuszdabrowski.pl still has them.';
+      cta.classList.add('df-whatsnew__cta--done');
+    }
+  });
 }

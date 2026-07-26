@@ -1,27 +1,30 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.21.1';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.21.1';
-import { resizeDataObjectToFit } from './components.js?v=1.21.1';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.21.1';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs } from './util.js?v=1.21.1';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.21.1';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.21.1';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.21.1';
-import { renderTemplateThumbnail } from './templates.js?v=1.21.1';
-import { showWhatsNewNow } from './whats-new.js?v=1.21.1';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.21.1';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.21.1';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.21.1';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.21.1';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.21.1';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.21.1';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.21.1';
+import { diagramHasImage } from './image-component.js?v=1.21.2';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.21.2';
+import { resizeDataObjectToFit } from './components.js?v=1.21.2';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.21.2';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.21.2';
+// The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
+// toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
+import { pctx } from './persistence/context.js?v=1.21.2';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.21.2';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.21.2';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.21.2';
+import { renderTemplateThumbnail } from './templates.js?v=1.21.2';
+import { showWhatsNewNow } from './whats-new.js?v=1.21.2';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.21.2';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.21.2';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.21.2';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.21.2';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.21.2';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.21.2';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.21.2';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.21.1';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.21.1';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.21.1';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.21.2';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.21.2';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.21.2';
 
 let modules = {};
 export function init(_modules) {
@@ -422,6 +425,7 @@ export function init(_modules) {
   // dropdown. btn-help-tour is wired in walkthrough.js (start); the other two here.
   setupDropdown('btn-help');
   btn('btn-help-whatsnew')?.addEventListener('click', () => showWhatsNewNow());
+  btn('btn-help-ai')?.addEventListener('click', () => openAiModal());
   btn('btn-help-shortcuts')?.addEventListener('click', () => openShortcutsModal());
   btn('btn-help-about')?.addEventListener('click', () => showAboutModal());
 
@@ -656,9 +660,75 @@ function openShortcutsModal() {
   bodyHtml += `<div class="df-shortcuts__group df-shortcuts__group--wide"><h3>Right-click&hellip;</h3>${RIGHT_CLICK_TIPS.map(([k, d]) => plainRow(k, d)).join('')}</div>`;
   const { footer, close } = buildModal({
     title: 'Keyboard shortcuts', width: '480px', className: 'df-shortcuts-modal', bodyHtml,
-    footerHtml: '<button class="df-modal__btn df-modal__btn--accent df-shortcuts__done">Done</button>',
+    // margin-left:auto - the Help menu's three modals must dismiss the same way. This one sat bottom-LEFT
+    // while What's New and Diagram with AI sat bottom-right; one dropdown offering three different exits.
+    footerHtml: '<button class="df-modal__btn df-modal__btn--accent df-shortcuts__done" style="margin-left:auto">Got it</button>',
   });
   footer?.querySelector('.df-shortcuts__done')?.addEventListener('click', () => close());
+}
+
+// ── "Diagram with AI" (Help menu) ───────────────────────────────────────────
+// Discoverability, not new capability: the Claude skill and the LLM JSON spec both shipped in 1.20.x/1.21.0
+// and were reachable only from a What's-New entry that scrolls away the moment the next release lands.
+//
+// Both assets are served from THIS origin (they are part of the deployed file set), so Download is a plain
+// `download` link - no fetch, no CSP exception, no CORS. View goes to GitHub, which renders Markdown and shows
+// history; the raw same-origin URL would just dump text in a tab.
+const AI_ASSETS = [
+  {
+    id: 'skill',
+    title: 'Build diagrams with Claude',
+    blurb: 'A free Claude skill. Describe the diagram you want and Claude hands one back, ready to open. It can also rebuild a diagram from a screenshot, or turn Salesforce Flow metadata into a detailed Flow diagram.',
+    file: 'cowork-skill/diagramforce.skill',
+    view: 'https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce',
+    downloadLabel: 'Download skill',
+  },
+  {
+    id: 'spec',
+    title: 'Author diagrams with any LLM',
+    blurb: 'The published JSON format. Give it to any model and the diagram it writes will open here with nothing missing - no plugin, no account, no upload.',
+    file: 'DIAGRAM_JSON_SPEC.md',
+    view: 'https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md',
+    downloadLabel: 'Download spec',
+  },
+];
+const AI_DL_KEY = (id) => `df.ai.downloaded.${id}`;
+
+/** Remember WHICH RELEASE the user downloaded, so a later visit can say the copy they hold is behind.
+ *  Deliberately per-browser and advisory: it cannot know about a download on another machine, so the copy
+ *  must never claim the asset IS stale - only that a newer one exists here. */
+function aiStaleNote(id) {
+  const current = pctx.appVersion;
+  let had = null;
+  try { had = localStorage.getItem(AI_DL_KEY(id)); } catch { /* private mode */ }
+  if (!had || !current || compareSemver(had, current) >= 0) return '';
+  return `<p class="df-ai__stale">You downloaded the <strong>${escHtml(had)}</strong> copy in this browser. Current is <strong>${escHtml(current)}</strong> - worth re-downloading.</p>`;
+}
+
+function openAiModal() {
+  const section = (a) => `
+    <section class="df-ai__item">
+      <h3 class="df-ai__title">${escHtml(a.title)}</h3>
+      <p class="df-ai__blurb">${escHtml(a.blurb)}</p>
+      ${aiStaleNote(a.id)}
+      <!-- View is the SECONDARY action - a plain text link, not a second button competing with Download for
+           the eye. Download is the one the user came for, so it takes the button and the right-hand slot. -->
+      <div class="df-ai__actions">
+        <a class="df-ai__view" href="${escHtml(a.view)}" target="_blank" rel="noopener">View on GitHub</a>
+        <a class="df-modal__btn df-modal__btn--primary df-ai__dl" href="./${escHtml(a.file)}" download data-ai="${escHtml(a.id)}">${escHtml(a.downloadLabel)}</a>
+      </div>
+    </section>`;
+  const { body, footer, close } = buildModal({
+    title: 'Diagram with AI', width: '480px', className: 'df-ai-modal',
+    bodyHtml: AI_ASSETS.map(section).join(''),
+    footerHtml: '<button class="df-modal__btn df-modal__btn--accent df-ai__done" style="margin-left:auto">Got it</button>',
+  });
+  // Stamp on click, not on some "download finished" event - there isn't one for a `download` anchor, and a
+  // click is the honest signal ("you took a copy of this release"). Never blocks the navigation.
+  body?.querySelectorAll('.df-ai__dl').forEach((a) => a.addEventListener('click', () => {
+    try { localStorage.setItem(AI_DL_KEY(a.dataset.ai), pctx.appVersion || ''); } catch { /* private mode */ }
+  }));
+  footer?.querySelector('.df-ai__done')?.addEventListener('click', () => close());
 }
 
 // --- Shared modal helpers ---
@@ -747,6 +817,9 @@ function setupHamburgerMenu() {
         break;
       case 'whatsnew':
         showWhatsNewNow();
+        break;
+      case 'ai':
+        openAiModal();
         break;
       case 'about':
         showAboutModal();

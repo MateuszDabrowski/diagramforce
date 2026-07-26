@@ -95,7 +95,11 @@ const CONTENT_PROPS = [
   // `transformTarget` because a `change:target` listener misfired on every link re-route during auto-layout/undo.
   'name', 'apiName', 'description', 'processType', 'triggerType', 'object', 'filters', 'components',
   'actionName', 'actionType', 'flowName', 'waitEvents', 'assignmentItems', 'outcomes',
-  'collectionReference', 'conditions', 'transformTarget', 'message',
+  'collectionReference', 'conditions', 'transformTarget',
+  // 1.21.2: `configuration`, `template` and `activation` were MISSING (so panel edits to them were not
+  // undoable) and `message` was stale from the removed Custom Error shape. flow-content-props.test.js now
+  // derives the set from FLOW_ELEMENTS and fails on any future drift, which is what let this rot silently.
+  'configuration', 'template', 'activation', 'stageSteps',
 ];
 
 function schedulePendingDragCommit() {

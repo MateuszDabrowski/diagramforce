@@ -12,8 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.21.1';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.21.1';
+import { cctx } from './context.js?v=1.21.2';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.21.2';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded

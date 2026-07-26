@@ -1,20 +1,20 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as history from './history.js?v=1.21.1';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.21.1';
-import { fieldFocus } from './canvas/focus-state.js?v=1.21.1';
+import * as history from './history.js?v=1.21.2';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.21.2';
+import { fieldFocus } from './canvas/focus-state.js?v=1.21.2';
 // S9: the corner-drag resize interaction (handles + tracking guides + per-type snap/date logic)
 // extracted to ./selection/resize-handles.js; initResizeHandles wires graph/paper/selectedIds in init().
-import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.21.1';
+import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.21.2';
 // S9: the canvas context menu (right-click + touch long-press) + its action helpers extracted to
 // ./selection/context-menu.js; initContextMenu wires the live graph/selection in init(). The 6 app.js
 // action-API setters + copySelectionAsPng live there now and are re-exported below so wiring is unchanged.
-import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.21.1';
+import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.21.2';
 export {
   setAutoSizer, setCopyAsPng, setEndpointSetter, setActionProvider, setStyleApi, setCaptureApi,
   copySelectionAsPng,
-} from './selection/context-menu.js?v=1.21.1';
+} from './selection/context-menu.js?v=1.21.2';
 
 let graph, paper;
 const selectedIds = new Set();

@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.21.1">
-  <link rel="stylesheet" href="css/theme.css?v=1.21.1">
-  <link rel="stylesheet" href="css/layout.css?v=1.21.1">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.21.1">
-  <link rel="stylesheet" href="css/stencil.css?v=1.21.1">
-  <link rel="stylesheet" href="css/properties.css?v=1.21.1">
-  <link rel="stylesheet" href="css/tabs.css?v=1.21.1">
-  <link rel="stylesheet" href="css/canvas.css?v=1.21.1">
-  <link rel="stylesheet" href="css/modals.css?v=1.21.1">
+  <link rel="stylesheet" href="css/variables.css?v=1.21.2">
+  <link rel="stylesheet" href="css/theme.css?v=1.21.2">
+  <link rel="stylesheet" href="css/layout.css?v=1.21.2">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.21.2">
+  <link rel="stylesheet" href="css/stencil.css?v=1.21.2">
+  <link rel="stylesheet" href="css/properties.css?v=1.21.2">
+  <link rel="stylesheet" href="css/tabs.css?v=1.21.2">
+  <link rel="stylesheet" href="css/canvas.css?v=1.21.2">
+  <link rel="stylesheet" href="css/modals.css?v=1.21.2">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -385,6 +385,10 @@
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 6l8-3v10l-8-3V6z" stroke-linejoin="round"/><path d="M10 4.5l4-1.5v10l-4-1.5" stroke-linejoin="round"/></svg>
               What's new
             </button>
+            <button id="btn-help-ai" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Build diagrams with Claude, or with any LLM via the JSON spec">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M6 1.6l1.1 2.9L10 5.6 7.1 6.7 6 9.6 4.9 6.7 2 5.6l2.9-1.1L6 1.6z" stroke-linejoin="round"/><path d="M11.6 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" stroke-linejoin="round"/></svg>
+              Diagram with AI
+            </button>
             <button id="btn-help-shortcuts" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Keyboard shortcuts + right-click actions">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.2" y="3.5" width="13.6" height="9" rx="1.5"/><path d="M3.6 6.2h.01M6 6.2h.01M8.4 6.2h.01M10.8 6.2h.01M3.6 8.4h.01M6 8.4h.01M8.4 8.4h.01M10.8 8.4h.01M5 10.4h6" stroke-linecap="round"/></svg>
               Keyboard shortcuts
@@ -476,6 +480,12 @@
           <button class="df-toolbar__menu-item" data-action="whatsnew">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6l8-3v10l-8-3V6z" stroke-linejoin="round"/><path d="M10 4.5l4-1.5v10l-4-1.5" stroke-linejoin="round"/></svg>
             What's new
+          </button>
+          <!-- Mirrors #btn-help-ai. The (?) dropdown is HIDDEN on mobile, so every help entry needs this twin
+               or it silently does not exist on a phone (gotchas-storage-tabs.md 8.9 - gated twice). -->
+          <button class="df-toolbar__menu-item" data-action="ai">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6 1.6l1.1 2.9L10 5.6 7.1 6.7 6 9.6 4.9 6.7 2 5.6l2.9-1.1L6 1.6z" stroke-linejoin="round"/><path d="M11.6 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" stroke-linejoin="round"/></svg>
+            Diagram with AI
           </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
@@ -746,8 +756,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.21.1"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.21.1"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.21.1"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.21.2"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.21.2"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.21.2"></script>
 </body>
 </html>

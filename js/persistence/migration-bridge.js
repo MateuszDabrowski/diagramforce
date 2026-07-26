@@ -18,10 +18,10 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.21.1';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.21.1';
-import { importTemplatesArray } from '../templates.js?v=1.21.1';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.1';
+import { showToast } from '../feedback.js?v=1.21.2';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.21.2';
+import { importTemplatesArray } from '../templates.js?v=1.21.2';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.2';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
@@ -60,6 +60,25 @@ export function isNewHost() { return typeof location !== 'undefined' && location
  *  this the route existed only while the move WAS the current release - the moment any later release shipped, anyone who
  *  had dismissed the once-per-browser prompt was left with no way back to them. */
 export function isMigrationPending() { return isNewHost() && !lsGet(MIGRATED_KEY); }
+
+/**
+ * "I have nothing to bring over" - retire the move card without running a transfer.
+ *
+ * Needed because MIGRATED_KEY was only ever set from inside finishMigration(), i.e. only by CLICKING the
+ * button. Anyone who never clicks - most people arriving fresh, with nothing on the old origin at all - got the
+ * move card prepended to EVERY later release's What's New, forever. The file-rescue path has the same problem
+ * from the other end: those users got their diagrams by download, so the bridge never reported success.
+ *
+ * Deliberately NOT destructive and deliberately not a confirm-dialog: it hides a notice, it does not delete
+ * anything. Everything on the old origin stays exactly where it is, and the Worker serves /migrate there
+ * indefinitely - which is why the confirmation copy names that address. A user who dismisses this and later
+ * realises they did have diagrams is inconvenienced, not stranded.
+ */
+export function dismissMigrationPrompt() {
+  if (!isNewHost()) return false;
+  lsSet(MIGRATED_KEY, '1');
+  return true;
+}
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode / quota */ } }
 

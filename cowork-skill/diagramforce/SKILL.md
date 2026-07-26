@@ -70,7 +70,8 @@ Cloud Next journeys do) or stored only some - computes the same tidy tree the ap
 the validator proves the diagram LOADS, while the warnings are where the converter says what it could
 not represent faithfully. An element type it has no dedicated shape for still gets drawn (as a generic
 Action card, so the graph stays connected and nothing pointing at it breaks) and named in a warning -
-Orchestrator/approval **stages** and **Custom Error** are the two you will meet most. Other warnings
+**Custom Error** is the one you will meet most. (Orchestrator/approval **stages** used to warn here; they
+have had a real `df.FlowStage` card since 1.21.2, with each step's kind and assignee in its details.) Other warnings
 flag a flow with no entry point, connectors pointing at deleted elements, and metadata whose canvas
 coordinates were missing or incomplete.
 
@@ -181,7 +182,7 @@ mapping links, authored from the spec's `datamapping` section and Data 360 guida
 **Example 3**
 Input: "Here's the Tooling API JSON for our Case routing flow - diagram it." *(response pasted)*
 Output: run `scripts/flow-to-diagramforce.mjs` on it, validate the result, hand over the file plus the
-paste steps, and pass on any converter warning (e.g. Orchestrator stages shown as Action cards).
+paste steps, and pass on any converter warning (e.g. a Custom Error element shown as an Action card).
 
 ## Staying in sync (for maintainers)
 

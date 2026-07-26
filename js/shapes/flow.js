@@ -19,8 +19,8 @@
 // NB per-kind keys avoid JointJS built-in cell attributes (source/target/vertices/router) — `transformTarget`,
 // not `target`, so a change-listener never misfires on a link's endpoint change (caught in S1 e2e).
 
-import { portGroups, portItems } from './ports.js?v=1.21.1';
-import { getIconDataUri } from '../icons.js?v=1.21.1';
+import { portGroups, portItems } from './ports.js?v=1.21.2';
+import { getIconDataUri } from '../icons.js?v=1.21.2';
 
 // Uniform card size for every element (decision #8/S1: "Uniform default size for all classes"). MUST equal the
 // DEFAULT_SIZES entries in properties/type-meta.js or "Auto Size" snaps to a different box.
@@ -69,6 +69,11 @@ export const FLOW_ELEMENTS = [
   { cls: 'CreateCampaignMember', label: 'Create Campaign Member',           icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName', 'object'] },
   { cls: 'CreateTask',           label: 'Create Task',                      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName'] },
   { cls: 'Exit',                 label: 'Exit from a Flow',                 icon: 'outcome',              accent: C.interaction, meta: '(UI-only, REMOVE_FROM_FLOW)', fields: [] },
+  // Orchestrator / ApprovalWorkflow. Filed under Interaction because a stage is a container of HUMAN steps
+  // (stepApproval / stepInteractive) - it belongs with Screen and Action, not with Decision and Loop. There is
+  // deliberately no df.FlowStageStep sibling: steps live inside a stage, carry no routing of their own, and a
+  // card each would double the element count while adding nothing to the graph.
+  { cls: 'Stage',                label: 'Stage',                            icon: 'stage',                accent: C.interaction, meta: 'orchestratedStages', fields: ['stageSteps'] },
   // ── Logic (orange) ───────────────────────────────────────────────────────
   { cls: 'Assignment',           label: 'Assignment',                       icon: 'assignment',           accent: C.logic,       meta: 'assignments',        fields: ['assignmentItems'] },
   { cls: 'Decision',             label: 'Decision',                         icon: 'decision',             accent: C.logic,       meta: 'decisions',          fields: ['outcomes'] },

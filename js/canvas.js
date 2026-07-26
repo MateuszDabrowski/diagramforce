@@ -1,78 +1,78 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.21.1';
-export { assertCctxWired } from './canvas/context.js?v=1.21.1';   // S8 wiring self-check (app.js calls it at end of init)
-import { registerSfRouter } from './canvas/router.js?v=1.21.1';
-import { Z_BASE, Z_TIER_SPAN, Z_GANTT_DEP, tierNameForType, registerZTiers } from './canvas/z-tiers.js?v=1.21.1';
+import { cctx } from './canvas/context.js?v=1.21.2';
+export { assertCctxWired } from './canvas/context.js?v=1.21.2';   // S8 wiring self-check (app.js calls it at end of init)
+import { registerSfRouter } from './canvas/router.js?v=1.21.2';
+import { Z_BASE, Z_TIER_SPAN, Z_GANTT_DEP, tierNameForType, registerZTiers } from './canvas/z-tiers.js?v=1.21.2';
 export { Z_BASE, Z_TIER_SPAN, tierNameForType };   // re-export for properties.js + properties/widgets.js (reorder controls)
-import { setIconDataUriFn, refreshIcons, registerIconRefresh } from './canvas/icon-refresh.js?v=1.21.1';
+import { setIconDataUriFn, refreshIcons, registerIconRefresh } from './canvas/icon-refresh.js?v=1.21.2';
 export { setIconDataUriFn, refreshIcons };   // re-export: app.js (pre-init) + toolbar.js theme switch
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible, registerLinkStyles } from './canvas/link-styles.js?v=1.21.1';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible, registerLinkStyles } from './canvas/link-styles.js?v=1.21.2';
 export { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible };   // re-export for properties/toolbar/table-view
 // S7 slice 3b: the interactive link BEHAVIOURS (port-drag default-link factory, the reroute
 // cascade for connector grouping, the object-rel add-time hider, the frequency change:labels
 // re-glue) extracted to ./canvas/link-runtime.js. buildDefaultLink feeds the paper config;
 // registerLinkRuntime(cctx) mounts the graph listeners in init().
-import { rerouteAllLinks, buildDefaultLink, registerLinkRuntime } from './canvas/link-runtime.js?v=1.21.1';
+import { rerouteAllLinks, buildDefaultLink, registerLinkRuntime } from './canvas/link-runtime.js?v=1.21.2';
 export { rerouteAllLinks };   // re-export for toolbar.js (connector-grouping toggle applies instantly)
 // S7 slice 4: the link:connect classifier (Gantt-dep / mapping / ER / sequence-reply) + the
 // DataObject-refresh-on-link-change listeners extracted to ./canvas/link-classifier.js.
-import { registerLinkClassifier } from './canvas/link-classifier.js?v=1.21.1';
+import { registerLinkClassifier } from './canvas/link-classifier.js?v=1.21.2';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, applyFlowLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.21.1';
+export { autoLayout, applyDataMappingLayout, applyFlowLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.21.2';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, migrateNodes } from './canvas/migration.js?v=1.21.1';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, migrateNodes } from './canvas/migration.js?v=1.21.2';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.21.1';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.21.1';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.21.2';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.21.2';
 // Change Review overlay (NBA-1) — transient, non-destructive diff visualisation. cctx-only (no init wiring needed).
-export { enterReview, exitReview, isReviewing, getReviewSummary } from './canvas/review-overlay.js?v=1.21.1';
+export { enterReview, exitReview, isReviewing, getReviewSummary } from './canvas/review-overlay.js?v=1.21.2';
 // Diagram check (NBA #3, refocused) — find + transiently highlight loose connectors. cctx-only.
-export { findLooseConnectors, highlightLooseConnectors } from './canvas/diagram-check.js?v=1.21.1';
+export { findLooseConnectors, highlightLooseConnectors } from './canvas/diagram-check.js?v=1.21.2';
 // Capture-visibility overlay (v1.19.2) — selecting a captor tints its captured children (green) vs
 // overlapping-but-free shapes (amber). Driven by selection.onChange (wired in app.js). cctx-only.
-export { syncCaptureOverlay } from './canvas/capture-overlay.js?v=1.21.1';
+export { syncCaptureOverlay } from './canvas/capture-overlay.js?v=1.21.2';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.21.1';
-export { zoomIn, zoomOut, resetZoom, fitContent, toggleGrid, refreshGrid, isGridVisible, getViewport, setViewport } from './canvas/viewport.js?v=1.21.1';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.21.2';
+export { zoomIn, zoomOut, resetZoom, fitContent, toggleGrid, refreshGrid, isGridVisible, getViewport, setViewport } from './canvas/viewport.js?v=1.21.2';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported and called in init();
 // the mobile pair is re-exported below for external (toolbar/tabs) callers.
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.21.1';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.21.1';
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.21.1';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.21.2';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.21.2';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.21.2';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.21.1';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.21.2';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.21.1';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.21.2';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding, HALO_PARENT_TYPES } from './canvas/embedding.js?v=1.21.1';
+import { canEmbed, findEmbeddingParent, registerEmbedding, HALO_PARENT_TYPES } from './canvas/embedding.js?v=1.21.2';
 export { canEmbed, HALO_PARENT_TYPES };
-export { enclosedCapturableShapes, groupChildrenInto } from './canvas/embedding.js?v=1.21.1';
+export { enclosedCapturableShapes, groupChildrenInto } from './canvas/embedding.js?v=1.21.2';
 // S7 slice 5: the Gantt drag/reorder cluster (drop-line + date chips + reorder-on-drop) extracted to
 // ./canvas/gantt-drag.js; registerGanttDrag(cctx) mounts it (BEFORE registerEmbedding — see init()).
-import { registerGanttDrag } from './canvas/gantt-drag.js?v=1.21.1';
+import { registerGanttDrag } from './canvas/gantt-drag.js?v=1.21.2';
 // Gantt drop-layer chip forwarders — the PUBLIC facade over registerGanttDrag's cctx closures, so
 // external callers (selection.js resize, stencil.js dragover) reach them through the canvas facade
 // instead of importing the private cctx (S8). Optional-chained: a safe no-op until init() wires them.
 export function showGanttDateChip(bar, start, end) { cctx.showGanttDateChip?.(bar, start, end); }
 export function clearGanttDateChip() { cctx.clearGanttDateChip?.(); }
 export function showGanttGroupInsertBar(tl, localY, thickness) { cctx.showGanttGroupInsertBar?.(tl, localY, thickness); }
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.21.1';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.21.2';
 
 
 // ── Z-order tiers ────────────────────────────────────────────────────
