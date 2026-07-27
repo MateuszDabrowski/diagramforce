@@ -4,12 +4,12 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.21.4';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.21.4';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, triggerDownload } from '../persistence.js?v=1.21.4';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.21.4';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.21.4';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.21.4';
+import { tbctx } from './context.js?v=1.21.5';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.21.5';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, triggerDownload } from '../persistence.js?v=1.21.5';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.21.5';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.21.5';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.21.5';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -129,6 +129,7 @@ export function saveTabs() {
     }));
     const payload = JSON.stringify({ ...meta, tabs: full });
     localStorage.setItem(STORAGE_KEY, payload);
+    _backupHealthy = true;
     // CR-7.1 / Gap 32 (v1.12.0) — proactive pressure check, sampled every
     // 5 successful saves. The deterministic counter (not random) makes
     // behaviour reproducible for debugging. The footprint loop itself is
@@ -145,19 +146,29 @@ export function saveTabs() {
       try {
         evictRedundantArchives(0);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...meta, tabs: full }));
+        _backupHealthy = true;
         return;   // recovered - the backup is current again
       } catch (e2) {
         if (!quotaToastShown) {
           quotaToastShown = true;
           showError('Browser storage full - session backup paused. Export to JSON or delete saved diagrams to make space.');
         }
+        _backupHealthy = false;
         console.warn('SF Diagrams: Tab save failed after evict+retry:', e2);
         return;
       }
     }
+    _backupHealthy = false;   // Private Mode / anything non-quota - the blob on disk is now STALE
     console.warn('SF Diagrams: Tab save failed:', err);
   }
 }
+
+// Did the LAST session write actually land? The session backup is what makes a reload lossless, so when it
+// stops working the app genuinely can lose work - and that, not "a tab has unsaved edits", is the only
+// condition worth interrupting someone with a leave-page prompt for. Optimistic at boot: nothing has failed
+// yet, and restoreTabs() reads rather than writes.
+let _backupHealthy = true;
+export function isSessionBackupHealthy() { return _backupHealthy; }
 
 // Module-level flag so the quota toast fires at most once per page load
 // (Gap 22, v1.12.0). Reset by reload — that's the natural moment for the
@@ -454,6 +465,31 @@ function showSessionVersionWarning(savedVersion, diff) {
 
 // Auto-save tabs whenever graph changes (debounced)
 let tabSaveTimer = null;
+
+/** Write the session NOW, cancelling any pending debounce. */
+function flushSessionSave() {
+  clearTimeout(tabSaveTimer);
+  tabSaveTimer = null;
+  saveTabs();
+}
+
+/** Persist before the page can go away. The autosave is debounced 1000ms and NOTHING used to flush it, so an
+ *  edit made within a second of a tab discard, a close or a navigation was silently lost - the exact loss the
+ *  beforeunload prompt claimed to guard against while only ever showing a dialog.
+ *
+ *  BOTH events, deliberately:
+ *  - `visibilitychange` -> hidden fires when the tab is backgrounded, which is the moment BEFORE Safari decides
+ *    to reclaim it under memory pressure. This is the one that actually covers the reported case.
+ *  - `pagehide` covers close / navigate-away, and is the reliable signal on Safari, which does not fire
+ *    `beforeunload` dependably around bfcache and on iOS.
+ *  Both are idempotent - a second flush with nothing pending just rewrites the same blob. */
+export function setupSessionFlush() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSessionSave();
+  });
+  window.addEventListener('pagehide', flushSessionSave);
+}
+
 export function setupAutoSave() {
   const { tabs } = tbctx;
   const { persistence: persistenceModule, graph, canvas: canvasModule } = tbctx.modules;

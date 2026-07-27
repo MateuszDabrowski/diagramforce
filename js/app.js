@@ -1,30 +1,30 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.21.4';
-import * as icons       from './icons.js?v=1.21.4';
-import { getAllStencilSvgs } from './components.js?v=1.21.4';
-import * as shapes      from './shapes.js?v=1.21.4';
-import * as canvas      from './canvas.js?v=1.21.4';
-import * as stencil     from './stencil.js?v=1.21.4';
-import * as selection   from './selection.js?v=1.21.4';
-import * as history     from './history.js?v=1.21.4';
-import * as clipboard   from './clipboard.js?v=1.21.4';
-import * as templates    from './templates.js?v=1.21.4';
-import * as keyboard    from './keyboard.js?v=1.21.4';
-import * as toolbar     from './toolbar.js?v=1.21.4';
-import * as properties  from './properties.js?v=1.21.4';
-import * as persistence from './persistence.js?v=1.21.4';
-import * as tabs        from './tabs.js?v=1.21.4';
-import * as mermaidImport from './mermaid-import.js?v=1.21.4';
-import * as tableView    from './table-view.js?v=1.21.4';
-import * as walkthrough  from './walkthrough.js?v=1.21.4';
-import * as whatsNew     from './whats-new.js?v=1.21.4';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.21.4';
-import * as externalImport from './persistence/external-import.js?v=1.21.4';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.21.4';
-import { seedDefaultPalette } from './brand-palette.js?v=1.21.4';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.4';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.21.5';
+import * as icons       from './icons.js?v=1.21.5';
+import { getAllStencilSvgs } from './components.js?v=1.21.5';
+import * as shapes      from './shapes.js?v=1.21.5';
+import * as canvas      from './canvas.js?v=1.21.5';
+import * as stencil     from './stencil.js?v=1.21.5';
+import * as selection   from './selection.js?v=1.21.5';
+import * as history     from './history.js?v=1.21.5';
+import * as clipboard   from './clipboard.js?v=1.21.5';
+import * as templates    from './templates.js?v=1.21.5';
+import * as keyboard    from './keyboard.js?v=1.21.5';
+import * as toolbar     from './toolbar.js?v=1.21.5';
+import * as properties  from './properties.js?v=1.21.5';
+import * as persistence from './persistence.js?v=1.21.5';
+import * as tabs        from './tabs.js?v=1.21.5';
+import * as mermaidImport from './mermaid-import.js?v=1.21.5';
+import * as tableView    from './table-view.js?v=1.21.5';
+import * as walkthrough  from './walkthrough.js?v=1.21.5';
+import * as whatsNew     from './whats-new.js?v=1.21.5';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.21.5';
+import * as externalImport from './persistence/external-import.js?v=1.21.5';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.21.5';
+import { seedDefaultPalette } from './brand-palette.js?v=1.21.5';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.5';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -172,6 +172,8 @@ async function main() {
 
   tabs.init(graph, paper, canvas, selection, history, persistence, stencil);
   tabs.setupAutoSave();
+  // Flush that debounced save when the page is backgrounded or going away - see setupSessionFlush.
+  tabs.setupSessionFlush();
   // Tab right-click "Compare" diffs the ACTIVE tab against the right-clicked one, in place (toolbar owns the
   // review overlay + banner; tabs just supplies which tab is the baseline).
   tabs.setCompareTabHandler?.(toolbar.compareActiveWithTab);
@@ -273,16 +275,25 @@ async function main() {
   // then starts the single guided tour. Defers its own paint and never touches the graph / history.
   walkthrough.maybeStartFirstRunTour();
 
-  // --- Phase 10: beforeunload guard (Gap 21, v1.12.0) ---
-  // Prevent silent data loss on ⌘R / browser close / back nav when any
-  // open tab has uncommitted changes. Session backup catches most cases
-  // but quota errors + Private Mode can break the safety net, so a
-  // native confirmation is the last line of defence. Modern browsers
-  // ignore the custom string (showing their own generic prompt) but
-  // both the legacy `returnValue` and event.preventDefault() are
+  // --- Phase 10: beforeunload guard (Gap 21, v1.12.0; narrowed 1.21.5) ---
+  // The last line of defence when the session backup CANNOT save. Modern browsers ignore the custom string
+  // (showing their own generic prompt) but both the legacy `returnValue` and event.preventDefault() are
   // required for cross-browser support.
+  //
+  // It used to fire on `hasAnyDirty()` alone, and that was wrong in both directions (owner-reported 2026-07-27:
+  // "coming back to the tab shows a leave-page overlay"):
+  //  - `dirty` is cleared ONLY by an explicit Save or a Drive sync, so any diagram edited and not deliberately
+  //    saved stays dirty for the whole session. That is the normal working state, not a warning sign.
+  //  - Safari reclaims background tabs under memory pressure, and discarding fires beforeunload. So returning
+  //    to the tab produced a scary prompt about losing work that the session backup had already persisted.
+  // Meanwhile the ACTUAL loss window - the debounced save never being flushed - went unguarded, and the prompt
+  // would not have helped anyway, since it only asks and never saves. setupSessionFlush() above closes that.
+  //
+  // So the guard now asks the question its own comment always described: is the safety net broken? The session
+  // store knows - it catches quota errors, evicts, retries, and gives up - and now reports it. Dirty AND
+  // unhealthy: with nothing dirty there is nothing to lose even when writes are failing.
   window.addEventListener('beforeunload', evt => {
-    if (!tabs.hasAnyDirty()) return;
+    if (!tabs.hasAnyDirty() || tabs.isSessionBackupHealthy()) return;
     evt.preventDefault();
     evt.returnValue = '';
     return '';

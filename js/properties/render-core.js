@@ -8,14 +8,14 @@
 // Reads graph/selection + the panel DOM refs (bodyEl/footerEl) via prctx; imports the convert/widgets/clipboard/
 // components/type-meta leaves; never imports the facade. The facade re-exports autoSizeCell + buildCellActions
 // (app.js namespace access) and the staying renderers import finishStandardProps + autoSizeCell back.
-import { prctx } from './context.js?v=1.21.4';
-import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.21.4';
-import { resizeDataObjectToFit } from '../components.js?v=1.21.4';
-import { saveCellAsShape } from '../templates.js?v=1.21.4';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.21.4';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.4';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.21.4';
-import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.21.4';
+import { prctx } from './context.js?v=1.21.5';
+import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.21.5';
+import { resizeDataObjectToFit } from '../components.js?v=1.21.5';
+import { saveCellAsShape } from '../templates.js?v=1.21.5';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.21.5';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.5';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.21.5';
+import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.21.5';
 
 /** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
  *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and

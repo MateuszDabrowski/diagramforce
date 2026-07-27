@@ -14,9 +14,9 @@
 // the service worker precaches the ?v= URL, so a bare specifier misses the cache and breaks offline boot;
 // and a bare './context.js' is a DIFFERENT module URL from './context.js?v=…', which instantiates a SECOND
 // pctx singleton whose appVersion is never set - stamping every imported flow appVersion "1".
-import { convertFlowMetadata } from './flow-convert.js?v=1.21.4';
-import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.21.4';
-import { pctx } from './context.js?v=1.21.4';
+import { convertFlowMetadata } from './flow-convert.js?v=1.21.5';
+import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.21.5';
+import { pctx } from './context.js?v=1.21.5';
 
 // Metadata keys whose value is a LIST even when the XML carries exactly one of them. XML has no way to
 // say "array of one" — <screens> appearing once is indistinguishable from a scalar — so the shape has to

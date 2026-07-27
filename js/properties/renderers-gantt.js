@@ -3,11 +3,11 @@
 // bar CRUD). Build via widgets + finishStandardProps (render-core) + the gantt-layout helpers, reading graph +
 // the panel DOM refs + the showProperties dispatch via prctx (add/delete/reorder re-render the panel); never
 // imports the facade. The showProperties() dispatch imports the five render*Props back.
-import * as history from '../history.js?v=1.21.4';
-import { asUndoBatch, prctx } from './context.js?v=1.21.4';
-import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTimelineFor, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.21.4';
-import { finishStandardProps } from './render-core.js?v=1.21.4';
-import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, section, toHex } from './widgets.js?v=1.21.4';
+import * as history from '../history.js?v=1.21.5';
+import { asUndoBatch, prctx } from './context.js?v=1.21.5';
+import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTimelineFor, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.21.5';
+import { finishStandardProps } from './render-core.js?v=1.21.5';
+import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, section, toHex } from './widgets.js?v=1.21.5';
 
 export function renderGanttTaskProps(cell) {
   // Content

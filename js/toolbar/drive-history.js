@@ -1,10 +1,10 @@
 // Drive version history (CLEANUP S4) — lists the active synced diagram Drive revisions (View / Restore / Pin / eye-preview / Review). Reads tctx.modules; imports renderDriveSignIn (context) + reviewAgainstRevision (review) - one-way slice edges. sync-control calls showDriveHistoryModal.
-import { buildModal, confirmModal } from '../feedback.js?v=1.21.4';
-import { storageRowHtml } from '../storage-ui.js?v=1.21.4';
-import { renderTemplateThumbnail } from '../templates.js?v=1.21.4';
-import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.21.4';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.4';
-import { reviewAgainstRevision } from './review.js?v=1.21.4';
+import { buildModal, confirmModal } from '../feedback.js?v=1.21.5';
+import { storageRowHtml } from '../storage-ui.js?v=1.21.5';
+import { renderTemplateThumbnail } from '../templates.js?v=1.21.5';
+import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.21.5';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.5';
+import { reviewAgainstRevision } from './review.js?v=1.21.5';
 
 // Version history for the active synced diagram — list its Drive revisions newest-first with View / Restore
 // / Pin. Mirrors the library modal's loading/empty/error scaffold. Restore is non-destructive (the current

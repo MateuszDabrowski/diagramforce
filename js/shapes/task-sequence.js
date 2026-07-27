@@ -1,7 +1,7 @@
 // Task / Sequence-diagram shapes + the standard.Link label patch tail (CLEANUP S3). registerTaskSequence() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.21.4';
+import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.21.5';
 
 export function registerTaskSequence() {
   // --- Task ---
