@@ -1039,6 +1039,21 @@
     padding: 0;
   }
 
+  /* ...and the OTHER half, missed in 1.21.2 and shipped to prod in 1.21.3 (reported on a phone: ~1.5 screens of
+     dead space above the filter pills on Load AND Templates, but not Create).
+
+     The rule at the top of this file keeps the HIDDEN Create panel in flow on purpose -
+     `[data-tab="create"][hidden] { display: block; visibility: hidden }` - so it SIZES the panels box while the
+     other panels sit absolute inside it. That is what stops a desktop tab switch from jumping.
+
+     Once the others are back in normal flow (above), that reservation has nothing left to fill it: the invisible
+     Create panel just occupies its full height - 912px on a 375x812 phone - and the active panel flows BELOW it.
+     Measured: templates panel top = wrapper top + exactly the create panel's height.
+
+     So on mobile the hidden Create panel must leave the flow entirely. Nothing needs it to size anything here;
+     the comment above already states that the sheet's height follows the ACTIVE panel on purpose. */
+  .df-new-modal__panel[data-tab="create"][hidden] { display: none; }
+
   .df-new-modal__grid {
     gap: 10px;
   }

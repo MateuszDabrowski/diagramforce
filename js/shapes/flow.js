@@ -19,8 +19,8 @@
 // NB per-kind keys avoid JointJS built-in cell attributes (source/target/vertices/router) — `transformTarget`,
 // not `target`, so a change-listener never misfires on a link's endpoint change (caught in S1 e2e).
 
-import { portGroups, portItems } from './ports.js?v=1.21.3';
-import { getIconDataUri } from '../icons.js?v=1.21.3';
+import { portGroups, portItems } from './ports.js?v=1.21.4';
+import { getIconDataUri } from '../icons.js?v=1.21.4';
 
 // Uniform card size for every element (decision #8/S1: "Uniform default size for all classes"). MUST equal the
 // DEFAULT_SIZES entries in properties/type-meta.js or "Auto Size" snaps to a different box.

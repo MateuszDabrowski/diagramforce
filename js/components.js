@@ -1,14 +1,14 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.21.3';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.21.3';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.21.3';
-import { sanitizeCssColor } from './util.js?v=1.21.3';
+import { getIconDataUri } from './icons.js?v=1.21.4';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.21.4';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.21.4';
+import { sanitizeCssColor } from './util.js?v=1.21.4';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.21.3';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.21.3';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.21.4';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.21.4';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -546,11 +546,12 @@ const flowStencil = (cls) => {
   return { type: 'df.Flow' + e.cls, label: e.label, iconName: e.icon, accent: e.accent, round: !!e.round };
 };
 export const FLOW_CATEGORIES = [
-  // Its own section, FIRST among the flow categories - a not-yet-defined step belongs to NO palette section, and
-  // filing it under one would imply a category the author has not picked yet. ("Generic Shapes" still renders
-  // above it; js/stencil.js pins that band to the top for every diagram type.)
-  { id: 'flow-planning',    label: 'Planning',      components: ['Placeholder'].map(flowStencil) },
+  // Start & End leads, because a flow starts at Start - the palette should read in the order someone builds in
+  // (owner, 2026-07-27). Planning follows it rather than heading the list: a not-yet-defined step belongs to NO
+  // palette section, so it keeps its own, but it is not where anyone begins. ("Generic Shapes" renders above
+  // both regardless; js/stencil.js pins that band to the top for every diagram type.)
   { id: 'flow-startend',    label: 'Start & End',   components: ['Start', 'End'].map(flowStencil) },
+  { id: 'flow-planning',    label: 'Planning',      components: ['Placeholder'].map(flowStencil) },
   { id: 'flow-interaction', label: 'Interaction',   components: ['Screen', 'Action', 'Subflow', 'SendToFlow', 'SendEmail', 'SendSms', 'SendWhatsApp', 'SendToData360', 'SendMobileApp', 'SendMobileInApp', 'ForwardToBot', 'RunAgent', 'CreateCampaignMember', 'CreateTask', 'Stage', 'Exit'].map(flowStencil) },
   { id: 'flow-logic',       label: 'Logic',         components: ['Assignment', 'Decision', 'Loop', 'Transform', 'PathExperiment', 'CollectionSort', 'CollectionFilter', 'Wait', 'WaitUntilDate', 'WaitUntilEvent', 'EinsteinDecision', 'DetermineCrmRecord'].map(flowStencil) },
   { id: 'flow-data',        label: 'Data',          components: ['GetRecords', 'CreateRecords', 'UpdateRecords', 'DeleteRecords', 'Rollback'].map(flowStencil) },

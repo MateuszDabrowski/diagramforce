@@ -1,25 +1,25 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.21.3';
-import { tbctx } from './tabs/context.js?v=1.21.3';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.21.3';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.3';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.21.3';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.21.3';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.21.4';
+import { tbctx } from './tabs/context.js?v=1.21.4';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.21.4';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.4';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.21.4';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave } from './tabs/session-store.js?v=1.21.4';
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.21.3';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.21.3';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.21.3';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.21.3';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.21.3';
-import { wireMenuDismiss } from './menu.js?v=1.21.3';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.21.3';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.21.3';
-import { getPalette } from './brand-palette.js?v=1.21.3';
-import { getAllIcons } from './icons.js?v=1.21.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.21.3';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.21.4';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.21.4';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.21.4';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.21.4';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.21.4';
+import { wireMenuDismiss } from './menu.js?v=1.21.4';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.21.4';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.21.4';
+import { getPalette } from './brand-palette.js?v=1.21.4';
+import { getAllIcons } from './icons.js?v=1.21.4';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.21.4';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

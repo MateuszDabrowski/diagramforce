@@ -4,11 +4,12 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.21.3';
-import { finishStandardProps } from './render-core.js?v=1.21.3';
-import { addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.3';
-import { escHtml } from '../util.js?v=1.21.3';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.3';
+import { prctx } from './context.js?v=1.21.4';
+import { finishStandardProps } from './render-core.js?v=1.21.4';
+import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.4';
+import { escHtml } from '../util.js?v=1.21.4';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.4';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.21.4';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -61,6 +62,22 @@ export function renderFlowElementProps(cell) {
   });
   addText(content, 'API Name', cell.get('apiName') || '', (v) => cell.set('apiName', v));
   addTextarea(content, 'Description', cell.get('description') || '', (v) => cell.set('description', v));
+
+  // The way OUT of a Placeholder. Flow has 34 element classes and no generic node, so unlike the architecture
+  // placeholder this cannot be a style preset - the user picks the class and the cell is swapped for a real one.
+  // A SELECT, not 34 Convert buttons. Deleting-and-redrawing was the alternative, and JointJS takes every
+  // connected link with a removed cell, so a placeholder wired into the middle of a flow would cost the user all
+  // of its connectors. Converting keeps them (plus position, embedding and selection) in ONE undo step.
+  if (type === 'df.FlowPlaceholder') {
+    const become = section(prctx.bodyEl, 'Resolve');
+    const opts = FLOW_ELEMENTS
+      .filter((e) => e.cls !== 'Placeholder')
+      .map((e) => ({ value: 'df.Flow' + e.cls, label: e.label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    addSelect(become, 'Convert to', '', [{ value: '', label: 'Pick an element type...' }, ...opts], (v) => {
+      if (v) convertFlowPlaceholderTo(cell, v);
+    });
+  }
 
   // Flow Details — the element's per-kind fields (empty section is skipped, e.g. End / Roll Back Records).
   const fields = el?.fields || [];

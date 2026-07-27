@@ -4,11 +4,11 @@
 // convertFromIcon. Each mints the replacement shape, re-attaches links + embedding, and swaps in ONE undo batch.
 // Reads the live graph/selection via prctx; never imports the facade back. The facade renderers + buildCellActions
 // import the 5 convertTo* back (they wire the panel's Convert buttons + the right-click convert menu).
-import * as history from '../history.js?v=1.21.3';
-import { prctx } from './context.js?v=1.21.3';
-import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.3';
-import { contrastTextColor } from '../components.js?v=1.21.3';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.21.3';
+import * as history from '../history.js?v=1.21.4';
+import { prctx } from './context.js?v=1.21.4';
+import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.4';
+import { contrastTextColor } from '../components.js?v=1.21.4';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.21.4';
 
 export function collectConnections(cell) {
   return prctx.graph.getConnectedLinks(cell).map(link => ({
@@ -100,6 +100,70 @@ export function convertToNode(cell) {
     reconnectLinks(connections, node.id);
     cell.remove();
     prctx.selection.selectOnly(node.id);
+  } finally { history.endBatch(); }
+}
+
+// ── Placeholder -> a real shape (1.21.4) ─────────────────────────────────────────────────────────────────────
+// A placeholder is by definition temporary, so the moment it stops being one it has to become a real shape
+// WITHOUT the user deleting it. Deleting is what the owner objected to and rightly: JointJS removes every
+// connected link with the cell, so resolving a placeholder that was already wired in meant re-drawing all of its
+// connectors by hand. The conversions below reuse the same collect/reconnect/embed machinery the
+// SimpleNode<->Container<->Icon swaps use, so links, the container parent, position and selection all survive and
+// the whole swap is ONE undo step.
+
+/** df.Placeholder -> sf.SimpleNode, carrying the label and description across. */
+export function convertPlaceholderToNode(cell) {
+  const pos = cell.position();
+  const size = cell.size();
+  const connections = collectConnections(cell);
+  const node = new joint.shapes.sf.SimpleNode({
+    position: pos,
+    // Keep the user's own size, not DEFAULT_SIZES: a placeholder that was resized to fit its slot in the diagram
+    // should not jump when it resolves. They share a default size anyway, so this only matters once resized.
+    size: { width: size.width, height: size.height },
+    attrs: {
+      // The placeholder's label is the note about what was undecided ("Identity provider - TBD"); it is the best
+      // starting point for the real name, so carry it and let the user edit rather than resetting to "Node".
+      label:    { text: cell.attr('label/text') || 'Node' },
+      subtitle: { text: cell.attr('subtitle/text') || '' },
+      // Deliberately NO icon: the placeholder's ? means "not decided", and carrying it onto a resolved node would
+      // keep asserting that. An empty slot invites the icon picker, which is the next thing the user wants.
+      icon:     { href: '' },
+    },
+  });
+  history.startBatch();
+  try {
+    prctx.graph.addCell(node);
+    updateSimpleNodeLayout(node);
+    preserveParentEmbedding(cell, node);
+    reconnectLinks(connections, node.id);
+    cell.remove();
+    prctx.selection.selectOnly(node.id);
+  } finally { history.endBatch(); }
+}
+
+/** df.FlowPlaceholder -> any df.Flow* element class. `targetType` is a full type string ('df.FlowScreen').
+ *  Flow has 34 element classes and no generic node, so unlike architecture this cannot be a style preset - the
+ *  user picks the class and the cell is swapped for a real one of that type. */
+export function convertFlowPlaceholderTo(cell, targetType) {
+  const Ctor = joint.shapes.df?.[String(targetType).replace(/^df\./, '')];
+  if (!Ctor) return;                       // unknown class - do nothing rather than destroy the placeholder
+  const pos = cell.position();
+  const connections = collectConnections(cell);
+  const name = cell.get('name');
+  const el = new Ctor({ position: pos });
+  // Flow cards render from the `name` prop, not attrs/label. Carry the author's note ("Approval step - TBD")
+  // unless it is still the untouched default, in which case the new class's own default label is better.
+  if (name && name !== 'Placeholder') el.set('name', name);
+  const desc = cell.get('description');
+  if (desc) el.set('description', desc);
+  history.startBatch();
+  try {
+    prctx.graph.addCell(el);
+    preserveParentEmbedding(cell, el);
+    reconnectLinks(connections, el.id);
+    cell.remove();
+    prctx.selection.selectOnly(el.id);
   } finally { history.endBatch(); }
 }
 
