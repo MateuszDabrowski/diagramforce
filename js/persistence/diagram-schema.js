@@ -46,8 +46,9 @@ export const ALLOWED_CELL_TYPES = new Set([
   'df.FlowGetRecords', 'df.FlowCreateRecords', 'df.FlowUpdateRecords', 'df.FlowDeleteRecords',
   'df.FlowRollback',
   'df.FlowStage',
+  'df.FlowPlaceholder',
   // Generic (df.* net-new shapes; sf.* legacy kept for save back-compat)
-  'df.Pill', 'df.Legend', 'df.Table',
+  'df.Pill', 'df.Legend', 'df.Table', 'df.Placeholder',
   // JointJS link
   'standard.Link',
 ]);

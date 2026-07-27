@@ -151,7 +151,7 @@ const screenFieldLabel = (f) => {
 // reproduce the mid-table "+N more" that actionParamRows was fixed for. It appends to ONE flat array which
 // screenRows caps ONCE at the end.
 const SCREEN_DEPTH_CAP = 6;   // Section > Column > field is 2 - this only guards a malformed tree
-function screenFieldRows(list, out, prefix, depth = 0) {
+function screenFieldRows(list, out, prefix, depth = 0, choiceIdx = null) {
   if (depth > SCREEN_DEPTH_CAP) return out;
   for (const f of asList(list)) {
     const label = screenFieldLabel(f);
@@ -169,6 +169,18 @@ function screenFieldRows(list, out, prefix, depth = 0) {
         value: [
           f.extensionName || f.fieldType || '',
           label !== f.name ? f.name : null,
+          // A dropdown documented as merely EXISTING is the "choices are a count, not a source" defect at the
+          // exact place the reader is looking. Name the choice sets it draws from.
+          asList(f.choiceReferences).length ? `choices: ${describeChoices(f.choiceReferences, choiceIdx)}` : null,
+          f.isRequired === true || f.isRequired === 'true' ? 'required' : null,
+          // What the field is PRE-FILLED with, what it TELLS the user, and what it REJECTS - all documentation,
+          // all previously dropped. The validation MESSAGE over the formula: the message is what a person sees,
+          // the formula is developer detail, and only one belongs in a 58%-wide column. Formula only when there
+          // is no message, so a rule is never invisible.
+          pickValue(f.defaultValue) ? `default ${pickValue(f.defaultValue)}` : null,
+          plainText(f.helpText) ? `help: ${plainText(f.helpText)}` : null,
+          f.validationRule?.errorMessage ? `rejects with "${plainText(f.validationRule.errorMessage) || ''}"`
+            : (f.validationRule?.formulaExpression ? `validated: ${f.validationRule.formulaExpression}` : null),
           shown && `shown when ${shown}`,
         ].filter(Boolean).join(' \u00b7 '),
       });
@@ -180,12 +192,12 @@ function screenFieldRows(list, out, prefix, depth = 0) {
     // transparent instead of spending a line of a 42%-wide column on themselves.
     if (kids.length) {
       const named = label && label !== f.name ? label : null;
-      screenFieldRows(kids, out, [prefix, named].filter(Boolean).join(' / '), depth + 1);
+      screenFieldRows(kids, out, [prefix, named].filter(Boolean).join(' / '), depth + 1, choiceIdx);
     }
   }
   return out;
 }
-const screenRows = (el) => capRows(screenFieldRows(el.fields, [], ''));
+const screenRows = (el, choiceIdx) => capRows(screenFieldRows(el.fields, [], '', 0, choiceIdx));
 /** Leaves only, in order - what the screen actually asks, with the containers dropped. */
 function flattenScreenFields(list, out = [], depth = 0) {
   if (depth > SCREEN_DEPTH_CAP) return out;
@@ -209,6 +221,107 @@ const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
       .filter(Boolean).join(', ') || null,
   ].filter(Boolean).join(' \u00b7 '),
 }));
+/** How a data element gets its records IN. `inputAssignments` is field-by-field; `inputReference` is a whole
+ *  collection - the standard bulk pattern inside a loop, and the one that rendered a completely EMPTY card. */
+const inputRows = (el) => {
+  const assigned = assignmentRows(el);
+  if (assigned.length) return assigned;
+  return el.inputReference ? [{ label: 'Records from', value: `{!${el.inputReference}}` }] : [];
+};
+/** How a Get Records hands results OUT. Three shapes, and only one was documented: `outputAssignments`
+ *  (field -> variable), `outputReference` (whole result into one variable), and `storeOutputAutomatically`
+ *  (referenced as {!Element.field}). On modern flows the latter two are the common ones. */
+const getOutputRows = (el) => {
+  const rows = [];
+  // ONLY when it deviates from the default. `getFirstRecordOnly: false` is the norm, so a "Returns: all
+  // matching records" row on every Get card states the assumption the reader already holds - noise that
+  // pushes real content toward the 20-row cap. Flow Builder likewise surfaces only the toggle.
+  if (el.getFirstRecordOnly === true || el.getFirstRecordOnly === 'true') {
+    rows.push({ label: 'Returns', value: 'the first matching record only' });
+  }
+  if (el.queriedFields?.length) rows.push({ label: 'Fields read', value: asList(el.queriedFields).join(', ') });
+  if (el.sortField) rows.push({ label: 'Sorted by', value: `${el.sortField}${el.sortOrder ? ` ${SORT_ORDER[el.sortOrder] || el.sortOrder}` : ''}` });
+  const assigned = outputRows(el);
+  if (assigned.length) return rows.concat(assigned);
+  if (el.outputReference) rows.push({ label: 'Stored in', value: `{!${el.outputReference}}` });
+  else if (el.storeOutputAutomatically) rows.push({ label: 'Stored', value: `on the element (referenced as {!${el.name}.<field>})` });
+  return rows;
+};
+/** A subflow's parameter list is the only thing that makes it comprehensible - by definition its internals are
+ *  not on this canvas. */
+const subflowRows = (el) => {
+  const rows = rows2(el.inputAssignments, (a) => ({ label: a.name, value: `= ${pickValue(a.value)}` }));
+  for (const o of asList(el.outputAssignments)) {
+    if (o.name) rows.push({ label: o.name, value: `-> {!${o.assignToReference}}` });
+  }
+  if (!asList(el.outputAssignments).length && el.storeOutputAutomatically) {
+    rows.push({ label: 'Outputs', value: `stored on the element (referenced as {!${el.name}.<output>})` });
+  }
+  return capRows(rows);
+};
+/** rows() caps internally, which is wrong when a caller concatenates several sources - use this and cap once. */
+function rows2(list, toRow) {
+  const out = [];
+  for (const item of asList(list)) {
+    const r = toRow(item);
+    if (r && r.label) out.push({ label: String(r.label), value: r.value == null ? '' : String(r.value) });
+  }
+  return out;
+}
+const SORT_ORDER = { Asc: 'ascending', Desc: 'descending' };
+// Flow Builder spells these out; the raw enum reads as jargon and, for RecordField, as a field name.
+const TIME_SOURCE = { RecordTriggerEvent: 'the trigger', RecordField: 'a record field' };
+/** Collection Sort / Filter / Map. A Sort card that never says WHICH field it sorts by is decorative. */
+const collectionRows = (el) => {
+  const rows = [];
+  if (el.collectionReference) rows.push({ label: 'Collection', value: `{!${el.collectionReference}}` });
+  for (const o of asList(el.sortOptions)) {
+    rows.push({ label: 'Sort by', value: [o.sortField, SORT_ORDER[o.sortOrder] || o.sortOrder].filter(Boolean).join(' ') });
+  }
+  const cond = summarizeConditions(el.conditions, el.conditionLogic);
+  if (cond) rows.push({ label: 'Keep when', value: cond });
+  for (const m of asList(el.mapItems)) {
+    rows.push({ label: m.assignToFieldReference || 'Maps', value: `${m.operator === 'Assign' || !m.operator ? '=' : m.operator} ${pickValue(m.value)}` });
+  }
+  if (el.formula) rows.push({ label: 'Formula', value: el.formula });
+  if (el.limit != null) rows.push({ label: 'Limit', value: String(el.limit) });
+  return capRows(rows);
+};
+/** What a Transform actually writes, field by field. */
+const transformRows = (el) => {
+  const rows = [];
+  for (const tv of asList(el.transformValues)) {
+    for (const a of asList(tv.transformValueActions)) {
+      const target = a.outputFieldApiName || a.transformType || '';
+      if (target) rows.push({ label: target, value: `${a.transformType && a.outputFieldApiName ? a.transformType + ' ' : ''}${pickValue(a.value) || ''}`.trim() });
+    }
+  }
+  return capRows(rows);
+};
+
+/** name -> a one-line description of what a choice reference actually offers. Built once per flow, because a
+ *  dynamicChoiceSet is a RESOURCE with no card of its own: without this the reader sees that a dropdown exists,
+ *  sees the reference name, and can never find out what is in it. */
+function buildChoiceIndex(md) {
+  const idx = new Map();
+  for (const c of asList(md.choices)) if (c.name) idx.set(c.name, c.label || pickValue(c.value) || null);
+  for (const d of asList(md.dynamicChoiceSets)) {
+    if (!d.name) continue;
+    const where = summarizeFilters(d.filters, d.filterLogic);
+    idx.set(d.name, [
+      d.object && d.displayField ? `${d.object}.${d.displayField}` : (d.object || d.displayField || null),
+      where && `where ${where}`,
+      d.sortField && `by ${d.sortField}${d.sortOrder ? ` ${SORT_ORDER[d.sortOrder] || d.sortOrder}` : ''}`,
+      d.limit != null && `top ${d.limit}`,
+    ].filter(Boolean).join(', ') || null);
+  }
+  return idx;
+}
+/** "dcs_Reasons (Case.Subject, where ...)" - keeps the reference AND names the source. */
+const describeChoices = (refs, idx) => asList(refs)
+  .map((r) => { const d = idx?.get(r); return d ? `${r} (${d})` : r; })
+  .join(', ');
+
 /** Each decision outcome and the condition that selects it. */
 const outcomeRows = (el) => {
   const out = rows(el.rules, (r) => ({
@@ -256,6 +369,11 @@ const actionParamRows = (el) => {
 // prefix ("Event Occurs", "Timeout"), which is what the branch actually means, so strip the parent's name
 // and de-underscore what is left. A pure "el_0" placeholder carries no meaning at all - fall back to the
 // duration there, which is the one useful thing a timed wait branch can say.
+/** The wait mechanisms Flow Builder names in plain language; anything unmapped prints its own API name. */
+const WAIT_EVENT_TYPE = {
+  AlarmEvent: 'absolute time alarm',
+  DateRefAlarmEvent: 'alarm relative to a record date',
+};
 function waitEventLabel(ev, parentName) {
   const raw = ev.label || ev.name || '';
   let stem = raw;
@@ -275,12 +393,18 @@ const waitRows = (el) => rows(el.waitEvents, (ev) => ({
   // branches rendered as a label beside an empty cell: "the flow waits" without saying for what.
   value: [
     ev.offset != null && ev.offsetUnit ? `after ${ev.offset} ${ev.offsetUnit}` : null,
+    // The MECHANISM, but only when nothing else in the row reveals it. Beside "after 2 Days" the eventType is
+    // noise; on a platform-event or date-referenced branch it is the single thing that says how the flow resumes.
+    ev.offset == null && ev.eventType ? `${WAIT_EVENT_TYPE[ev.eventType] || ev.eventType}` : null,
     ev.recordTriggerType ? `on record ${ev.recordTriggerType}` : null,
     ...(ev.inputParameters || []).map((p) => {
       const v = pickValue(p.value);
       return v == null || String(v).trim() === '' ? null : `${p.name} ${v}`;
     }),
     summarizeConditions(ev.conditions, ev.conditionLogic),
+    // Where the event's result LANDS. A platform-event or alarm branch that stores its payload was documented
+    // as a branch that simply happens - the reader could not tell what became available afterwards.
+    ...asList(ev.outputParameters).map((o) => (o.name ? `${o.name} -> {!${o.assignToReference}}` : null)),
   ].filter(Boolean).join(' \u00b7 '),
 }));
 
@@ -364,7 +488,7 @@ const COLLECTION_PROCESSOR_SUBTYPE = {
 
 // Each collection -> [cell type (or resolver), per-kind field extractor].
 const COLLECTIONS = [
-  ['screens', () => 'df.FlowScreen', (e) => {
+  ['screens', () => 'df.FlowScreen', (e, ctx) => {
     // Leaves, not the top level: on a sectioned screen the top level is Section1 / Column1, so the summary
     // used to name the scaffolding and never the inputs. Flattening also stops a RegionContainer counting as
     // "interactive" merely because it has a fieldType.
@@ -376,7 +500,7 @@ const COLLECTIONS = [
     // element name), so the old slice(0,4) + "(+6 more)" hid information for no layout benefit. Interactive
     // fields lead so the summary opens with what the screen ASKS; DisplayText prose follows.
     const ordered = [...interactive, ...all.filter((f) => !interactive.includes(f))];
-    return { components: ordered.map((f) => f.name).join(', ') || null, details: screenRows(e) };
+    return { components: ordered.map((f) => f.name).join(', ') || null, details: screenRows(e, ctx?.choiceIdx) };
   }],
   // Orchestrator stages have NO dedicated df.Flow* class (the spec's Flow Shapes table stops at the
   // standard element set), so they degrade to the generic Action card with their steps as the summary.
@@ -388,7 +512,7 @@ const COLLECTIONS = [
     stageSteps: asList(e.stageSteps).map((s) => s.label || s.name).join(' → ') || null,
     details: stageStepRows(e),
   })],
-  ['subflows', () => 'df.FlowSubflow', (e) => ({ flowName: e.flowName })],
+  ['subflows', () => 'df.FlowSubflow', (e) => ({ flowName: e.flowName, details: subflowRows(e) })],
   ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${pickValue(a.value)}`).join('; ') || null })],
   ['decisions', () => 'df.FlowDecision', (e) => ({ outcomes: (e.rules || []).map((r) => r.label || r.name).concat(e.defaultConnectorLabel ? [e.defaultConnectorLabel] : []).join(', ') || null, details: outcomeRows(e) })],
   ['loops', () => 'df.FlowLoop', (e) => ({
@@ -400,11 +524,11 @@ const COLLECTIONS = [
       { label: 'Loop variable', value: e.assignNextValueToReference || '' },
     ].filter((r) => r.value),
   })],
-  ['transforms', () => 'df.FlowTransform', (e) => ({ transformTarget: e.objectType || e.transformTarget || null })],
-  ['recordLookups', () => 'df.FlowGetRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: outputRows(e) })],
-  ['recordCreates', () => 'df.FlowCreateRecords', (e) => ({ object: e.object, details: assignmentRows(e) })],
-  ['recordUpdates', () => 'df.FlowUpdateRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: assignmentRows(e) })],
-  ['recordDeletes', () => 'df.FlowDeleteRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic) })],
+  ['transforms', () => 'df.FlowTransform', (e) => ({ transformTarget: e.objectType || e.transformTarget || null, details: transformRows(e) })],
+  ['recordLookups', () => 'df.FlowGetRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: getOutputRows(e) })],
+  ['recordCreates', () => 'df.FlowCreateRecords', (e) => ({ object: e.object, details: inputRows(e) })],
+  ['recordUpdates', () => 'df.FlowUpdateRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
+  ['recordDeletes', () => 'df.FlowDeleteRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
   ['recordRollbacks', () => 'df.FlowRollback', () => ({})],
   ['experiments', () => 'df.FlowPathExperiment', (e) => ({ outcomes: (e.experimentPaths || []).map((p) => p.name).join(', ') || null })],
   ['collectionProcessors', (e, warn) => {
@@ -412,7 +536,7 @@ const COLLECTIONS = [
     const cls = COLLECTION_PROCESSOR_SUBTYPE[sub];
     if (!cls && sub) warn(`collectionProcessor subtype "${sub}" has no dedicated shape - drawn as Collection Filter`);
     return cls || 'df.FlowCollectionFilter';
-  }, (e) => ({ collectionReference: e.collectionReference, conditions: summarizeConditions(e.conditions, e.conditionLogic) })],
+  }, (e) => ({ collectionReference: e.collectionReference, conditions: summarizeConditions(e.conditions, e.conditionLogic), details: collectionRows(e) })],
   ['waits', (e) => WAIT_SUBTYPE[e.elementSubtype] || 'df.FlowWait',
     (e) => ({ waitEvents: (e.waitEvents || []).map((ev) => waitEventLabel(ev, e.name)).filter(Boolean).join(', ') || null, details: waitRows(e) })],
   ['actionCalls', (e) => actionType(e)[0], (e) => ({ ...actionType(e)[1], details: actionParamRows(e) })],
@@ -497,7 +621,12 @@ function convert(input, opts = {}) {
     ...(st.filters?.length ? [{ label: 'Entry conditions', value: summarizeFilters(st.filters, st.filterLogic) || '' }] : []),
     ...rows(st.scheduledPaths, (sp) => ({
       label: sp.label || sp.name,
-      value: [sp.offsetNumber != null ? `${sp.offsetNumber} ${sp.offsetUnit || ''}`.trim() : null, sp.timeSource].filter(Boolean).join(' after ') || 'immediately',
+      // TIME_SOURCE, not the raw enum: "5 Days after RecordField" reads like a field name and is a TYPE name.
+      // When the source IS a record field, sp.recordField names it - which is what the reader wanted.
+      value: [
+        sp.offsetNumber != null ? `${sp.offsetNumber} ${sp.offsetUnit || ''}`.trim() : null,
+        sp.timeSource === 'RecordField' ? (sp.recordField || 'a record field') : (TIME_SOURCE[sp.timeSource] || sp.timeSource),
+      ].filter(Boolean).join(' after ') || 'immediately',
     })),
     ...rows(md.processMetadataValues, (m) => ({ label: m.name, value: pickValue(m.value) })),
   ].filter((r) => r.value != null && String(r.value).trim() !== '');
@@ -521,10 +650,12 @@ function convert(input, opts = {}) {
 
   // ── Every other collection ──
   const warn = (m) => warnings.push(m);
+  // Flow-wide context for the extractors, which otherwise only see their own element.
+  const convertCtx = { choiceIdx: buildChoiceIndex(md) };
   for (const [key, typeOf, fieldsOf] of COLLECTIONS) {
     for (const el of md[key] || []) {
       if (!el?.name) { warnings.push(`${key} entry without a name - skipped`); continue; }
-      if (!addNode(el.name, typeOf(el, warn), el.label || el.name, fieldsOf(el), el)) continue;
+      if (!addNode(el.name, typeOf(el, warn), el.label || el.name, fieldsOf(el, convertCtx), el)) continue;
 
       // Connectors live in a DIFFERENT place per element type - this is the whole edge model.
       if (key === 'decisions') {
@@ -684,17 +815,11 @@ function convert(input, opts = {}) {
   // straight across the cards - which is exactly what the spec's "connect between the baked-in ports"
   // instruction exists to prevent.
   const elById = new Map(cells.filter((c) => c.type !== 'standard.Link').map((c) => [c.id, c]));
-  const OPPOSITE = { 'port-top': 'port-bottom', 'port-bottom': 'port-top', 'port-left': 'port-right', 'port-right': 'port-left' };
   const endpoints = (e) => {
     const a = elById.get(e.source), b = elById.get(e.target);
     if (!a || !b) return ['port-bottom', 'port-top'];
-    const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
-    // Fault and Go To leave the SIDE of a card by convention, so they read as an aside rather than as
-    // the main path down the spine - the same way Flow Builder draws them.
-    if (e.kind === 'fault' || e.kind === 'goto') {
-      const out = dx >= 0 ? 'port-right' : 'port-left';
-      return [out, Math.abs(dy) > Math.abs(dx) ? (dy > 0 ? 'port-top' : 'port-bottom') : OPPOSITE[out]];
-    }
+    return flowLinkPorts(a.position, b.position, e.kind);
+  };
     // A flow reads top-to-bottom, so ANY step to a different row leaves the bottom and enters the top -
     // the orthogonal router draws the horizontal jog. Do NOT pick by dominant axis: a branch that moves
     // further sideways than down (a decision to a child in the next row, say dx 264 / dy 120) would then
@@ -705,13 +830,6 @@ function convert(input, opts = {}) {
     // unreadable. Flow Builder wraps it around the side instead, so do the same: leave a side and re-enter
     // the SAME side, giving the U-turn that reads as "go round and repeat" rather than a crossing.
     // Left by default (matching Flow Builder); right only when the target genuinely sits to the right.
-    if (dy < 0 && Math.abs(dy) >= H) {
-      const side = dx > W / 2 ? 'port-right' : 'port-left';
-      return [side, side];
-    }
-    if (Math.abs(dy) >= H) return ['port-bottom', 'port-top'];
-    return dx >= 0 ? ['port-right', 'port-left'] : ['port-left', 'port-right'];
-  };
 
   let li = 0;
   for (const e of kept) {
@@ -827,6 +945,40 @@ function convert(input, opts = {}) {
  * @param {boolean} [opts.forceLayout] - ignore metadata coordinates and always compute.
  * @returns {{diagram: object, stats: object}}
  */
+const OPPOSITE = { 'port-top': 'port-bottom', 'port-bottom': 'port-top', 'port-left': 'port-right', 'port-right': 'port-left' };
+/** Which of the four baked-in ports a connector should leave from and arrive at, given the two cards' positions
+ *  and the connector kind ('fault' | 'goto' | anything else). EXPORTED because the app needs the identical rule
+ *  on the LOAD path: a hand- or LLM-authored flow link that omits `source.port`/`target.port` anchors to the
+ *  element CENTRE, so sfManhattan has nothing to work against and the line cuts diagonally across the cards. The
+ *  diagram validates, loads, and looks broken. Sharing this function is what keeps a repaired-on-load diagram
+ *  identical to a converted one instead of merely similar. Pure - takes positions, returns port ids. */
+export function flowLinkPorts(aPos, bPos, kind) {
+  if (!aPos || !bPos) return ['port-bottom', 'port-top'];
+  const dx = bPos.x - aPos.x, dy = bPos.y - aPos.y;
+  // Fault and Go To leave the SIDE of a card by convention, so they read as an aside rather than as
+  // the main path down the spine - the same way Flow Builder draws them.
+  if (kind === 'fault' || kind === 'goto') {
+    const out = dx >= 0 ? 'port-right' : 'port-left';
+    return [out, Math.abs(dy) > Math.abs(dx) ? (dy > 0 ? 'port-top' : 'port-bottom') : OPPOSITE[out]];
+  }
+  // A flow reads top-to-bottom, so ANY step to a different row leaves the bottom and enters the top -
+  // the orthogonal router draws the horizontal jog. Do NOT pick by dominant axis: a branch that moves
+  // further sideways than down (a decision to a child in the next row, say dx 264 / dy 120) would then
+  // exit the side and curl back on itself. Sides are only right when the two cards truly share a row.
+  // A connector pointing UP is a RETURN path - overwhelmingly a loop's back-edge, where the body's last
+  // element feeds the iteration back to the Loop card sitting above it. Routing that top-to-bottom drives
+  // the line straight back up THROUGH the loop body it just came out of, which is what made loops
+  // unreadable. Flow Builder wraps it around the side instead, so do the same: leave a side and re-enter
+  // the SAME side, giving the U-turn that reads as "go round and repeat" rather than a crossing.
+  // Left by default (matching Flow Builder); right only when the target genuinely sits to the right.
+  if (dy < 0 && Math.abs(dy) >= H) {
+    const side = dx > W / 2 ? 'port-right' : 'port-left';
+    return [side, side];
+  }
+  if (Math.abs(dy) >= H) return ['port-bottom', 'port-top'];
+  return dx >= 0 ? ['port-right', 'port-left'] : ['port-left', 'port-right'];
+}
+
 export function convertFlowMetadata(input, opts = {}) {
   return convert(input, opts);
 }

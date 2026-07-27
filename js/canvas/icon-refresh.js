@@ -5,7 +5,7 @@
 // every element's icon (current normalized viewBoxes). registerIconRefresh(cctx) exposes
 // refreshAllIconHrefs + freqClockUri (the frequency-label clock-glyph builder used by the inline
 // link-styles frequency label) on cctx. Reads the live graph via cctx.
-import { cctx } from './context.js?v=1.21.2';
+import { cctx } from './context.js?v=1.21.3';
 
 let _iconDataUriFn = null;
 export function setIconDataUriFn(fn) { _iconDataUriFn = fn; }
@@ -33,6 +33,9 @@ export function refreshIcons() {
   }
 }
 
+// Mirrors PLACEHOLDER_INK in js/shapes/core.js - the df.Placeholder ? is a fixed mid-grey, not a themed colour.
+const PLACEHOLDER_INK = '#747474';
+
 /** Regenerate ALL icon data URIs on canvas elements so they use current normalized viewBoxes. */
 function refreshAllIconHrefs() {
   if (!_iconDataUriFn) return;
@@ -52,6 +55,11 @@ function refreshAllIconHrefs() {
       // full SVG (it rendered empty). Re-resolve it from label/fill (the note text colour). An empty href -
       // i.e. a user-cleared icon - no-ops in _refreshElementIcon, so cleared notes stay cleared. (item 1.2)
       _refreshElementIcon(el, 'icon/href', 'label/fill');
+    } else if (type === 'df.Placeholder') {
+      // Intrinsic to the type (a ? in a fixed grey), so re-resolve it like a flow icon rather than from a
+      // label colour. Without this branch it renders empty after a reload - initialize() only bakes an EMPTY
+      // href, and the save leaves a non-empty `data-icon-id` placeholder behind.
+      _refreshElementIcon(el, 'icon/href', null, PLACEHOLDER_INK);
     } else if (type.startsWith('df.Flow')) {
       // Flow element icons are ALWAYS white on the coloured/circular chip (intrinsic to the element type). The save
       // slims the baked data URI to a `data-icon-id` placeholder; without this branch it never re-resolved on load

@@ -15,9 +15,9 @@
 // graph reset) is the shared overlay-layer.js kit — capture adds `change:parent` to its event list so the halos
 // re-read the moment an embed changes. cctx-only (no init wiring) — driven by selection.onChange via the canvas
 // facade. This module supplies its own captor detection + halo/pill draw.
-import { cctx } from './context.js?v=1.21.2';
-import { createOverlay } from './overlay-layer.js?v=1.21.2';
-import { HALO_PARENT_TYPES, enclosedCapturableShapes, groupChildrenInto } from './embedding.js?v=1.21.2';
+import { cctx } from './context.js?v=1.21.3';
+import { createOverlay } from './overlay-layer.js?v=1.21.3';
+import { HALO_PARENT_TYPES, enclosedCapturableShapes, groupChildrenInto } from './embedding.js?v=1.21.3';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Adopt the CONNECTOR-focus halo STYLE (v1.19.2.10): a soft, wide, translucent stroke — captured = SOLID

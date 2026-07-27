@@ -19,8 +19,8 @@
 // NB per-kind keys avoid JointJS built-in cell attributes (source/target/vertices/router) — `transformTarget`,
 // not `target`, so a change-listener never misfires on a link's endpoint change (caught in S1 e2e).
 
-import { portGroups, portItems } from './ports.js?v=1.21.2';
-import { getIconDataUri } from '../icons.js?v=1.21.2';
+import { portGroups, portItems } from './ports.js?v=1.21.3';
+import { getIconDataUri } from '../icons.js?v=1.21.3';
 
 // Uniform card size for every element (decision #8/S1: "Uniform default size for all classes"). MUST equal the
 // DEFAULT_SIZES entries in properties/type-meta.js or "Auto Size" snaps to a different box.
@@ -41,6 +41,9 @@ const C = {
   screen:      '#1B96FF', // bright blue (measured) - Screen renders its own lighter blue, not the navy
   logic:       '#DD7A01', // orange      (measured)
   data:        '#FF538A', // pink        (measured)
+  // NOT measured - Placeholder has no Flow Builder counterpart to read a colour from. A deliberate neutral grey:
+  // it must read as "no category yet", so it cannot borrow any section's colour without implying a section.
+  placeholder: '#747474',
 };
 
 // The single source of truth. cls → class suffix (df.Flow<cls>); icon → SLDS symbol id (standard sprite unless
@@ -93,6 +96,13 @@ export const FLOW_ELEMENTS = [
   { cls: 'UpdateRecords',        label: 'Update Records',                   icon: 'record_update',        accent: C.data,        meta: 'recordUpdates',      fields: ['object', 'filters'] },
   { cls: 'DeleteRecords',        label: 'Delete Records',                   icon: 'record_delete',        accent: C.data,        meta: 'recordDeletes',      fields: ['object', 'filters'] },
   { cls: 'Rollback',             label: 'Roll Back Records',                icon: 'recent',               accent: C.data,        meta: 'recordRollbacks',    fields: [] },                                                  // standard:recent (export-verified)
+  // ── Planning (grey) - UI-only, no Flow metadata counterpart ───────────────
+  // A step the author knows belongs here but has not defined yet. `dashed` is the only visual signal that
+  // separates it from a real card, and it is why the row carries a flag the define() loop reads rather than a
+  // one-off class. Deliberately NOT emitted by the flow converter: an empty branch in a real org means "do
+  // nothing and continue", not "undefined", and inventing an element that is absent from the org would
+  // misrepresent the very thing an imported diagram exists to document.
+  { cls: 'Placeholder',          label: 'Placeholder',                      icon: 'question_mark',        accent: C.placeholder, meta: '(UI-only)',          fields: [], dashed: true },
   // NB: Recommendation Assignment + Custom Error were REMOVED (2026-07-19, owner) - their icons couldn't be found
   // in Salesforce to verify; re-add when a real export confirms them.
 ];
@@ -125,6 +135,10 @@ export function registerFlow() {
           body: {
             width: 'calc(w)', height: 'calc(h)', rx: 8, ry: 8,
             fill: 'var(--node-bg)', stroke: 'var(--node-border)', strokeWidth: 1,
+            // A DASHED body is the whole visual grammar of "not defined yet". It is a default attr, not a hard
+            // override, so the Shape state control (Added/Changed/Removed/Deferred) still stashes it into
+            // `_origBorder` and restores it losslessly on None - see SHAPE_STATE_STYLES in properties.js.
+            ...(el.dashed ? { strokeDasharray: '6 4' } : {}),
           },
           iconChip: {
             x: 8, y: 'calc(0.5 * h - 16)', width: 32, height: 32,

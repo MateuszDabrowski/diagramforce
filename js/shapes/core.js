@@ -1,9 +1,15 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.2';
-import { portGroups, portItems } from './ports.js?v=1.21.2';
-import { sanitizeCssColor } from '../util.js?v=1.21.2';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.3';
+import { portGroups, portItems } from './ports.js?v=1.21.3';
+import { sanitizeCssColor } from '../util.js?v=1.21.3';
+import { getIconDataUri } from '../icons.js?v=1.21.3';
+
+// The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
+// than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a
+// resolved, colour-coded component. Same value the flow Placeholder chip uses.
+const PLACEHOLDER_INK = '#747474';
 
 export function registerCore() {
   // --- SimpleNode ---
@@ -406,6 +412,78 @@ export function registerCore() {
       ensureMarkdownFO(this, 'label', text, { x: 0, y: 0, width, height, css, hideSelector: 'label' });
     },
   });
+
+  // --- Placeholder ---
+  // "A component belongs here and we have not decided what it is." Architecture diagrams get drawn while the
+  // architecture is still being argued about, and until now there were only two ways to say that: draw a real node
+  // that lies about being decided, or leave a gap that reads as an oversight.
+  //
+  // It borrows sf.SimpleNode's silhouette DELIBERATELY (same 180x64, same rounded rect, same icon slot at x=12,
+  // same label geometry) so it sits in an architecture diagram as a peer rather than as a foreign object. The
+  // DASHED border is the only structural difference - that is the whole visual grammar, exactly as df.FlowPlaceholder
+  // does it for the flow card. Sibling shape, sibling reasoning: see functions/shapes.md.
+  //
+  // Net-new, so `df.` per the namespace convention. NOT `df.ArchPlaceholder`: unlike the flow family, architecture
+  // shapes carry no family prefix (sf.SimpleNode / sf.Container / sf.Zone) and nothing keys off one, so there is no
+  // prefix to match. Architecture is also the default type a type-less diagram opens as, which makes the unqualified
+  // name the right home for it.
+  joint.dia.Element.define(
+    'df.Placeholder',
+    {
+      size: { width: 180, height: 64 },
+      z: 2000,    // Node tier, same as sf.SimpleNode - it stands in for one
+      attrs: {
+        body: {
+          width: 'calc(w)', height: 'calc(h)', rx: 8, ry: 8,
+          fill: 'var(--node-bg)', stroke: 'var(--node-border)', strokeWidth: 1,
+          // A DEFAULT attr, not a hard override, so the Shape state control (Added/Changed/Removed/Deferred)
+          // stashes it into `_origBorder` and restores it losslessly on None.
+          strokeDasharray: '6 4',
+        },
+        icon: { x: 12, y: 'calc(0.5 * h - 16)', width: 32, height: 32, href: '' },
+        label: {
+          x: 'calc(0.5 * w + 20)', y: 'calc(0.5 * h)',
+          textAnchor: 'middle', textVerticalAnchor: 'middle',
+          fontSize: 13, fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--node-text)', text: 'Placeholder',
+          textWrap: { width: 'calc(w - 64)', maxLineCount: 4, ellipsis: true },
+        },
+        subtitle: {
+          x: 12, y: 42,
+          textAnchor: 'start', textVerticalAnchor: 'top',
+          fontSize: 10, fontFamily: 'system-ui, -apple-system, sans-serif',
+          fill: 'var(--node-subtitle)', text: '', visibility: 'hidden',
+          textWrap: { width: 'calc(w - 24)', height: 'calc(h - 48)', ellipsis: true },
+        },
+      },
+      ports: { groups: portGroups, items: portItems },
+    },
+    {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'image', selector: 'icon' },
+        { tagName: 'text', selector: 'label' },
+        { tagName: 'text', selector: 'subtitle' },
+      ],
+      // Bake the ? glyph when the href is EMPTY - the fresh-drop and LLM-authored path, which never sets an icon.
+      // A reload restores a slimmed `data-icon-id` placeholder (non-empty), so this guard skips it and
+      // icon-refresh.js re-resolves it instead. Missing that second half is what once broke every flow icon on
+      // refresh, so df.Placeholder has a branch there too, and an e2e reload test pinning it.
+      initialize() {
+        joint.dia.Element.prototype.initialize.apply(this, arguments);
+        this.on('change:name', () => this._syncSubtitle());
+        this._syncSubtitle();
+        if (!this.attr('icon/href')) {
+          const href = getIconDataUri('question_mark', PLACEHOLDER_INK, 32);
+          if (href) this.attr('icon/href', href);
+        }
+      },
+      _syncSubtitle() {
+        // Show the description row only when there IS one - an empty grey band under the label reads as a defect.
+        this.attr('subtitle/visibility', String(this.attr('subtitle/text') || '').trim() ? 'visible' : 'hidden');
+      },
+    }
+  );
 
   // --- Pill ---
   // A number / short-label badge: a filled circle that extends into a stadium "pill" as the content grows. Use it

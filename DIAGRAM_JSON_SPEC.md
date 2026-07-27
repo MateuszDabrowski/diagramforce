@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.21.2** — matches the app's current `appVersion`; set `"appVersion": "1.21.2"` in generated files.
+> **Spec snapshot: v1.21.3** — matches the app's current `appVersion`; set `"appVersion": "1.21.3"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.21.2"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.21.3"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.2", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.2" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.3", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.3" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.2", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.3", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.2" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.3" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -120,7 +120,7 @@
 
 | Type | Use For | Primary Shapes |
 |------|---------|----------------|
-| `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image |
+| `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image, Placeholder |
 | `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnLoop, BpmnPool, BpmnDataObject, Flow* shapes, Annotation |
 | `datamodel` | ERDs, Salesforce object models (pure ER) | DataObject |
 | `datamapping` | Data Cloud / Data 360 field mapping (mapping mode always on — all-field ports, Category, source→DMO mapping links) | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone` with `layerStage`: `source`/`datastream`/`dlo`/`dmo`/`activation`) |
@@ -129,6 +129,14 @@
 | `sequence` | UML sequence diagrams, message flows | SequenceParticipant, SequenceActor, SequenceActivation, SequenceFragment |
 
 > **`sf.Image`** is available in every diagram type's "Generic Shapes" stencil group (since v1.9). Note that any tab containing `sf.Image` cells has Share-as-URL automatically disabled — see [sf.Image](#sfimage-since-v19) for details.
+
+> **`df.Placeholder`** (since v1.21.3) is an ARCHITECTURE shape meaning "a component belongs here and it is not
+> decided yet" - `sf.SimpleNode`'s silhouette (180x64) with a DASHED border and a `?` glyph. Use it when the user
+> is sketching an architecture that is still being argued about, instead of inventing a concrete component that
+> claims a decision nobody made, or leaving a gap that reads as an oversight. Put what is unknown in
+> `attrs.label.text` ("Identity provider - TBD"); `attrs.subtitle.text` takes an optional description. It has no
+> icon or colour options - the `?` and the dash are the meaning. Its sibling `df.FlowPlaceholder` does the same
+> job on a `flow` diagram; use whichever matches the `diagramType`, they are not interchangeable.
 
 > **`df.Pill`** (an auto-widening number / short-label badge — a circle for `1`, a stadium pill for `Phase 1`, driven by the `pillText` prop) is a net-new GENERIC shape in every type's "Generic Shapes" group (since v1.17.2). It uses the **`df.` namespace** — the project marks net-new shapes `df.*` while legacy shapes keep `sf.*` (the type string is serialized, so renaming would break old saves); both resolve via `cellNamespace`/`cellViewNamespace = joint.shapes`.
 
@@ -1464,6 +1472,13 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 | `df.FlowDeleteRecords` | Delete Records | `recordDeletes` | `object`, `filters` |
 | `df.FlowRollback` | Roll Back Records | `recordRollbacks` *(record-triggered / autolaunched)* | *(none)* |
 | `df.FlowStage` | Stage | `orchestratedStages` *(Orchestrator / `ProcessType: ApprovalWorkflow`)* | `stageSteps` |
+| `df.FlowPlaceholder` | Placeholder | *(UI-only; NEVER produced by flow import)* | *(none)* |
+
+> **Placeholder is for DESIGN, not import.** `df.FlowPlaceholder` is a dashed card meaning "a step belongs here
+> and it is not defined yet" - use it when the author is sketching a flow they have not built. It has no Metadata
+> API counterpart, and the flow-metadata converter never emits one: an empty decision outcome in a real org means
+> "do nothing and continue", not "undefined", so inventing an element there would misrepresent the org. Put its
+> description in the card's `name` ("Approval step - TBD"); it takes no per-kind fields.
 
 > **Field-key note.** Where a real 1:1 Metadata API field exists the key IS that field name (`triggerType`, `object`, `filters`, `actionName`, `actionType`, `flowName`, `waitEvents`, `assignmentItems`, `collectionReference`, `conditions`). The rest are pragmatic summary keys (`components`, `outcomes`, `transformTarget`, `message`, `template`, `activation`, `configuration`) - a short human summary, not the raw metadata. The messaging sends store their content reference in `template` (the panel labels it per channel: Email / SMS / Message / Push Notification Message / In-App Message); Send to Data 360 uses `activation` (an API-activation reference, not message content). Start carries a free-text `configuration` (arbitrary setup notes - schedule cadence, entry conditions, etc.). `processType` is a Flow-level field parked on the Start card for convenience. (The Transform summary key is `transformTarget`, not `target`, to avoid colliding with a link's built-in `target` endpoint.)
 
@@ -1978,7 +1993,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.21.2", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.21.3", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2081,7 +2096,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2113,7 +2128,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2240,7 +2255,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2270,7 +2285,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2303,7 +2318,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2346,7 +2361,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2392,7 +2407,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.2",
+  "appVersion": "1.21.3",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

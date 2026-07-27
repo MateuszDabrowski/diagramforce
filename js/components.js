@@ -1,14 +1,14 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.21.2';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.21.2';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.21.2';
-import { sanitizeCssColor } from './util.js?v=1.21.2';
+import { getIconDataUri } from './icons.js?v=1.21.3';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.21.3';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.21.3';
+import { sanitizeCssColor } from './util.js?v=1.21.3';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.21.2';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.21.2';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.21.3';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.21.3';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -51,6 +51,17 @@ export function contrastTextColor(bgHex) {
 // imported at the top of this file. The *_CATEGORIES arrays below build on them.
 
 export const COMPONENT_CATEGORIES = [
+  // Its own section, FIRST among architecture's own categories - mirrors the flow stencil's Planning group. (The
+  // shared "Generic Shapes" band renders above it regardless: js/stencil.js pins that one to the top for every
+  // diagram type.) A component whose identity is not decided belongs to no product or vendor section, and filing
+  // it under one implies a choice the author has not made.
+  {
+    id: 'arch-planning',
+    label: 'Planning',
+    components: [
+      { type: 'df.Placeholder', label: 'Placeholder', stencilSvg: SVG.placeholder },
+    ],
+  },
   {
     id: 'generic',
     label: 'Generic Shapes',
@@ -535,6 +546,10 @@ const flowStencil = (cls) => {
   return { type: 'df.Flow' + e.cls, label: e.label, iconName: e.icon, accent: e.accent, round: !!e.round };
 };
 export const FLOW_CATEGORIES = [
+  // Its own section, FIRST among the flow categories - a not-yet-defined step belongs to NO palette section, and
+  // filing it under one would imply a category the author has not picked yet. ("Generic Shapes" still renders
+  // above it; js/stencil.js pins that band to the top for every diagram type.)
+  { id: 'flow-planning',    label: 'Planning',      components: ['Placeholder'].map(flowStencil) },
   { id: 'flow-startend',    label: 'Start & End',   components: ['Start', 'End'].map(flowStencil) },
   { id: 'flow-interaction', label: 'Interaction',   components: ['Screen', 'Action', 'Subflow', 'SendToFlow', 'SendEmail', 'SendSms', 'SendWhatsApp', 'SendToData360', 'SendMobileApp', 'SendMobileInApp', 'ForwardToBot', 'RunAgent', 'CreateCampaignMember', 'CreateTask', 'Stage', 'Exit'].map(flowStencil) },
   { id: 'flow-logic',       label: 'Logic',         components: ['Assignment', 'Decision', 'Loop', 'Transform', 'PathExperiment', 'CollectionSort', 'CollectionFilter', 'Wait', 'WaitUntilDate', 'WaitUntilEvent', 'EinsteinDecision', 'DetermineCrmRecord'].map(flowStencil) },
@@ -748,6 +763,14 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
   }
 
   switch (type) {
+    case 'df.Placeholder': {
+      // Nothing to configure at drop time: the ? glyph is baked by the shape's own initialize() and the dashed
+      // border is a default attr. A label is the only thing worth seeding, and only when the caller supplied one.
+      const el = new joint.shapes.df.Placeholder({ position });
+      if (label) el.attr('label/text', label);
+      if (subtitle) { el.attr('subtitle/text', subtitle); el.attr('subtitle/visibility', 'visible'); }
+      return el;
+    }
     case 'sf.SimpleNode': {
       const textColor = bg ? contrastTextColor(bg) : null;
       const iconColor = textColor || getComputedStyle(document.documentElement).getPropertyValue('--node-text').trim() || '#1C1E21';

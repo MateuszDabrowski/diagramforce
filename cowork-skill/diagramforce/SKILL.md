@@ -153,15 +153,32 @@ The validator proves the diagram will **load intact**. It does **not** judge whe
 **reads well** - do a final visual pass in your head (spacing, overlaps, flow direction) before
 handing it over.
 
-### 5. Deliver (paste into Diagramforce - no account, no backend)
+### 5. Deliver (a one-click link when it fits, the file otherwise)
 
 Save the final, validated JSON as a file (`.json`, or Diagramforce's own `.dgf` extension - the
-content is identical). Then give the user the file **and** these steps:
+content is identical). **Then try the link first:**
+
+```bash
+node scripts/make-share-url.mjs your-diagram.json
+```
+
+On success it prints a single `https://diagramforce.com/#diagram=...` URL. Give the user **that link**
+and tell them to click it - the diagram opens directly, no import step. Also attach the file, so they
+have something to keep.
+
+The URL carries the whole diagram in its hash; nothing is uploaded and no account is involved.
+
+**If it exits with code 2**, the diagram is past the ~8000-character ceiling that browsers and chat
+clients start truncating at. Do NOT hand over a truncated link. Fall back to the file:
 
 1. Open **https://diagramforce.com**
 2. Click **Load & Import**, choose the **Paste** tab, paste the JSON, and click **Load**
    (or use the **File** tab to open the `.json` / `.dgf` you saved).
-3. That's it - the diagram opens as a new tab. No sign-in; nothing leaves the browser.
+3. The diagram opens as a new tab. No sign-in; nothing leaves the browser.
+
+Rough guide to what fits: a converted Salesforce Flow or a normal architecture diagram fits easily; a
+large Data Cloud field-mapping diagram (hundreds of mapped fields) generally does not. Do not guess -
+run the script and read the exit code.
 
 If the user later wants it in Google Drive or shared, they can do that from inside the app - your job
 ends at a clean, importable diagram.
@@ -172,7 +189,8 @@ ends at a clean, importable diagram.
 Input: "We push Leads from a web form into Salesforce, sync them to Marketing Cloud via MC Connect, and
 mirror them to a data warehouse. Diagram it."
 Output: an `architecture` diagram - a node per system (Web Form, Salesforce, Marketing Cloud, Data
-Warehouse) with labeled connectors for each hop - validated clean, saved to a file, with the paste steps.
+Warehouse) with labeled connectors for each hop - validated clean, saved to a file, and delivered as a
+one-click `#diagram=` link (it fits comfortably at this size).
 
 **Example 2**
 Input: "Map the standard Contact fields into a Data Cloud Individual DMO."

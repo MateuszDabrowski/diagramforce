@@ -17,6 +17,7 @@ export function container(label, iconName, accentColor, options = {}) {
 
 // Stencil SVG icons (20×20 viewBox, stroke-based, no fill by default)
 export const SVG = {
+  placeholder: '<rect x="3" y="4" width="14" height="12" rx="3" stroke-dasharray="3 2"/><text x="10" y="13.5" text-anchor="middle" font-size="9" font-family="system-ui, sans-serif" font-weight="600" fill="currentColor" stroke="none">?</text>',
   node:       '<rect x="3" y="4" width="14" height="12" rx="3" /><circle cx="10" cy="10" r="2" fill="currentColor" stroke="none"/>',
   container:  '<rect x="2" y="3" width="16" height="14" rx="2" /><line x1="2" y1="7" x2="18" y2="7"/><circle cx="5.5" cy="5" r="1" fill="currentColor" stroke="none"/>',
   text:       '<line x1="5" y1="4" x2="15" y2="4"/><line x1="10" y1="4" x2="10" y2="16"/><line x1="7" y1="16" x2="13" y2="16"/>',

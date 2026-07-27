@@ -2,11 +2,12 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.21.2';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.21.2';
-import { nodeContrastText } from '../util.js?v=1.21.2';
-import { getIconDataUri } from '../icons.js?v=1.21.2';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.21.2';
+import { cctx } from './context.js?v=1.21.3';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.21.3';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.21.3';
+import { nodeContrastText } from '../util.js?v=1.21.3';
+import { getIconDataUri } from '../icons.js?v=1.21.3';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.21.3';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -144,6 +145,22 @@ export function migrateLinks() {
         // link that omits `router` would otherwise render as a diagonal straight line. Idempotent.
         if (link.router()?.name !== 'sfManhattan') link.router({ name: 'sfManhattan' });
         if (link.connector()?.name !== 'rounded') link.connector('rounded', { radius: 8 });
+        // Default the PORTS the same way, and for the same reason as the router above. Without a port JointJS
+        // anchors to the element CENTRE, so sfManhattan has nothing to work against and the line cuts diagonally
+        // straight across the cards - the diagram validates, loads, and looks broken. It failed exactly that way
+        // in real use: DIAGRAM_JSON_SPEC.md said to use the baked-in ports in one line, while its own three
+        // connector examples omitted them, so the examples won. The spec is fixed, but that only helps diagrams
+        // authored AFTER it; this repairs the ones already in the wild, on every load.
+        //
+        // flowLinkPorts is the CONVERTER's own rule, imported rather than reimplemented, so a repaired link is
+        // identical to a converted one instead of merely similar. Only fills a MISSING port - an explicit choice
+        // (the converter's, or one the user made by dragging an end onto a specific port) is never overwritten.
+        const sEnd = link.get('source'), tEnd = link.get('target');
+        if (sCell && tCell && (!sEnd?.port || !tEnd?.port)) {
+          const [sPort, tPort] = flowLinkPorts(sCell.position(), tCell.position(), type);
+          if (!sEnd.port) link.set('source', { ...sEnd, port: sPort });
+          if (!tEnd.port) link.set('target', { ...tEnd, port: tPort });
+        }
       }
     }
 

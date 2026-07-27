@@ -4,11 +4,11 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.21.2';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.21.2';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.21.2';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.2';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.21.2';
+import { tbctx } from './context.js?v=1.21.3';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.21.3';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.21.3';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.3';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.21.3';
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;

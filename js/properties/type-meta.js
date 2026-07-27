@@ -76,7 +76,9 @@ export const TYPE_LABELS = {
   'df.FlowDeleteRecords':        'Delete Records',
   'df.FlowRollback':             'Roll Back Records',
   'df.FlowStage':                'Stage',
+  'df.FlowPlaceholder':          'Placeholder',
   'df.Pill':                'Pill',
+  'df.Placeholder':              'Placeholder',
   'df.Legend':              'Legend',
   'df.Table':               'Table',
 };
@@ -109,6 +111,7 @@ export const DEFAULT_SIZES = {
   'sf.Annotation':     { width: 100, height: 120 },
   'sf.Line':           { width: 200, height: 8 },
   'df.Pill':           { width: 32,  height: 32 },
+  'df.Placeholder':              { width: 180, height: 64 },
   'df.Legend':         { width: 120, height: 28 },
   'df.Table':          { width: 330, height: 90 },
   'sf.Link':           { width: 220, height: 44 },
@@ -159,4 +162,5 @@ export const DEFAULT_SIZES = {
   'df.FlowDeleteRecords':        { width: 210, height: 56 },
   'df.FlowRollback':             { width: 210, height: 56 },
   'df.FlowStage':                { width: 210, height: 56 },
+  'df.FlowPlaceholder':          { width: 210, height: 56 },
 };

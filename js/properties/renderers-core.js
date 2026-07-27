@@ -5,16 +5,33 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.21.2';
-import { prctx } from './context.js?v=1.21.2';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.2';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.21.2';
-import { startImageAddFlow } from '../image-component.js?v=1.21.2';
-import { recolorCellIcon } from './color-schema.js?v=1.21.2';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.2';
-import { renderFieldEditor } from './field-editor.js?v=1.21.2';
-import { finishStandardProps } from './render-core.js?v=1.21.2';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.21.2';
+import * as history from '../history.js?v=1.21.3';
+import { prctx } from './context.js?v=1.21.3';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.3';
+import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.21.3';
+import { startImageAddFlow } from '../image-component.js?v=1.21.3';
+import { recolorCellIcon } from './color-schema.js?v=1.21.3';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.21.3';
+import { renderFieldEditor } from './field-editor.js?v=1.21.3';
+import { finishStandardProps } from './render-core.js?v=1.21.3';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.21.3';
+
+/** df.Placeholder — Label + Description, and deliberately nothing else.
+ *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
+ *  them be edited away leaves a card that looks decided while still being a placeholder. A user who wants a real
+ *  node should drop a real node. */
+export function renderPlaceholderProps(cell) {
+  const content = section(prctx.bodyEl, 'Content');
+  addText(content, 'Label', cell.attr('label/text'), (v) => {
+    cell.attr('label/text', v);
+    prctx.titleEl.textContent = v || '';
+  }, cell);
+  addTextarea(content, 'Description', cell.attr('subtitle/text'), (v) => {
+    cell.attr('subtitle/text', v);
+    // Keep the band hidden while empty - the shape's own _syncSubtitle does this on load; mirror it on edit.
+    cell.attr('subtitle/visibility', String(v || '').trim() ? 'visible' : 'hidden');
+  });
+}
 
 export function renderSimpleNodeProps(cell) {
   const isIcon = cell.get('iconMode');

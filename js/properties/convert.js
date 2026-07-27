@@ -4,11 +4,11 @@
 // convertFromIcon. Each mints the replacement shape, re-attaches links + embedding, and swaps in ONE undo batch.
 // Reads the live graph/selection via prctx; never imports the facade back. The facade renderers + buildCellActions
 // import the 5 convertTo* back (they wire the panel's Convert buttons + the right-click convert menu).
-import * as history from '../history.js?v=1.21.2';
-import { prctx } from './context.js?v=1.21.2';
-import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.2';
-import { contrastTextColor } from '../components.js?v=1.21.2';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.21.2';
+import * as history from '../history.js?v=1.21.3';
+import { prctx } from './context.js?v=1.21.3';
+import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.3';
+import { contrastTextColor } from '../components.js?v=1.21.3';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.21.3';
 
 export function collectConnections(cell) {
   return prctx.graph.getConnectedLinks(cell).map(link => ({
