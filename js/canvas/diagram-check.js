@@ -10,8 +10,8 @@
 //
 // The transient-`<g>`-in-`.joint-layers` lifecycle (create / redraw-on-move / auto-clear on reset) is the shared
 // overlay-layer.js kit; this module supplies only its own detection + draw + red outline/dot builders.
-import { cctx } from './context.js?v=1.21.5';
-import { createOverlay } from './overlay-layer.js?v=1.21.5';
+import { cctx } from './context.js?v=1.21.6';
+import { createOverlay } from './overlay-layer.js?v=1.21.6';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const COL = '#DA4E55';   // red — matches the issue / Removed palette

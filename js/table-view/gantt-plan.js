@@ -6,11 +6,11 @@
 // draft-session state machine (_barDraft/_barOrig), which this module never touches. Reads the live
 // graph + facade callbacks via initGanttPlan; never imports table-view.js back (acyclic).
 
-import { escHtml } from '../util.js?v=1.21.5';
-import { startBatch, endBatch } from '../history.js?v=1.21.5';
-import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.21.5';
-import { applyGanttDepLinkStyle } from '../canvas.js?v=1.21.5';
-import { buildModal } from '../feedback.js?v=1.21.5';
+import { escHtml } from '../util.js?v=1.21.6';
+import { startBatch, endBatch } from '../history.js?v=1.21.6';
+import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.21.6';
+import { applyGanttDepLinkStyle } from '../canvas.js?v=1.21.6';
+import { buildModal } from '../feedback.js?v=1.21.6';
 
 // ── Injected context (wired by table-view.init → initGanttPlan). Read at CALL time. `graph` is the
 // live JointJS graph; syncGanttDraft/render/isEditSession are facade functions the structural ops

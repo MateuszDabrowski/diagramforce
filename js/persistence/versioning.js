@@ -4,9 +4,9 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver, escHtml, stableStringify, sanitizeFilenamePart } from '../util.js?v=1.21.5';
-import { buildModal } from '../feedback.js?v=1.21.5';
-import { pctx } from './context.js?v=1.21.5';
+import { compareSemver, escHtml, stableStringify, sanitizeFilenamePart } from '../util.js?v=1.21.6';
+import { buildModal } from '../feedback.js?v=1.21.6';
+import { pctx } from './context.js?v=1.21.6';
 
 /** Content signature of a cell array (a diagram's `graph.cells` or a template's
  *  `cells`). Two imports with the same signature are exact duplicates. Exported

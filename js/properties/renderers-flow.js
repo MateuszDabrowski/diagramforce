@@ -4,12 +4,12 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.21.5';
-import { finishStandardProps } from './render-core.js?v=1.21.5';
-import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.5';
-import { escHtml } from '../util.js?v=1.21.5';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.5';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.21.5';
+import { prctx } from './context.js?v=1.21.6';
+import { finishStandardProps } from './render-core.js?v=1.21.6';
+import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.6';
+import { escHtml } from '../util.js?v=1.21.6';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.6';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.21.6';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -116,6 +116,21 @@ export function renderFlowElementProps(cell) {
       return `<tr><th scope="row">${label}</th><td>${value || '<span class="df-prop-detail-table__empty">-</span>'}</td></tr>`;
     }).join('');
     meta.appendChild(table);
+    // State the SUPPRESSION RULE. The converter drops action parameters that are unset or explicitly `false`,
+    // because Salesforce writes the full parameter list whether or not it was configured - on a real Send Email
+    // action that was 20 of 27 rows saying nothing. But a reader cannot tell "hidden because it is off" from
+    // "the app is not showing me something", and that ambiguity is a trust problem, not a data problem
+    // (real-use feedback 2026-07-27: "nie jestem pewna, czy jest to pomocne, czy generuje wiecej szumu").
+    //
+    // A NOTE rather than a "Show All" toggle, deliberately: the suppressed rows are dropped at IMPORT and are
+    // not in the diagram to reveal, so a toggle would mean persisting them - measured at +181% on that card's
+    // details, in localStorage AND every save AND every share URL. It would also exceed DETAIL_CAP (20) and
+    // render "+7 more", so the button would not even show all. And because this is a panel string rather than
+    // baked data, it works on flows imported BEFORE this release, which storing rows never could.
+    const note = document.createElement('p');
+    note.className = 'df-prop-detail-note';
+    note.textContent = 'Values that are unset or false are hidden.';
+    meta.appendChild(note);
   }
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });

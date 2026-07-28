@@ -1,10 +1,10 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.5';
-import { portGroups, portItems } from './ports.js?v=1.21.5';
-import { sanitizeCssColor } from '../util.js?v=1.21.5';
-import { getIconDataUri } from '../icons.js?v=1.21.5';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.6';
+import { portGroups, portItems } from './ports.js?v=1.21.6';
+import { sanitizeCssColor } from '../util.js?v=1.21.6';
+import { getIconDataUri } from '../icons.js?v=1.21.6';
 
 // The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
 // than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a

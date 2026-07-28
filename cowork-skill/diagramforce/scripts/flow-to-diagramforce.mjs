@@ -30,7 +30,10 @@ const appVersion = (() => {
 const [inPath, outPath] = process.argv.slice(2);
 if (!inPath) { console.error('usage: node flow-to-diagramforce.mjs <flow.json> [out.json]'); process.exit(1); }
 const raw = JSON.parse(readFileSync(inPath, 'utf8'));
-const { diagram, stats } = convertFlowMetadata(raw, { computeFlowLayout, appVersion });
+// SFDX source format keeps a flow's API name ONLY in the FILE NAME - never inside the document - so derive it
+// here for the .flow-meta.xml path. A Tooling response carries FullName and wins over this.
+const fullName = inPath.split('/').pop().replace(/\.(flow-meta\.xml|json|xml)$/i, '') || null;
+const { diagram, stats } = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion });
 const json = JSON.stringify(diagram, null, 2);
 if (outPath) writeFileSync(outPath, json); else console.log(json);
 console.error(`✓ ${diagram.title}

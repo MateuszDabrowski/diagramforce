@@ -348,7 +348,14 @@ const actionParamRows = (el) => {
   const out = [];
   for (const p of el.inputParameters || []) {
     const v = pickValue(p.value);
-    if (p.name && v != null && String(v).trim() !== '') out.push({ label: p.name, value: String(v) });
+    // ...and a FALSE flag is dropped for the same reason an unset parameter is. Salesforce writes every boolean
+    // whether or not it was touched, and `false` IS the default, so its absence says exactly what its presence
+    // would. Measured on a real Send Email Message action: 3 of its 10 rows were `false` - 30% of the card
+    // asserting nothing, crowding the 4 rows that meant something (real-use feedback 2026-07-27: "czy generuje
+    // wiecej szumu informacyjnego"). Keyed on `booleanValue` specifically, so a stringValue that happens to read
+    // "false" is left alone - that one WAS authored.
+    const falseFlag = p.value?.booleanValue != null && String(p.value.booleanValue).trim() === 'false';
+    if (p.name && !falseFlag && v != null && String(v).trim() !== '') out.push({ label: p.name, value: String(v) });
   }
   for (const o of el.outputParameters || []) {
     if (o.assignToReference) out.push({ label: o.name || 'output', value: `-> {!${o.assignToReference}}` });
@@ -617,7 +624,7 @@ function convert(input, opts = {}) {
   const startDetails = [
     ...(st.recordTriggerType ? [{ label: 'Record trigger', value: String(st.recordTriggerType) }] : []),
     ...(st.doesRequireRecordChangedToMeetCriteria ? [{ label: 'Only on change', value: 'yes' }] : []),
-    ...(st.schedule ? [{ label: 'Schedule', value: [st.schedule.frequency, st.schedule.startDate, st.schedule.startTime?.timeValue].filter(Boolean).join(' \u00b7 ') }] : []),
+    ...(st.schedule ? [{ label: 'Schedule', value: describeSchedule(st.schedule) }] : []),
     ...(st.filters?.length ? [{ label: 'Entry conditions', value: summarizeFilters(st.filters, st.filterLogic) || '' }] : []),
     ...rows(st.scheduledPaths, (sp) => ({
       label: sp.label || sp.name,
@@ -857,8 +864,21 @@ function convert(input, opts = {}) {
   //
   // Added LAST, deliberately. It is not a flow element: it must not reach the layout (which would rank it as
   // a node), the End synthesis (which gives every outgoing-link-less cell an End) or the port/link pass.
+  // The flow's API NAME. The row has always existed; it was the VALUE that was missing. A Tooling response
+  // carries `FullName` on the envelope and some sources carry `md.fullName`, but a .flow-meta.xml carries
+  // NEITHER: in SFDX source format the API name lives ONLY in the FILE NAME
+  // (Gather_Scent_Preferences_Campaign_Flow.flow-meta.xml) and never inside the document. So the row resolved to
+  // null and was filtered out, and an XML-imported flow showed no API name at all - reported from real use
+  // 2026-07-27, where it is the identifier needed to pull the flow again via CLI. The importer now passes the
+  // dropped file's base name in as `opts.fullName`.
+  //
+  // `derivedName` matters for the emit decision below: a name read from the ENVELOPE is authored metadata, but
+  // one recovered from a file name is inferred by us, and inferring one fact is not a reason to add a card to
+  // somebody's canvas when the flow carries nothing else.
+  const apiName = input?.FullName || md.fullName || opts.fullName || null;
+  const derivedName = !input?.FullName && !md.fullName && !!opts.fullName;
   const meta = [
-    ['API Name', input?.FullName || md.fullName],
+    ['API Name', apiName],
     ['Type', md.processType],
     // Provenance. An INSTALLED flow comes from a managed package - which is why every element here carries a
     // namespace prefix, and why the reader cannot edit it in their own org. That is a first-order fact about
@@ -888,7 +908,11 @@ function convert(input, opts = {}) {
   ].filter(([, v]) => v != null && String(v).trim() !== '')
     .map(([k, v]) => [k, String(v).replace(/\s+/g, ' ').trim()]);
 
-  if (meta.length) {
+  // Emit only when there is something to say. A DERIVED API name does not count on its own - see `derivedName`.
+  // In practice every real flow carries processType / status / apiVersion, so this only ever bites a degenerate
+  // one; the point is that the card never appears just because we inferred a name from a file path.
+  const substantive = meta.filter(([k]) => !(derivedName && k === 'API Name')).length;
+  if (substantive) {
     const startCell = cells.find((c) => c.id === START_ID);
     const TABLE_W = 330, ROW_H = 28, LINE_H = 19, LABEL_H = 26, GAP = 90;
     // The view re-measures and GROWS DOWNWARD from position.y, so an under-estimate here lands the card on top
@@ -977,6 +1001,27 @@ export function flowLinkPorts(aPos, bPos, kind) {
   }
   if (Math.abs(dy) >= H) return ['port-bottom', 'port-top'];
   return dx >= 0 ? ['port-right', 'port-left'] : ['port-left', 'port-right'];
+}
+
+/** Frequency -> the unit an interval counts in, so `frequencyNumber` can be read out in English. */
+const SCHEDULE_UNIT = { Hourly: 'hours', Daily: 'days', Weekly: 'weeks', Monthly: 'months' };
+/** "every 2 hours - from 2026-07-21 16:15". Two things were being dropped here, both reported from a real org:
+ *  - `frequencyNumber` was never read, so a flow running every 2 hours was documented as plain "Hourly" - the
+ *    schedule looked twice as frequent as it is.
+ *  - `startTime` was read as `.timeValue`, but it is a PLAIN STRING in both a .flow-meta.xml and a Tooling
+ *    response, so the time silently vanished on every path (our own fixture included). Accept both shapes. */
+function describeSchedule(sc) {
+  if (!sc) return null;
+  const n = Number(sc.frequencyNumber);
+  const unit = SCHEDULE_UNIT[sc.frequency];
+  // Only an interval GREATER than 1 is worth spelling out - "every 1 hours" is worse than "Hourly".
+  const every = Number.isFinite(n) && n > 1 && unit ? `every ${n} ${unit}` : (sc.frequency || null);
+  const raw = typeof sc.startTime === 'string' ? sc.startTime : sc.startTime?.timeValue;
+  const time = raw ? String(raw).replace(/\.\d+Z?$/, '').replace(/:00$/, '') : null;
+  const from = [sc.startDate, time].filter(Boolean).join(' ');
+  // dayOfMonthToRun is only meaningful on a Monthly schedule; it is present as 0 on every other frequency.
+  const day = sc.frequency === 'Monthly' && Number(sc.dayOfMonthToRun) > 0 ? `on day ${sc.dayOfMonthToRun}` : null;
+  return [every, day, from && `from ${from}`].filter(Boolean).join(' \u00b7 ') || null;
 }
 
 export function convertFlowMetadata(input, opts = {}) {

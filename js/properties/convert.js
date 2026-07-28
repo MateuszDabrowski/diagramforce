@@ -4,11 +4,11 @@
 // convertFromIcon. Each mints the replacement shape, re-attaches links + embedding, and swaps in ONE undo batch.
 // Reads the live graph/selection via prctx; never imports the facade back. The facade renderers + buildCellActions
 // import the 5 convertTo* back (they wire the panel's Convert buttons + the right-click convert menu).
-import * as history from '../history.js?v=1.21.5';
-import { prctx } from './context.js?v=1.21.5';
-import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.5';
-import { contrastTextColor } from '../components.js?v=1.21.5';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.21.5';
+import * as history from '../history.js?v=1.21.6';
+import { prctx } from './context.js?v=1.21.6';
+import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.6';
+import { contrastTextColor } from '../components.js?v=1.21.6';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.21.6';
 
 export function collectConnections(cell) {
   return prctx.graph.getConnectedLinks(cell).map(link => ({
@@ -103,7 +103,7 @@ export function convertToNode(cell) {
   } finally { history.endBatch(); }
 }
 
-// ── Placeholder -> a real shape (1.21.4) ─────────────────────────────────────────────────────────────────────
+// ── Placeholder -> a real shape (1.21.5) ─────────────────────────────────────────────────────────────────────
 // A placeholder is by definition temporary, so the moment it stops being one it has to become a real shape
 // WITHOUT the user deleting it. Deleting is what the owner objected to and rightly: JointJS removes every
 // connected link with the cell, so resolving a placeholder that was already wired in meant re-drawing all of its

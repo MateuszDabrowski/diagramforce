@@ -1509,3 +1509,11 @@
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 .df-prop-detail-table__empty { color: var(--text-muted); font-family: inherit; }
+/* Footnote under the flow Metadata table - explains that unset/false values are suppressed. Muted and small so
+   it reads as a note about the table rather than as another row of it. */
+.df-prop-detail-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}

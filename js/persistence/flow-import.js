@@ -14,9 +14,9 @@
 // the service worker precaches the ?v= URL, so a bare specifier misses the cache and breaks offline boot;
 // and a bare './context.js' is a DIFFERENT module URL from './context.js?v=…', which instantiates a SECOND
 // pctx singleton whose appVersion is never set - stamping every imported flow appVersion "1".
-import { convertFlowMetadata } from './flow-convert.js?v=1.21.5';
-import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.21.5';
-import { pctx } from './context.js?v=1.21.5';
+import { convertFlowMetadata } from './flow-convert.js?v=1.21.6';
+import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.21.6';
+import { pctx } from './context.js?v=1.21.6';
 
 // Metadata keys whose value is a LIST even when the XML carries exactly one of them. XML has no way to
 // say "array of one" — <screens> appearing once is indistinguishable from a scalar — so the shape has to
@@ -128,7 +128,11 @@ export function isFlowMetadata(obj) {
  * @returns {{diagram: object, stats: object}}
  * @throws {Error} when the text is neither format, or the XML is not a Flow.
  */
-export function importFlowSource(text) {
+/** `opts.fileName` is the dropped file's base name. It matters because SFDX SOURCE FORMAT keeps a flow's API
+ *  name ONLY in the file name - `Gather_Scent_Preferences_Campaign_Flow.flow-meta.xml` - and never inside the
+ *  document, so without it an XML-imported flow has no API name at all. A Tooling response carries `FullName`
+ *  and wins; this is the fallback for the file path. */
+export function importFlowSource(text, opts = {}) {
   let input;
   if (looksLikeFlowXml(text)) input = parseFlowXml(text);
   else {
@@ -140,5 +144,5 @@ export function importFlowSource(text) {
   }
   // pctx.appVersion is set at persistence module-eval, so it is always populated by the time a user
   // can reach an import control.
-  return convertFlowMetadata(input, { computeFlowLayout, appVersion: pctx.appVersion });
+  return convertFlowMetadata(input, { fullName: opts.fileName || null, computeFlowLayout, appVersion: pctx.appVersion });
 }
