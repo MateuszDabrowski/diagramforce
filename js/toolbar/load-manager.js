@@ -1,10 +1,10 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.21.6';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.21.6';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.6';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.21.6';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.6';
-import { showSaveManagerModal } from './save-manager.js?v=1.21.6';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.21.7';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.21.7';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.7';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.21.7';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.7';
+import { showSaveManagerModal } from './save-manager.js?v=1.21.7';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -525,9 +525,16 @@ function renderPasteLoadPane({ pane, footer, close }) {
         <div class="df-paste-modal__fmt" data-fmt="mermaid">
           <div class="df-paste-modal__fmt-title">Mermaid <span class="df-badge df-badge--beta">Beta</span></div>
           <ul class="df-paste-modal__fmt-list">
-            <li data-mtype="flowchart" data-label="flowchart">flowchart</li><li data-mtype="graph" data-label="graph">graph</li><li data-mtype="state" data-label="stateDiagram">stateDiagram</li><li data-mtype="er" data-label="erDiagram">erDiagram</li><li data-mtype="sequence" data-label="sequenceDiagram">sequenceDiagram</li>
+            <li data-mtype="flowchart" data-label="flowchart">flowchart</li><li data-mtype="graph" data-label="graph">graph</li><li data-mtype="state" data-label="stateDiagram">stateDiagram</li><li data-mtype="er" data-label="erDiagram">erDiagram</li><li data-mtype="sequence" data-label="sequenceDiagram">sequenceDiagram</li><li data-mtype="gantt" data-label="gantt">gantt</li>
           </ul>
-        </div>
+            <label class="df-paste-modal__mtarget" hidden>Import as
+              <select class="df-paste-modal__mtarget-sel">
+                <option value="process">Process</option>
+                <option value="architecture">Architecture</option>
+                <option value="org">Org Chart</option>
+              </select>
+            </label>
+          </div>
       </div>
     </div>`;
   footer.innerHTML = '<button class="df-modal__btn df-modal__btn--accent df-paste-modal__load" style="margin-left:auto" disabled>Load</button>';
@@ -537,6 +544,8 @@ function renderPasteLoadPane({ pane, footer, close }) {
   const fmtCols = pane.querySelectorAll('.df-paste-modal__fmt');
   const jsonCol = pane.querySelector('.df-paste-modal__fmt[data-fmt="json"]');
   const mtypeEls = pane.querySelectorAll('.df-paste-modal__fmt-list [data-mtype]');
+  const mtarget = pane.querySelector('.df-paste-modal__mtarget');
+  const mtargetSel = pane.querySelector('.df-paste-modal__mtarget-sel');
   const errColor = 'var(--color-danger)';
   let mode = null;
 
@@ -544,6 +553,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
   const resetHighlight = () => {
     fmtCols.forEach(c => c.classList.remove('is-on', 'is-err'));
     mtypeEls.forEach(li => { li.classList.remove('is-on'); li.textContent = li.dataset.label; });
+    if (mtarget) mtarget.hidden = true;
     if (jsonDetected) jsonDetected.textContent = '';
   };
   const detect = (raw) => {
@@ -583,14 +593,21 @@ function renderPasteLoadPane({ pane, footer, close }) {
       return;
     }
     const li = [...mtypeEls].find(el => el.dataset.mtype === d.mtype);
-    if (li) { li.classList.add('is-on'); li.textContent = `${li.dataset.label} → ${MERMAID_INFO[d.mtype]?.target || 'diagram'}`; }
+    // Only a flowchart/graph is ambiguous about its target; every other mermaid type maps to exactly one.
+    const pickable = d.mtype === 'flowchart' || d.mtype === 'graph';
+    if (mtarget) mtarget.hidden = !pickable;
+    const label = pickable && mtargetSel
+      ? (mtargetSel.selectedOptions[0]?.textContent || 'Process')
+      : (MERMAID_INFO[d.mtype]?.target || 'diagram');
+    if (li) { li.classList.add('is-on'); li.textContent = `${li.dataset.label} → ${label}`; }
   };
   input.addEventListener('input', validate);
+  mtargetSel?.addEventListener('change', validate);
   loadBtn.addEventListener('click', async () => {
     let ok = false;
     if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
     else if (mode === 'json') ok = await tctx.modules.persistence.loadJSONText(input.value, 'Pasted');
-    else if (mode === 'mermaid') ok = tctx.modules.mermaidImport.importMermaidText(input.value);
+    else if (mode === 'mermaid') ok = tctx.modules.mermaidImport.importMermaidText(input.value, { target: mtargetSel?.value });
     if (ok) close();
   });
   setTimeout(() => input.focus(), 50);
@@ -608,6 +625,7 @@ const MERMAID_INFO = {
   state:     { name: 'state diagram', target: 'Process' },
   er:        { name: 'ER diagram', target: 'Data Model' },
   sequence:  { name: 'sequence diagram', target: 'Sequence' },
+  gantt:     { name: 'gantt', target: 'Gantt' },
 };
 
 function buildLoadItem(save) {

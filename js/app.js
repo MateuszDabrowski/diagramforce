@@ -1,30 +1,30 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.21.6';
-import * as icons       from './icons.js?v=1.21.6';
-import { getAllStencilSvgs } from './components.js?v=1.21.6';
-import * as shapes      from './shapes.js?v=1.21.6';
-import * as canvas      from './canvas.js?v=1.21.6';
-import * as stencil     from './stencil.js?v=1.21.6';
-import * as selection   from './selection.js?v=1.21.6';
-import * as history     from './history.js?v=1.21.6';
-import * as clipboard   from './clipboard.js?v=1.21.6';
-import * as templates    from './templates.js?v=1.21.6';
-import * as keyboard    from './keyboard.js?v=1.21.6';
-import * as toolbar     from './toolbar.js?v=1.21.6';
-import * as properties  from './properties.js?v=1.21.6';
-import * as persistence from './persistence.js?v=1.21.6';
-import * as tabs        from './tabs.js?v=1.21.6';
-import * as mermaidImport from './mermaid-import.js?v=1.21.6';
-import * as tableView    from './table-view.js?v=1.21.6';
-import * as walkthrough  from './walkthrough.js?v=1.21.6';
-import * as whatsNew     from './whats-new.js?v=1.21.6';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.21.6';
-import * as externalImport from './persistence/external-import.js?v=1.21.6';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.21.6';
-import { seedDefaultPalette } from './brand-palette.js?v=1.21.6';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.6';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.21.7';
+import * as icons       from './icons.js?v=1.21.7';
+import { getAllStencilSvgs } from './components.js?v=1.21.7';
+import * as shapes      from './shapes.js?v=1.21.7';
+import * as canvas      from './canvas.js?v=1.21.7';
+import * as stencil     from './stencil.js?v=1.21.7';
+import * as selection   from './selection.js?v=1.21.7';
+import * as history     from './history.js?v=1.21.7';
+import * as clipboard   from './clipboard.js?v=1.21.7';
+import * as templates    from './templates.js?v=1.21.7';
+import * as keyboard    from './keyboard.js?v=1.21.7';
+import * as toolbar     from './toolbar.js?v=1.21.7';
+import * as properties  from './properties.js?v=1.21.7';
+import * as persistence from './persistence.js?v=1.21.7';
+import * as tabs        from './tabs.js?v=1.21.7';
+import * as mermaidImport from './mermaid-import.js?v=1.21.7';
+import * as tableView    from './table-view.js?v=1.21.7';
+import * as walkthrough  from './walkthrough.js?v=1.21.7';
+import * as whatsNew     from './whats-new.js?v=1.21.7';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.21.7';
+import * as externalImport from './persistence/external-import.js?v=1.21.7';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.21.7';
+import { seedDefaultPalette } from './brand-palette.js?v=1.21.7';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.7';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.

@@ -29,8 +29,10 @@ or another diagram to recreate, that is a prime use of this skill: read the sour
 elements and connections, and author the equivalent Diagramforce JSON with the same workflow below
 (the source just seeds step 1's type choice and step 3's content). One shortcut worth offering: if the
 source is **Mermaid**, Diagramforce imports it natively - the user can paste the Mermaid straight into
-**Load & Import -> Paste** and the app auto-detects and converts it (`graph`/`flowchart`/`stateDiagram`
--> Process, `erDiagram` -> Data Model, `sequenceDiagram` -> Sequence), so you may not need to author
+**Load & Import -> Paste** and the app auto-detects and converts it (`graph`/`flowchart` -> Process,
+Architecture or Org Chart - the pane offers the choice; `stateDiagram` -> Process, `erDiagram` -> Data Model,
+`sequenceDiagram` -> Sequence, `gantt` -> Gantt, with sections becoming phases and `after` becoming real
+dependencies). `subgraph` groups import as labelled zones. So you may not need to author
 JSON at all. Author JSON yourself when they want a type Mermaid can't express, or edits beyond a
 straight conversion.
 

@@ -11,9 +11,13 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.21.6';
-import { ER_MARKER_D } from './er-markers.js?v=1.21.6';
-import { showError, showToast } from './feedback.js?v=1.21.6';
+import { createElementFromComponent } from './components.js?v=1.21.7';
+import { ER_MARKER_D } from './er-markers.js?v=1.21.7';
+import { showError, showToast } from './feedback.js?v=1.21.7';
+// Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
+// functions the load migration uses. Nothing here computes a bar's x or width.
+import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
+  from './gantt-layout.js?v=1.21.7';
 
 let modules = {};
 
@@ -56,7 +60,7 @@ function parseFrontmatter(text) {
  * Parse + import mermaid text into a new tab.
  * Returns true on success, false on failure (with error toast shown).
  */
-export function importMermaidText(text) {
+export function importMermaidText(text, opts = {}) {
   if (!text || !text.trim()) { showError('Mermaid import failed: empty input.'); return false; }
   const { title: fmTitle, body } = parseFrontmatter(text);
   const type = detectDiagramType(body);
@@ -64,12 +68,17 @@ export function importMermaidText(text) {
 
   let parsed;
   try {
-    parsed = parseMermaid(body, type);
+    parsed = parseMermaid(body, type, opts.target);
   } catch (err) {
     console.error('Mermaid parse error:', err);
     showError('Mermaid import failed: ' + err.message);
     return false;
   }
+  // A Gantt is a SCHEDULE, not a node-and-edge graph: it carries `tasks`, never `elements`, and its geometry
+  // comes from dates rather than from a layout. Branch before the node guard below, which would otherwise
+  // reject every gantt as empty.
+  if (parsed?.diagramType === 'gantt') return buildGantt(parsed, modules);
+
   if (!parsed || !parsed.elements || parsed.elements.length === 0) {
     showError('Mermaid import failed: no nodes found.');
     return false;
@@ -82,6 +91,10 @@ export function importMermaidText(text) {
 
   const isSequence = !!parsed.isSequence;
 
+  // mermaid-id -> cell, hoisted out of the build block so the layout + Zone steps below can resolve each
+  // subgraph's members (the parser records membership by MERMAID id, not by JointJS cell id).
+  const byIdForGroups = new Map();
+
   // Build elements into the live graph of the freshly activated tab.
   modules.canvas.setLoadingJSON(true);
   try {
@@ -89,7 +102,7 @@ export function importMermaidText(text) {
     graph.clear();
 
     // Create elements first (they reference each other by mermaid-id)
-    const byId = new Map();
+    const byId = byIdForGroups;
     let x = 0, y = 0;
     for (const el of parsed.elements) {
       // Sequence-parsed elements already carry absolute positions — honour them.
@@ -143,13 +156,25 @@ export function importMermaidText(text) {
     return true;
   }
 
-  // Auto-layout
+  // Auto-layout. `groupOf` bands the cross axis by subgraph so each group's Zone is a clean stripe; without it
+  // a group whose members sit at different ranks would need a box spanning the whole diagram, and six such boxes
+  // overlap (measured on the reported sample: 6 overlapping pairs out of 15).
   const direction = parsed.direction || 'horizontal';
+  const groupOf = new Map();
+  for (const g of (parsed.groups || [])) {
+    for (const mid of g.memberIds) { const c = byIdForGroups.get(mid); if (c) groupOf.set(c.id, g.key); }
+  }
   try {
-    hierarchicalLayout(modules.graph, parsed, direction);
+    hierarchicalLayout(modules.graph, parsed, direction, groupOf.size ? groupOf : null);
   } catch (err) {
     console.warn('hierarchicalLayout failed, falling back to canvas.autoLayout:', err);
     try { modules.canvas.autoLayout(direction); } catch {}
+  }
+  // Zones LAST: one in the graph while hierarchicalLayout runs would be ranked as a node.
+  if (parsed.groups?.length) {
+    try {
+      createSubgraphZones(modules.graph, parsed.groups, byIdForGroups, createElementFromComponent);
+    } catch (err) { console.warn('subgraph zones failed:', err); }
   }
   // After layout, snap link endpoints to the nearest side ports so the
   // router draws clean orthogonal connections into the element borders
@@ -302,7 +327,11 @@ function dedupeTabName(baseName) {
  * 3. Barycentric ordering within each layer to reduce crossings.
  * 4. Place nodes on a grid; back-edges are still routed by sfManhattan.
  */
-function hierarchicalLayout(graph, _parsed, direction) {
+/** `groupOf` (cell id -> subgraph key) bands the CROSS axis so every member of a subgraph shares a lane and the
+ *  Zone drawn around it is a clean stripe. Nodes keep their LAYER - that is the flow reading and is not ours to
+ *  move - so a group whose members sit at different ranks becomes a WIDE band, which is exactly what mermaid
+ *  renders. Groups may overlap freely along the flow axis; what must never overlap is the cross axis. */
+function hierarchicalLayout(graph, _parsed, direction, groupOf = null) {
   const elements = graph.getElements();
   if (elements.length === 0) return;
   const H_GAP = 80;   // space between layers
@@ -409,6 +438,51 @@ function hierarchicalLayout(graph, _parsed, direction) {
   const maxWidth = Math.max(...layers.map(l => l.length));
   const byModelId = new Map(elements.map(e => [e.id, e]));
 
+  // ── Banded placement when subgraphs are present ────────────────────────────
+  // Each group owns a contiguous slice of the cross axis. Band ORDER follows the earliest layer any of its
+  // members reaches, so the bands read in flow order rather than in declaration order.
+  const bandOf = new Map();     // cell id -> band key ('' = ungrouped)
+  for (const id of ids) bandOf.set(id, (groupOf && groupOf.get(id)) || '');
+  const usingBands = groupOf && new Set(bandOf.values()).size > 1;
+
+  if (usingBands) {
+    const firstLayer = new Map();
+    for (const id of ids) {
+      const b = bandOf.get(id), l = level.get(id);
+      if (!firstLayer.has(b) || l < firstLayer.get(b)) firstLayer.set(b, l);
+    }
+    const bands = [...firstLayer.keys()].sort((a, b) => (firstLayer.get(a) - firstLayer.get(b))
+      || String(a).localeCompare(String(b)));
+    // A band is as thick as the MOST members it ever has in a single layer.
+    const thickness = new Map(bands.map((b) => [b, 1]));
+    layers.forEach((layer) => {
+      const perBand = new Map();
+      layer.forEach((id) => perBand.set(bandOf.get(id), (perBand.get(bandOf.get(id)) || 0) + 1));
+      for (const [b, n] of perBand) if (n > (thickness.get(b) || 1)) thickness.set(b, n);
+    });
+    const step = cellH + V_GAP;
+    const bandTop = new Map();
+    let acc = 0;
+    // BAND_GAP leaves room between two Zones so their borders never touch or read as one box.
+    const BAND_GAP = 70;
+    for (const b of bands) { bandTop.set(b, acc); acc += thickness.get(b) * step + BAND_GAP; }
+
+    layers.forEach((layer, layerIdx) => {
+      const seen = new Map();
+      layer.forEach((id) => {
+        const cell = byModelId.get(id);
+        if (!cell) return;
+        const b = bandOf.get(id);
+        const lane = seen.get(b) || 0;
+        seen.set(b, lane + 1);
+        const along = layerIdx * (cellW + H_GAP);
+        const across = bandTop.get(b) + lane * step;
+        if (vertical) cell.position(across, along); else cell.position(along, across);
+      });
+    });
+    return;
+  }
+
   layers.forEach((layer, layerIdx) => {
     const count = layer.length;
     layer.forEach((id, i) => {
@@ -434,6 +508,124 @@ function hierarchicalLayout(graph, _parsed, direction) {
   });
 }
 
+/** Draw an sf.Zone around each subgraph AFTER layout and embed its members. Layout-first is deliberate: a Zone
+ *  in the graph while hierarchicalLayout runs would be ranked as a node. Zones sit at z 0 (behind everything),
+ *  so an enclosing stripe never hides the cards it contains. */
+function createSubgraphZones(graph, groups, byId, createElementFromComponent) {
+  const PAD_X = 26, PAD_TOP = 38, PAD_BOTTOM = 22;
+  for (const g of groups) {
+    const members = g.memberIds.map((mid) => byId.get(mid)).filter(Boolean);
+    if (!members.length) continue;
+    const bs = members.map((m) => m.getBBox());
+    const x1 = Math.min(...bs.map((b) => b.x)) - PAD_X;
+    const y1 = Math.min(...bs.map((b) => b.y)) - PAD_TOP;
+    const x2 = Math.max(...bs.map((b) => b.x + b.width)) + PAD_X;
+    const y2 = Math.max(...bs.map((b) => b.y + b.height)) + PAD_BOTTOM;
+    const zone = createElementFromComponent({ type: 'sf.Zone', label: g.title }, { x: x1, y: y1 });
+    if (!zone) continue;
+    zone.resize(x2 - x1, y2 - y1);
+    graph.addCell(zone);
+    // Embed AFTER adding both, so the parent's `embeds` array and each child's `parent` stay consistent.
+    for (const m of members) zone.embed(m);
+  }
+}
+
+
+/** Build a Gantt from the parsed schedule. Emits DATA - a timeline plus dated, ordered, grouped bars - and lets
+ *  `applyGanttGeometry` compute every pixel, exactly as an LLM-authored Gantt JSON is handled on load. That is
+ *  what makes this tractable: when gantt support was dropped in beta a bar carried a manual x/width, so an
+ *  importer had to do axis maths it had no business doing. */
+function buildGantt(parsed, modules) {
+  const graph = modules.graph;
+  const name = dedupeTabName(parsed.title || 'Imported Plan');
+  modules.tabs.newTab(name, 'gantt');
+  // Row index for a MILESTONE. Milestones are NOT part of ganttRowLayout, so their row is the caller's job, and
+  // a source index is the wrong number to use: ganttRowLayout interleaves a header row per group, so a bar's
+  // visual row is its index PLUS the groups above it. Using the raw index put the milestone on top of a bar.
+  // They go after every bar instead - unambiguous, never collides, and reads as "events at the end of the plan".
+  // Declared out here because the geometry pass that reads it runs after the try/finally below.
+  const msRow = new Map();
+  const barRows = (parsed.timeline.groups?.length || 0)
+    + parsed.tasks.filter((t) => !(t.milestone || t.startDate === t.endDate)).length;
+  modules.canvas.setLoadingJSON(true);
+  let tl;
+  try {
+    graph.clear();
+    tl = createElementFromComponent({
+      type: 'sf.GanttTimeline', label: parsed.title || 'Timeline',
+      viewMode: parsed.timeline.viewMode, numPeriods: parsed.timeline.numPeriods,
+    }, { x: 0, y: 0 });
+    if (!tl) throw new Error('could not create the timeline');
+    tl.set('startDate', parsed.timeline.startDate);
+    tl.set('groups', parsed.timeline.groups);
+    graph.addCell(tl);
+
+    const byId = new Map();
+    parsed.tasks.forEach((t, i) => {
+      // A zero-length task is a MILESTONE in mermaid whether or not it is tagged one - that is what `0d` means.
+      const isMilestone = t.milestone || t.startDate === t.endDate;
+      const cell = isMilestone
+        ? new joint.shapes.sf.GanttMilestone({ milestoneDate: t.startDate, attrs: { label: { text: t.label } } })
+        : new joint.shapes.sf.GanttTask({
+          order: i, groupId: t.groupId, taskLabel: t.label,
+          startDate: t.startDate, endDate: t.endDate,
+          // `done` is complete, `active` is in flight - the only two mermaid states with a progress meaning.
+          progress: t.tags.includes('done') ? 100 : t.tags.includes('active') ? 50 : 0,
+          attrs: { label: { text: t.label } },
+        });
+      graph.addCell(cell);
+      tl.embed(cell);
+      if (isMilestone) msRow.set(cell.id, barRows + msRow.size);
+      byId.set(t.id, cell);
+    });
+
+    // `after` is finish-to-start by definition, which is exactly what the Gantt dependency model stores.
+    for (const lk of parsed.links) {
+      const src = byId.get(lk.source), tgt = byId.get(lk.target);
+      if (!src || !tgt || src.get('type') !== 'sf.GanttTask' || tgt.get('type') !== 'sf.GanttTask') continue;
+      const link = new joint.shapes.standard.Link({
+        source: { id: src.id, port: 'port-right' }, target: { id: tgt.id, port: 'port-left' },
+      });
+      link.prop('linkKind', 'ganttDep');
+      link.prop('depType', lk.depType || 'FS');
+      graph.addCell(link);
+    }
+  } finally {
+    modules.canvas.setLoadingJSON(false);
+  }
+
+  // Geometry LAST, once every bar and group is in place - the same order the load migration uses.
+  //
+  // Measured, because the obvious reading of this block is wrong: the BARS do not need it. A GanttTask view
+  // re-derives its own geometry on `change:startDate`/`endDate`, so setting dates at construction is enough -
+  // removing either applyGanttGeometry or layoutTimelineTasks here changes nothing. What IS load-bearing is the
+  // MILESTONE branch (a milestone is not part of ganttRowLayout, so nothing else gives it a row) and
+  // backfillGanttOrders. The task calls stay because they are idempotent and keep this correct if that view
+  // behaviour ever changes - but they are a belt, not the braces.
+  try {
+    if (backfillGanttOrders(tl)) layoutTimelineTasks(tl);
+    for (const el of graph.getElements()) {
+      if (el.get('type') === 'sf.GanttTask' && el.get('startDate')) applyGanttGeometry(el, tl);
+      if (el.get('type') === 'sf.GanttMilestone') {
+        // applyGanttMilestoneGeometry sets X from the date and KEEPS the existing Y - a milestone is not part of
+        // ganttRowLayout, so its row is the caller's job. Without this every milestone sat at y=0, i.e. inside
+        // the timeline HEADER, which reads as a stray diamond in the axis rather than an event on the plan.
+        const row = msRow.get(el.id);
+        if (row != null) el.position(el.position().x, orderToY(tl, row) - 4, { gantt: true });
+        applyGanttMilestoneGeometry(el, tl);
+      }
+    }
+    layoutTimelineTasks(tl);
+  } catch (err) { console.warn('gantt geometry failed:', err); }
+
+  requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
+  const n = parsed.tasks.length;
+  const w = parsed.warnings || [];
+  if (w.length) showToast(`Imported ${n} task${n === 1 ? '' : 's'} — ${w[0]}`, 'warning', { duration: 9000 });
+  else showToast(`Imported ${n} task${n === 1 ? '' : 's'} from Mermaid`, 'success');
+  return true;
+}
+
 function defaultTabName(type) {
   const names = {
     process: 'Imported Process',
@@ -457,24 +649,197 @@ export function detectDiagramType(text) {
     if (/^stateDiagram(-v2)?\b/i.test(line)) return 'state';
     if (/^erDiagram\b/i.test(line))        return 'er';
     if (/^sequenceDiagram\b/i.test(line))  return 'sequence';
-    // gantt intentionally unsupported (removed in beta)
+    // gantt was dropped in beta because a Gantt was POSITIONAL then - importing one meant computing bar geometry
+    // against an axis. The 1.2x Gantt rework flipped that ("the schedule is authored as data; the app computes
+    // every pixel"), so the importer now emits dates and lets applyGanttGeometry place them. Re-added 1.21.7.
+    if (/^gantt\b/i.test(line))            return 'gantt';
     // First non-empty line with none of the above → unsupported
     return null;
   }
   return null;
 }
 
+
+// ─── Gantt ─────────────────────────────────────────────────────────────────
+// Mermaid's gantt grammar, mapped onto the data-first Gantt model. NOTHING here computes a pixel: the builder
+// emits a timeline + dated bars and `applyGanttGeometry` places them, which is the whole reason this is
+// tractable now and was not when gantt support was dropped in beta.
+//
+//   gantt
+//     title Project
+//     dateFormat YYYY-MM-DD
+//     section Discovery
+//     Research      :a1, 2026-06-01, 10d
+//     Interviews    :after a1, 5d
+//     Sign-off      :milestone, m1, 2026-06-20, 0d
+//
+// Task grammar after the colon: `[tags,] [id,] [start,] <end|duration>` where a tag is done/active/crit/
+// milestone, start is a date or `after <id>[ <id>...]`, and an omitted start means "when the previous task ends"
+// (mermaid's rule). Resolution is therefore ITERATIVE - `after` can point forward - with a pass cap so a cycle
+// or a dangling reference degrades to the chart start plus a warning instead of hanging.
+const GANTT_TAGS = new Set(['done', 'active', 'crit', 'milestone', 'vert']);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DURATION = /^(\d+(?:\.\d+)?)\s*(ms|[dwhms])$/i;
+
+const gDate = (iso) => new Date(`${iso}T00:00:00`);
+const gIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const gAdd = (iso, days) => { const d = gDate(iso); d.setDate(d.getDate() + days); return gIso(d); };
+const gDiff = (a, b) => Math.round((gDate(b) - gDate(a)) / 86400000);
+
+/** A duration token in DAYS. Diagramforce's axis is day-granular, so sub-day units collapse to one day. */
+function durationDays(tok) {
+  const m = String(tok).trim().match(DURATION);
+  if (!m) return null;
+  const n = parseFloat(m[1]), unit = m[2].toLowerCase();
+  // NOT clamped to a minimum here: `0d` is how mermaid writes a MILESTONE, and clamping it to one day turned
+  // every milestone into a one-day bar. The caller applies the floor, because only it knows whether a
+  // zero-length task is legitimate.
+  if (unit === 'd') return Math.round(n);
+  if (unit === 'w') return Math.round(n * 7);
+  return 0;   // h / m / s / ms — sub-day on a day-granular axis
+}
+
+export function parseGantt(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('%%'));
+  let title = '';
+  const warnings = [];
+  const groups = [];            // { id, label, order }
+  const tasks = [];             // { id, label, tags, startSpec, afterIds, durDays, endDate, groupId, order }
+  let openGroup = null;
+  const unsupported = new Set();
+
+  for (const line of lines) {
+    if (/^gantt\b/i.test(line)) continue;
+    let m;
+    if ((m = line.match(/^title\s+(.+)$/i))) { title = m[1].trim(); continue; }
+    if ((m = line.match(/^section\s+(.+)$/i))) {
+      const label = m[1].trim();
+      openGroup = { id: `g${groups.length + 1}`, label, order: groups.length };
+      groups.push(openGroup);
+      continue;
+    }
+    if (/^(dateFormat|axisFormat|excludes|includes|tickInterval|todayMarker|weekday|inclusiveEndDates)\b/i.test(line)) {
+      const kw = line.split(/\s+/)[0];
+      // dateFormat is the one we genuinely act on, and only to confirm it is ISO - anything else is a parse risk
+      // we do not take, because a mis-read date silently produces a plausible WRONG schedule.
+      if (/^dateFormat$/i.test(kw)) {
+        const fmt = line.replace(/^dateFormat\s+/i, '').trim();
+        if (fmt && !/^YYYY-MM-DD$/i.test(fmt)) unsupported.add(`dateFormat ${fmt} (only YYYY-MM-DD is read)`);
+      } else unsupported.add(kw);
+      continue;
+    }
+    const ci = line.indexOf(':');
+    if (ci < 0) continue;
+    const label = line.slice(0, ci).trim();
+    const parts = line.slice(ci + 1).split(',').map((x) => x.trim()).filter(Boolean);
+    if (!label || !parts.length) continue;
+
+    const tags = [];
+    while (parts.length && GANTT_TAGS.has(parts[0].toLowerCase())) tags.push(parts.shift().toLowerCase());
+    // An id is present only when the next token is neither a date, an `after` clause, nor a duration.
+    let id = null;
+    if (parts.length > 1 && !ISO_DATE.test(parts[0]) && !/^after\s/i.test(parts[0]) && !DURATION.test(parts[0])) {
+      id = parts.shift();
+    }
+    let startSpec = 'prev', afterIds = [], startDate = null;
+    if (parts.length && ISO_DATE.test(parts[0])) { startSpec = 'date'; startDate = parts.shift(); }
+    else if (parts.length && /^after\s/i.test(parts[0])) {
+      startSpec = 'after';
+      afterIds = parts.shift().replace(/^after\s+/i, '').split(/\s+/).filter(Boolean);
+    }
+    let durDays = null, endDate = null;
+    if (parts.length) {
+      if (ISO_DATE.test(parts[0])) endDate = parts.shift();
+      else { const d = durationDays(parts[0]); if (d !== null) { durDays = d; parts.shift(); } }
+    }
+    tasks.push({ id: id || `t${tasks.length + 1}`, label, tags, startSpec, afterIds, startDate, endDate,
+      durDays, groupId: openGroup ? openGroup.id : null, order: tasks.length,
+      milestone: tags.includes('milestone') });
+  }
+
+  // ── Resolve dates. Iterative: `after` may point at a task declared later. ──
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  // Tolerates undefined: `after ghost` resolves byId.get() to nothing, and dereferencing that CRASHED the
+  // whole import rather than degrading to the anchored-with-a-warning path below.
+  const endOf = (t) => (t && t.startDate && t.endDate) ? t.endDate : null;
+  let passes = 0;
+  for (; passes < tasks.length + 2; passes++) {
+    let moved = false;
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+      if (t.startDate && t.endDate) continue;
+      if (!t.startDate) {
+        if (t.startSpec === 'after') {
+          const ends = t.afterIds.map((a) => endOf(byId.get(a))).filter(Boolean);
+          if (ends.length === t.afterIds.length && ends.length) t.startDate = ends.sort().at(-1);
+        } else if (t.startSpec === 'prev') {
+          const prev = tasks[i - 1];
+          if (!prev) t.startDate = null;             // first task with no date — anchored below
+          else if (endOf(prev)) t.startDate = endOf(prev);
+        }
+      }
+      if (t.startDate && !t.endDate) {
+        const d = t.durDays == null ? (t.milestone ? 0 : 1) : t.durDays;
+        t.endDate = gAdd(t.startDate, Math.max(d, t.milestone ? 0 : 1));
+        moved = true;
+      } else if (t.startDate) moved = true;
+    }
+    if (!moved) break;
+  }
+
+  const dated = tasks.filter((t) => t.startDate);
+  const anchor = dated.length ? dated.map((t) => t.startDate).sort()[0] : gIso(new Date());
+  const stranded = tasks.filter((t) => !t.startDate);
+  if (stranded.length) {
+    warnings.push(`${stranded.length} task(s) had no resolvable start (an unknown or circular \`after\`): `
+      + `${stranded.map((t) => t.label).join(', ')} — anchored at ${anchor}.`);
+    for (const t of stranded) {
+      t.startDate = anchor;
+      t.endDate = gAdd(anchor, t.milestone ? 0 : Math.max(t.durDays ?? 1, 1));
+    }
+  }
+  if (unsupported.size) {
+    warnings.push(`Not imported (no equivalent on a Diagramforce Gantt): ${[...unsupported].join(', ')}.`);
+  }
+
+  // ── Timeline window + view mode. Derived, never authored. ──
+  const starts = tasks.map((t) => t.startDate).sort();
+  const ends = tasks.map((t) => t.endDate).sort();
+  const from = starts[0] || anchor;
+  const to = ends.at(-1) || gAdd(from, 7);
+  const span = Math.max(1, gDiff(from, to));
+  const viewMode = span <= 31 ? 'day' : span <= 182 ? 'week' : 'month';
+  const perPeriod = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : 30;
+  const numPeriods = Math.max(4, Math.ceil(span / perPeriod) + 1);
+
+  // Dependencies: `after` IS a finish-to-start link, which is exactly linkKind 'ganttDep' + depType 'FS'.
+  const links = [];
+  for (const t of tasks) {
+    for (const a of t.afterIds) if (byId.has(a)) links.push({ source: a, target: t.id, depType: 'FS' });
+  }
+
+  return {
+    diagramType: 'gantt', title, direction: 'horizontal',
+    timeline: { startDate: from, viewMode, numPeriods, groups: groups.map((g) => ({ ...g, color: '#5B5FC7' })) },
+    tasks, links, warnings,
+    elements: [], // built by the gantt path, not the generic element loop
+  };
+}
+
 // ─── Top-level dispatch ────────────────────────────────────────────────────
 
-export function parseMermaid(text, kind) {
+export function parseMermaid(text, kind, target) {
   // Strip %% comments and directive blocks
   const cleaned = stripComments(text);
   switch (kind) {
-    case 'flowchart': return parseFlowchart(cleaned, 'process');
-    case 'graph':     return parseFlowchart(cleaned, 'process');
+    // A flowchart legitimately maps to THREE app types - the shapes differ, the graph does not - so the caller
+    // picks. Defaulting to 'process' keeps every existing paste byte-identical.
+    case 'flowchart': return parseFlowchart(cleaned, target || 'process');
+    case 'graph':     return parseFlowchart(cleaned, target || 'process');
     case 'state':     return parseStateDiagram(cleaned);
     case 'er':        return parseErDiagram(cleaned);
     case 'sequence':  return parseSequenceDiagram(cleaned);
+    case 'gantt':     return parseGantt(cleaned);
   }
   return null;
 }
@@ -543,15 +908,63 @@ export function parseFlowchart(text, targetType) {
     return node;
   };
 
+  // `subgraph <Name>` / `subgraph id[Title]` ... `end` groups its members. Previously both keywords were simply
+  // skipped, so the member nodes still parsed (they sit on their own lines) and the GROUPING was silently lost -
+  // reported from real use 2026-07-27 on a flowchart whose six groups all vanished.
+  //
+  // Membership is recorded on FIRST MENTION inside a subgraph, and the INNERMOST open one wins. Mermaid allows
+  // nesting; Diagramforce cannot (`canEmbed('sf.Zone','sf.Zone')` is false), so nesting flattens to the innermost
+  // group and the outer one is reported as dropped rather than silently ignored.
+  const groups = [];                 // { key, title, memberIds: [] } in declaration order
+  const groupByKey = new Map();
+  const groupOfNode = new Map();     // nodeId -> group key (innermost)
+  const openStack = [];
+  const droppedOuter = new Set();
+
   // First line is the header (flowchart TD / graph LR) — skip
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (i === 0 && /^(flowchart|graph)/i.test(line)) continue;
     if (/^title\s+/i.test(line)) { title = line.replace(/^title\s+/i, '').trim(); continue; }
-    if (/^(subgraph|end|direction|classDef|class|click|style|linkStyle)\b/i.test(line)) continue;
+
+    const sg = line.match(/^subgraph\s+(.+)$/i);
+    if (sg) {
+      // `subgraph Name`, `subgraph id[Title]`, `subgraph id["Title"]` — the bracketed form names the id first.
+      const raw = sg[1].trim();
+      const m = raw.match(/^([^\s[\]{}()]+)\s*[[({]\s*"?(.*?)"?\s*[\])}]\s*$/);
+      const key = (m ? m[1] : raw).trim();
+      const label = (m ? m[2] : raw).trim() || key;
+      if (openStack.length) droppedOuter.add(openStack[openStack.length - 1]);
+      if (!groupByKey.has(key)) {
+        const g = { key, title: label, memberIds: [] };
+        groupByKey.set(key, g);
+        groups.push(g);
+      }
+      openStack.push(key);
+      continue;
+    }
+    if (/^end\b/i.test(line)) { openStack.pop(); continue; }
+    if (/^(direction|classDef|class|click|style|linkStyle)\b/i.test(line)) continue;
 
     // Parse links on this line (may contain multiple sequential: A --> B --> C)
+    const before = new Set(elementsById.keys());
     parseFlowLineEdges(line, ensureNode, links);
+    // Claim every node this line INTRODUCED for the innermost open subgraph. Claiming only new ids is what makes
+    // `A --> B` outside a subgraph leave an already-grouped A where it was.
+    if (openStack.length) {
+      const key = openStack[openStack.length - 1];
+      for (const id of elementsById.keys()) {
+        if (before.has(id) || groupOfNode.has(id)) continue;
+        groupOfNode.set(id, key);
+        groupByKey.get(key).memberIds.push(id);
+      }
+    }
+  }
+
+  const warnings = [];
+  if (droppedOuter.size) {
+    warnings.push(`Nested subgraphs flattened to the innermost group: ${[...droppedOuter].join(', ')} `
+      + 'kept its label but not its members (a Zone cannot contain another Zone).');
   }
 
   return {
@@ -560,6 +973,8 @@ export function parseFlowchart(text, targetType) {
     direction,
     elements: [...elementsById.values()],
     links,
+    groups: groups.filter((g) => g.memberIds.length),
+    warnings,
   };
 }
 
@@ -693,6 +1108,18 @@ function flowComponent(label, shape, targetType) {
   if (targetType === 'architecture') {
     // Everything maps to SimpleNode in architecture
     return { type: 'sf.SimpleNode', label };
+  }
+  if (targetType === 'org') {
+    // An org chart written in mermaid is a flowchart of manager -> report edges; mermaid has no org syntax, so
+    // there is nothing to detect and the TARGET is a caller's choice. Node shape is meaningless here (nobody
+    // writes a rhombus person), so every node becomes a person and the label is the NAME - `personName` is what
+    // the card renders and what the org tooling reads, so putting it only in `label` would leave the card blank.
+    // `Jane Doe - CTO` splits on the first dash because that is how people actually write these; without the
+    // split the whole string lands in the name and the job-title row stays empty.
+    const m = String(label).match(/^(.*?)\s+[-\u2013]\s+(.+)$/);
+    return m
+      ? { type: 'sf.OrgPerson', label: m[1].trim(), personName: m[1].trim(), jobTitle: m[2].trim() }
+      : { type: 'sf.OrgPerson', label, personName: label };
   }
   // targetType === 'process' → BPMN shapes
   switch (shape) {

@@ -3,11 +3,11 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.21.6';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.21.6';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.21.6';
-import { normalizeDiagramType } from '../persistence.js?v=1.21.6';
-import { showError } from '../feedback.js?v=1.21.6';
+import { tbctx } from './context.js?v=1.21.7';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.21.7';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.21.7';
+import { normalizeDiagramType } from '../persistence.js?v=1.21.7';
+import { showError } from '../feedback.js?v=1.21.7';
 
 export function showNewDiagramModal(targetGroupId = null) {
   const { tabs } = tbctx;                                            // shared array ref (read length for dismiss-guard)

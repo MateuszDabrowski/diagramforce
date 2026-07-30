@@ -12,8 +12,8 @@
 //
 // Reads cctx.graph/paper + cctx.getMappingMode; imports the apply* stylers from link-styles.js.
 
-import { cctx } from './context.js?v=1.21.6';
-import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle } from './link-styles.js?v=1.21.6';
+import { cctx } from './context.js?v=1.21.7';
+import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle } from './link-styles.js?v=1.21.7';
 
 export function registerLinkClassifier(cctx) {
   const { graph, paper } = cctx;

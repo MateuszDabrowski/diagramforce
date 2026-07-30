@@ -10,7 +10,7 @@
 // _isLoadingJSON guard (via cctx.isLoadingJSON) keeps graph.fromJSON() from clobbering
 // saved z values on reload. Reads the live graph via cctx; the constants + tierNameForType
 // are re-exported by canvas.js for properties.js / properties/widgets.js (reorder controls).
-import { cctx } from './context.js?v=1.21.6';
+import { cctx } from './context.js?v=1.21.7';
 
 export const Z_BASE = {
   'sf.Zone':           0,
