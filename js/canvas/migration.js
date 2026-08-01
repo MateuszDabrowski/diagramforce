@@ -2,12 +2,15 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.21.7';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.21.7';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.21.7';
-import { nodeContrastText } from '../util.js?v=1.21.7';
-import { getIconDataUri } from '../icons.js?v=1.21.7';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.22.0';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.22.0';
+import { applyMappingLinkStyle } from './link-styles.js?v=1.22.0';
+import { nodeContrastText } from '../util.js?v=1.22.0';
+import { getIconDataUri } from '../icons.js?v=1.22.0';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.22.0';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.0';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.22.0';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -38,8 +41,18 @@ export function updateNoteIconLayout(cell) {
 // was hoisted onto lineStyle in migrateLinks.
 const LEGACY_DASH_REMAP = { '3 4': '0 6', '16 8 2 8': '16 8' };
 
+// Links whose label POSITION the app seeded during this load, rather than the document carrying one.
+//
+// `migrateLinks()` fills it (it is the only pass that sees a label before `applyFlowLinkStyle` supplies a
+// fallback position) and `migrateNodes()` reads it when it runs the label resolver. Module-scoped because the
+// two are separate exported passes; `migrateLinks` clears it on entry, and the load path always runs links
+// before nodes. If that order ever changes, the set is simply empty and the resolver falls back to preserving
+// positions - the pre-1.22.0 behaviour, not a crash.
+const appSeededLabels = new Set();
+
 // ── Migrate link labels to use canvas-bg rect + connector-colored text ──
 export function migrateLinks() {
+  appSeededLabels.clear();   // fresh per load - a stale id from the previous document must not leak in
   const { graph, paper } = cctx;
   // ── Strip DANGLING parent / embeds refs (v1.19.0) ──
   // A cell (most often a LINK authored by an LLM or template) can carry a `parent` attribute pointing at a cell
@@ -82,6 +95,19 @@ export function migrateLinks() {
     // sfManhattan router and use a horizontal-tangent bezier (matches the SF
     // mapping canvas). Idempotent.
     if (link.prop('linkKind') === 'mapping') {
+      // A mapping link authored MINIMALLY (just `linkKind` + endpoints — LLM JSON, or the Data Cloud CLI
+      // converter) carries no `attrs`, so it would render as a default grey 2px standard.Link with mapping
+      // ROUTING: right shape, wrong colour. Give it the canonical amber line, matching what the ganttDep
+      // branch below does for the same authoring style.
+      // Gated on the line still being standard.Link's UNTOUCHED default rather than healed unconditionally:
+      // unlike a dep, a mapping link's colour is user-editable, so a deliberate recolour must survive a reload.
+      // The gate cannot test for an ABSENT stroke — JointJS merges its `defaults` into the model on
+      // construction, so `attr('line/stroke')` reads '#333333' whether or not the JSON authored one. Matching
+      // BOTH the default colour and the default 2px width is the available signal: applyMappingLinkStyle always
+      // leaves (#F6B355, 1), so this is a no-op on anything the app itself saved.
+      // Must stay ahead of the generic "ensure a sourceMarker" fill-in further down, which would otherwise bake
+      // the grey default into the marker too.
+      if (link.attr('line/stroke') === '#333333' && link.attr('line/strokeWidth') === 2) applyMappingLinkStyle(link);
       if (link.router()?.name !== 'sfMappingRouter') link.router({ name: 'sfMappingRouter' });
       if (link.connector()?.name !== 'sfMappingConnector') link.connector('sfMappingConnector');
       // Pin to the field-port anchor with a small outward offset (port-hit + 90°
@@ -139,7 +165,13 @@ export function migrateLinks() {
       const legacyKind = link.prop('connectorKind');
       if (isFlowLink || legacyKind != null) {
         const type = legacyKind != null ? (legacyKind === 'fault' ? 'fault' : 'standard') : (cctx.flowConnectorType?.(link) || 'standard');
-        cctx.applyFlowLinkStyle?.(link, { type });
+        // Note whether the DOCUMENT carried a label position, BEFORE applyFlowLinkStyle fills one in. A converted
+        // or LLM-authored flow authors none - deliberately, so the app can place it against the resolved route -
+        // and `defaultFlowLabelPosition` then seeds an index stagger. That stagger is the app's own default, not
+        // a choice anyone made, so the collision pass must not treat it as one worth preserving. See
+        // flow-label-placement.js `preferTargetCentre`.
+        if (isFlowLink && (link.labels() || []).some((l) => l && !l.position)) appSeededLabels.add(link.id);
+        cctx.applyFlowLinkStyle?.(link, { type, preserveAuthored: true });
         if (legacyKind != null) link.removeProp('connectorKind');
         // Default to ORTHOGONAL routing — a drawn flow link gets sfManhattan from the link factory, but a spec/LLM
         // link that omits `router` would otherwise render as a diagonal straight line. Idempotent.
@@ -407,18 +439,51 @@ function applyNodeTextContrast(cell) {
 // the object-name label right to clear it. Mirrors updateSimpleNodeLayout — a
 // standalone pass called on icon-pick (properties.js) + on load (migrateNodes),
 // never from the view's update loop, so it sets attrs non-silently without churn.
+/** An `sf.Link` authored as raw JSON - by an LLM, or by the flow converter's "Open in Salesforce" card - has
+ *  no `iconImage/href`, because the data URI is generated at drop time by createElementFromComponent. The
+ *  shape's default is an empty string, so the pill renders with a blank right end that reads as an empty
+ *  circle. Fill it on load from the label colour, the same way the stencil would. Idempotent: an authored or
+ *  recoloured icon is left alone. */
+/** Every selector a shipped 1.22.0 build ever wrote a native `<title>` onto. See healLinkSublabel. */
+const LINK_TITLE_TARGETS = ['root', 'body', 'label', 'iconImage', 'iconHit'];
+
+/** Retire the sf.Link URL sublabel on load (1.22.0). At 10px inside a 220px pill it truncated to noise
+ *  ("ma1781552930809. ...") and pushed the label off centre, so it is gone - the full URL is a native `<title>`
+ *  tooltip on the body instead. A diagram saved before this still carries `domain/text`, and the selector is
+ *  still in the markup, so it would keep rendering the old line forever without this. */
+export function healLinkSublabel(cell) {
+  if (cell.get('type') !== 'sf.Link') return;
+  if (cell.attr('domain/text')) cell.attr('domain/text', '');
+  // Hidden rather than empty: `textWrap` + `ellipsis` paints a lone "-" for an empty string.
+  if (cell.attr('domain/visibility') !== 'hidden') cell.attr('domain/visibility', 'hidden');
+  if (cell.attr('label/y') !== 'calc(0.5 * h)') cell.attr('label/y', 'calc(0.5 * h)');
+  // Strip any native `<title>` a diagram carries from the two shipped attempts at this. The URL is an
+  // app-owned tooltip now (js/canvas/cell-tooltip.js) and a native one alongside it would show twice.
+  for (const sel of LINK_TITLE_TARGETS) {
+    if (cell.attr(`${sel}/title`)) cell.attr(`${sel}/title`, '');
+  }
+}
+
+export function healLinkIcon(cell) {
+  if (cell.get('type') !== 'sf.Link' || cell.attr('iconImage/href')) return;
+  const color = cell.attr('label/fill') || '#1D73C9';
+  cell.attr('iconImage/href', getStencilSvgDataUri(COMPONENT_SVG.linkIcon, color, 20));
+}
+
 export function updateDataObjectHeaderLayout(cell) {
   if (cell.get('type') !== 'sf.DataObject') return;
   const hasIcon = !!cell.attr('headerIcon/href');
+  // The wrap width moves WITH the x inset, or the label truncates at the wrong place: at x:32 a
+  // `calc(w - 24)` box still starts 32px in and so overruns the card's right edge by 20px.
   if (hasIcon) {
     cell.attr({
       headerIcon: { x: 10, y: 8, width: 16, height: 16 },
-      headerLabel: { x: 32 },
+      headerLabel: { x: 32, textWrap: { width: 'calc(w - 74)', maxLineCount: 1, ellipsis: true } },
     });
   } else {
     cell.attr({
       headerIcon: { width: 0, height: 0 },
-      headerLabel: { x: 12 },
+      headerLabel: { x: 12, textWrap: { width: 'calc(w - 54)', maxLineCount: 1, ellipsis: true } },
     });
   }
 }
@@ -445,6 +510,42 @@ export function updateContainerHeaderLayout(cell) {
   }
 }
 
+// Gap between the two annotation tables in the flow diagram's left-hand column. Must match the converter's,
+// which lays the column out from an ESTIMATE (see js/persistence/flow-convert.js).
+const FLOW_COL_GAP = 40;
+
+/**
+ * Re-seat the Resources card against the flow card's MEASURED height.
+ *
+ * The converter has to guess how tall `__flowmeta` will render - it is a df.Table, and only the view can
+ * measure wrapped text - so it estimates, then places `__flowresources` one gap below the estimate. df.TableView
+ * then measures for real and resizes the model, and any shortfall in the estimate is taken straight out of that
+ * gap: measured at 40px short on a flow with a long Description, which left the two tables touching with zero
+ * clearance. One more wrapped line and they overlap.
+ *
+ * Estimating better only moves the threshold, so this stops estimating: once the view has resized the card, the
+ * true height is known and Resources is placed against THAT. Load-time only (the pass runs under the JSON-load
+ * guard, so no history entry and no dirty flag), and it never fires again - a user who drags the card afterwards
+ * keeps their placement.
+ */
+export function alignFlowAnnotationColumn() {
+  const { graph } = cctx;
+  const meta = graph.getCell('__flowmeta');
+  const res = graph.getCell('__flowresources');
+  if (!meta || !res) return;
+  const seat = () => {
+    const y = meta.position().y + meta.size().height + FLOW_COL_GAP;
+    if (Math.abs(res.position().y - y) > 0.5) res.position(res.position().x, y);
+  };
+  seat();
+  // The paper renders synchronously, so by the time this pass runs the table has normally measured itself and
+  // the call above is the one that does the work (removing it fails dev/tests/e2e/flow-card-height.spec.js;
+  // removing the listener does not). The listener covers the OTHER branch in df.TableView: a first measurement
+  // of 0 - foreignObjects not laid out yet - defers to requestAnimationFrame and resizes up to 8 frames later.
+  // That path is not exercised by the test.
+  meta.once('change:size', seat);
+}
+
 export function migrateNodes() {
   const { graph, refreshAllIconHrefs } = cctx;
   // Phase 4.5: convert legacy tasks[]-only Gantt timelines into real bars BEFORE the per-element pass. The new
@@ -454,6 +555,8 @@ export function migrateNodes() {
     if (tl.get('type') === 'sf.GanttTimeline') migrateGanttTimeline(tl);
   }
   for (const el of graph.getElements()) {
+    healLinkIcon(el);
+    healLinkSublabel(el);
     if (el.get('type') === 'sf.SimpleNode' && !el.get('iconMode')) {
       updateSimpleNodeLayout(el);
       // Keep hardcoded light "cards" (common in LLM/imported diagrams) legible in dark mode:
@@ -623,6 +726,11 @@ export function migrateNodes() {
     if (tl.get('type') !== 'sf.GanttTimeline') continue;
     if (backfillGanttOrders(tl)) layoutTimelineTasks(tl);
   }
+  // The flow diagram's annotation column, once the tables above have had a chance to measure themselves.
+  alignFlowAnnotationColumn();
+  // ...and the connector labels, which can only be resolved once the links have a resolved ROUTE. Inside the
+  // JSON-loading guard on purpose: history.js skips change:labels while it is set, so this costs no undo entry.
+  resolveFlowLabelCollisions(cctx, { seededLabels: appSeededLabels });
   // Regenerate icon data URIs so all icons use current normalized viewBoxes
   refreshAllIconHrefs();
 }

@@ -1,6 +1,6 @@
 // Markdown foreignObject helper (CLEANUP S3, CR-6.1) — sf.TextLabel/Note render inline markdown as native HTML
 // inside an SVG <foreignObject>. Moved out of shapes.js so every registrar view can call it.
-import { parseMarkdown } from '../markdown.js?v=1.21.7';
+import { parseMarkdown } from '../markdown.js?v=1.22.0';
 
 // ── Markdown foreignObject helper (CR-6.1) ─────────────────────────
 // sf.TextLabel and sf.Note render their text as native HTML inside an SVG
@@ -12,6 +12,13 @@ import { parseMarkdown } from '../markdown.js?v=1.21.7';
 // to call from initialize/render/update without leaking DOM.
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 export const SVG_NS_SHAPES = 'http://www.w3.org/2000/svg';
+
+// The non-markdown path (see `opts.plain` below). Mirrors what parseMarkdown does BEFORE its marker pass, so
+// plain and markdown cells escape identically and differ only in marker interpretation.
+const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escapePlain = (text) => String(text ?? '')
+  .replace(/[&<>"']/g, (c) => HTML_ESC[c])
+  .replace(/\n/g, '<br>');
 
 export function ensureMarkdownFO(view, key, text, opts) {
   if (!view?.el) return;
@@ -63,7 +70,17 @@ export function ensureMarkdownFO(view, key, text, opts) {
   content.style.cssText = 'display:block;max-width:100%;pointer-events:none;user-select:none;';
   // parseMarkdown escHtml's first, then applies only the four whitelisted
   // tags + <br>. innerHTML is safe here.
-  content.innerHTML = parseMarkdown(text);
+  //
+  // `opts.plain` turns the marker pass OFF for content that is CODE rather than prose. Without it a Salesforce
+  // formula expression is silently mangled: `{!Quantity} * {!UnitPrice} * 1.23` matches the italic rule and
+  // renders as `{!Quantity} <em> {!UnitPrice} </em> 1.23` - the multiplication operators are GONE and the
+  // reader cannot tell. That is the "a wrong row ends the question a missing row would invite" failure, not a
+  // cosmetic one.
+  // Escaping in the DATA is not an alternative: the same strings render through escHtml in the properties
+  // panel, so a baked `\*` would show a literal backslash there - the identical objection that ruled out
+  // smuggling U+00A0 indents into saved JSON.
+  // Escape + <br> only, so the two modes differ ONLY in whether markers are interpreted.
+  content.innerHTML = opts.plain ? escapePlain(text) : parseMarkdown(text);
   // Hide the original SVG <text> node JointJS still emits (so its rendering
   // doesn't shadow / sit underneath our HTML). Done via inline style so it
   // survives JointJS attr-pass re-renders.

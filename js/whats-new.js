@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.21.7';
-import { buildModal } from './feedback.js?v=1.21.7';
+import { compareSemver } from './util.js?v=1.22.0';
+import { buildModal } from './feedback.js?v=1.22.0';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,24 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.22.0 — the ORG IMPORT release. Four converters (objects / mappings / data graphs / richer flows) all
+  // reached through the Claude skill's CLI scripts, so the copy deliberately leads with the capability rather
+  // than an in-app button - there isn't one; the einstein item carries the install route. Final wording is the
+  // owner's call at cut. Icons here come from the SLDS sprites (icons.js registers every symbol id):
+  // database / data_mapping / hierarchy are sprite-verified, the rest were already in use above.
+  {
+    version: '1.22.0',
+    title: "What's new in Diagramforce",
+    intro: 'This one is about diagrams built from your own org instead of retyped out of it - real objects, Data Cloud mappings, data graphs and richer flows - plus a canvas that keeps up with them.',
+    highlights: [
+      { icon: 'database', text: '<strong>Turn real Salesforce objects into a data model.</strong> Name the objects you care about and the Diagramforce skill queries your org with the Salesforce CLI and drafts the ERD - primary and foreign keys inferred, relationships drawn only where both ends are on the canvas, and the field list curated to something readable - or ask for specific fields, or for every field, and get exactly that. Core objects and Data Cloud data model objects work the same.' },
+      { icon: 'data_mapping', text: '<strong>Draw your Data Cloud mappings, end to end.</strong> The whole chain is laid out - data stream to data lake object to data model object, each in its own labelled lane - with one connector per mapped field. Formula fields show their expression on the connector, every unmapped field is accounted for instead of left ambiguous, and object-level connectors between card headers sum a mapping up when the field detail is more than the moment needs.' },
+      { icon: 'hierarchy', text: '<strong>See a Data Cloud data graph as a diagram.</strong> Name a data graph and the skill fetches its definition and draws the tree - the root, every related object, the joining field named on each connector, and a facts card beside the tree recording what the graph is for. Pasting the definition JSON into Load &amp; Import draws the same diagram without the CLI.' },
+      { icon: 'flow', text: '<strong>Flow imports read more like the org.</strong> Convert a flow with the skill\'s <strong>--org</strong> flag and the summary card links straight back to the flow in Flow Builder, marketing send steps show which CMS asset and which consent subscription their ids point to, and a wait names the event it is waiting for. Converted flows also gained a Resources summary, a left-hand annotation column, and false metadata flags folded into a disclosure instead of dropped.' },
+      { icon: 'einstein', text: '<strong>All four org imports in one free skill.</strong> A flow, a data model, a mapping and a data graph can all come from the same org in the same session. Everything stays on your machine - the CLI runs locally and the skill writes a file you open here. <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Get the skill</a>.' },
+      { icon: 'edit', text: '<strong>The canvas kept up.</strong> Drop a diagram file anywhere on the window to open it. Tables and Data Objects collapse, and a collapsed card reports how many fields it hides. A relationship drawn by hand between two Data Model cards seeds real crow\'s-foot ends, self-relationships included. And the arrowheads and line styles you pick now survive a reload instead of being repainted.' },
+    ],
+  },
   // 1.21.0 — the DOMAIN MOVE release. This entry is the one users actually read on the new host: arriving
   // at diagramforce.com means an EMPTY localStorage (storage is per-origin), so `isNewerRelease` sees a null
   // lastSeen and the normal overlay never fires — `maybeShowMovedEntry()` force-shows THIS entry (index 0)

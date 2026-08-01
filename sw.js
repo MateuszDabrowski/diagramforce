@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.21.7';
+const CACHE_VERSION = '1.22.0';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -53,6 +53,7 @@ const PRECACHE_URLS = [
   `./js/canvas/auto-layout.js?v=${CACHE_VERSION}`,
   `./js/canvas/layout-core.js?v=${CACHE_VERSION}`,
   `./js/canvas/flow-layout.js?v=${CACHE_VERSION}`,
+  `./js/canvas/flow-label-placement.js?v=${CACHE_VERSION}`,
   `./js/canvas/migration.js?v=${CACHE_VERSION}`,
   `./js/canvas/crossing-bumps.js?v=${CACHE_VERSION}`,
   `./js/canvas/review-overlay.js?v=${CACHE_VERSION}`,
@@ -64,6 +65,7 @@ const PRECACHE_URLS = [
   `./js/canvas/mobile.js?v=${CACHE_VERSION}`,
   `./js/canvas/external-labels.js?v=${CACHE_VERSION}`,
   `./js/canvas/selection-viz.js?v=${CACHE_VERSION}`,
+  `./js/canvas/cell-tooltip.js?v=${CACHE_VERSION}`,
   `./js/canvas/spacing-guides.js?v=${CACHE_VERSION}`,
   `./js/canvas/embedding.js?v=${CACHE_VERSION}`,
   `./js/canvas/gantt-drag.js?v=${CACHE_VERSION}`,
@@ -100,6 +102,9 @@ const PRECACHE_URLS = [
   `./js/persistence/json-pipeline.js?v=${CACHE_VERSION}`,
   `./js/persistence/flow-convert.js?v=${CACHE_VERSION}`,
   `./js/persistence/flow-import.js?v=${CACHE_VERSION}`,
+  `./js/persistence/flow-xml.js?v=${CACHE_VERSION}`,
+  `./js/persistence/mapping-convert.js?v=${CACHE_VERSION}`,
+  `./js/persistence/datagraph-convert.js?v=${CACHE_VERSION}`,
   `./js/persistence/storage.js?v=${CACHE_VERSION}`,
   `./js/properties.js?v=${CACHE_VERSION}`,
   `./js/properties/color-schema.js?v=${CACHE_VERSION}`,

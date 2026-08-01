@@ -1,78 +1,80 @@
 // Canvas module — manages the JointJS graph and paper
 // Provides pan (drag blank area), zoom (mouse wheel + ctrl), grid
 
-import { cctx } from './canvas/context.js?v=1.21.7';
-export { assertCctxWired } from './canvas/context.js?v=1.21.7';   // S8 wiring self-check (app.js calls it at end of init)
-import { registerSfRouter } from './canvas/router.js?v=1.21.7';
-import { Z_BASE, Z_TIER_SPAN, Z_GANTT_DEP, tierNameForType, registerZTiers } from './canvas/z-tiers.js?v=1.21.7';
+import { cctx } from './canvas/context.js?v=1.22.0';
+export { assertCctxWired } from './canvas/context.js?v=1.22.0';   // S8 wiring self-check (app.js calls it at end of init)
+import { registerSfRouter } from './canvas/router.js?v=1.22.0';
+import { Z_BASE, Z_TIER_SPAN, Z_GANTT_DEP, tierNameForType, registerZTiers } from './canvas/z-tiers.js?v=1.22.0';
 export { Z_BASE, Z_TIER_SPAN, tierNameForType };   // re-export for properties.js + properties/widgets.js (reorder controls)
-import { setIconDataUriFn, refreshIcons, registerIconRefresh } from './canvas/icon-refresh.js?v=1.21.7';
+import { setIconDataUriFn, refreshIcons, registerIconRefresh } from './canvas/icon-refresh.js?v=1.22.0';
 export { setIconDataUriFn, refreshIcons };   // re-export: app.js (pre-init) + toolbar.js theme switch
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible, registerLinkStyles } from './canvas/link-styles.js?v=1.21.7';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible, registerLinkStyles } from './canvas/link-styles.js?v=1.22.0';
 export { applyMappingLinkStyle, applyRelationshipLinkStyle, applyGanttDepLinkStyle, applyFlowLinkStyle, isFlowFaultLink, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncMappingTypeBadge, syncFrequencyLabel, setMappingModeGetter, isObjectRelationshipsVisible, setObjectRelationshipsVisible };   // re-export for properties/toolbar/table-view
 // S7 slice 3b: the interactive link BEHAVIOURS (port-drag default-link factory, the reroute
 // cascade for connector grouping, the object-rel add-time hider, the frequency change:labels
 // re-glue) extracted to ./canvas/link-runtime.js. buildDefaultLink feeds the paper config;
 // registerLinkRuntime(cctx) mounts the graph listeners in init().
-import { rerouteAllLinks, buildDefaultLink, registerLinkRuntime } from './canvas/link-runtime.js?v=1.21.7';
+import { rerouteAllLinks, buildDefaultLink, registerLinkRuntime } from './canvas/link-runtime.js?v=1.22.0';
 export { rerouteAllLinks };   // re-export for toolbar.js (connector-grouping toggle applies instantly)
 // S7 slice 4: the link:connect classifier (Gantt-dep / mapping / ER / sequence-reply) + the
 // DataObject-refresh-on-link-change listeners extracted to ./canvas/link-classifier.js.
-import { registerLinkClassifier } from './canvas/link-classifier.js?v=1.21.7';
+import { registerLinkClassifier } from './canvas/link-classifier.js?v=1.22.0';
 // The router reads the connector-grouping flag via cctx; wire it at module-eval
 // (isConnectorGroupingEnabled is a hoisted function declaration below).
 cctx.isConnectorGroupingEnabled = isConnectorGroupingEnabled;
 // Phase 4 Slice 3: auto-layout domain extracted to ./canvas/auto-layout.js
-export { autoLayout, applyDataMappingLayout, applyFlowLayout, analyzeSequenceLayout, applySequenceAutoLayout } from './canvas/auto-layout.js?v=1.21.7';
+export { autoLayout, applyDataMappingLayout, applyFlowLayout, analyzeSequenceLayout, applySequenceAutoLayout, resolveConnectorLabels } from './canvas/auto-layout.js?v=1.22.0';
 // Phase 4 Slice 4: migration fixups extracted to ./canvas/migration.js
-export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, migrateNodes } from './canvas/migration.js?v=1.21.7';
+export { migrateLinks, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, migrateNodes, alignFlowAnnotationColumn } from './canvas/migration.js?v=1.22.0';
 // Phase 4 Slice 5: crossing-bump calculation extracted to ./canvas/crossing-bumps.js
-import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.21.7';
-export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.21.7';
+import { initCrossingBumps, getBumpLayer } from './canvas/crossing-bumps.js?v=1.22.0';
+export { isCrossingBumpsEnabled, setCrossingBumpsEnabled } from './canvas/crossing-bumps.js?v=1.22.0';
 // Change Review overlay (NBA-1) — transient, non-destructive diff visualisation. cctx-only (no init wiring needed).
-export { enterReview, exitReview, isReviewing, getReviewSummary } from './canvas/review-overlay.js?v=1.21.7';
+export { enterReview, exitReview, isReviewing, getReviewSummary } from './canvas/review-overlay.js?v=1.22.0';
 // Diagram check (NBA #3, refocused) — find + transiently highlight loose connectors. cctx-only.
-export { findLooseConnectors, highlightLooseConnectors } from './canvas/diagram-check.js?v=1.21.7';
+export { findLooseConnectors, highlightLooseConnectors } from './canvas/diagram-check.js?v=1.22.0';
 // Capture-visibility overlay (v1.19.2) — selecting a captor tints its captured children (green) vs
 // overlapping-but-free shapes (amber). Driven by selection.onChange (wired in app.js). cctx-only.
-export { syncCaptureOverlay } from './canvas/capture-overlay.js?v=1.21.7';
+export { syncCaptureOverlay } from './canvas/capture-overlay.js?v=1.22.0';
 // Phase 4 Slice 6: viewport domain (zoom / pan / grid / get-set) extracted to ./canvas/viewport.js.
 // getGridColor is used by the initial paper setup below; registerViewportControls
 // is the bridge called in init(); the rest are re-exported unchanged for backward
 // compat (toolbar/keyboard/tabs/persistence call them via the canvas facade).
-import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.21.7';
-export { zoomIn, zoomOut, resetZoom, fitContent, toggleGrid, refreshGrid, isGridVisible, getViewport, setViewport } from './canvas/viewport.js?v=1.21.7';
+import { registerViewportControls, getGridColor } from './canvas/viewport.js?v=1.22.0';
+export { zoomIn, zoomOut, resetZoom, fitContent, toggleGrid, refreshGrid, isGridVisible, getViewport, setViewport } from './canvas/viewport.js?v=1.22.0';
 // Phase 4 Slices 7-9 — the "Leaf Purge": non-interactive side-effect leaves.
 // line-style + external-labels init functions are imported and called in init();
 // the mobile pair is re-exported below for external (toolbar/tabs) callers.
-import { startLineStyleOverlays } from './canvas/line-style.js?v=1.21.7';
-import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.21.7';
-export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.21.7';
+import { startLineStyleOverlays } from './canvas/line-style.js?v=1.22.0';
+import { initExternalLabelAutoplace } from './canvas/external-labels.js?v=1.22.0';
+export { initMobileDragHandles, syncMobilePanelHeight } from './canvas/mobile.js?v=1.22.0';
 // Phase 4 Slice 10: link hover/focus tinting extracted to ./canvas/selection-viz.js.
 // Export-neutral (all internal) — registerSelectionViz(cctx) is called in init()
 // after the cctx block; the tinting bridges to crossing-bumps via getBumpLayer().
-import { registerSelectionViz } from './canvas/selection-viz.js?v=1.21.7';
+import { registerSelectionViz } from './canvas/selection-viz.js?v=1.22.0';
+// Hover tooltip for cells that carry one (today: the sf.Link URL). registerCellTooltip(cctx) is called in init().
+import { registerCellTooltip } from './canvas/cell-tooltip.js?v=1.22.0';
 // Phase 4 Slice 11: spacing/alignment guides extracted to ./canvas/spacing-guides.js.
 // Export-neutral; registerSpacingGuides(cctx) is called in init() after the cctx
 // block. The element:pointerup activation-lifeline snap stays here (its own listener).
-import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.21.7';
+import { registerSpacingGuides } from './canvas/spacing-guides.js?v=1.22.0';
 // Phase 4 Slice 12 (finale): embedding mechanics extracted to ./canvas/embedding.js.
 // canEmbed + findEmbeddingParent feed the paper's embeddingMode config below;
 // registerEmbedding(cctx) mounts the 4 auto-fit graph triggers post-hydration.
 // The 4 public entry points are re-exported (stencil.js/properties.js/toolbar.js).
-import { canEmbed, findEmbeddingParent, registerEmbedding, HALO_PARENT_TYPES } from './canvas/embedding.js?v=1.21.7';
+import { canEmbed, findEmbeddingParent, registerEmbedding, HALO_PARENT_TYPES } from './canvas/embedding.js?v=1.22.0';
 export { canEmbed, HALO_PARENT_TYPES };
-export { enclosedCapturableShapes, groupChildrenInto } from './canvas/embedding.js?v=1.21.7';
+export { enclosedCapturableShapes, groupChildrenInto } from './canvas/embedding.js?v=1.22.0';
 // S7 slice 5: the Gantt drag/reorder cluster (drop-line + date chips + reorder-on-drop) extracted to
 // ./canvas/gantt-drag.js; registerGanttDrag(cctx) mounts it (BEFORE registerEmbedding — see init()).
-import { registerGanttDrag } from './canvas/gantt-drag.js?v=1.21.7';
+import { registerGanttDrag } from './canvas/gantt-drag.js?v=1.22.0';
 // Gantt drop-layer chip forwarders — the PUBLIC facade over registerGanttDrag's cctx closures, so
 // external callers (selection.js resize, stencil.js dragover) reach them through the canvas facade
 // instead of importing the private cctx (S8). Optional-chained: a safe no-op until init() wires them.
 export function showGanttDateChip(bar, start, end) { cctx.showGanttDateChip?.(bar, start, end); }
 export function clearGanttDateChip() { cctx.clearGanttDateChip?.(); }
 export function showGanttGroupInsertBar(tl, localY, thickness) { cctx.showGanttGroupInsertBar?.(tl, localY, thickness); }
-export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.21.7';
+export { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, setDragSelectionBBox } from './canvas/embedding.js?v=1.22.0';
 
 
 // ── Z-order tiers ────────────────────────────────────────────────────
@@ -195,6 +197,17 @@ export function init() {
     joint.shapes.sf.syncParticipantBottomLabel?.(cell);
   });
 
+// A port that may legally connect to ITSELF, producing the top-to-top bracket the ERD / data-graph converters
+// author for a self-relationship. Only a DataObject's own top/bottom ports qualify: those edges are empty by
+// construction on a Data Model (the grid stacks cards in columns, so nothing routes above or below one), which
+// is the whole reason that shape beat every side-anchored candidate. A field port or an `er-*` port self-loop
+// would land in the column gutter every cross-object relationship runs through.
+function isSelfLoopPort(cellView, magnet) {
+  if (String(cellView?.model?.get('type')) !== 'sf.DataObject') return false;
+  const portId = magnet?.getAttribute?.('port') || '';
+  return portId === 'port-top' || portId === 'port-bottom';
+}
+
   paper = new joint.dia.Paper({
     el: document.getElementById('paper'),
     model: graph,
@@ -227,7 +240,19 @@ export function init() {
       // Allow self-connection when the two magnets (ports) are different —
       // useful for sequence diagram self-calls and data-model self-joins.
       // Block only when the user tries to connect the exact same port.
-      if (cellViewS === cellViewT && magnetS && magnetT && magnetS === magnetT) return false;
+      //
+      // ONE EXCEPTION: a DataObject's TOP (or BOTTOM) port back to ITSELF. That is the shape the Data Cloud /
+      // ERD converters author for a self-relationship, and measured it is by far the best of the candidates —
+      // 112px of path against 580px for the top→bottom pair the drag was silently retargeted to, and 0px over
+      // the card either way. Reported twice: "I'm not able to add them manually. This should also be possible
+      // by hand."
+      //
+      // Gated on the port GROUP rather than on the shape alone, and on the drag having STARTED from that port,
+      // so it cannot fire by accident: a bare port click already mints a dangling link (pre-existing), and a
+      // blanket same-port rule would turn every mis-click into a visible loop.
+      if (cellViewS === cellViewT && magnetS && magnetT && magnetS === magnetT) {
+        return isSelfLoopPort(cellViewS, magnetS);
+      }
       // When dragging source arrowhead, validate the source magnet
       if (end === 'source') {
         if (!magnetS) return false;
@@ -326,6 +351,7 @@ export function init() {
   // Slice 10: bind the link hover/focus-tinting listeners (reads cctx.graph/paper;
   // relocated here from earlier in init() for the same post-hydration reason).
   registerSelectionViz(cctx);
+  registerCellTooltip(cctx);
 
   // Slice 11: bind the drag-snap / alignment-guide listeners (reads cctx.graph/paper).
   registerSpacingGuides(cctx);

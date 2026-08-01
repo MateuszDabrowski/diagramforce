@@ -12,8 +12,8 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.21.7';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.22.0';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -789,6 +789,19 @@ export function registerEmbedding(cctx) {
   // embeds-array when this fires. Not a drag, so always immediate.
   graph.on('remove', (cell) => {
     if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
+    // ELEMENTS only, exactly like Trigger 1. A LINK can be embedded too, and one specific link always is: JointJS
+    // `dia.Link#reparent` embeds a link into an element whenever BOTH ends resolve to the SAME element, so every
+    // SELF-RELATIONSHIP becomes a child of its own card. It fires on the link's own drop AND on any element drop
+    // (`finalizeEmbedding` reparents every connected link), so merely nudging a card embeds the self-loops it
+    // already had - and `parent`/`embeds` then persist into the save.
+    //
+    // Without this guard, deleting that link reached `fitParentToChildren`, which counts ELEMENT children only.
+    // A card whose only child is a link scores zero, so the "no children left" branch reset it to the shape's
+    // `defaults.size`. MEASURED on a real 12-field DataObject: 480x314 -> 260x80, the field rows clipped to two,
+    // and the collapse chevron left painting 216px below the body - the owner's report, "when I delete it, it
+    // deletes/hides/changes whole object (notice collapse arrow way below visible object)". Not DataObject
+    // specific: an sf.SimpleNode at 400x260 reset to its own 180x64.
+    if (!cell.isElement || !cell.isElement()) return;
     const parentId = cell.get('parent') || cell.previous('parent');
     if (!parentId) return;
     const parent = graph.getCell(parentId);

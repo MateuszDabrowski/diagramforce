@@ -12,11 +12,32 @@
 //
 // Reads cctx.graph/paper + cctx.getMappingMode; imports the apply* stylers from link-styles.js.
 
-import { cctx } from './context.js?v=1.21.7';
-import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle } from './link-styles.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
+import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType } from './link-styles.js?v=1.22.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.22.0';
 
 export function registerLinkClassifier(cctx) {
   const { graph, paper } = cctx;
+
+  // Which existing link, if any, the CURRENT pointer interaction started on. This is the honest re-anchor
+  // signal: dragging an existing link's end begins with a pointerdown ON THAT LINK, while a freshly drawn link
+  // is born from a magnet drag on an ELEMENT and never fires link:pointerdown at all. The previous approach -
+  // `link.previous('target')?.id` inside link:connect - reads as re-anchor whenever the target held a cell id
+  // at ANY point before the drop, and snapLinks (radius 30) transiently snaps the in-flight end onto whatever
+  // magnet the cursor brushes. Measured: a straight drag between two cards' bottom ports passed a field port on
+  // the way, previous('target') came back {id, port: 'field-left-…'}, and a brand-new link was mis-read as a
+  // re-anchor - which is why the ER seed below never fired on paths that crossed a card. The Gantt branch's own
+  // comment documents the same trap and dropped previous() for it; this makes the fix once, for every branch.
+  let grabbedLinkId = null;
+  paper.on('link:pointerdown', (lv) => {
+    // Only a link with BOTH ends already connected can be a re-anchor grab. A magnet drag synthesises a
+    // pointerdown on the link it is CREATING too - at that moment its target is still a loose point - and
+    // recording that one would mark every fresh draw as its own re-anchor.
+    const m = lv.model;
+    if (m.get('source')?.id && m.get('target')?.id) grabbedLinkId = m.id;
+  });
+  // Clear AFTER the interaction resolves - link:connect fires during pointerup processing, before these.
+  paper.on('link:pointerup blank:pointerup element:pointerup', () => { grabbedLinkId = null; });
 
   // --- UML sequence default: reply-style links get dashed stroke ------
   // Fires when the user releases an arrowhead onto a valid port. In UML a
@@ -48,12 +69,20 @@ export function registerLinkClassifier(cctx) {
       }
       return;
     }
-    // Flow connector: a link OUT of a flow element becomes a plain Standard connector (grey, "None" stub ends so it
-    // TOUCHES the cards). Types are just Standard/Fault, set from the panel later; there is no connectorKind prop.
-    // The stub-marker presence is the guard - a re-route (already a flow connector) keeps the user's Standard/Fault
-    // choice instead of resetting it. df.Flow* never appears on non-flow diagrams, so this self-gates to flow.
+    // Flow connector: a link OUT of a flow element is a flow connector, and re-styling it must PRESERVE its type.
+    // `flowConnectorType` derives Standard / Fault / Go To from the line's own STROKE, which a re-anchor never
+    // touches - so re-applying the derived type is a no-op on an existing connector, and yields Standard on a
+    // freshly drawn one (whose stroke is still the default). df.Flow* never appears on non-flow diagrams, so this
+    // self-gates to flow.
+    //
+    // This used to key off the target MARKER: "if the end is not the None stub, treat it as new and reset it to
+    // Standard". That was a style detail standing in for identity, and it broke the moment the style changed -
+    // giving Fault and Go To a real arrowhead meant neither carried the stub any more, so every re-anchor of one
+    // silently reverted it to Standard (reported: "drag and drop Go To or Fault Connector to another port and it
+    // reverts"). A stroke-derived type cannot drift that way, and it also fixes the same reset for anyone who
+    // picked a custom end marker from the panel and then re-anchored the link.
     if (String(srcCell.get('type')).startsWith('df.Flow')) {
-      if (link.attr('line/targetMarker/d') !== 'M 0 0 L -12 0') applyFlowLinkStyle(link, { fault: false });
+      applyFlowLinkStyle(link, { type: flowConnectorType(link) });
       return;
     }
     // The remaining classifiers (mapping / ER / sequence) all key off the specific port → require both.
@@ -79,11 +108,22 @@ export function registerLinkClassifier(cctx) {
         // link:connect fires both for a freshly-DRAWN link AND when an existing link's end is
         // dragged to a new port (re-anchor). Only a brand-new link should (re)apply the default
         // relationship style — otherwise dragging a One↔Many link to a different port wipes its
-        // crow's-foot markers back to plain ends (reported bug). Re-anchor = the moved end had a
-        // real cell id before this drop; we ALSO bail when the link already carries ER
-        // cardinality, as a belt-and-braces guard so a configured relationship is never reset.
-        const reAnchor = !!link.previous(arrowhead || 'target')?.id;
-        const isErCard = m => !!(m?.d) && m.d !== 'M 0 0 L -12 0';
+        // crow's-foot markers back to plain ends (reported bug). Re-anchor = this pointer
+        // interaction STARTED on the link (grabbedLinkId above); we ALSO bail when the link
+        // already carries ER cardinality, as a belt-and-braces guard so a configured
+        // relationship is never reset.
+        const reAnchor = grabbedLinkId === link.id;
+        // "Already has cardinality" means an end carries one of the ACTUAL crow's-foot paths - one, zero-one,
+        // many, one-many, zero-many - not merely "anything that is not the None stub". The looser test was the
+        // bug that kept this whole branch dead from v1.15.6 to 1.22.0: the drag PREVIEW seeds every fresh
+        // link's target with a plain filled arrow (js/canvas/link-runtime.js, buildDefaultLink), so on first
+        // connect there was always a non-stub marker, hasCardinality was always true, and no hand-drawn Data
+        // Model relationship ever received the ER style or the One <-> One-or-Many seed. Keying on the real
+        // vocabulary keeps the guard's actual job - never overwrite ends someone SET - while treating preview
+        // residue as what it is.
+        const ER_CARDINALITY = new Set([ER_MARKER_D.one, ER_MARKER_D.zeroOne, ER_MARKER_D.many,
+          ER_MARKER_D.oneMany, ER_MARKER_D.zeroMany]);
+        const isErCard = m => !!(m?.d) && ER_CARDINALITY.has(m.d);
         const hasCardinality = isErCard(link.attr('line/sourceMarker')) || isErCard(link.attr('line/targetMarker'));
         if (!reAnchor && !hasCardinality) {
           applyRelationshipLinkStyle(link);

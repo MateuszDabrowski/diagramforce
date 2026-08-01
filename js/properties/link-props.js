@@ -7,11 +7,11 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.21.7';
-import { prctx } from './context.js?v=1.21.7';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.21.7';
-import { ER_MARKER_D } from '../er-markers.js?v=1.21.7';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.21.7';
+import * as history from '../history.js?v=1.22.0';
+import { prctx } from './context.js?v=1.22.0';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.22.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.22.0';
+import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.22.0';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -356,6 +356,13 @@ export function renderLinkProps(cell) {
       history.startBatch();
       try {
         applyFlowLinkStyle(cell, { type: v });
+        // An EXPLICIT type click also owns the connector's IDENTITY. A converter loop connector carries
+        // `flowKind: 'loop'`, and before this the click repainted the link while leaving that prop behind -
+        // a model that says loop under a connector the user just declared Standard. The stale prop is what
+        // powered the zombie-arrow resurrection until the load pass stopped overwriting ends; clearing it
+        // here removes the lie itself. Inside the batch, and undo-tracked via history's change:flowKind
+        // listener, so Cmd+Z restores the loop identity together with the paint.
+        if (cell.prop('flowKind') !== undefined) cell.removeProp('flowKind');
         // The Type toggle OWNS the label: Fault OVERWRITES it to a single "Fault" pill; Go To OVERWRITES it to the
         // destination element's name (falling back to "Go To"); Standard CLEARS it (a former fault/go-to no longer
         // carries its seeded text). One undo step with the restyle.

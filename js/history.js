@@ -62,6 +62,13 @@ const _clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
 const CONTENT_PROPS = [
   // DataObject
   'objectName', 'category', 'headerColor',
+  // ...and its collapse. Only the SIDE EFFECT was recorded before - the `change:size` from _autoResize - so
+  // Cmd+Z restored the card's HEIGHT while leaving `collapsed` true, i.e. a tall EMPTY card. Undoing the size
+  // fires JointJS's resize, which calls update(), which re-runs _renderFieldRows against a still-collapsed
+  // model. Routing the prop through the same merged handler puts both halves in ONE command, because the size
+  // change and this one land in the same idle window (and inside the toggle's own startBatch/endBatch).
+  // `df.Table` reuses the same prop name, so it inherits the fix rather than repeating it.
+  'collapsed',
   // Task (RACI card)
   'taskName', 'taskDescription', 'descriptionWidth',
   // OrgPerson (mirrors OrgPersonView's change-listener set)
@@ -347,6 +354,22 @@ export function init(_graph) {
     pushCommand({
       undo: () => { const c = graph.getCell(id); if (c) c.prop('linkKind', oldKind); },
       redo: () => { const c = graph.getCell(id); if (c) c.prop('linkKind', newKind); },
+    });
+  });
+
+  // flowKind (a Loop element's branch identity) is a top-level prop like linkKind, so change:attrs never
+  // fires for it. The panel's connector Type control CLEARS it on an explicit click (a connector the user
+  // declared Standard must not keep saying loop in the model); recording it keeps that clear in the same
+  // undo step as the restyle, so Cmd+Z restores the loop identity together with the paint.
+  graph.on('change:flowKind', (cell) => {
+    if (isUndoRedoing || loadingGuard?.()) return;
+    const oldKind = cell.previous('flowKind') ?? null;
+    const newKind = cell.get('flowKind') ?? null;
+    if (oldKind === newKind) return;
+    const id = cell.id;
+    pushCommand({
+      undo: () => { const c = graph.getCell(id); if (c) c.prop('flowKind', oldKind); },
+      redo: () => { const c = graph.getCell(id); if (c) c.prop('flowKind', newKind); },
     });
   });
 

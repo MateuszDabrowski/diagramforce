@@ -339,6 +339,18 @@
 }
 .df-modal__btn--accent:hover:not(:disabled) { filter: brightness(1.06); }
 
+/* LINK-colour OUTLINE (wire) — a download/take-away action styled to PAIR with the text links beside it
+   (owner call on the Diagram with AI modal: same colour as "View on GitHub", as a wire button). Uses the
+   theme-flipping --color-primary on purpose: the links it pairs with flip too, so the pair stays matched in
+   both themes. Hover gains a faint tint, never a fill - the filled --accent "Got it" stays the single
+   strongest element on the modal. */
+.df-modal__btn--link-outline {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.df-modal__btn--link-outline:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+
 /* Red outline (no fill) — a secondary destructive action shown next to a filled --danger primary. */
 .df-modal__btn--danger-outline {
   background: transparent;
@@ -1205,8 +1217,10 @@
    eye when only one of them is the point of the section. space-between (not margin-left:auto on the button) so
    the pair still reads correctly if the link ever wraps. */
 .df-ai__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
-.df-ai__view { font-size: 13px; color: var(--text-secondary); text-decoration: none; }
-.df-ai__view:hover, .df-ai__view:focus-visible { color: var(--color-primary); text-decoration: underline; }
+/* A LINK, and it must read as one at rest (owner: "View on GitHub looks like normal text") - same brand
+   token the What's New links use, underline on hover matching .df-about__link. */
+.df-ai__view { font-size: 13px; color: var(--color-primary); text-decoration: none; }
+.df-ai__view:hover, .df-ai__view:focus-visible { text-decoration: underline; }
 /* .df-modal__btn is authored for <button>; Download is an <a> so it needs these to sit right. */
 .df-ai__actions .df-modal__btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
@@ -1235,9 +1249,12 @@
 /* --- Load from Paste (df-paste-modal): two-column format recognition ------------------------------------- */
 /* Two side-by-side cards (Diagramforce JSON | Mermaid), muted by default. The recognised format lights brand
    GREEN; unrecognised input flags BOTH brand RED. Driven by setFormat() in showPasteImportModal. */
-.df-paste-modal__formats { display: flex; gap: 12px; margin: 8px 0 0; }
+/* WRAPS, and each card has a floor. This started as two cards and is now four (Diagramforce JSON, Salesforce
+   Flow, Data Cloud mappings, Mermaid); four `flex:1 1 0` columns on a phone give ~70px each, which turns every
+   card into a column of single words. flex-wrap + a min-width lets them fall to two rows instead. */
+.df-paste-modal__formats { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 0; }
 .df-paste-modal__fmt {
-  flex: 1 1 0; min-width: 0; padding: 8px 10px;
+  flex: 1 1 180px; min-width: 180px; padding: 8px 10px;
   border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);
   color: var(--text-muted); transition: color var(--transition-fast), border-color var(--transition-fast);
 }
@@ -1245,7 +1262,16 @@
 .df-paste-modal__fmt-sub { font-size: 11px; line-height: 1.5; color: inherit; }
 .df-paste-modal__fmt-list { margin: 4px 0 0; padding-left: 16px; font-size: 11px; line-height: 1.5; color: inherit; }
 .df-paste-modal__fmt-list li { transition: color var(--transition-fast); }
-.df-paste-modal__fmt-anchor { color: var(--color-primary); }
+/* EVERY link in a format card, not just the one that happens to carry the class. The Workbench links in the
+   Flow and mappings cards are plain <a> elements and were falling through to the browser default blue, which is
+   unreadable on the dark panel. Reported: "the links need to be fixed - system blue is unreadable". */
+.df-paste-modal__fmt-anchor,
+.df-paste-modal__fmt-body a,
+.df-paste-modal__fmt-how a,
+.df-paste-modal__fmt-note a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+.df-paste-modal__fmt-body a:hover,
+.df-paste-modal__fmt-how a:hover,
+.df-paste-modal__fmt-note a:hover { color: var(--brand-green); }
 /* Recognised JSON → green the "Diagramforce JSON" title + its card border. Recognised Mermaid → green ONLY the
    matched type name (the <li>, which also gains its "→ Target" mapping). Unrecognised → both cards red. */
 .df-paste-modal__fmt.is-on { border-color: var(--brand-green); }
@@ -2135,4 +2161,167 @@
   margin-top: 6px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+}
+
+/* --- Paste pane: "How do I get this out of Salesforce?" (1.22.0) -----------------------------------------
+   A <details>, collapsed by default. It sits between the textarea and the format roster because that is
+   exactly where the question occurs to someone: they have opened Paste, and they do not have anything to
+   paste. Native <details> so it needs no JS, keyboard-toggles for free, and is inert when collapsed. */
+.df-paste-guide { margin: var(--spacing-sm) 0 0; border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); }
+.df-paste-guide__summary {
+  cursor: pointer; padding: 7px 10px; font-size: var(--font-size-sm); font-weight: 600;
+  color: var(--color-primary); list-style-position: inside;
+}
+.df-paste-guide__summary::-webkit-details-marker { color: var(--text-muted); }
+.df-paste-guide__summary:hover { background: var(--bg-hover, rgba(127,127,127,.08)); }
+.df-paste-guide[open] .df-paste-guide__summary { border-bottom: 1px solid var(--border-color); }
+.df-paste-guide__body { padding: 10px; font-size: 11px; line-height: 1.6; color: var(--text-secondary); }
+.df-paste-guide__lead { margin: 0 0 8px; }
+.df-paste-guide__steps { margin: 0 0 8px; padding-left: 18px; }
+.df-paste-guide__urls { margin: 0; }
+.df-paste-guide__urls dt { font-weight: 600; color: var(--text-primary); margin-top: 8px; }
+.df-paste-guide__urls dd { margin: 3px 0 0; }
+/* The URLs are long and must stay COPYABLE, so they wrap rather than truncate - an ellipsis here would hand
+   the user a broken request. `overflow-wrap: anywhere` breaks mid-token, which a query string needs. */
+.df-paste-guide__body code {
+  display: inline-block; max-width: 100%; overflow-wrap: anywhere;
+  padding: 1px 4px; border-radius: 3px;
+  background: var(--bg-panel); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
+}
+.df-paste-guide__note { display: block; margin-top: 3px; color: var(--text-muted); }
+
+/* Window-wide file-drop affordance. Shown only while an OS FILE drag is over the app (see
+   initWindowFileDrop) - internal drags of shapes, templates and tabs never raise it.
+   `pointer-events: none` is load-bearing: an overlay that took the pointer would sit between the cursor and
+   the window, firing a dragleave the instant it appeared and flickering itself away. It is purely visual;
+   the listeners are on `window`. */
+.df-file-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;                 /* over the canvas and panels, under a modal (10000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+.df-file-drop-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 40px;
+  text-align: center;
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--border-radius-md, 8px);
+  background: var(--bg-panel);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 28%);
+}
+/* Matches .df-load-file__icon - same sprite, same currentColor fix (the paths carry no intrinsic fill). */
+.df-file-drop-overlay__icon { width: 44px; height: 44px; color: var(--color-primary); fill: currentColor; }
+.df-file-drop-overlay__title { margin: 0; color: var(--text-primary); font-size: 18px; font-weight: 600; }
+.df-file-drop-overlay__sub { margin: 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .df-file-drop-overlay { backdrop-filter: none; }
+}
+
+/* Paste pane: the four supported formats as collapsible cards (1.22.0). Each opens to how-to-get-it detail, so
+   the guidance sits ON the format it describes instead of in one long disclosure below the fold covering two of
+   them. Two columns - four cards in a row would put each title on three lines. */
+.df-paste-modal__formats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: var(--spacing-sm);
+}
+/* An OPEN card spans both columns: its detail is prose plus a URL, and a half-width column wraps that to
+   ribbons. Staying in-column was tried (to stop the grid reshuffling on a click) and reverted on the owner's
+   call - "the previous full width view was better for the content there" - because the reshuffle is one
+   moment's motion while the cramped prose is there the whole time you are reading it.
+   Only one card is ever open (the accordion in load-manager.js), so the grid never fights itself. */
+.df-paste-modal__fmt.is-open { grid-column: 1 / -1; }
+/* COLLAPSED cards are all the same height. Their leads run to one or two lines, so left to themselves the rows
+   come out ragged and the grid reads as broken spacing rather than as a set of equal choices - reported as
+   "weird gaps based on different heights of cards". `stretch` is the grid default; it is spelled out here
+   because the in-column experiment above had turned it off. */
+.df-paste-modal__formats { align-items: stretch; }
+.df-paste-modal__fmt { display: flex; flex-direction: column; }
+.df-paste-modal__fmt {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md, 8px);
+  background: var(--bg-panel);
+  overflow: hidden;
+  transition: border-color 120ms ease;
+}
+.df-paste-modal__fmt.is-on { border-color: var(--color-primary); }
+.df-paste-modal__fmt.is-err { border-color: var(--color-danger); }
+.df-paste-modal__fmt-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* The hover belongs to the CARD, not to the head button inside it. The head is only the top strip - the
+   detected-format line and the open body sit outside it - so a head-only hover lit part of a control that reads
+   as one object. Reported: "the hover effect does not cover whole card". */
+.df-paste-modal__fmt:hover { background: var(--bg-elevated); }
+.df-paste-modal__fmt-head:hover { background: transparent; }
+.df-paste-modal__fmt-title { font-weight: 600; font-size: var(--font-size-sm); color: var(--text-primary); }
+.df-paste-modal__fmt-lead {
+  grid-column: 1;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.df-paste-modal__fmt-chev {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 12px; height: 12px;
+  color: var(--text-muted);
+  transition: transform 140ms ease;
+}
+.df-paste-modal__fmt.is-open .df-paste-modal__fmt-chev { transform: rotate(180deg); }
+.df-paste-modal__fmt-body {
+  padding: 0 10px 10px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.df-paste-modal__fmt-how { margin-top: 8px; }
+.df-paste-modal__fmt-note { display: block; margin-top: 6px; color: var(--text-muted); font-size: var(--font-size-xs); }
+/* The URL is the thing to copy, so it gets its own selectable block rather than sitting inline in prose. */
+.df-paste-modal__url {
+  display: block;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-color);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: pre;
+  user-select: all;
+}
+@media (prefers-reduced-motion: reduce) {
+  .df-paste-modal__fmt-chev, .df-paste-modal__fmt { transition: none; }
+}
+
+/* One column on a phone. Two ~150px columns plus the modal's own padding overflow a 375px viewport, and the
+   Paste pane then scrolls sideways - caught by paste-datacloud.spec.js's phone case. The open card already
+   spans the full width, so the only change here is the collapsed row. */
+@media (max-width: 560px) {
+  .df-paste-modal__formats { grid-template-columns: 1fr; }
+  .df-paste-modal__url { font-size: 10px; }
 }

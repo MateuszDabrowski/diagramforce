@@ -1,10 +1,10 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.21.7';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.21.7';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.21.7';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.21.7';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.21.7';
-import { showSaveManagerModal } from './save-manager.js?v=1.21.7';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.22.0';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.22.0';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.22.0';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.22.0';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.22.0';
+import { showSaveManagerModal } from './save-manager.js?v=1.22.0';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -467,6 +467,119 @@ function renderDriveLoadPane({ pane, footer, close }) {
   render();
 }
 
+/** What a dropped or picked file may be. Mirrors the `accept` on the Load modal's file input, so the picker and
+ *  a drop refuse exactly the same things - a file the picker greys out must not sneak in past a drop. */
+const OPENABLE_EXTENSIONS = new Set(['dgf', 'json', 'xml', 'flow-meta.xml']);
+
+/**
+ * Open ONE dropped or picked file as a new tab. The single path both the Load modal's drop zone and the
+ * window-wide drop use, so a file behaves identically however it arrived.
+ *
+ * @param {File} f
+ * @param {Function} [close] - closes the Load modal when the file came from there; omitted for a window drop.
+ */
+export async function openDroppedFile(f, close) {
+  if (!f) return;
+  // EXTENSION FIRST, before the file is even read. Everything downstream assumes text, so dropping a PNG got as
+  // far as JSON.parse and surfaced the parser's own complaint about the file's magic bytes:
+  //   Failed to load "datamodel.png": Unexpected token '<?>', "<?>PNG   "... is not valid JSON
+  // which describes the failure in terms of a parser the reader never invoked. The extension is the cheapest
+  // signal available and it is enough to say the useful thing instead: what this app opens, and what they
+  // dropped. A file with NO extension still goes through - the content check below is the real authority, and
+  // an export saved without a suffix is a fair thing to drop.
+  const ext = (/\.(flow-meta\.xml|[a-z0-9]+)$/i.exec(f.name) || [])[1]?.toLowerCase() || '';
+  if (ext && !OPENABLE_EXTENSIONS.has(ext)) {
+    showError(`Diagramforce cannot open .${ext} files. Drop a Diagramforce .dgf or .json export, `
+      + 'or a Salesforce Flow (.flow-meta.xml or its Tooling API .json).');
+    return;
+  }
+  let text;
+  try { text = await f.text(); } catch { showError('Could not read that file.'); return; }
+  // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
+  // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
+  const base = f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '');
+  close?.();   // close first; loadJSONText handles single/bundle/templates (a bundle reopens the Browser tab with a summary)
+  // The SAME content-detect chain as the Paste pane, in the same order - a file is just a paste that arrived
+  // by another door, and the two routes diverging is exactly how a saved Connect response or a retrieved
+  // ObjectSourceTargetMap .xml (whose extension passes the gate above) used to die in loadJSONText's
+  // JSON.parse with the parser's own complaint, while the identical bytes pasted fine. Detect by CONTENT, not
+  // extension - a Tooling response is a .json like any other, and the user may well have renamed the file.
+  const P = tctx.modules.persistence;
+  if (P.isFlowSourceText?.(text)) await P.loadFlowSource(text, base);
+  else if (P.looksLikeMappingJson?.(text)) await P.loadDataCloudMapping(text, base);
+  else if (P.looksLikeDataGraphJson?.(text)) await P.loadDataGraph(text, base);
+  else await P.loadJSONText(text, base);
+}
+
+// --- Drop a file anywhere on the app window ---------------------------------------------------------------
+// A shortcut for Load, and the discoverable gesture: the Load modal has had a drop zone since it shipped, but
+// you have to open the modal to find it, so dropping a diagram on the app did nothing at all.
+//
+// The whole design problem is that this app is FULL of internal drag and drop - stencil shapes and templates
+// onto the canvas, tabs into the tab bar and the tray, Gantt bars, org rows, field rows, table rows. A naive
+// window-level handler would swallow all of them. The signal that separates them is `dataTransfer.types`:
+// an OS file drag always carries `'Files'`, and every internal drag carries its own `application/sf-diagrams-*`
+// type instead. So this reacts to a file drag ONLY, and is otherwise inert.
+let _fileDropWired = false;
+export function initWindowFileDrop() {
+  if (_fileDropWired) return;
+  _fileDropWired = true;
+
+  const isFileDrag = (e) => {
+    const t = e.dataTransfer?.types;
+    return !!t && (Array.from(t).includes('Files'));
+  };
+  // The Load modal's own zone keeps its behaviour - it is more specific, and it shows its own hover state.
+  const inOwnZone = (e) => !!(e.target instanceof Element && e.target.closest('.df-load-file'));
+
+  let overlay = null;
+  // dragenter/dragleave fire on every child boundary crossing, so a boolean would flicker the overlay off the
+  // moment the cursor passed over a card. Counting enters and leaves is the standard fix.
+  let depth = 0;
+  const show = () => {
+    if (overlay) return;
+    overlay = document.createElement('div');
+    overlay.className = 'df-file-drop-overlay';
+    overlay.setAttribute('role', 'presentation');
+    overlay.innerHTML = '<div class="df-file-drop-overlay__card">'
+      + '<svg class="df-file-drop-overlay__icon" aria-hidden="true"><use href="#upload"></use></svg>'
+      + '<p class="df-file-drop-overlay__title">Drop to open</p>'
+      + '<p class="df-file-drop-overlay__sub">Diagramforce .dgf or .json, or a Salesforce Flow</p></div>';
+    document.body.appendChild(overlay);
+  };
+  const hide = () => { depth = 0; overlay?.remove(); overlay = null; };
+
+  window.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e) || inOwnZone(e)) return;
+    depth++;
+    show();
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!isFileDrag(e)) return;
+    if (--depth <= 0) hide();
+  });
+  // Without preventDefault on dragover the browser NAVIGATES to the dropped file, replacing the app - and any
+  // unsaved work with it. This is the listener that actually enables dropping.
+  window.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e) || inOwnZone(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('drop', (e) => {
+    if (!isFileDrag(e) || inOwnZone(e)) { hide(); return; }
+    e.preventDefault();
+    hide();
+    const files = e.dataTransfer?.files;
+    // One diagram per drop. Multiple files would each want a tab and a version prompt, and a half-applied batch
+    // is worse than a clear refusal - the Load modal is the place to open several.
+    if (files && files.length > 1) {
+      showError('Drop one file at a time, or use Load to open several.');
+      return;
+    }
+    openDroppedFile(files?.[0]);
+  });
+}
+
 // --- Load Manager: File pane (open a .dgf / .json export by drop or picker) ---
 function renderFileLoadPane({ pane, footer, close }) {
   pane.innerHTML = `
@@ -479,21 +592,7 @@ function renderFileLoadPane({ pane, footer, close }) {
   footer.innerHTML = '<span class="df-load-mgr__foot-hint">Files load into a new tab.</span>';
   const zone = pane.querySelector('.df-load-file');
   const input = pane.querySelector('.df-load-file__input');
-  const onFiles = async (files) => {
-    const f = files && files[0];
-    if (!f) return;
-    let text;
-    try { text = await f.text(); } catch { showError('Could not read that file.'); return; }
-    // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
-    // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
-    const base = f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '');
-    close();   // close first; loadJSONText handles single/bundle/templates (a bundle reopens the Browser tab with a summary)
-    // A Salesforce Flow goes through the converter; everything else is a Diagramforce document. Detect by
-    // CONTENT, not by extension - a Tooling API response is a .json like any other, and the user may well
-    // have renamed the file.
-    if (tctx.modules.persistence.isFlowSourceText?.(text)) await tctx.modules.persistence.loadFlowSource(text, base);
-    else await tctx.modules.persistence.loadJSONText(text, base);
-  };
+  const onFiles = (files) => openDroppedFile(files?.[0], close);
   zone.addEventListener('click', () => input.click());
   zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
   input.addEventListener('change', () => onFiles(input.files));
@@ -506,27 +605,82 @@ function renderFileLoadPane({ pane, footer, close }) {
 function renderPasteLoadPane({ pane, footer, close }) {
   pane.innerHTML = `
     <div class="df-paste-modal">
-      <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON, a Salesforce Flow, or Mermaid code - the format is detected automatically:</p>
+      <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON, Salesforce metadata, or Mermaid code - the format is detected automatically:</p>
       <textarea class="df-paste-modal__input" spellcheck="false" rows="9"
         placeholder='{ "diagramType": "architecture", "graph": { "cells": [ ... ] } }&#10;&#10;OR&#10;&#10;flowchart TD&#10;  A[Start] --> B[Decision]'
         style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
       <p class="df-paste-modal__status" style="margin:var(--spacing-sm) 0 0;min-height:1.4em;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>
       <div class="df-paste-modal__formats">
         <div class="df-paste-modal__fmt" data-fmt="json">
-          <div class="df-paste-modal__fmt-title">Diagramforce JSON</div>
-          <div class="df-paste-modal__fmt-sub">A diagram exported via <strong>Save → Export to JSON</strong>, or generated with the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" class="df-paste-modal__fmt-anchor">Diagramforce LLM Spec</a>.</div>
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Diagramforce JSON</span>
+            <span class="df-paste-modal__fmt-lead">An export, or LLM-authored</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">A diagram exported via <strong>Save &rarr; Export to JSON</strong>, or generated with the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" class="df-paste-modal__fmt-anchor">Diagramforce LLM Spec</a>.</div>
+            <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> Hand that spec to an LLM along with what you want drawn, and paste back what it returns. A <code>.dgf</code> or <code>.json</code> file does the same thing on the <strong>File</strong> tab - or drop it anywhere on the app.</div>
+          </div>
         </div>
         <div class="df-paste-modal__fmt" data-fmt="flow">
-          <div class="df-paste-modal__fmt-title">Salesforce Flow</div>
-          <div class="df-paste-modal__fmt-sub">A flow's <strong>Tooling API</strong> response, or the contents of its <strong>.flow-meta.xml</strong> source file. Converted to a Flow diagram - element cards, decision outcomes, fault and Go To paths.</div>
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Salesforce Flow</span>
+            <span class="df-paste-modal__fmt-lead">Tooling API response, or .flow-meta.xml</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">Becomes a Flow diagram - element cards, decision outcomes, fault and Go To paths - beside a card of the flow's own facts and one listing its formulas, templates and choices.</div>
+            <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> One <strong>GET</strong> request. Use the Salesforce CLI if you have it; if not, or your org blocks it, <a href="https://workbench.developerforce.com" target="_blank" rel="noopener">Workbench</a> signs in with your normal browser login (SSO included) and needs nothing installed - <strong>utilities &rarr; REST Explorer</strong>, press Execute, copy the whole response.
+              <code class="df-paste-modal__url">/services/data/v64.0/tooling/sobjects/Flow/301...</code>
+              <span class="df-paste-modal__fmt-note">The <code>301...</code> id is in the URL when you open the flow in <strong>Setup &rarr; Flows</strong>. Use your org's newest API version - an older one silently omits anything added since. A <code>.flow-meta.xml</code> from <code>sf project retrieve</code> works too: paste its contents, or drop the file on the app.</span>
+            </div>
+          </div>
+        </div>
+        <div class="df-paste-modal__fmt" data-fmt="dcmapping">
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Data Cloud mappings</span>
+            <span class="df-paste-modal__fmt-lead">Connect response, or ObjectSourceTargetMap</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">Becomes a Data Mapping diagram, laid out in Data Stream / Data Lake / Data Model layers with a connector per mapped field.</div>
+            <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> One <strong>GET</strong> request. Use the Salesforce CLI if you have it; if not, or your org blocks it, <a href="https://workbench.developerforce.com" target="_blank" rel="noopener">Workbench</a> signs in with your normal browser login (SSO included) and needs nothing installed - <strong>utilities &rarr; REST Explorer</strong>, press Execute, copy the whole response.
+              <code class="df-paste-modal__url">/services/data/v64.0/ssot/data-model-object-mappings?dmoDeveloperName=ssot__Individual__dlm</code>
+              <span class="df-paste-modal__fmt-note">One data model object per request, which is also what keeps the diagram a readable size. <strong>Formulas and filters are not in this response</strong> - no Salesforce API exposes them.
+              <br><br>To get those, retrieve the metadata instead - <code>sf project retrieve start -m "ObjectSourceTargetMap:*"</code> - and paste <strong>one</strong> <code>.objectSourceTargetMap-meta.xml</code> file's contents. That works on its own: a single file draws its own source and target objects with every field pair, plus the formulas and filters the GET cannot give you.</span>
+            </div>
+          </div>
+        </div>
+        <div class="df-paste-modal__fmt" data-fmt="datagraph">
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Data Cloud data graph</span>
+            <span class="df-paste-modal__fmt-lead">Definition, or the Preview payload</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">Becomes a Data Model diagram laid out as the TREE it is - a column per level, the primary object on the left, each related object to its right with a crow's foot at the many end.</div>
+            <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> Two ways in, and they carry different amounts.
+              <code class="df-paste-modal__url">/services/data/v64.0/ssot/data-graphs/&lt;DeveloperName&gt;</code>
+              <span class="df-paste-modal__fmt-note">One <strong>GET</strong> via the CLI or <a href="https://workbench.developerforce.com" target="_blank" rel="noopener">Workbench</a>, exactly like the mappings above. This is the <strong>definition</strong>, and it is the better source - real object and field labels, field types, and which columns are keys. List what the org has with <code>/ssot/data-graphs/metadata</code>.
+              <br><br>Or open the graph in <strong>Data Cloud &rarr; Data Graphs</strong>, press <strong>Preview</strong>, and use <strong>Copy</strong> on the <strong>JSON Preview</strong> panel that opens at the bottom. That needs no API access at all - but the schema preview carries no object labels, field labels or key flags, so those are derived from the API names and from naming convention.</span>
+            </div>
+          </div>
         </div>
         <div class="df-paste-modal__fmt" data-fmt="mermaid">
-          <div class="df-paste-modal__fmt-title">Mermaid <span class="df-badge df-badge--beta">Beta</span></div>
-          <ul class="df-paste-modal__fmt-list">
-            <li data-mtype="flowchart" data-label="flowchart">flowchart</li><li data-mtype="graph" data-label="graph">graph</li><li data-mtype="state" data-label="stateDiagram">stateDiagram</li><li data-mtype="er" data-label="erDiagram">erDiagram</li><li data-mtype="sequence" data-label="sequenceDiagram">sequenceDiagram</li><li data-mtype="gantt" data-label="gantt">gantt</li>
-          </ul>
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Mermaid <span class="df-badge df-badge--beta">Beta</span></span>
+            <span class="df-paste-modal__fmt-lead">flowchart, ER, sequence, gantt and more</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">Diagram source from a README, a wiki, or an LLM. The kind that was recognised lights up as you paste:</div>
+            <ul class="df-paste-modal__fmt-list">
+              <li data-mtype="flowchart" data-label="flowchart">flowchart</li><li data-mtype="graph" data-label="graph">graph</li><li data-mtype="state" data-label="stateDiagram">stateDiagram</li><li data-mtype="er" data-label="erDiagram">erDiagram</li><li data-mtype="sequence" data-label="sequenceDiagram">sequenceDiagram</li><li data-mtype="gantt" data-label="gantt">gantt</li>
+            </ul>
             <label class="df-paste-modal__mtarget" hidden>Import as
               <select class="df-paste-modal__mtarget-sel">
                 <option value="process">Process</option>
@@ -535,6 +689,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
               </select>
             </label>
           </div>
+        </div>
       </div>
     </div>`;
   footer.innerHTML = '<button class="df-modal__btn df-modal__btn--accent df-paste-modal__load" style="margin-left:auto" disabled>Load</button>';
@@ -542,6 +697,29 @@ function renderPasteLoadPane({ pane, footer, close }) {
   const status = pane.querySelector('.df-paste-modal__status');
   const loadBtn = footer.querySelector('.df-paste-modal__load');
   const fmtCols = pane.querySelectorAll('.df-paste-modal__fmt');
+  // Each card expands to how-to-get-it detail. Collapsed by default so the four supported formats read as a
+  // scannable list rather than a wall - the standalone "How do I get a Flow out of Salesforce?" disclosure this
+  // replaces was one long block covering two formats, below the fold, and easy to miss entirely.
+  // Accordion, not independent toggles: two open bodies push the paste box off-screen in the modal.
+  /** Open one card and close the rest. Shared by the click handler and by detection, which opens the Mermaid
+   *  card when its `Import as` control becomes relevant. */
+  const openFmtCard = (fmt) => {
+    fmtCols.forEach((c) => {
+      const b = c.querySelector('.df-paste-modal__fmt-body');
+      const h = c.querySelector('.df-paste-modal__fmt-head');
+      if (!b || !h) return;
+      const on = c.dataset.fmt === fmt;
+      b.hidden = !on;
+      h.setAttribute('aria-expanded', String(on));
+      c.classList.toggle('is-open', on);
+    });
+  };
+  fmtCols.forEach((col) => {
+    const head = col.querySelector('.df-paste-modal__fmt-head');
+    const body = col.querySelector('.df-paste-modal__fmt-body');
+    if (!head || !body) return;
+    head.addEventListener('click', () => openFmtCard(body.hidden ? col.dataset.fmt : null));
+  });
   const jsonCol = pane.querySelector('.df-paste-modal__fmt[data-fmt="json"]');
   const mtypeEls = pane.querySelectorAll('.df-paste-modal__fmt-list [data-mtype]');
   const mtarget = pane.querySelector('.df-paste-modal__mtarget');
@@ -563,13 +741,25 @@ function renderPasteLoadPane({ pane, footer, close }) {
     // fail with a confusing "not a diagram" error. isFlowSourceText only matches real Flow metadata (it
     // rejects anything carrying `graph`/`diagramType`), so a Diagramforce document still falls through.
     if (tctx.modules.persistence.isFlowSourceText?.(t)) return { kind: 'flow', xml: t[0] === '<' };
+    // Data Cloud mappings BEFORE describePastedJSON, for exactly the reason Flow is above: a Connect API
+    // response is JSON too, so the describer would claim it and fail with a confusing "not a diagram" error.
+    // looksLikeMappingJson demands the `objectSourceTargetMaps` key AND rejects anything carrying
+    // `graph`/`diagramType`, so a Diagramforce document still falls through to the describer.
+    if (tctx.modules.persistence.looksLikeMappingJson?.(t)) return { kind: 'dcmapping', xml: t[0] === '<' };
+    // A Data Cloud DATA GRAPH, after mappings (whose `objectSourceTargetMaps` key is the more specific signal)
+    // and before the describer, for the same reason the two above are: it is JSON, so the describer would claim
+    // it and fail with a confusing "not a diagram". looksLikeDataGraphJson rejects anything carrying
+    // `graph`/`diagramType`, so a Diagramforce document still falls through.
+    if (tctx.modules.persistence.looksLikeDataGraphJson?.(t)) {
+      return { kind: 'datagraph', shape: /"sourceObject"\s*:/.test(t) ? 'definition' : 'preview' };
+    }
     if (t[0] === '{' || t[0] === '[') {
       const d = tctx.modules.persistence.describePastedJSON(t);
       return d.ok ? { kind: 'json', rawType: d.rawType, diagramType: d.diagramType } : { kind: 'error', error: d.error };
     }
     const v = tctx.modules.mermaidImport.validateMermaid(t);
     if (v.ok) return { kind: 'mermaid', mtype: v.type };
-    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, or a supported Mermaid diagram.' };
+    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, Data Cloud mappings, or a supported Mermaid diagram.' };
   };
   const validate = () => {
     resetHighlight();
@@ -586,6 +776,23 @@ function renderPasteLoadPane({ pane, footer, close }) {
       if (det) det.textContent = d.xml ? '.flow-meta.xml -> Flow' : 'Tooling API JSON -> Flow';
       return;
     }
+    if (d.kind === 'datagraph') {
+      const col = pane.querySelector('.df-paste-modal__fmt[data-fmt="datagraph"]');
+      col?.classList.add('is-on');
+      const det = col?.querySelector('.df-paste-modal__fmt-detected');
+      // Name the SOURCE, for the same reason mappings do: the two differ in what they carry, and the reader
+      // should know whether the labels they are about to see were GIVEN or derived from the API names.
+      if (det) det.textContent = d.shape === 'definition' ? 'Definition → Data Model' : 'Preview → Data Model';
+      return;
+    }
+    if (d.kind === 'dcmapping') {
+      const col = pane.querySelector('.df-paste-modal__fmt[data-fmt="dcmapping"]');
+      col?.classList.add('is-on');
+      const det = col?.querySelector('.df-paste-modal__fmt-detected');
+      // Name the SOURCE, because the two differ in what they can carry: only the metadata has formulas.
+      if (det) det.textContent = d.xml ? 'ObjectSourceTargetMap → Data Mapping' : 'Connect API → Data Mapping';
+      return;
+    }
     if (d.kind === 'json') {
       jsonCol?.classList.add('is-on');
       // Showcase what the paste will become: "<diagramType from JSON> → <friendly Diagram Type>" in brand green.
@@ -600,12 +807,22 @@ function renderPasteLoadPane({ pane, footer, close }) {
       ? (mtargetSel.selectedOptions[0]?.textContent || 'Process')
       : (MERMAID_INFO[d.mtype]?.target || 'diagram');
     if (li) { li.classList.add('is-on'); li.textContent = `${li.dataset.label} → ${label}`; }
+    // Highlight the CARD too, the way the other three do. The lit type sits inside the card BODY, which is
+    // collapsed by default, so without this a recognised Mermaid paste gave no signal at all - Load simply
+    // became enabled with nothing to say why.
+    pane.querySelector('.df-paste-modal__fmt[data-fmt="mermaid"]')?.classList.add('is-on');
+    // ...and OPEN it when the target is the user's to choose. `Import as` is a real control, not decoration: a
+    // flowchart can land as Process, Architecture or Org Chart, and a collapsed card hides that choice behind a
+    // click nobody knows to make.
+    if (pickable) openFmtCard('mermaid');
   };
   input.addEventListener('input', validate);
   mtargetSel?.addEventListener('change', validate);
   loadBtn.addEventListener('click', async () => {
     let ok = false;
     if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
+    else if (mode === 'dcmapping') ok = await tctx.modules.persistence.loadDataCloudMapping(input.value, 'Data Cloud Mappings');
+    else if (mode === 'datagraph') ok = await tctx.modules.persistence.loadDataGraph(input.value, null);
     else if (mode === 'json') ok = await tctx.modules.persistence.loadJSONText(input.value, 'Pasted');
     else if (mode === 'mermaid') ok = tctx.modules.mermaidImport.importMermaidText(input.value, { target: mtargetSel?.value });
     if (ok) close();

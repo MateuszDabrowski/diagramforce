@@ -21,10 +21,10 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.21.7';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.21.7';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.21.7';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.21.7';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.22.0';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.22.0';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.22.0';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.22.0';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -39,13 +39,19 @@ const MAX_TEMPLATES = 60;            // library cap — keeps the stencil usable
 const MAX_CELLS_PER_TEMPLATE = 200;  // sanity cap per template
 
 let graph, selection, history;
+// The post-insert heal passes (canvas migrateLinks/migrateNodes), INJECTED rather than imported: a static
+// import of the canvas facade drags JointJS's browser-only `joint` global into every node test that imports
+// this module transitively (migration-bridge.test.js found it). Optional-chained at the call site, so an
+// un-wired environment (tests) simply skips the heal.
+let healAfterInsert = null;
 let getDiagramType = () => 'architecture';
 const changeCallbacks = [];
 
-export function init(_graph, _selection, _history) {
+export function init(_graph, _selection, _history, _healAfterInsert) {
   graph = _graph;
   selection = _selection;
   history = _history;
+  healAfterInsert = typeof _healAfterInsert === 'function' ? _healAfterInsert : null;
 }
 
 /** Set a getter returning the active diagram type — stored as template metadata. */
@@ -389,6 +395,15 @@ export function insertTemplateCells(template, dropPoint) {
   if (history?.startBatch) history.startBatch();
   try {
     graph.addCells(clones);
+    // Official template files are COMPACTED saves (compactGraphForSave): slimForShare strips every mapping
+    // link's router/connector/connectionPoints, DataObject ports, and icon artwork, and only the load pass
+    // (fromJSON + migrateLinks + migrateNodes in tabs.js) rebuilds them. A stencil drop adds cells to a LIVE
+    // graph without that pass, so mapping connectors rendered straight and header icons blank. Run the same
+    // reconstruction here; both passes are idempotent (each heal checks before writing), so pre-existing
+    // cells produce no writes. INSIDE the batch on purpose - the router/connector prop-sets on the new
+    // clones must land in the same undo step, or redo would resurrect straight links. (Injected via init -
+    // see healAfterInsert above.)
+    healAfterInsert?.();
   } finally {
     if (history?.endBatch) history.endBatch();
   }

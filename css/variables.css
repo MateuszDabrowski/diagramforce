@@ -43,6 +43,11 @@
   --text-secondary: #606770;
   --text-muted: #65707B;
   --text-inverse: #FFFFFF;
+
+  /* Canvas hover tooltip. Deliberately dark in BOTH themes - a tooltip reads as an overlay rather than a
+     surface, and the light canvas is what it most often sits on. */
+  --tooltip-bg: #1F2937;
+  --tooltip-fg: #F9FAFB;
   /* Tab-switch "ghost" trail base — flipped per theme: light here (light theme), dark in [data-theme=dark]
      theme.css). Pure black/white (not --text-inverse, whose dark value ≈ the bar bg) so the trail has
      real contrast against the tabs. */

@@ -1,14 +1,14 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.21.7';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.21.7';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.21.7';
-import { sanitizeCssColor } from './util.js?v=1.21.7';
+import { getIconDataUri } from './icons.js?v=1.22.0';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.22.0';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.22.0';
+import { sanitizeCssColor } from './util.js?v=1.22.0';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.21.7';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.21.7';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.22.0';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.22.0';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -834,17 +834,14 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
       const color = '#1D73C9';
       const iconHref = getStencilSvgDataUri(SVG.linkIcon, color, 20);
       const url = component.url || '';
-      const domain = extractLinkDomain(url);
       return new joint.shapes.sf.Link({
         position,
         url,
         attrs: {
-          label: {
-            text: label || 'Link',
-            fill: color,
-            y: domain ? 'calc(0.5 * h - 8)' : 'calc(0.5 * h)',
-          },
-          domain: { text: domain },
+          // Vertically centred, always. The URL is a native `<title>` tooltip on the body rather than a 10px
+          // sublabel: inside a 220px pill that truncated to noise and cost the label its centring.
+          label: { text: label || 'Link', fill: color, y: 'calc(0.5 * h)' },
+          // See js/canvas/migration.js healLinkSublabel: the tooltip belongs on `root`, not `body`.
           iconImage: { href: iconHref },
         },
       });

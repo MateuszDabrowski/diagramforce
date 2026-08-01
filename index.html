@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.21.7">
-  <link rel="stylesheet" href="css/theme.css?v=1.21.7">
-  <link rel="stylesheet" href="css/layout.css?v=1.21.7">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.21.7">
-  <link rel="stylesheet" href="css/stencil.css?v=1.21.7">
-  <link rel="stylesheet" href="css/properties.css?v=1.21.7">
-  <link rel="stylesheet" href="css/tabs.css?v=1.21.7">
-  <link rel="stylesheet" href="css/canvas.css?v=1.21.7">
-  <link rel="stylesheet" href="css/modals.css?v=1.21.7">
+  <link rel="stylesheet" href="css/variables.css?v=1.22.0">
+  <link rel="stylesheet" href="css/theme.css?v=1.22.0">
+  <link rel="stylesheet" href="css/layout.css?v=1.22.0">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.22.0">
+  <link rel="stylesheet" href="css/stencil.css?v=1.22.0">
+  <link rel="stylesheet" href="css/properties.css?v=1.22.0">
+  <link rel="stylesheet" href="css/tabs.css?v=1.22.0">
+  <link rel="stylesheet" href="css/canvas.css?v=1.22.0">
+  <link rel="stylesheet" href="css/modals.css?v=1.22.0">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -389,6 +389,10 @@
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M6 1.6l1.1 2.9L10 5.6 7.1 6.7 6 9.6 4.9 6.7 2 5.6l2.9-1.1L6 1.6z" stroke-linejoin="round"/><path d="M11.6 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" stroke-linejoin="round"/></svg>
               Diagram with AI
             </button>
+            <button id="btn-help-sfmeta" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="What Salesforce metadata Diagramforce can draw, and how to feed it in">
+              <svg width="16" height="16" viewBox="0 0 520 520" fill="currentColor" aria-hidden="true"><use href="#salesforce1"></use></svg>
+              Use SF Metadata
+            </button>
             <button id="btn-help-shortcuts" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="Keyboard shortcuts + right-click actions">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.2" y="3.5" width="13.6" height="9" rx="1.5"/><path d="M3.6 6.2h.01M6 6.2h.01M8.4 6.2h.01M10.8 6.2h.01M3.6 8.4h.01M6 8.4h.01M8.4 8.4h.01M10.8 8.4h.01M5 10.4h6" stroke-linecap="round"/></svg>
               Keyboard shortcuts
@@ -486,6 +490,11 @@
           <button class="df-toolbar__menu-item" data-action="ai">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6 1.6l1.1 2.9L10 5.6 7.1 6.7 6 9.6 4.9 6.7 2 5.6l2.9-1.1L6 1.6z" stroke-linejoin="round"/><path d="M11.6 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z" stroke-linejoin="round"/></svg>
             Diagram with AI
+          </button>
+          <!-- Mirrors #btn-help-sfmeta - same twin rule as the AI entry above. -->
+          <button class="df-toolbar__menu-item" data-action="sfmeta">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 520 520" fill="currentColor"><use href="#salesforce1"></use></svg>
+            Use SF Metadata
           </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
@@ -714,9 +723,9 @@
         <p class="df-about__tagline">Visual diagramming for every part of a project</p>
         <div class="df-about__info">
           <p>Diagramforce is a free, browser-based editor purpose-built for creating diagrams covering all project needs.</p>
-          <p>It supports architecture, data modeling and mapping, processes with BPMN, Salesforce Flow documentation (including marketing and campaign flows), org charts, Gantt timelines, and UML sequence diagrams.</p>
+          <p>It supports architecture, data modeling and mapping, processes with BPMN, Salesforce Flows, org charts, Gantt timelines, and UML sequence diagrams. It also draws real org metadata: Flows, objects, Data Cloud mappings and data graphs.</p>
           <p>Everything runs in your browser - no sign-up and no Diagramforce server. Optionally connect your own Google Drive to auto-save, share diagrams, and browse version history; your work stays in your browser and your own Drive.</p>
-          <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Diagram JSON Spec</a>.</p>
+          <p>LLMs can author diagrams via the <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Diagramforce Skill</a> or <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">JSON Spec</a>.</p>
           <p>Built with <a href="https://www.jointjs.com/" target="_blank" rel="noopener">JointJS</a> and <a href="https://www.lightningdesignsystem.com/" target="_blank" rel="noopener">Salesforce Lightning Design System</a>.</p>
         </div>
         <div class="df-about__meta">
@@ -756,8 +765,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.21.7"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.21.7"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.21.7"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.22.0"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.22.0"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.22.0"></script>
 </body>
 </html>

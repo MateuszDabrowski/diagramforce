@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.21.7** — matches the app's current `appVersion`; set `"appVersion": "1.21.7"` in generated files.
+> **Spec snapshot: v1.22.0** — matches the app's current `appVersion`; set `"appVersion": "1.22.0"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.21.7"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.22.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.7", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.7" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.21.7", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.21.7" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -142,7 +142,7 @@
 
 > **`df.Legend`** (since v1.17.3) — one legend KEY: a fillable rounded "squircle" swatch (the user-fillable colour, attr `swatch/fill`) with a label beside it (attr `label/text`, themed `var(--text-primary)`). Drop several to explain each colour a diagram uses. AUTO-WIDTHS to the label at the model level, UNLESS `manualWidth: true` (set by the Width control or a resize, cleared by "Auto size") — then the authored `size.width` is kept. The **Shape state** border paints on the `swatch` (the visible squircle); the full-bounds `body` attr is transparent and only carries selection.
 
-> **`df.Table`** (since v1.17.3) — a grid of **markdown, multi-line** cells. Top-level props: `rows` (an array of row arrays of cell strings, e.g. `[["**Layer**","What"],["Data 360","Unifies\nidentity"]]` — each cell supports the same markdown subset as a description: `**bold**` / `*italic*` / `~~strike~~` / `` `code` `` + `\n` line breaks); optional `tableLabel` (a caption rendered above the grid, left-aligned); `highlightFirstRow` (bool, default `true`) + `highlightFirstCol` (bool, default `false`) tint + bold the leading row / column; `fontSize` (default `13`); `tableFill`; `tableBorder` (tints BOTH the outer border AND the inner grid lines — the "Grid & Border" control); and `tableTextColor` (cell text + the label; `''` → `var(--text-primary)`). The label renders one notch larger than the cells (`fontSize + 2`). The number of columns is the widest row's length; ragged input is padded to a rectangle on load, and a manual resize re-applies a per-column minimum width. The view MEASURES each cell's wrapped markdown to give rows **variable height** (so a multi-line cell grows its row), and resizes the model. The outer `body` rect is a transparent selection + Shape-state frame (the visible table is view-drawn from `tableFill`/`tableBorder`). Cells are edited in the "Edit in Table" overlay (Save / Cancel, +Row / +Column strips, row-× / column-×). *(Replaces the pre-v1.17.3 `headerRow` boolean — old tables migrate it to `highlightFirstRow` on load.)*
+> **`df.Table`** (since v1.17.3) — a grid of **markdown, multi-line** cells. Top-level props: `rows` (an array of row arrays of cell strings, e.g. `[["**Layer**","What"],["Data 360","Unifies\nidentity"]]` — each cell supports the same markdown subset as a description: `**bold**` / `*italic*` / `~~strike~~` / `` `code` `` + `\n` line breaks); optional `tableLabel` (a caption rendered above the grid, left-aligned); `highlightFirstRow` (bool, default `true`) + `highlightFirstCol` (bool, default `false`) tint + bold the leading row / column; `plainCells` (bool, default `false`) renders cells LITERALLY instead of as inline markdown - turn it on when the cells hold **code**, because a Salesforce formula's `*` operators are markdown italic markers and `{!a} * {!b} * 2` otherwise renders as `{!a} <em> {!b} </em> 2` with the operators silently deleted (v1.22.0); `fontSize` (default `13`); `tableFill`; `tableBorder` (tints BOTH the outer border AND the inner grid lines — the "Grid & Border" control); and `tableTextColor` (cell text + the label; `''` → `var(--text-primary)`). The label renders one notch larger than the cells (`fontSize + 2`). The number of columns is the widest row's length; ragged input is padded to a rectangle on load, and a manual resize re-applies a per-column minimum width. The view MEASURES each cell's wrapped markdown to give rows **variable height** (so a multi-line cell grows its row), and resizes the model. The outer `body` rect is a transparent selection + Shape-state frame (the visible table is view-drawn from `tableFill`/`tableBorder`). Cells are edited in the "Edit in Table" overlay (Save / Cancel, +Row / +Column strips, row-× / column-×). *(Replaces the pre-v1.17.3 `headerRow` boolean — old tables migrate it to `highlightFirstRow` on load.)*
 
 > **Highlight State (review / diff overlay, since v1.17.2; UI label "Highlight" → "Shape State" → "Highlight State" across v1.17.x — internals/prop unchanged):** any element with a `body` outline gets a `None / Added / Changed / Removed / Deferred` control — its own COLLAPSIBLE section (collapsed by default, between Content and Appearance), the states stacked as styled checkbox rows (the selected row carries the dash effect) — that paints the body stroke green (added) / orange dotted (changed) / red dashed (removed) / violet dash-dot (deferred). It persists as a top-level `borderStyle` prop (`"bold"` / `"dotted"` / `"dashed"` / `"deferred"`; the prop name predates the UI rename and is kept stable for back-compat). A companion `_origBorder` prop (`{stroke, strokeWidth, strokeDasharray}`) stashes the pre-override stroke so reverting to **None** restores the shape's own border losslessly. Both absent on a None / un-highlighted element.
 
@@ -218,7 +218,7 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 **`flow`** (Salesforce Flow - see the [Flow Shapes](#flow-shapes-salesforce-flow-diagrams) reference)
 - ✗ putting the element name/label inside `attrs.label.text` → ✓ set the TOP-LEVEL `name` prop (it drives the card label via the model); the element TYPE renders as the grey subtitle automatically (shown once `name` differs from the type); `apiName`, `description` + the per-kind fields are also top-level documentation metadata (edited in the panel, NOT shown on the card). Nothing element-specific goes in `attrs`.
 - ✗ setting `attrs.icon.href` (or inventing an icon) → ✓ OMIT it entirely - each `df.Flow*` class bakes its own canonical white SLDS glyph on load. Authoring an icon href does nothing useful (and `refreshAllIconHrefs` skips flow cells).
-- ✗ `type:"sf.Link"` / a BPMN gateway to branch a decision → ✓ `type:"standard.Link"` with `source`/`target` `{id, port}` between `df.Flow*` cells; the four baked-in port ids (`port-top`/`port-right`/`port-bottom`/`port-left`) apply. A flow connector is **Standard** (grey, the default), **Fault** (set `attrs.line.stroke` to `#EA001E`), or **Go To** (set `attrs.line.stroke` to the Go To blue `#0B5CAB` - a dotted jump to an existing element) - see [Flow connectors](#flow-shapes-salesforce-flow-diagrams). Add outcome/loop labels via `labels`.
+- ✗ `type:"sf.Link"` / a BPMN gateway to branch a decision → ✓ `type:"standard.Link"` with `source`/`target` `{id, port}` between `df.Flow*` cells; the four baked-in port ids (`port-top`/`port-right`/`port-bottom`/`port-left`) apply. A flow connector is **Standard** (grey, the default), **Fault** (set `attrs.line.stroke` to `#EA001E`), **Go To** (set `attrs.line.stroke` to the Go To blue `#0B5CAB` - a dotted jump to an existing element), or **Loop** (set top-level `flowKind:"loop"` on a Loop element's two branches - grey like Standard but with an arrowhead, v1.22.0) - see [Flow connectors](#flow-shapes-salesforce-flow-diagrams). Add outcome/loop labels via `labels`.
 - ✗ mixing `processType` and `triggerType` values → ✓ `processType` is the FLOW-level kind (`Flow` = screen flow, `AutoLaunchedFlow`, `Orchestrator`, `EvaluationFlow`, `Survey`, `Journey`, `PromptFlow`, `CheckoutFlow`, `RoutingFlow`, `Workflow`, `CustomEvent`, `InvocableProcess`, … - this is the complete standard set); `triggerType` exists only on an autolaunched Start (`RecordAfterSave`/`RecordBeforeSave`/`RecordBeforeDelete`/`Scheduled`/`PlatformEvent`/`DataCloudDataChange`/`DataGraphDataChange`/`AutomationEvent`/`ExternalSystemChange`/`EnterpriseScaleExternalSystemChange`/`Activation`/`Segment`/`CampaignMember`/`CrmRecordQuery`/`List`/`ScheduledJourney`/`Capability`/`FormSubmissionEvent`/`IndivRelatedRecord`). A screen flow's Start has no `triggerType`. In the property panel these two Start fields are FREE-TEXT inputs with a datalist of the most popular values as suggestions (`renderers-flow.js`) - type any value; the JSON value is always a free string. Every per-kind field is free text - never validated.
 - ✗ reaching for a `df.FlowDecision` diamond or a BPMN gateway to show a branch → ✓ every element is the SAME uniform card (`210 x 56`); the branch is expressed by the outgoing `standard.Link`s, not by the element shape.
 
@@ -230,7 +230,7 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 
 **`datamapping`** (additive - see the Data Cloud mapping checklist below)
 - ✗ `category` omitted, nested in `attrs`, or keyed `objectCategory` → ✓ top-level `"category": "Profile"`|`"Engagement"`|`"Other"` on each DLO/DMO cell.
-- ✗ a mapping link with explicit `router`/`connector` or ER markers, or no `linkKind` → ✓ `linkKind:"mapping"` + a `mappingType` from `Standard`/`Formula`/`Streaming Transform`/`Batch Transform`/`Calculated Insight`; the loader applies `sfMappingRouter`/`sfMappingConnector` itself.
+- ✗ a mapping link with explicit `router`/`connector` or ER markers, or no `linkKind` → ✓ `linkKind:"mapping"` + a `mappingType` from `Standard`/`Formula`/`Streaming Transform`/`Batch Transform`/`Calculated Insight`; the loader applies `sfMappingRouter`/`sfMappingConnector` **and the amber 1 px line** itself (v1.22.0).
 - ✗ a layer as `sf.Container`, or `layerStage` on the DataObject → ✓ each layer is an `sf.Zone` with top-level `layerStage` in `source`/`datastream`/`dlo`/`dmo`/`activation`.
 
 **`org`**
@@ -1423,7 +1423,10 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 - `name` (string) - the visible card label. Seed it; it drives `attrs.label.text` via the model.
 - `apiName` (string, optional) - renders as a mono subtitle under the label (hidden when blank). Use the Flow element's API name.
 - `details` (array, optional, since v1.21.0) - `[{ "label": "...", "value": "..." }]` rows rendered as a
-  read-only **Metadata** table in the property panel, never on the card. This is where the long tail goes: the
+  read-only **Metadata** table in the property panel, never on the card. A row may add **`"quiet": true`**
+  (v1.22.0): quiet rows render inside a collapsed "N settings turned off" disclosure below the table instead of
+  inline - use it for a flag whose value is an explicit `false`, which is an answer worth keeping ("this is NOT
+  a template") but not what the reader came for. Quiet rows do not count against the ~20-row cap. This is where the long tail goes: the
   fields a Create/Update actually WRITES, the fields a Get reads out and into which variables, a screen's full
   component list with types, each decision outcome's condition, an action's input parameters. Both sides are
   FREE TEXT - nothing is parsed or validated, and nothing in the app keys off these rows, so use whatever
@@ -1498,11 +1501,12 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 }
 ```
 
-**Flow connectors (Standard / Fault / Go To).** A flow link is a plain `standard.Link` between two `df.Flow*` cells. There are THREE types (Salesforce's terms): **Standard**, **Fault**, and **Go To** - a shortcut over the normal connector styling, NOT a separate prop. The loader DERIVES the type from `(stroke, dash)`. You do NOT need to set `router`/`connector` - the loader defaults every flow link to orthogonal `sfManhattan` + rounded routing (omitting them renders a diagonal straight line until load).
+**Flow connectors (Standard / Fault / Go To / Loop).** A flow link is a plain `standard.Link` between two `df.Flow*` cells. There are FOUR types (Salesforce's terms): **Standard**, **Fault**, **Go To**, and **Loop** (a Loop element's "For Each" / "After Last" branch). Fault and Go To are a shortcut over the normal connector styling, NOT a separate prop - the loader derives those two from `(stroke, dash)`. Loop is the exception: it keeps the Standard grey, so its stroke cannot identify it, and it carries a top-level **`flowKind: "loop"`** prop instead (v1.22.0; the loader checks `flowKind` BEFORE the stroke). You do NOT need to set `router`/`connector` - the loader defaults every flow link to orthogonal `sfManhattan` + rounded routing (omitting them renders a diagonal straight line until load).
 
-- **Standard** (the default): emit just `source`/`target` (endpoints). The loader paints it grey `#5C5C5C` with "None" line-continuation stub ends so it TOUCHES the cards. You do not set `line`/`attrs`.
+- **Standard** (the default): emit just `source`/`target` (endpoints). The loader paints it grey `#5C5C5C` with "None" line-continuation stub ends so it TOUCHES the cards. You do not set `line`/`attrs`. If you DO author end markers, the loader keeps them (fill-if-absent since v1.22.0) - an authored end, including an explicit `{"type":"none"}`, is never overwritten on load, only recoloured to the connector type's colour. The same rule covers `lineStyle`: an authored value - including an explicit `null` for solid - is kept; only an absent prop is filled with the type's dash.
 - **Fault**: set `attrs.line.stroke` to the fault red `#EA001E`. The loader recognises the red, dashes the line (`lineStyle` `"8 4"`), and applies the stub ends. (A fault path originates from a data/action element - Get/Create/Update/Delete Records, Action, Subflow - never from `df.FlowStart`.)
 - **Go To** ("Outgoing Go To" - a jump to an existing element, e.g. a loop-back or a shared downstream target): blue `#0B5CAB` + dotted. Set `attrs.line.stroke` to `#0B5CAB` (like a Fault authors via red) - the loader dots the line and seeds a BLUE ITALIC reference label "*&lt;destination name&gt;* →" (SLDS blue-40, matching Flow Builder), falling back to "Go To". You don't author the label; it derives from the target.
+- **Loop** (v1.22.0): set top-level `flowKind: "loop"` on BOTH branches leaving a `df.FlowLoop` - "For Each" (into the body) and "After Last" (onward). The loader keeps the Standard grey and solid line but adds a **Line Arrow target end**, because a loop is where the top-to-bottom layout stops giving the direction: both branches leave the same card and the For Each branch RETURNS to it, so which line enters the body is exactly what the reader cannot see. A prop rather than a colour on purpose - re-anchoring re-applies the style FROM the type, so a style detail must never stand in for identity. Add the branch labels ("For Each", "After Last") via `labels` yourself.
 - **Labels** (a decision outcome name, "For Each"/"After Last" on a loop, etc.) are yours to add via `labels` - the loader seeds text only for Fault ("Fault") and Go To (the destination name). A label's colour tracks the line (grey / red / blue).
   - ⚠️ **Author the label's TEXT only - never its `position`.** The loader places an unpositioned flow label for you, and it can do it better than you can from here because it knows the route the router actually resolved: a branch label rides near its **target**, where that branch owns its own column, while a Fault, a Go To, or an empty outcome dropping several ranks to a merge stays near the source. Placing them yourself is a trap with no good answer - at the link midpoint a decision's outcomes drift apart down their own branches, and near the source they pile on top of each other, because every outcome leaves the **same** port and shares that first 32 px stub. Set `position` only to nudge a placement you have actually seen render wrong.
   - ⚠️ **On a Go To, author the OUTCOME NAME ALONE (`"No"`) - or no label at all.** The loader renders a Go To as blue italic and appends the "→" **itself**, so `"No → Retry Screen"` comes out as `"No → Retry Screen →"` - and at that width it sits on top of the card it just left. Authoring any label REPLACES the auto-seeded destination name, so this is a real trade: `"No"` names the branch and the dotted line shows where it lands; no label names the target instead. Pick one - never pack both into the string.
@@ -1513,6 +1517,19 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 > Start (`highlightFirstCol: true`, `highlightFirstRow: false` gives the key/value look; `tableLabel` carries
 > the flow's name). `df.Table` is a generic shape available in every diagram type, so this needs no
 > flow-specific grammar. Give it no connectors - it documents the flow, it is not a step in it.
+> A flow that declares input/output variables SHOULD get an `Inputs` / `Outputs` row stating the full call
+> signature - list every item up to 12, then truncate with `+N more`.
+
+> **A second `df.Table` carries the RESOURCES** (v1.22.0) - the formulas, text templates, choice sets,
+> constants and described variables a flow references, which have no card of their own and were otherwise
+> reduced to a count. Place it as a SIDEBAR to the RIGHT of everything, not stacked above Start: a flow is tall
+> and thin, so height is the scarce axis and fit-to-screen is height-bound. Set **`plainCells: true`** on it -
+> formula expressions are code, and a `*` operator is a markdown italic marker. Row grammar mirrors the flow
+> card: resource name in the left column, `Kind (Type) · definition` in the right.
+> Curate, do not dump: a resource earns a row when it carries real content (a formula's expression, a text
+> template's body, a variable with a description, a choice with a human name). Close the table with a final
+> `Not listed` accounting row that sums everything skipped (e.g. `Not listed | 14 record variables, 3
+> constants`) so the listed rows plus that row reconcile with the flow's true resource count.
 
 > ⚠️ **On a `flow` diagram, always set a `port` on both endpoints of every link** (`port-top` / `port-right` /
 > `port-bottom` / `port-left`). This is the single most common way an authored flow diagram comes out looking
@@ -1898,13 +1915,13 @@ A layer is an `sf.Zone` carrying a `layerStage` property. **Place every DataObje
 | `Activation` | `"activation"` | `#27AE60` (green) | Outbound targets where harmonized data is pushed (Email, SMS, Ad Audience, Snowflake share, webhook). |
 
 - **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO — omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
-- **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do.
+- **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do. Only the stream's own companion object lives in the Data Stream Zone - every real source table (in an org import, the suffix-less DSO names; DLOs carry `__dll`, DMOs `__dlm`) MUST stay in the Source Zone above. Start the Data Stream Zone ~56 px below the Source Zone's bottom edge so the two read as one ingestion column.
 - **Coordinates:** give each layer its own column. A workable grid: object width 260, ~200 px between columns ⇒ column pitch ≈ 480. e.g. Source objects at `x:80`, DLO at `x:560`, DMO at `x:1040`, Activation at `x:1520`. When objects are ~480 px wide (both label and API name shown — the Data Cloud norm, §3), keep **at least ~140 px clear between columns**, more if many links fan out of one object. Make each Zone ≈ `60` px wider/taller than the objects it wraps, with the objects inset ~`40` px. Or omit `viewport` and let the user run **Auto Layout** (it re-columns layers with a 200 px lane gap, 36 px between objects, top-aligned).
 - A generic `Layer` Zone (no `layerStage`) is available for grouping that isn't one of the canonical tiers; it reports its own label as the Data Layer.
 
 ### 2. Objects — `category` is mandatory for DLO/DMO
 
-Every `sf.DataObject` that represents a **Data Cloud-native** resource (DLOs and DMOs) **must set `category`** — it is platform-enforced and drives execution (Identity Resolution eligibility, time-series indexing). Source-system objects (raw CRM/ERP tables) normally leave it blank.
+Every `sf.DataObject` that represents a **Data Cloud-native** resource (DLOs and DMOs) **must set `category`** — it is platform-enforced and drives execution (Identity Resolution eligibility, time-series indexing). Source-system objects (raw CRM/ERP tables) and Data Stream companion objects MUST omit the `category` key entirely - it belongs on Data-Cloud-native cards only. When converting real org metadata, keep only these three values: an org category outside the set (`Related`, `Segment_Membership`, ...) normalises to `"Other"` (the shipped template sets AccountContact to `Other` the same way).
 
 | `category` | Use for | Platform effect |
 |---|---|---|
@@ -1932,6 +1949,40 @@ Populate `fields` as an array of field **objects** (never bare strings); see the
 
   Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** — real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
 
+### 3b. Geometry and layers: MEASURE the shipped template (v1.22.0)
+
+`templates/` carries an official diagram for both data types, and it **is** the contract. Three converters
+shipped with invented numbers and all three validated cleanly while looking nothing like the app's own output -
+the validator proves a diagram LOADS, not that it reads right.
+
+| | Data Mapping | Data Model |
+|---|---|---|
+| Card width | **260** | **480** (an ERD row is `Label (ApiName)` + a type column) |
+| Lane / zone width | **292** on a **492** pitch | n/a |
+| Card inset in lane | **16** | n/a |
+| First card / card gap | **44** / **36** | |
+| Link ports | `field-right-*` -> `field-left-*` | `er-right` -> `er-left` (OBJECT level) |
+| Link router / connector | applied on load from `linkKind` | **you must author** `router:{name:"sfManhattan"}` + `connector:{name:"rounded",args:{radius:8}}` |
+
+> ⚠️ **An ERD relationship with no `router` renders as a DIAGONAL.** A `standard.Link` without one is a
+> straight line between anchors. Mapping links are healed on load from `linkKind:"mapping"`; ER relationships
+> are **not**, so an authored data model has to say it.
+
+> ⚠️ **A `datamapping` layer Zone needs FOUR things, not one.** `layerStage` is what Auto-Layout reads, but a
+> zone carrying only that renders as the generic "Layer" preset and reads as a custom layer duplicating the
+> built-in one. Match what the stencil produces:
+> ```json
+> { "type": "sf.Zone", "layerStage": "dlo",
+>   "attrs": { "body":  { "stroke": "#F6B355", "fill": "rgba(246,179,85,0.05)" },
+>              "label": { "text": "Data Lake Object", "fill": "#F6B355" } } }
+> ```
+> Accents: `source`/`datastream` `#1D73C9`, `dlo` `#F6B355`, `dmo` `#DA4E55`, `activation` `#27AE60`. Each
+> card's `headerColor` takes its own lane's accent.
+
+**Field mix on an ERD card:** 105 of the official model's 169 fields carry NO key, 43 are fk, 21 are pk. Do not
+fill a card with foreign keys - a standard object has ~15 lookups and they will consume the whole budget before
+a single business field. A reader identifies a record by its name, not its `MasterRecordId`.
+
 ### 4. Field-level mapping links (`linkKind: "mapping"`)
 
 A mapping link carries one attribute from a source-side field to a target-side field, drawn **left → right**. Reference the field **ports** — `field-right-<fid>` on the left/source object, `field-left-<fid>` on the right/target object — via the endpoint's **`port`** key (it is **not** a `<fid>#fieldRight` suffix, and field ports are **never** listed in `ports.items` — they are generated):
@@ -1943,13 +1994,13 @@ A mapping link carries one attribute from a source-side field to a target-side f
   "source": { "id": "obj-sf-contact", "port": "field-right-c_email" },
   "target": { "id": "obj-dlo-contact", "port": "field-left-dlo_email" },
   "linkKind": "mapping",
-  "mappingType": "Standard",
-  "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1,
-    "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } }
+  "mappingType": "Standard"
 }
 ```
 
-That is the **minimal** correct form. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): it applies the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), pins the ends to the field ports (`connectionPoint` anchor offset 12), repairs the arrowhead, and renders the type-code badge. So you do **not** need to hand-author the bézier router or the badge — but **do** set the amber `line/stroke` (`#F6B355`) and `strokeWidth: 1`, which are not auto-applied.
+That is the **minimal** correct form — endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#F6B355`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
+
+The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour — which is how a user's deliberate recolour survives a reload. Authoring the canonical amber explicitly is still valid and produces an identical result. (Before v1.22.0 the colour was *not* auto-applied, so pre-existing JSON that sets it is unaffected.)
 
 | `mappingType` | Code badge on target | Meaning |
 |---|---|---|
@@ -1962,6 +2013,15 @@ That is the **minimal** correct form. On load the app **auto-heals the rest** fr
 For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` — it surfaces in the link inspector and the table's *Expression / Rule* column. (`mappingType`/`expressionRule` superseded the pre-release `mapsTo`/`mappingLabel`, still read as fallbacks.)
 
 **Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column — e.g. a Source object feeding the Data Stream Zone stacked below it — anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
+
+**Formula inputs are explicit links.** A Data Stream formula row that READS source data - the calculated key, or any expression over payload fields - MUST receive one input link per source field it references: source row `field-left-<fid>` to formula row `field-left-<fid>`, a plain `linkKind:"mapping"` + `mappingType:"Standard"` link with NO `expressionRule` (the formula itself lives on the Data-Stream-to-DLO `Formula` link, not on its inputs). A static row (Data Source, Internal Organization / MID, a literal channel like `'EMAIL'`, the system timestamp) reads nothing, so it MUST get no input link.
+
+```json
+{ "id": "in-key", "type": "standard.Link",
+  "source": { "id": "obj-src", "port": "field-left-s_id" },
+  "target": { "id": "obj-stream", "port": "field-left-ds_key" },
+  "linkKind": "mapping", "mappingType": "Standard" }
+```
 
 ### 5. Object-level relationships (ER, optional)
 
@@ -1993,7 +2053,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.21.7", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.22.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2096,7 +2156,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2128,7 +2188,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2255,7 +2315,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2285,7 +2345,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2318,7 +2378,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2361,7 +2421,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2407,7 +2467,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.7",
+  "appVersion": "1.22.0",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

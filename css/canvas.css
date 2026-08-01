@@ -608,3 +608,28 @@ foreignObject[data-md] del { text-decoration: line-through; }
   white-space: normal;
   font-size: 13px;
 }
+
+/* ── Canvas hover tooltip ────────────────────────────────────────────────
+   One shared tip for cells that carry hover text; today that is the sf.Link
+   card's URL. It replaces a native SVG <title>, which was reported invisible
+   twice - see js/canvas/cell-tooltip.js for why. Fixed-positioned on <body>
+   so it is never clipped by the paper's own overflow, and pointer-transparent
+   so it can never steal the hover that produced it. */
+.df-canvas-tip {
+  position: fixed;
+  z-index: 9000;
+  max-width: min(420px, 90vw);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--tooltip-bg, #1F2937);
+  color: var(--tooltip-fg, #F9FAFB);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  /* A URL has no spaces to break at, so it must be allowed to break anywhere
+     or a long one blows past max-width. */
+  overflow-wrap: anywhere;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+  pointer-events: none;
+}
+.df-canvas-tip[hidden] { display: none; }

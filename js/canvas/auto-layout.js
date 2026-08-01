@@ -3,12 +3,13 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.21.7';
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.0';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.21.7';
-import { flowConnectorType } from './link-styles.js?v=1.21.7';
+import { computeFlowLayout } from './flow-layout.js?v=1.22.0';
+import { flowConnectorType } from './link-styles.js?v=1.22.0';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.0';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -49,7 +50,12 @@ export function autoLayout(direction, opts = {}) {
   // of the flow - ranking it into the layout drags it into the diagram and overlaps content (the reported bug).
   // Pull these out of the layout and re-park them as a tidy right-hand margin AFTER the content settles. Only
   // UNCONNECTED, top-level ones (an annotation wired to a node stays in the flow).
-  const ANNOTATION_TYPES = new Set(['sf.Note', 'sf.TextLabel', 'df.Legend', 'sf.Image']);
+  // `df.Table` is here for the converter-authored FACTS cards - a flow's `__flowmeta` / `__flowresources`, a
+  // data graph's `__dgmeta`. They gloss the diagram rather than take part in it, and ranking one drags it into
+  // the content: measured on a Profile data graph, the facts card landed at the BOTTOM of the tree, reported as
+  // "it would be better if Table could be either on the side or above the first element". `isParkable` requires
+  // NO connectors, so a table someone wired into their diagram stays in the layout where it belongs.
+  const ANNOTATION_TYPES = new Set(['sf.Note', 'sf.TextLabel', 'df.Legend', 'sf.Image', 'df.Table']);
   const connectedIds = new Set();
   for (const l of links) { const s = l.get('source')?.id, t = l.get('target')?.id; if (s) connectedIds.add(s); if (t) connectedIds.add(t); }
   const isParkable = (el) => ANNOTATION_TYPES.has(el.get('type')) && !el.get('parent') && !connectedIds.has(el.id);
@@ -395,6 +401,20 @@ export function applyFlowLayout() {
     if (s.getPort?.(sp)) l.source({ id: s.id, port: sp });
     if (t.getPort?.(tp)) l.target({ id: t.id, port: tp });
   }
+  // ...then RESOLVE the labels we just re-centred. Auto Layout resets every label to `distance: 0.5` above,
+  // which is the right SEED - every route has changed - but on a Decision fan-out it puts two ~250px pills at the
+  // midpoints of two connectors sharing a source, and they land on each other. Reported as "auto layout on Flows
+  // still overlays the labels even when they can be cleanly positioned manually".
+  //
+  // Safe to call here, and only here, because this whole function runs inside `recordPositionsBatch` (see
+  // js/toolbar.js runAutoLayout): that batch sets `_suppressPositionTracking`, so the per-change `change:labels`
+  // listener bails, and the batch captures the label diffs itself as part of the SAME undo step. Calling the
+  // resolver from a bare `render:done` instead would push its own command and clear the redo stack.
+  // `preferTargetCentre`: the labels were just reset to the path midpoint two loops up, so the resolver must
+  // not treat that midpoint as a placement worth preserving - it should start from the point on each path that
+  // sits over the card the connector points at, and only search outward from there.
+  resolveFlowLabelCollisions(cctx, { preferTargetCentre: true });
+
   // Frame by the ELEMENTS bbox via fitToCells — NOT paper.getContentBBox, which returns a degenerate zero box
   // when a link view (a loop back-edge) resolves late, slamming the zoom. Fit now AND on the next frame: the
   // immediate fit can read a not-yet-laid-out paper rect (→ a clamped-min zoom), the rAF fit corrects it once
@@ -402,6 +422,18 @@ export function applyFlowLayout() {
   const fit = () => { const bb = graph.getCellsBBox(elements); if (bb && cctx.fitToCells) cctx.fitToCells(bb); };
   fit();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fit);
+}
+
+/**
+ * Target-centred label placement for NON-flow diagrams - the datamodel Auto Layout's second pass (1.22.0).
+ * The same resolver applyFlowLayout uses, opened up via `scope: 'any'` (no df.Flow gate). Call AFTER
+ * snapLinksToPorts inside recordPositionsBatch, for the same undo-batching
+ * reason documented above resolveFlowLabelCollisions' call in applyFlowLayout: the batch captures the label
+ * diffs as part of the one layout undo step. `preferTargetCentre` because snapLinksToPorts has just reset
+ * every label to its path midpoint - a seed, not a placement worth preserving.
+ */
+export function resolveConnectorLabels(opts = {}) {
+  resolveFlowLabelCollisions(cctx, { preferTargetCentre: true, scope: 'any', ...opts });
 }
 
 // ── Sequence Auto Layout ─────────────────────────────────────────────

@@ -1,35 +1,39 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.21.7';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.21.7';
-import { resizeDataObjectToFit } from './components.js?v=1.21.7';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.21.7';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.21.7';
+import { diagramHasImage } from './image-component.js?v=1.22.0';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.22.0';
+import { resizeDataObjectToFit } from './components.js?v=1.22.0';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.22.0';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.22.0';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.21.7';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.21.7';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.21.7';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.21.7';
-import { renderTemplateThumbnail } from './templates.js?v=1.21.7';
-import { showWhatsNewNow } from './whats-new.js?v=1.21.7';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.21.7';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.21.7';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.21.7';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.21.7';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal } from './toolbar/load-manager.js?v=1.21.7';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.21.7';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.21.7';
+import { pctx } from './persistence/context.js?v=1.22.0';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.0';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.22.0';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.22.0';
+import { renderTemplateThumbnail } from './templates.js?v=1.22.0';
+import { showWhatsNewNow } from './whats-new.js?v=1.22.0';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.22.0';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.22.0';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.22.0';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.22.0';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.22.0';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.22.0';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.22.0';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.21.7';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.21.7';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.21.7';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.22.0';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.22.0';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.22.0';
 
 let modules = {};
 export function init(_modules) {
   modules = _modules;
   tctx.modules = _modules;
+
+  // Dropping a diagram file anywhere on the window opens it - the shortcut for Load. Wired here because the
+  // handler needs tctx.modules.persistence, which is what the two lines above just set.
+  initWindowFileDrop();
 
   // Collapsible storage rows on mobile: tapping a row's disclosure caret toggles its detail line
   // (storage chips / edited date) + the trailing action. Delegated once on the document so it works
@@ -386,6 +390,19 @@ export function init(_modules) {
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
         modules.canvas.autoLayout(direction, { align: 'barycenter' });
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+      } else if (type === 'datamodel') {
+        // Data Model (1.22.0): the generic layout, with TWO deviations measured on a real 10-object data
+        // graph. (a) `maxRankExtent: 0` - rank wrapping off. The M7 cap wrapped 7 same-parent siblings into
+        // sub-rows spliced as consecutive ranks; every parent-to-row-2 link then had to pass THROUGH the
+        // row-1 band (object links are pinned to top/bottom ports), and sfManhattan's obstacle avoidance
+        // detoured it around the 380px cards - the reported wrap-around routes. One rank per depth removes
+        // the obstacle; width-aware packing and subtree ordering were both simulated and do NOT (any second
+        // sub-row still sits column-aligned under the first). M7 stays on for architecture/org, where it was
+        // measured and tuned. (b) join labels get the flow-style target-centred placement afterwards -
+        // snapLinksToPorts reseeds every label to its route midpoint, which can sit on top of a card.
+        modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0 });
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+        try { modules.canvas.resolveConnectorLabels(); } catch {}
       } else {
         modules.canvas.autoLayout(direction, opts);
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
@@ -426,6 +443,7 @@ export function init(_modules) {
   setupDropdown('btn-help');
   btn('btn-help-whatsnew')?.addEventListener('click', () => showWhatsNewNow());
   btn('btn-help-ai')?.addEventListener('click', () => openAiModal());
+  btn('btn-help-sfmeta')?.addEventListener('click', () => openSfMetadataModal());
   btn('btn-help-shortcuts')?.addEventListener('click', () => openShortcutsModal());
   btn('btn-help-about')?.addEventListener('click', () => showAboutModal());
 
@@ -678,7 +696,7 @@ const AI_ASSETS = [
   {
     id: 'skill',
     title: 'Build diagrams with Claude',
-    blurb: 'A free Claude skill. Describe the diagram you want and Claude hands one back, ready to open. It can also rebuild a diagram from a screenshot, or turn Salesforce Flow metadata into a detailed Flow diagram.',
+    blurb: 'Describe the diagram you want and Claude hands one back, ready to open. The free skill also rebuilds a diagram from a screenshot, or builds one from your org: a real Flow, objects into a data model, Data Cloud mappings, or a data graph.',
     file: 'cowork-skill/diagramforce.skill',
     view: 'https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce',
     downloadLabel: 'Download skill',
@@ -686,7 +704,7 @@ const AI_ASSETS = [
   {
     id: 'spec',
     title: 'Author diagrams with any LLM',
-    blurb: 'The published JSON format. Give it to any model and the diagram it writes will open here with nothing missing - no plugin, no account, no upload.',
+    blurb: 'Hand the published JSON format to any model. The diagram it writes opens here complete, straight from a file or a paste.',
     file: 'DIAGRAM_JSON_SPEC.md',
     view: 'https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md',
     downloadLabel: 'Download spec',
@@ -715,7 +733,7 @@ function openAiModal() {
            the eye. Download is the one the user came for, so it takes the button and the right-hand slot. -->
       <div class="df-ai__actions">
         <a class="df-ai__view" href="${escHtml(a.view)}" target="_blank" rel="noopener">View on GitHub</a>
-        <a class="df-modal__btn df-modal__btn--primary df-ai__dl" href="./${escHtml(a.file)}" download data-ai="${escHtml(a.id)}">${escHtml(a.downloadLabel)}</a>
+        <a class="df-modal__btn df-modal__btn--link-outline df-ai__dl" href="./${escHtml(a.file)}" download data-ai="${escHtml(a.id)}">${escHtml(a.downloadLabel)}</a>
       </div>
     </section>`;
   const { body, footer, close } = buildModal({
@@ -729,6 +747,55 @@ function openAiModal() {
     try { localStorage.setItem(AI_DL_KEY(a.dataset.ai), pctx.appVersion || ''); } catch { /* private mode */ }
   }));
   footer?.querySelector('.df-ai__done')?.addEventListener('click', () => close());
+}
+
+// ── "Use SF Metadata" (Help menu, 1.22.0) ───────────────────────────────────
+// The org-import release made "what real metadata can this draw?" the most useful question a new user can
+// ask, and the answer was scattered across What's New entries and the GitHub README. One permanent entry,
+// same shape as Diagram with AI (whose classes it reuses - same visual pattern, one set of CSS to keep right).
+// Routes are honest about WHERE they run: the paste routes are in-app; the org-querying ones need the skill.
+const SF_META = [
+  {
+    title: 'Salesforce Flows',
+    blurb: 'Drop a flow anywhere on the window, or into Load & Import - either its .flow-meta.xml source file or the Tooling API response. Diagramforce draws every element, decision outcome, fault path and Go To, positioned the way Flow Builder had it. With the Claude skill and org access, the summary card links back to Flow Builder and marketing sends name their CMS asset, consent subscription and segment.',
+  },
+  {
+    title: 'Objects into a Data Model',
+    blurb: 'Name the objects you care about and the Claude skill drafts the ERD from your org: primary and foreign keys, relationships between the objects on the canvas, and the fields you ask for. Core objects and Data Cloud data model objects work the same.',
+  },
+  {
+    title: 'Data Cloud Mappings',
+    blurb: 'Retrieve your ObjectSourceTargetMap metadata, or save one REST call, and paste it into Load & Import. Diagramforce draws the chain from data stream to data lake object to data model object, one connector per mapped field. Formulas sit on their own Data Stream card, wired to the source fields they read, and with org access every card gets its real category.',
+  },
+  {
+    title: 'Data Graphs',
+    blurb: 'Fetch a data graph definition with one REST call and paste it in. You get the root, every related object, the join named on each connector, and a facts card recording what the graph is for.',
+  },
+];
+
+function openSfMetadataModal() {
+  const section = (a) => `
+    <section class="df-ai__item">
+      <h3 class="df-ai__title">${escHtml(a.title)}</h3>
+      <p class="df-ai__blurb">${escHtml(a.blurb)}</p>
+    </section>`;
+  const { body, footer, close } = buildModal({
+    title: 'Use Salesforce Metadata', width: '480px', className: 'df-sfmeta-modal',
+    // "Everything stays on your machine" is the accurate claim - the browser tab and the Salesforce CLI both
+    // run locally, and Diagramforce has no server. (An earlier draft said "nothing is uploaded anywhere",
+    // which the owner rightly flagged: you DO load the CLI's file into the browser. That is still your
+    // machine, so say that instead.)
+    bodyHtml: `<p class="df-ai__blurb" style="margin-bottom:4px">Diagramforce draws diagrams from your real Salesforce metadata, and everything stays on your machine: files you paste or drop open right here in the browser, and org queries run through the Salesforce CLI, driven by the <a href="#" class="df-ai__view df-sfmeta__ai-link">Claude skill</a>. Diagramforce has no server to send anything to.</p>${SF_META.map(section).join('')}`,
+    footerHtml: '<button class="df-modal__btn df-modal__btn--accent df-sfmeta__done" style="margin-left:auto">Got it</button>',
+  });
+  // The skill mention is a LINK, not a "see above" - it closes this modal and opens Diagram with AI, where
+  // the download lives.
+  body?.querySelector('.df-sfmeta__ai-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    close();
+    openAiModal();
+  });
+  footer?.querySelector('.df-sfmeta__done')?.addEventListener('click', () => close());
 }
 
 // --- Shared modal helpers ---
@@ -820,6 +887,9 @@ function setupHamburgerMenu() {
         break;
       case 'ai':
         openAiModal();
+        break;
+      case 'sfmeta':
+        openSfMetadataModal();
         break;
       case 'about':
         showAboutModal();

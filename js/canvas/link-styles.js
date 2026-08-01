@@ -8,8 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.21.7';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.22.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.22.0';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -348,6 +349,12 @@ const FLOW_GOTO_DASH = '2 4';        // panel LINK_LINE_STYLE_OPTS "Dotted" — 
 /** Derive the connector TYPE from its STROKE COLOUR (no stored prop), symmetric with Fault: red = Fault; blue =
  *  Go To (Salesforce "Outgoing Go To" — a jump to an existing element, drawn blue + dotted); else Standard. */
 export function flowConnectorType(link) {
+  // A LOOP connector - a Loop element's "For Each" or "After Last" - is grey and solid like the spine, so unlike
+  // a fault or a Go To its stroke cannot identify it. It carries a durable `flowKind` PROP instead. A prop, not
+  // an attr: re-anchoring a connector rewrites source/target and re-applies the style, and the whole reason this
+  // function reads the stroke rather than the marker is that a style detail must never stand in for identity -
+  // that is what made every re-anchor of a Fault revert it to Standard (see the re-anchor note below).
+  if (link.prop?.('flowKind') === 'loop') return 'loop';
   const stroke = String(link.attr('line/stroke') || '').toUpperCase();
   if (stroke === FLOW_FAULT_COLOR) return 'fault';
   if (stroke === FLOW_GOTO_COLOR) return 'goto';
@@ -404,16 +411,59 @@ export function flowGoToLabelAttrs(name, position) {
 //   • Fault / Go To — matches Flow Builder's pill sitting right beside the element it exits.
 //   • A branch that SKIPS ranks (an empty outcome dropping to a distant merge) — near-target would strand its
 //     label rows below the decision it belongs to, and having no neighbouring rank it has nothing to collide with.
-const FLOW_LABEL_NEAR_SOURCE = { distance: 44, offset: 0 };
-const FLOW_LABEL_NEAR_TARGET = { distance: -40, offset: 0 };
-const FLOW_RANK_SKIP = 192;   // > ~1.5 rows (56 px card + 72 px ROW_GAP) ⇒ the target is not the next rank down
+// Sibling outcome labels are split between the two ENDS of their connectors, alternating by INDEX.
+//
+// The original rule had the right instinct and the wrong selector. Two label pills render 99-138px wide, so
+// near a shared port they simply cannot both sit close to the source - there is not that much room before the
+// router's fan-out. Splitting them between the ends is the only thing that reliably separates them, and every
+// attempt to fan them apart instead (perpendicular offset, screen-space offset, staggering along the path)
+// failed on a decision whose two branches diverge in OPPOSITE directions: the offset direction follows each
+// connector, so a symmetric spread pushes them together.
+//
+// What was wrong was choosing the end by `dy > 0 && dy <= 192`. That is a coincidence, not a rule:
+//   • siblings with DIFFERENT dy (512 vs 128, measured on a real flow) landed at opposite ends - correct by
+//     accident, but it reads as labels randomly at the start or the end;
+//   • siblings with the SAME dy (two next-rank branches, 128 and 128) both scored "near target", got the
+//     IDENTICAL position and overlapped - and the pill is opaque, so each masked the other's connector.
+// The old e2e fixture only ever covered the first case, which is exactly why the second shipped green.
+//
+// Index alternation gives the same separation deterministically, independent of where the cards sit - so it
+// holds under the tidy tree AND under a flow's own Flow Builder coordinates, whose row pitch is whatever a
+// human dragged.
+const FLOW_LABEL_SOURCE_AT = 48;   // clear of the port stub (16) and the router's fan-out turn (~40)
+const FLOW_LABEL_TARGET_AT = -40;  // negative measures back from the target end
+const FLOW_LABEL_STEP = 34;        // a third or later sibling steps further along, away from the first two
+// Below this the connector is too short for an absolute distance: `tangentAtLength` clamps an over-length one
+// to the endpoint, dropping a "near source" label onto the target card. Use a ratio there instead.
+const FLOW_LABEL_MIN_LEN = 150;
 function defaultFlowLabelPosition(link, type) {
-  if (type !== 'standard') return FLOW_LABEL_NEAR_SOURCE;
   const g = cctx.graph;
-  const s = g?.getCell(link.get('source')?.id), t = g?.getCell(link.get('target')?.id);
-  if (!s?.position || !t?.position) return FLOW_LABEL_NEAR_SOURCE;
-  const dy = t.position().y - s.position().y;
-  return dy > 0 && dy <= FLOW_RANK_SKIP ? FLOW_LABEL_NEAR_TARGET : FLOW_LABEL_NEAR_SOURCE;
+  const srcId = link.get('source')?.id;
+  const s = g?.getCell(srcId), t = g?.getCell(link.get('target')?.id);
+  // Index among the labelled links leaving the SAME card, in graph order - stable across reloads, because the
+  // cell order is what the document preserves.
+  let i = 0;
+  if (g && srcId) {
+    const sibs = g.getLinks().filter((l) => l.get('source')?.id === srcId && (l.labels() || []).length);
+    i = Math.max(0, sibs.findIndex((l) => l.id === link.id));
+  }
+  // A fault or Go To is an aside and always rides beside the element it leaves, as Flow Builder draws it.
+  if (type !== 'standard') return { distance: FLOW_LABEL_SOURCE_AT, offset: 0 };
+  // Absolute px or a ratio, decided for the WHOLE sibling group. Deciding per link mixes the two scales inside
+  // one fan-out - a long branch got `48` while its short sibling got `0.75`, which are not comparable, and the
+  // two pills landed on each other anyway.
+  const len = (a, b) => (a?.position && b?.position
+    ? Math.hypot(b.position().x - a.position().x, b.position().y - a.position().y) : Infinity);
+  const shortest = g && srcId
+    ? Math.min(...g.getLinks()
+      .filter((l) => l.get('source')?.id === srcId && (l.labels() || []).length)
+      .map((l) => len(s, g.getCell(l.get('target')?.id))), len(s, t))
+    : len(s, t);
+  if (shortest < FLOW_LABEL_MIN_LEN) return { distance: i % 2 ? 0.78 : 0.22, offset: 0 };
+  const step = Math.floor(i / 2) * FLOW_LABEL_STEP;
+  return i % 2
+    ? { distance: FLOW_LABEL_TARGET_AT - step, offset: 0 }
+    : { distance: FLOW_LABEL_SOURCE_AT + step, offset: 0 };
 }
 
 /** Apply a flow connector preset — a shortcut over the standard connector props (line colour + line style + label
@@ -424,15 +474,75 @@ export function applyFlowLinkStyle(link, opts = {}) {
   const type = opts.type || (opts.fault ? 'fault' : 'standard');
   const color = type === 'fault' ? FLOW_FAULT_COLOR : type === 'goto' ? FLOW_GOTO_COLOR : FLOW_LINK_COLOR;
   const dash = type === 'fault' ? FLOW_FAULT_DASH : type === 'goto' ? FLOW_GOTO_DASH : null;
+  // A LOOP connector is a standard connector in every visual respect except that it earns an arrowhead. See the
+  // marker note below for why.
+  const arrowed = type !== 'standard';
   const width = link.attr('line/strokeWidth') ?? 2;
   const noneEnd = { type: 'path', d: 'M 0 0 L -12 0', fill: 'none', stroke: color, 'stroke-width': width, 'stroke-dasharray': 'none' };
+  // The ASIDES get a real ARROWHEAD at the target end - the panel's own "Line Arrow" option, byte for byte, so a
+  // converted connector and one a user picked by hand are the same connector.
+  //
+  // Standard connectors keep the stub at both ends: they are the spine, read top-to-bottom, and their direction
+  // is already given by the layout - an arrowhead on all ~1700 of them is noise.
+  //
+  // A LOOP connector is the third exception, and for the spine's OWN reason inverted: "For Each" and "After
+  // Last" leave the same Loop card in different directions, and the For Each branch RETURNS to that card, so
+  // the layout does NOT give the direction - a reader cannot tell which line goes into the body and which comes
+  // out the far side. Reported: "for each and after last should also have line arrow target endings like faults
+  // because without it it might be hard to understand order of events". It keeps the standard grey and stays
+  // solid - it IS the spine, it is only ambiguous about which way it points. A fault or a Go To is the
+  // exception because it JUMPS: it leaves the SIDE of a card, crosses the diagram and lands somewhere the reader
+  // was not following, so which end is the destination is the one thing the line itself cannot say. Reported as
+  // "not readable without it", and it matches Flow Builder, which draws an arrowhead on the fault connector.
+  //
+  // FAULT is included deliberately, and it is the bigger half. A fault connector can ALSO be a Go To - real
+  // flows point many faults at one shared error screen that way - and there are more of those (104 measured
+  // across 339 flows, median jump 1154px) than there are plain Go Tos (77, median 944px). They are painted as
+  // faults, and nothing in a saved diagram distinguishes them, so a goto-only rule would have missed the longest
+  // jumps in the corpus. Treating every aside the same needs no new persisted state to get them all.
+  //
+  // `stroke-dasharray: 'none'` matters: both asides are dashed or dotted, and a dashed arrowhead renders as
+  // broken fragments. The dash rides the `lineStyle` overlay prop rather than line/strokeDasharray (gotcha 1.1),
+  // so this is belt-and-braces, and identical to what buildLinkMarkerDefs bakes into the panel's lineArrow.
+  const arrowEnd = { type: 'path', d: ER_MARKER_D.lineArrow, fill: 'none', stroke: color, 'stroke-width': 2,
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-dasharray': 'none' };
   link.attr('line/stroke', color);
-  link.attr('line/targetMarker', noneEnd);
-  link.attr('line/sourceMarker', noneEnd);
+  // How the END writes behave. On an EXPLICIT restyle - the panel's type control, the classifier on first
+  // connect - the ends are owned by the type and are overwritten. On LOAD (`opts.preserveAuthored`, passed by
+  // migration.js) an existing end is the DOCUMENT'S own statement, possibly the user's hand-picked marker, and
+  // is kept: only a MISSING end is filled with the type default, and a kept one is recoloured so an old save's
+  // ends still track the line. This replaces the unconditional overwrite that deleted a hand-picked Line Arrow
+  // on every open (owner: "deleting arrow ends on every load is not ok" - and their diagnosis was right: the
+  // bridging that makes a line touch its cards comes from a marker being PRESENT, which the fill guarantees,
+  // not from rewriting one that already exists).
+  // "Present" must mean AUTHORED. A document that omits a marker still reports one here, because model.attr()
+  // reads through standard.Link's prototype defaults - the JointJS built-in arrow 'M 10 -5 0 0 10 5 z' is
+  // exactly the shape that "leaks in when imported JSON omits targetMarker" (the unrecognised-marker heal
+  // below this pass says so in as many words). Preserving it would launder a library default into a user
+  // choice and hand it to that heal to canonicalise into a real arrowhead on every spine connector. An
+  // explicit `{ type: 'none' }` (no `d`) IS authored - an arrow-less end - and is preserved untouched.
+  const JOINT_DEFAULT_ARROW = 'M 10 -5 0 0 10 5 z';
+  const setEnd = (path, dflt) => {
+    const cur = link.attr(path);
+    const authored = !!cur && (cur.d ? cur.d !== JOINT_DEFAULT_ARROW : cur.type === 'none');
+    if (!opts.preserveAuthored || !authored) { link.attr(path, dflt); return; }
+    if (!cur.d) return;                                   // explicit type:'none' - nothing to recolour
+    link.attr(`${path}/stroke`, color);
+    if (cur.fill && cur.fill !== 'none') link.attr(`${path}/fill`, color);
+  };
+  setEnd('line/targetMarker', arrowed ? arrowEnd : noneEnd);
+  setEnd('line/sourceMarker', noneEnd);
   // Dash via the `lineStyle` overlay prop — NEVER line/strokeDasharray (it bleeds into the open-stroke marker on
   // Safari; the overlay manager owns the dash render, gotcha 1.1). Fault = Dashed ('8 4'), Go To = Dotted ('2 4'),
   // Standard = Solid (null). Uses the panel's OWN dash values so the Line Style control shows the matching option.
-  link.prop('lineStyle', dash);
+  //
+  // On LOAD (`preserveAuthored`) the same absent-vs-authored rule as the ends applies, and for lineStyle the
+  // distinction is exact with no prototype-default caveat: `undefined` means the prop was never written (a slim
+  // or LLM-authored save - fill with the type's dash), while `null` IS a statement - it is precisely what the
+  // panel writes when the user picks Solid, and slimForShare/compact keep null-valued props, so a Solid choice
+  // on a Fault survives the round-trip distinguishably. Overwriting unconditionally here was the same wipe as
+  // the markers, one property over: a user-picked Dashed on a Standard connector went solid on every open.
+  if (!opts.preserveAuthored || link.prop('lineStyle') === undefined) link.prop('lineStyle', dash);
   // Labels. Go To is special: its label IS the destination reference, rendered as blue italic "Name →" (no pill) —
   // preserve an authored label's text (arrow-stripped), else derive the target's name. Standard/Fault restyle to the
   // bordered PILL in the type colour; Fault seeds "Fault" when unlabelled; Standard seeds nothing.

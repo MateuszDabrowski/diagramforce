@@ -14,49 +14,21 @@
 // the service worker precaches the ?v= URL, so a bare specifier misses the cache and breaks offline boot;
 // and a bare './context.js' is a DIFFERENT module URL from './context.js?v=…', which instantiates a SECOND
 // pctx singleton whose appVersion is never set - stamping every imported flow appVersion "1".
-import { convertFlowMetadata } from './flow-convert.js?v=1.21.7';
-import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.21.7';
-import { pctx } from './context.js?v=1.21.7';
+import { convertFlowMetadata } from './flow-convert.js?v=1.22.0';
+import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.22.0';
+import { pctx } from './context.js?v=1.22.0';
+import { parseScalar, foldChild } from './flow-xml.js?v=1.22.0';
 
-// Metadata keys whose value is a LIST even when the XML carries exactly one of them. XML has no way to
-// say "array of one" — <screens> appearing once is indistinguishable from a scalar — so the shape has to
-// come from knowing the schema. Everything here is a Flow element collection or a repeated child of one;
-// get this wrong and a single-screen flow converts to a screens OBJECT the converter then skips.
-const XML_ARRAY_KEYS = new Set([
-  // element collections
-  'screens', 'decisions', 'assignments', 'loops', 'subflows', 'transforms', 'waits', 'actionCalls',
-  'recordLookups', 'recordCreates', 'recordUpdates', 'recordDeletes', 'recordRollbacks',
-  'orchestratedStages', 'collectionProcessors', 'experiments', 'customErrors', 'apexPluginCalls', 'steps',
-  // resources (not drawn, but must not collapse into scalars either)
-  'variables', 'constants', 'formulas', 'textTemplates', 'choices', 'dynamicChoiceSets', 'stages',
-  // repeated children the converter reads
-  'rules', 'conditions', 'filters', 'fields', 'waitEvents', 'stageSteps', 'experimentPaths',
-  'scheduledPaths', 'inputParameters', 'outputParameters', 'assignmentItems', 'inputAssignments',
-  'outputAssignments',
-  'customErrorMessages', 'connectors', 'processMetadataValues', 'assignees',
-]);
-
-// Leaf text that should not stay a string.
-const parseScalar = (s) => {
-  const t = s.trim();
-  if (t === 'true') return true;
-  if (t === 'false') return false;
-  if (t !== '' && !Number.isNaN(Number(t)) && /^-?\d+(\.\d+)?$/.test(t)) return Number(t);
-  return t;
-};
+// The SCHEMA rules (which keys are lists, how a leaf scalar is typed, how a child folds into its parent) live
+// in flow-xml.js, shared byte-identically with the skill - so the browser's DOMParser path below and the
+// skill's standalone Node scanner can never disagree about the shape they produce. Only the TOKENISER differs.
 
 /** One XML element -> a plain object shaped like the Tooling API's JSON for the same flow. */
 function xmlToObject(node) {
   const children = [...node.children];
   if (!children.length) return parseScalar(node.textContent || '');
   const out = {};
-  for (const child of children) {
-    const key = child.localName;
-    const val = xmlToObject(child);
-    if (XML_ARRAY_KEYS.has(key)) (out[key] ||= []).push(val);
-    else if (key in out) out[key] = [].concat(out[key], val);   // repeated but unlisted — still an array
-    else out[key] = val;
-  }
+  for (const child of children) foldChild(out, child.localName, xmlToObject(child));
   return out;
 }
 

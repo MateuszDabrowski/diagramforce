@@ -1517,3 +1517,21 @@
   line-height: 1.4;
   color: var(--text-muted);
 }
+
+/* Metadata > "N settings turned off" - the flags Salesforce wrote as `false`. Collapsed by default: they are
+   real answers ("this is not a template") but they are not what the reader came for, so they fold away rather
+   than compete with the rows that say what the element does. A native <details> for the free keyboard and
+   screen-reader behaviour. */
+.df-prop-detail-more { margin-top: 6px; }
+.df-prop-detail-more > summary {
+  cursor: pointer; list-style: none;
+  font-size: var(--font-size-xs); color: var(--text-muted);
+  padding: 3px 0;
+}
+.df-prop-detail-more > summary::-webkit-details-marker { display: none; }
+.df-prop-detail-more > summary::before {
+  content: '▸'; display: inline-block; width: 12px; color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+.df-prop-detail-more[open] > summary::before { content: '▾'; }
+.df-prop-detail-more > summary:hover { color: var(--text-primary); }

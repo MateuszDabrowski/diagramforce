@@ -2,7 +2,7 @@
 name: diagramforce
 description: >-
   Author an importable Diagramforce diagram - from a description, from an existing diagram (a screenshot,
-  draw.io, or Mermaid), or from real Salesforce Flow metadata (Tooling API JSON) - then hand the user a
+  draw.io, or Mermaid), or from real Salesforce Flow metadata (a .flow-meta.xml source file or Tooling API JSON) - then hand the user a
   file to open in Diagramforce. Diagramforce is a no-backend browser editor for Salesforce/CRM
   architecture, data models (ERD), Data Cloud field mappings, process flows, Salesforce Flows, org
   charts, Gantt timelines, and UML sequence diagrams. Use it whenever the user wants to visualize,
@@ -38,7 +38,8 @@ straight conversion.
 
 **Starting from a real Salesforce Flow? Convert it - do not redraw it.** If the flow exists in an org,
 its metadata already holds every element, connector, decision outcome and fault path, so hand-authoring
-it would be slower AND less accurate. Ask the user for the Tooling API response:
+it would be slower AND less accurate. If they have the SFDX source (`force-app/main/default/flows/*.flow-meta.xml`,
+or one `sf project retrieve` away), use that directly. Otherwise ask for the Tooling API response:
 
 1. In **Setup -> Flows**, open the flow; the URL carries `flowId=301...`. (This works for flows the org
    authored. A packaged flow shows a namespaced name like `ns__Flow_Name-1` instead, and its metadata is
@@ -53,20 +54,70 @@ it would be slower AND less accurate. Ask the user for the Tooling API response:
    third-party and blocked by some org policies), `sf api request rest` from the Salesforce CLI, or the
    Developer Console's **Query Editor**. The whole response or just its `Metadata` object both work.
 
-Then run the bundled converter and validate as usual:
+Then run the bundled converter and validate as usual. It takes **either** source format and detects which
+from the content:
 
 ```bash
+# the SFDX source file, straight from `sf project retrieve start -m "Flow:*"`
+node scripts/flow-to-diagramforce.mjs force-app/main/default/flows/My_Flow.flow-meta.xml diagram.json
+
+# ...or a Tooling API response
 node scripts/flow-to-diagramforce.mjs flow-response.json diagram.json
+
 node scripts/validate-diagram.mjs diagram.json
 ```
+
+**`--org <alias>` adds an "Open in Flow Builder" card** so the diagram is one click from the real flow. It is
+the only flag you need - it resolves both the org's instance URL and, for a `.flow-meta.xml`, the flow's version
+id:
+
+```bash
+node scripts/flow-to-diagramforce.mjs My_Flow.flow-meta.xml diagram.json --org <alias>
+```
+
+Requires an authenticated Salesforce CLI on the machine running the script. If there is none - or you know the
+host but are not authenticated to it - pass the instance URL directly instead, and the card still links to the
+Flows list in Setup:
+
+```bash
+node scripts/flow-to-diagramforce.mjs flow-response.json diagram.json --org-url https://acme.my.salesforce.com
+```
+
+Given explicitly, `--org-url` wins over whatever the alias resolves to. With neither flag no card is emitted, on
+purpose: a guessed host is worse than none.
+
+A **Tooling response** carries the `301...` id, so it deep-links with `--org-url` alone. A **`.flow-meta.xml`**
+has no id: with `--org` it is looked up (the LATEST version, which is what `sf project retrieve` gave you), and
+without it the card falls back to the Flows list. The script prints which you got - relay that, and relay the
+note if the org is running a DIFFERENT version as Active than the file you converted.
+
+**`--org` also names the references the metadata carries only as ids.** A marketing flow's cards would
+otherwise read as bare identifiers: CMS content keys on Send Email / SMS / WhatsApp / Push / In-App actions,
+Communication Subscriptions (`0Xl...`), their Channel Types (`0eB...`), and the segment a segment-triggered
+flow starts from (`1sg...`, MarketSegment). The id is always KEPT and the name APPENDED - `0XlHn... (Marketing)`
+- because the id is what a user pastes into a URL or hands to support. The segment is named on BOTH of its
+surfaces, the Start card's details row and its configuration line. `start.dataGraph` is already a developer
+name, so it is never looked up. The script prints how many references it resolved - relay that line with the
+warnings.
+
+The `.flow-meta.xml` path means a flow comes from the same `sf project retrieve` the object and mapping
+importers use, so one org pull can feed all three. (Before 1.22.0 this script took JSON only and died on an
+XML file with a raw parse error.)
 
 It maps each metadata collection to its `df.Flow*` class, carries decision outcomes / fault paths (red)
 / Go To jumps (blue) with their branch labels, synthesises the End cards the metadata has no element
 for, fills each card's **`details`** rows with the documentation detail that will not fit on a card (the
 fields a Create/Update writes, what a Get reads out and into which variables, a screen's components with
 their types, each outcome's condition, an action's parameters), emits a **`df.Table` above Start** holding
-the flow-level facts (status, API version, run mode, description, resource counts), and either honours the flow's own `locationX/Y` or - when the builder stored none (as Marketing
+the flow-level facts (status, API version, run mode, description, resource counts) plus a **Resources sidebar**
+to the right listing what each formula computes, what each text template sends and pulls, what fills each
+choice set, and the description of every variable that carries one, and either honours the flow's own `locationX/Y` or - when the builder stored none (as Marketing
 Cloud Next journeys do) or stored only some - computes the same tidy tree the app's Auto Layout uses.
+Two conventions on those tables to keep when you author a flow by hand: the facts table lists the flow's
+**Inputs / Outputs signature in full** up to 12 items each, then `+N more` - it is the flow's contract, not a
+detail to sample. The Resources card CURATES (variables that carry a description, choices with human names)
+and closes with a **Not listed** accounting row, so its rows plus that row reconcile with the facts table's
+resource counts.
 
 **Read its warnings out to the user - always.** They are the part a clean validator cannot tell you:
 the validator proves the diagram LOADS, while the warnings are where the converter says what it could
@@ -184,6 +235,170 @@ run the script and read the exit code.
 
 If the user later wants it in Google Drive or shared, they can do that from inside the app - your job
 ends at a clean, importable diagram.
+
+## From a live Salesforce org (CLI)
+
+When the user has the `sf` CLI authenticated, you can build a data model straight from their org. Two steps,
+because the middle one is a judgement only you can make.
+
+```bash
+# 1. Pull the raw metadata (core objects; use --only later to narrow)
+sf data query -o <org> -t -r csv -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, \
+   ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
+   WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact','Opportunity')" > fields.csv
+
+# 2. Draft a selection - infers keys and relationships, prunes to something readable
+node scripts/org-to-selection.mjs fields.csv --max-fields 25 --title "Sales Core" > selection.json
+
+# 3. REVIEW selection.json, then draw it
+node scripts/objects-to-diagramforce.mjs selection.json diagram.json
+node scripts/validate-diagram.mjs diagram.json
+```
+
+**How many fields per card: pass `--max-fields 25` unless the user says otherwise.** The script itself imposes
+NO cap - it does not know what the diagram is for, so it will not quietly shrink one. **You** apply the default,
+which makes it soft: 25 is enough that the pk, the Name, the on-canvas lookups and a useful slice of business
+fields all survive the ranking, and few enough that a card stays readable at fit-to-screen. Listen for what the
+user actually wants and pass the matching flag rather than reaching for 25 by inertia:
+
+| what they say | what to pass |
+|---|---|
+| nothing about fields | `--max-fields 25` |
+| "all the fields", "everything", "I want to decide what to map" | `--max-fields all` |
+| "just the keys", "only relationships" | `--keys-only` |
+| a NUMBER ("about 10 per object", "keep it tight") | `--max-fields 10` |
+| they NAME fields ("Account Name and Industry, Contact Email") | `--fields Account.Name,Account.Industry,Contact.Email` |
+
+`--fields` is exact and wins over the cap for the objects it names; objects it does not name still take the cap.
+Entries must be `Object.Field` - an unqualified name is refused, because `Name` exists on nearly every object.
+The pk is always kept (relationships point at it), and any named field the org does not have is reported on
+stderr - relay that, it is usually a typo.
+
+**Step 2's output is a DRAFT, and reviewing it is the job.** Measured on a real org: four core objects returned
+**612 fields**. `--keys-only` cut that to 192, `--max-fields 12` to 48. The hand-built official data models use
+3-14 fields per object. A whole-org dump is both unloadable (`MAX_CELL_COUNT` is 2000) and unreadable, so
+deciding which objects and which fields the diagram is ABOUT is the part that makes it useful - and it is
+exactly the part a script cannot do.
+
+Read the stderr summary: it tells you how many relationships were dropped for pointing outside the selection
+(add those objects) and how many were lost to field pruning (raise `--max-fields`).
+
+**Data Cloud** works the same way - pass the DMO catalogue instead, and remember to paginate:
+```bash
+sf api request rest "/services/data/v67.0/ssot/data-model-objects?limit=200" -o <org> > dmos.json
+node scripts/org-to-selection.mjs dmos.json --only ssot__Individual__dlm,ssot__ContactPointEmail__dlm
+```
+
+### Data Cloud field mappings → a `datamapping` diagram
+
+`ObjectSourceTargetMap` metadata carries the object pairs, the field pairs and the formulas in one retrieve.
+The Connect API (`/ssot/data-model-object-mappings`) returns the same pairs but has nowhere to put the formula
+detail, and is GET-by-name - so the retrieve is the one to use.
+
+```bash
+sf project retrieve start -o <org> -m "ObjectSourceTargetMap:*"
+node scripts/mappings-to-diagramforce.mjs force-app/main/default/objectSourceTargetMaps \
+  --only Contact_Home --org <org> --title "Contact_Home mappings" > diagram.json
+node scripts/validate-diagram.mjs diagram.json
+```
+
+Pass `--org <alias>` when you have one: it fetches each DLO's and DMO's **category** (Profile / Engagement /
+Other) from `/ssot/metadata` in two GETs and stamps it on the cards, the way the official templates categorise
+theirs. No org reachable? `--categories metadata.json` accepts a saved copy of the same payload. Either way a
+failure is a silent no-op - cards simply stay uncategorised for the user to set. The app's picklist is exactly
+Profile / Engagement / Other - an org (or a screenshot) may say `Related` or `Segment_Membership`, and both
+normalise to **Other** (AccountContact, Salesforce's standard Related-category DMO, is hand-set to Other in
+the official template). Only DLO and DMO cards carry `category`; Source and Data Stream cards OMIT the key
+entirely - do not invent one when you author by hand.
+
+The metadata path also draws the owner-convention **formula input connectors**: a formula that reads source
+data (`sourceField['X']` in its expression) gets a left-to-left connector from each referenced source field
+row into its formula row; static formulas get none. Draw the same convention when you author by hand: one
+plain `Standard` mapping link per referenced source field, from the source row's LEFT port to the formula
+row's LEFT port (`field-left-<fid>` at BOTH ends, so the link runs down the shared column edge), and set NO
+`expressionRule` on it - the expression already rides the companion's Formula link. A static formula reads no
+source data, so it gets no input connector at all.
+
+There is a second, lighter source the same script accepts - **one GET**, DMO-scoped, so it needs no `--only`:
+
+```bash
+sf api request rest "/services/data/v67.0/ssot/data-model-object-mappings?dmoDeveloperName=ssot__Individual__dlm" \
+  -o <org> > mappings.json
+node scripts/mappings-to-diagramforce.mjs mappings.json > diagram.json
+```
+
+Prefer the retrieve when you can: the Connect response carries only the object and field pairs, so it produces
+no Formula companion cards and no Expression / Rule values (~5% of field rows in a real org). Reach for the GET
+when the user cannot authenticate the CLI against the org, or already has the response in hand - and tell them
+what it left out. **The user can also paste that same response straight into the app** (Load & Import ->
+Paste), which is often faster than involving you at all - say so rather than making them round-trip through a
+file.
+
+`--only` matches either side of a mapping, and **you will need it.** Measured on a real Data Cloud org: 154
+object mappings, 3661 field mappings, one DLO fanning out to 7 DMOs. That is 3695 cells against a
+`MAX_CELL_COUNT` of 2000 - the script refuses rather than emitting something the app cannot open. Pick the
+objects the diagram is ABOUT.
+
+Two things to tell the user when you hand it over:
+
+- **The suffix tells you the layer - and the Data Stream zone is not a column.** A suffix-less name is a
+  source object (DSO) and sits in the **Source** layer; `__dll` is a DLO, `__dlm` a DMO. The **Data Stream**
+  zone holds ONLY what the stream itself adds - the formulas companion card - and it shares the Source column,
+  stacked about 56px below the Source zone, never a lane of its own. A DLO is one card, whether it is acting
+  as a source or a target. Follow the same placement when you author a `datamapping` by hand - the spec's
+  Data Mapping section prescribes it.
+- **Formula mappings have no source field** (153 of 153 in the org this was built against), so each source
+  object that has them gets a **"&lt;name&gt; Formulas"** companion card, feeding real
+  `mappingType: "Formula"` links. That is the convention the official `data360-contact-mapping` template uses,
+  and it means the formula gets the connector's **F** badge plus the **Expression / Rule** column in the Table
+  view. A companion card is NOT an object in the org - say so when you hand the diagram over.
+
+### Data Cloud DATA GRAPHS
+
+A data graph is a TREE - one primary DMO with related objects hanging off it, each with their own - so it
+becomes a Data Model diagram laid out by DEPTH: a column per level, the primary object on the left, a crow's
+foot at every child end (every edge is to-many by construction).
+
+```bash
+# what the org has
+sf api request rest /services/data/v64.0/ssot/data-graphs/metadata -o <org>
+# one graph, by DeveloperName
+node scripts/datagraph-to-diagramforce.mjs --org <org> --name Profile diagram.json
+node scripts/validate-diagram.mjs diagram.json
+```
+
+**Two input shapes, and the difference is worth telling the user about.** The DEFINITION above carries real
+object and field labels, field types, and which columns are keys. The PREVIEW payload - what Data Cloud shows
+under **Data Graphs -> Preview**, which a user can copy with no API access at all - carries none of that: names
+are derived from the API names and keys from naming convention. Both work:
+
+```bash
+node scripts/datagraph-to-diagramforce.mjs preview.json diagram.json --root UnifiedIndividual__dlm
+```
+
+A preview's repeated array entries are sample ROWS of one object, not several objects, so they are merged into
+one card - and merged across ALL rows, because a preview omits nulls and row 1 is therefore not the schema.
+
+A definition also gets **two things a preview cannot give**, and both are simply absent for a paste rather than
+faked: a **facts card** beside the tree (type, status, data space, primary object, refresh schedules, real-time
+and caching flags, Id / Values DMO, dates, version - rows with nothing to say are omitted), and a **join label
+on every edge** (`ssot__Id__c = UnifiedRecordId__c`), read from each related object's `path[]`. Tell the user
+which of the two they are looking at.
+**The user can paste either shape straight into the app** (Load & Import -> Paste, which has its own Data Graph
+card) - say so rather than making them round-trip through a file.
+
+### One retrieve, three diagrams
+
+All three org importers now read what `sf project retrieve` writes, so a single pull covers the release:
+
+```bash
+sf project retrieve start -o <org> -m "Flow:*" -m "ObjectSourceTargetMap:*"
+node scripts/flow-to-diagramforce.mjs force-app/main/default/flows/My_Flow.flow-meta.xml flow.json
+node scripts/mappings-to-diagramforce.mjs force-app/main/default/objectSourceTargetMaps --only <dlo> > map.json
+```
+
+Core objects are the exception - they are a QUERY, not a retrieve (`FieldDefinition` via `sf data query`), and
+they still go through `org-to-selection.mjs` first because which objects and fields belong is a judgement.
 
 ## Examples
 

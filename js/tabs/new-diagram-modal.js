@@ -3,11 +3,11 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.21.7';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.21.7';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.21.7';
-import { normalizeDiagramType } from '../persistence.js?v=1.21.7';
-import { showError } from '../feedback.js?v=1.21.7';
+import { tbctx } from './context.js?v=1.22.0';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.22.0';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.22.0';
+import { normalizeDiagramType } from '../persistence.js?v=1.22.0';
+import { showError } from '../feedback.js?v=1.22.0';
 
 export function showNewDiagramModal(targetGroupId = null) {
   const { tabs } = tbctx;                                            // shared array ref (read length for dismiss-guard)
@@ -167,7 +167,7 @@ export function showNewDiagramModal(targetGroupId = null) {
             <line x1="22" y1="38" x2="34" y2="38" stroke="var(--text-muted)" stroke-width="2"/>
           </svg>
           <span class="df-new-modal__card-title">Paste</span>
-          <span class="df-new-modal__card-desc">Paste Diagramforce JSON, a Salesforce Flow, or Mermaid code - the format is detected automatically.</span>
+          <span class="df-new-modal__card-desc">Paste Diagramforce JSON, Salesforce metadata, or Mermaid code - the format is detected automatically.</span>
         </button>
         <button class="df-new-modal__card" data-action="import-json">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
@@ -176,7 +176,7 @@ export function showNewDiagramModal(targetGroupId = null) {
             <text x="32" y="38" text-anchor="middle" font-size="11" font-family="var(--font-family)" fill="var(--color-primary)" opacity="0.9">{ }</text>
           </svg>
           <span class="df-new-modal__card-title">File</span>
-          <span class="df-new-modal__card-desc">Open a Diagramforce .dgf or .json - or a Salesforce Flow .flow-meta.xml.</span>
+          <span class="df-new-modal__card-desc">Open a Diagramforce .dgf or .json - or Salesforce metadata.</span>
         </button>
       </div>
       </div>

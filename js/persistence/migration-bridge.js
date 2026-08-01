@@ -18,10 +18,10 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.21.7';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.21.7';
-import { importTemplatesArray } from '../templates.js?v=1.21.7';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.21.7';
+import { showToast } from '../feedback.js?v=1.22.0';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.22.0';
+import { importTemplatesArray } from '../templates.js?v=1.22.0';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.22.0';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';

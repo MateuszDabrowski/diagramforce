@@ -89,15 +89,29 @@ const contentKey = (ref) => {
 // typed schema. It renders as a read-only table in the property panel, never on the card itself.
 const DETAIL_CAP = 20;   // a 60-field screen would otherwise bury the panel
 function capRows(out) {
-  if (out.length <= DETAIL_CAP) return out;
-  const extra = out.length - DETAIL_CAP;
-  return out.slice(0, DETAIL_CAP).concat([{ label: `+${extra} more`, value: 'not shown' }]);
+  // The cap counts only the rows the panel SHOWS. A `quiet` row - an explicitly-false flag - renders inside a
+  // collapsed disclosure, so letting it consume the budget would push a real row behind "+N more" to make room
+  // for something nobody is looking at.
+  const quiet = out.filter((r) => r.quiet);
+  const loud = out.filter((r) => !r.quiet);
+  if (loud.length <= DETAIL_CAP) return loud.concat(quiet);
+  const extra = loud.length - DETAIL_CAP;
+  return loud.slice(0, DETAIL_CAP).concat([{ label: `+${extra} more`, value: 'not shown' }], quiet);
 }
 // Tolerate a NON-ARRAY. XML has no arrays, so a repeated child that appears exactly once arrives as a bare
 // object unless flow-import.js's schema hint lists it - and a missing hint used to crash the whole import
 // (for..of over an object throws), turning one absent key into a total failure on an ordinary flow.
 // Degrading to a single item keeps a schema-hint gap lossy instead of fatal.
-const asList = (v) => (Array.isArray(v) ? v : (v && typeof v === 'object' ? [v] : []));
+//
+// SCALARS count too. The original form kept `typeof v === 'object'`, which silently swallowed a repeated
+// scalar child: a screen field with exactly one `<choiceReferences>Month</choiceReferences>` arrived as the
+// string "Month", asList returned [], and the row's whole `choices: …` clause disappeared - 50 fields across
+// 24 of 339 real org flows. The schema hint has been corrected for the keys we know about, but that list can
+// only ever lag what Salesforce adds next, and this converter's own rule is to never assume a fixed shape.
+// So the fallback is the general one. A scalar landing where a list of OBJECTS was expected is still dropped
+// downstream (`rows()` needs a `label`), exactly as it was before - this only stops the loss being silent
+// where the item legitimately IS a scalar.
+const asList = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
 function rows(list, toRow) {
   const out = [];
   const items = asList(list);
@@ -107,8 +121,22 @@ function rows(list, toRow) {
   }
   return capRows(out);
 }
+// Setting a field to NOTHING is a real instruction, not a gap. Two metadata shapes say it - no `<value>` child
+// at all, and an explicit `<value><stringValue></stringValue></value>` - and both rendered as a blank cell,
+// which reads as the converter having failed to parse something. 14 rows across a 339-flow corpus did exactly
+// that, in flows whose whole purpose is to clear a field (one is named `Set_arrival_windows_in_1969_to_Null`).
+//
+// The third case is deliberately NOT called the same thing: a `value` that IS present but yields nothing from
+// pickValue means we could not READ it, which is not the same as knowing it is empty. This file's own rule is
+// that a missing row invites a question while a wrong row ends it, so an unreadable value says so.
+const assignedValue = (a) => {
+  if (a.value == null) return '(no value)';
+  const v = pickValue(a.value);
+  if (v === '') return '(no value)';
+  return v == null ? '(value not shown)' : v;
+};
 /** Field assignments an element WRITES - the single most useful fact a Create/Update card was missing. */
-const assignmentRows = (el) => rows(el.inputAssignments, (a) => ({ label: a.field, value: pickValue(a.value) }));
+const assignmentRows = (el) => rows(el.inputAssignments, (a) => ({ label: a.field, value: assignedValue(a) }));
 /** Fields a Get Records READS OUT into flow variables (`field` -> `assignToReference`). */
 const outputRows = (el) => rows(el.outputAssignments, (o) => ({ label: o.field, value: `-> {!${o.assignToReference}}` }));
 // A screen component's meaning is NOT in `fieldType`. For a ComponentInstance - which is most of a modern
@@ -123,6 +151,12 @@ const plainText = (t) => {
   const v = String(t || '').trim();
   return v && !/[<>]/.test(v) ? v : null;
 };
+/** Prose out of a rich-text field. Distinct from `plainText`, which REJECTS markup: a screen field's label has
+ *  a fallback (the field name) so refusing a formatted one is safe, but a choice's text has none - dropping it
+ *  loses the only description of that option. Rich text is authored in the Flow Builder editor, so it arrives
+ *  as `<p>`-wrapped runs with inline styles; without this the reader gets the style attributes and the
+ *  character cap spends itself on markup instead of the sentence. */
+const strippedText = (t) => String(t || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const LABEL_MAX = 60;
 const screenFieldLabel = (f) => {
   const labelParam = (f.inputParameters || []).find((p) => p.name === 'label');
@@ -228,6 +262,27 @@ const inputRows = (el) => {
   if (assigned.length) return assigned;
   return el.inputReference ? [{ label: 'Records from', value: `{!${el.inputReference}}` }] : [];
 };
+// What a Create matches on when it is really an UPSERT. Salesforce spells `operationMultMatchingRecords` as an
+// enum; phrase it, because "UpdateFirstRecord" in a documentation table is a puzzle rather than an answer.
+// Unknown values pass through raw - Salesforce can add one, and the raw value beats a silent drop.
+const MULT_MATCH = {
+  UpdateFirstRecord: 'update the first match only',
+  UpdateLatestRecord: 'update the most recent match only',   // the value every upsert in the sample org used
+  UpdateAllRecords: 'update every match',
+  ThrowError: 'fail with an error',
+};
+const createRows = (el) => {
+  const rows = inputRows(el);
+  const match = summarizeFilters(el.filters, el.filterLogic);
+  // Prepend: "this is an upsert" reframes every assignment row below it, so it has to be read first. Guarded
+  // against the 20-row cap already applied by inputRows - capRows would otherwise be able to drop it.
+  const head = [];
+  if (match) head.push({ label: 'Matches existing on', value: match });
+  if (el.operationMultMatchingRecords) {
+    head.push({ label: 'If several match', value: MULT_MATCH[el.operationMultMatchingRecords] || String(el.operationMultMatchingRecords) });
+  }
+  return head.length ? head.concat(rows) : rows;
+};
 /** How a Get Records hands results OUT. Three shapes, and only one was documented: `outputAssignments`
  *  (field -> variable), `outputReference` (whole result into one variable), and `storeOutputAutomatically`
  *  (referenced as {!Element.field}). On modern flows the latter two are the common ones. */
@@ -308,8 +363,18 @@ function buildChoiceIndex(md) {
   for (const d of asList(md.dynamicChoiceSets)) {
     if (!d.name) continue;
     const where = summarizeFilters(d.filters, d.filterLogic);
+    // TWO shapes, and only the record-backed one was handled. A PICKLIST-backed set draws its options from a
+    // field's picklist values (`picklistObject` + `picklistField`) and carries NO `object`/`displayField` - so
+    // every clause below evaluated empty, the entry resolved to null, and describeChoices fell back to the bare
+    // reference name: the reader saw a dropdown exists and could never find out what fills it. That is 37 of the
+    // 61 dynamic choice sets in a real org, i.e. the MAJORITY shape.
+    // NB the nil fields arrive as EMPTY STRINGS, not undefined (`<object xsi:nil="true"/>` -> ''), so this has
+    // to test truthiness rather than presence.
+    const source = d.picklistObject && d.picklistField
+      ? `${d.picklistObject}.${d.picklistField} picklist`
+      : (d.object && d.displayField ? `${d.object}.${d.displayField}` : (d.object || d.displayField || null));
     idx.set(d.name, [
-      d.object && d.displayField ? `${d.object}.${d.displayField}` : (d.object || d.displayField || null),
+      source,
       where && `where ${where}`,
       d.sortField && `by ${d.sortField}${d.sortOrder ? ` ${SORT_ORDER[d.sortOrder] || d.sortOrder}` : ''}`,
       d.limit != null && `top ${d.limit}`,
@@ -355,7 +420,17 @@ const actionParamRows = (el) => {
     // wiecej szumu informacyjnego"). Keyed on `booleanValue` specifically, so a stringValue that happens to read
     // "false" is left alone - that one WAS authored.
     const falseFlag = p.value?.booleanValue != null && String(p.value.booleanValue).trim() === 'false';
-    if (p.name && !falseFlag && v != null && String(v).trim() !== '') out.push({ label: p.name, value: String(v) });
+    // A false flag is KEPT, marked `quiet`, and rendered in a collapsed disclosure. It used to be dropped
+    // outright on the grounds that Salesforce writes every boolean whether or not it was touched - but the
+    // owner, looking at a real Send Email card, made the case that "off" IS an answer: `isTemplate: false`
+    // says this is not a template, and a reader cannot get that from an absence.
+    //
+    // Only explicitly-false BOOLEANS. An UNSET parameter stays dropped, because it genuinely says nothing -
+    // Salesforce writes the whole parameter list, so an untouched `replyToName` is noise, not information.
+    // Measured across 60 real flows / 96 action cards: keeping the false flags is +5% of detail rows (12 of
+    // 262), where unset parameters would be a further +8%.
+    if (p.name && falseFlag) out.push({ label: p.name, value: 'false', quiet: true });
+    else if (p.name && v != null && String(v).trim() !== '') out.push({ label: p.name, value: String(v) });
   }
   for (const o of el.outputParameters || []) {
     if (o.assignToReference) out.push({ label: o.name || 'output', value: `-> {!${o.assignToReference}}` });
@@ -392,6 +467,15 @@ function waitEventLabel(ev, parentName) {
   if (ev.offset != null && ev.offsetUnit) return `${ev.offset} ${ev.offsetUnit}`;
   return null;
 }
+/** `trgrOnEmailResponseEngagement` -> "Email Response Engagement". Salesforce names a marketing wait's trigger
+ *  with a `trgrOn` prefix and camelCase, which is precise and unreadable; the prefix carries no information the
+ *  row's own position does not, so it goes. */
+const automationEventText = (raw) => String(raw || '')
+  .replace(/^trgrOn/i, '')
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .replace(/_+/g, ' ')
+  .trim();
+
 /** A wait's branches with what each one waits FOR - the duration the branch label no longer carries. */
 const waitRows = (el) => rows(el.waitEvents, (ev) => ({
   label: waitEventLabel(ev, el.name) || ev.name,
@@ -400,10 +484,29 @@ const waitRows = (el) => rows(el.waitEvents, (ev) => ({
   // branches rendered as a label beside an empty cell: "the flow waits" without saying for what.
   value: [
     ev.offset != null && ev.offsetUnit ? `after ${ev.offset} ${ev.offsetUnit}` : null,
-    // The MECHANISM, but only when nothing else in the row reveals it. Beside "after 2 Days" the eventType is
-    // noise; on a platform-event or date-referenced branch it is the single thing that says how the flow resumes.
-    ev.offset == null && ev.eventType ? `${WAIT_EVENT_TYPE[ev.eventType] || ev.eventType}` : null,
+    // The AWAITED EVENT leads the row (after a duration, which reads as the headline on a timed branch),
+    // because it is the answer to "what is this step waiting for". A marketing wait carries it as
+    // `automationEventType` (`trgrOnEmailResponseEngagement`) and nothing else on the branch says it: the row
+    // read "on record Create · associatedContent {!email_3…}", which describes the MECHANISM without ever
+    // naming the event. Reported: "without the step label I wouldn't know what the awaited event is" - and a
+    // step label is the one part of a flow a human is free to write badly.
+    ev.automationEventType ? automationEventText(ev.automationEventType) : null,
+    // The MECHANISM, only when nothing else reveals it. Beside "after 2 Days" the eventType is noise; beside a
+    // NAMED event it is noise twice over - so it renders only on a branch with no offset and no named event
+    // (a plain platform-event or date-referenced branch, where it is the single thing that says how the flow
+    // resumes). Before this gate the enum printed AHEAD of the named event, contradicting the ordering this
+    // comment promises - caught in release review.
+    ev.offset == null && !ev.automationEventType && ev.eventType
+      ? `${WAIT_EVENT_TYPE[ev.eventType] || ev.eventType}` : null,
+    // WHICH object a record-change branch watches. `recordTriggerType` below says Create/Update; without the
+    // object that is "waits for a record to be created" with the record left unnamed.
+    ev.object ? `on ${ev.object}` : null,
     ev.recordTriggerType ? `on record ${ev.recordTriggerType}` : null,
+    // WHEN a date-based branch resumes. `resumeDateReference` is the common shape - a field or variable the
+    // flow waits on - and without it such a branch renders as its mechanism alone ("Alarm Event"), which is
+    // the same gap `automationEventType` closed for the marketing wait.
+    ev.resumeDateReference ? `resumes at {!${ev.resumeDateReference}}` : null,
+    ev.resumeDate ? `resumes ${ev.resumeDate}${ev.resumeTime ? ` ${ev.resumeTime}` : ''}` : null,
     ...(ev.inputParameters || []).map((p) => {
       const v = pickValue(p.value);
       return v == null || String(v).trim() === '' ? null : `${p.name} ${v}`;
@@ -467,18 +570,179 @@ function packageState(raw) {
   return PACKAGE_STATE[v] || v;
 }
 
-// One side of a flow's public interface, as "name (Type)" with collections marked. Capped: a flow with 30
-// inputs has a design problem, and a card is not the place to discover it.
+// One side of a flow's public interface, as "name (Type)" with collections marked. The interface IS the
+// contract, so it is listed IN FULL up to a per-item cap - a flow with 30 inputs has a design problem, and a
+// card is not the place to discover it, but 10 real inputs deserve their 10 names (the owner's call on the
+// measured Bulk Asset Copy flow: "+6 more" on a summary card answers nothing). There USED to be a second cap
+// by rendered length (150 chars, "~5 wrapped lines at ~30 chars per line") - a fossil calibrated to the
+// 330px-era table. The table is 500px now, the height estimator scales to any value length per row, and the
+// load pass re-seats the Resources card below from the MEASURED card height, so a long row cannot collide
+// with anything. A char budget also recreates the same complaint on the next flow with longer names; the
+// item cap bounds true pathology and accounts for itself via "+N more".
 const SIGNATURE_CAP = 12;
 function varSignature(variables, flag) {
   const picked = (variables || []).filter((v) => v && v[flag] && v.name);
   if (!picked.length) return null;
-  const shown = picked.slice(0, SIGNATURE_CAP).map((v) => {
+  const label = (v) => {
     const type = v.apexClass || v.objectType || v.dataType;
     return type ? `${v.name} (${type}${v.isCollection ? '[]' : ''})` : v.name;
-  });
+  };
+  const shown = picked.slice(0, SIGNATURE_CAP).map(label);
   const extra = picked.length - shown.length;
   return shown.join(', ') + (extra > 0 ? `, +${extra} more` : '');
+}
+
+// ── Resources ────────────────────────────────────────────────────────────────────────────────────────────
+// A flow's RESOURCES - formulas, text templates, choice sets, constants, variables - have no card of their
+// own, so until now the only thing said about them was a count on the flow card ("1 formulas"). For seeing
+// the flow that is fine; for DOCUMENTING it the count is the whole gap: the card says a formula exists and
+// never what it computes, names a Send Email's template and never what it sends.
+//
+// The inclusion rule, stated once: a resource earns a row iff it has NO card on the canvas AND carries
+// AUTHORED meaning. That admits formulas, templates, choice sets, constants and DESCRIBED variables; it
+// excludes elements (they have cards), and it excludes machine-generated noise - measured across 339 real
+// flows, most of the 252 static choices are Flow Builder's own `S_<uuid>` screen plumbing, whose meaning is
+// already resolved at the point of use by describeChoices.
+// [metadata key, singular, plural] - drives the flow card's inventory row. Order is the reading order.
+const RESOURCE_KINDS = [
+  ['variables', 'variable', 'variables'],
+  ['constants', 'constant', 'constants'],
+  ['formulas', 'formula', 'formulas'],
+  ['textTemplates', 'text template', 'text templates'],
+  ['choices', 'choice', 'choices'],
+  ['dynamicChoiceSets', 'choice set', 'choice sets'],
+];
+const RES_VALUE_CAP = 240;   // one long formula is documentation; a 674-char HTML template is a wall
+/** Truncate, and SAY how much was cut - "…" alone lets a reader mistake a fragment for the whole thing. */
+const capText = (s, n = RES_VALUE_CAP) => {
+  const v = String(s ?? '').replace(/\s+/g, ' ').trim();
+  return v.length <= n ? v : `${v.slice(0, n)}... (+${v.length - n} chars)`;
+};
+/** A QUOTED excerpt whose truncation residue sits OUTSIDE the quotes. `"a b c... (+13 chars)"` reads as though
+ *  the residue were part of the text and the closing quote a typo; `"a b c..." (+13 chars)` reads as an excerpt
+ *  with a note about what was cut. Reported as "cut values (with +13 chars\" ...)". */
+/** Average rendered width of a character in a df.Table cell at 13px, measured in the browser across four real
+ *  samples (prose 6.29, a sentence 6.32, a formula 5.80, an API name 7.32). The API-name figure is the widest
+ *  and the LEFT column is full of API names, so the conservative one is the one to use: over-estimating a card's
+ *  height is harmless - the view shrinks the box - while under-estimating drops it onto whatever is below.
+ *  Both tables derive their characters-per-column from this and their own width, so neither can be left stale
+ *  when a width changes. dev/tests/e2e/flow-card-height.spec.js checks the result against the RENDER. */
+const CHAR_W = 7.32;
+
+/** Row count above which the Resources card ships COLLAPSED. Set from the geometry it competes with: the flow
+ *  card beside it runs ~600px, and a Resources row is ~28px, so ~20 rows is where this card stops being an
+ *  annotation and starts being the tallest thing on the canvas. */
+const RES_COLLAPSE_ABOVE = 20;
+
+const capQuoted = (s, n) => {
+  const v = String(s ?? '').replace(/\s+/g, ' ').trim();
+  return v.length <= n ? `"${v}"` : `"${v.slice(0, n)}..." (+${v.length - n} chars)`;
+};
+// XML arrives escaped, and an expression full of &apos;/&quot; is unreadable as documentation. The DOM path
+// unescapes for us; the raw-string path (and any &amp;-double-escape) does not.
+const unescapeXml = (s) => String(s ?? '')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+  .replace(/&apos;/g, "'").replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
+/** `{!Account.Name}` references inside a template or formula - what it actually PULLS. Harvested from the
+ *  RAW text, deliberately BEFORE any tag-stripping: a template whose whole content is
+ *  `<img src="{!Get_Account_Owner.FullPhotoUrl}">` keeps its meaning only in that attribute, so stripping
+ *  tags first deletes the one thing worth reporting. */
+const MERGE_CAP = 4;
+function mergeFields(raw) {
+  const seen = [];
+  for (const m of String(raw ?? '').matchAll(/\{!([A-Za-z0-9_.$]+)\}/g)) {
+    if (!seen.includes(m[1])) seen.push(m[1]);
+  }
+  if (!seen.length) return null;
+  const shown = seen.slice(0, MERGE_CAP).map((r) => `{!${r}}`).join(', ');
+  return seen.length > MERGE_CAP ? `${shown}, +${seen.length - MERGE_CAP} more` : shown;
+}
+/** Flow Builder names its inline screen choices `S_<32 hex>` (and older ones with a uuid). Those are
+ *  plumbing, not authored resources - listing 252 of them would bury the six a human actually named. */
+const isMachineName = (n) => /^S_[0-9a-f]{8}(_[0-9a-f]{4}){3}_[0-9a-f]{12}$/i.test(String(n || ''))
+  || /^S_[0-9a-f]{32}$/i.test(String(n || ''));
+const typeOf = (v) => v.apexClass || v.objectType || v.dataType || null;
+
+/** [name, description] pairs for every resource worth glossing. Order is by KIND so the card reads in
+ *  sections without needing header rows the user could sort away. */
+function resourceRows(md, choiceIdx) {
+  const out = [];
+  const push = (name, parts) => {
+    const v = parts.filter(Boolean).join(' · ');
+    if (name && v) out.push([String(name), v]);
+  };
+  for (const f of asList(md.formulas)) {
+    push(f.name, [`Formula${f.dataType ? ` (${f.dataType})` : ''}`,
+      f.expression ? `= ${capText(unescapeXml(f.expression))}` : null]);
+  }
+  for (const t of asList(md.textTemplates)) {
+    const raw = unescapeXml(t.text || '');
+    const isHtml = t.isViewedAsPlainText === false || t.isViewedAsPlainText === 'false';
+    const stripped = strippedText(raw);
+    // The size is only worth printing when the reader cannot see the thing itself. A short template shows in
+    // full inside the quotes, and "73 chars" next to "Select the products with cancel fee." is a fact about a
+    // string the reader is already looking at. Reported: "resources again show more than I think it should,
+    // with number of characters for a text template that asks for selection of type, or even nothing".
+    //
+    // So it survives in exactly the two cases where it still carries information:
+    //   · the excerpt was CUT - though `capQuoted` already appends its own "(+N chars)", so a leading count
+    //     would be the same fact twice; it is the markup-heavy case below that needs it;
+    //   · there is no prose to quote at all (an image-only or empty template), where the length is the only
+    //     size signal the row can give.
+    const shown = stripped ? capQuoted(stripped, 120) : null;
+    const sizeIsNews = !stripped;
+    push(t.name, [
+      `Text template (${isHtml ? 'HTML' : 'plain text'})`,
+      sizeIsNews ? (raw ? `${raw.length} chars` : 'empty') : null,
+      mergeFields(raw) && `uses ${mergeFields(raw)}`,
+      // A template that is ALL markup (the measured image-only one) has no prose to excerpt - say so rather
+      // than print an empty quote the reader reads as a converter failure.
+      shown || (raw ? 'no text outside the markup' : null),
+    ]);
+  }
+  for (const d of asList(md.dynamicChoiceSets)) {
+    push(d.name, [`Choice set${d.dataType ? ` (${d.dataType})` : ''}`, choiceIdx?.get(d.name) || null]);
+  }
+  for (const c of asList(md.choices)) {
+    if (isMachineName(c.name)) continue;   // counted below, never listed
+    // 8 of the measured choices carry rich text, so the raw value would print `<p><i style="font-size: 11px;">`
+    // and cut the sentence off at the cap. Strip first, THEN cap, so the 80 characters go to the prose.
+    const label = strippedText(c.choiceText || c.label);
+    // Value BEFORE the excerpt. The value is the short, precise fact - it is what the flow compares against -
+    // and trailing it after a long quoted label produced `"...(+13 chars)" · = 2`, read as "weird = 1 / = 2
+    // after another dot". `stores` also distinguishes it from a formula's `=`, which means something else: a
+    // formula EQUALS an expression, whereas a choice STORES a value while SHOWING a label.
+    push(c.name, [`Choice${c.dataType ? ` (${c.dataType})` : ''}`,
+      pickValue(c.value) ? `stores ${capText(pickValue(c.value), 40)}` : null,
+      // 120, matching the text-template excerpt. At 330px wide an 80-character cap was already three lines; the
+      // table is 500 now, and cutting a choice 13 characters short of the end is the "cut values" complaint.
+      label ? capQuoted(label, 120) : null]);
+  }
+  for (const c of asList(md.constants)) {
+    push(c.name, [`Constant${c.dataType ? ` (${c.dataType})` : ''}`,
+      pickValue(c.value) != null && pickValue(c.value) !== '' ? `= ${capText(pickValue(c.value), 120)}` : null]);
+  }
+  // Variables: the DESCRIBED ones only. 277 of 2152 measured carry a description, and that is the author's own
+  // signal that this one is worth explaining - a far better filter than any heuristic, and it keeps a flow with
+  // 62 working variables from drowning the card. The interface (isInput/isOutput) is already on the flow card.
+  for (const v of asList(md.variables)) {
+    if (!v.description) continue;
+    push(v.name, [`Variable${typeOf(v) ? ` (${typeOf(v)}${v.isCollection ? '[]' : ''})` : ''}`,
+      capText(v.description, 160)]);
+  }
+  // Account for what the curation above omits, so the card reconciles with the flow card's full inventory row
+  // (its "62 variables" against this card's one described row read as a defect until the difference is stated -
+  // the same accounted-for rule the mapping converter applies to DLO fields it prunes). Guarded on out.length:
+  // a flow with nothing WORTH listing still gets no card at all, and the accounting row must never conjure one.
+  const omittedVars = asList(md.variables).filter((v) => v && !v.description).length;
+  const machineChoices = asList(md.choices).filter((c) => c && isMachineName(c.name)).length;
+  if (out.length && (omittedVars || machineChoices)) {
+    push('Not listed', [
+      omittedVars ? `${omittedVars} ${omittedVars === 1 ? 'variable' : 'variables'} without ${omittedVars === 1 ? 'a description' : 'descriptions'}` : null,
+      machineChoices ? `${machineChoices} auto-generated screen ${machineChoices === 1 ? 'choice' : 'choices'}` : null,
+    ]);
+  }
+  return out;
 }
 
 // Flow Builder's Loop panel renders iterationOrder as a sentence, not the raw enum.
@@ -533,7 +797,12 @@ const COLLECTIONS = [
   })],
   ['transforms', () => 'df.FlowTransform', (e) => ({ transformTarget: e.objectType || e.transformTarget || null, details: transformRows(e) })],
   ['recordLookups', () => 'df.FlowGetRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: getOutputRows(e) })],
-  ['recordCreates', () => 'df.FlowCreateRecords', (e) => ({ object: e.object, details: inputRows(e) })],
+  // A Create with `filters` is an UPSERT: the filters are MATCHING criteria, not a query, and
+  // `operationMultMatchingRecords` is what happens when more than one record matches. Both were dropped, so an
+  // upsert was indistinguishable from a plain insert on the card - a real behavioural difference, and the one
+  // a reader most needs when auditing "could this create duplicates?". Labelled explicitly rather than reusing
+  // the `filters` prop, which reads as "where" on Get/Update/Delete and would say the wrong thing here.
+  ['recordCreates', () => 'df.FlowCreateRecords', (e) => ({ object: e.object, details: createRows(e) })],
   ['recordUpdates', () => 'df.FlowUpdateRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
   ['recordDeletes', () => 'df.FlowDeleteRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
   ['recordRollbacks', () => 'df.FlowRollback', () => ({})],
@@ -626,6 +895,15 @@ function convert(input, opts = {}) {
     ...(st.doesRequireRecordChangedToMeetCriteria ? [{ label: 'Only on change', value: 'yes' }] : []),
     ...(st.schedule ? [{ label: 'Schedule', value: describeSchedule(st.schedule) }] : []),
     ...(st.filters?.length ? [{ label: 'Entry conditions', value: summarizeFilters(st.filters, st.filterLogic) || '' }] : []),
+    // Data Cloud SEGMENT-triggered flows. `publishSegment` was the named backlog gap, but it never travels
+    // alone - the same start also carries the segment id and the data graph, and reporting one of the three
+    // would leave the reader knowing a segment is involved and not which. Named as Salesforce names them and
+    // reported raw, deliberately: the exact runtime meaning of publishSegment is not something this converter
+    // should assert, and `Record trigger` above already sets the precedent of passing an enum through.
+    ...(st.dataGraph ? [{ label: 'Data graph', value: String(st.dataGraph) }] : []),
+    ...(st.segment ? [{ label: 'Segment', value: String(st.segment) }] : []),
+    ...(st.publishSegment === true || st.publishSegment === 'true'
+      ? [{ label: 'Publish segment', value: 'yes' }] : []),
     ...rows(st.scheduledPaths, (sp) => ({
       label: sp.label || sp.name,
       // TIME_SOURCE, not the raw enum: "5 Days after RecordField" reads like a field name and is a TYPE name.
@@ -744,10 +1022,38 @@ function convert(input, opts = {}) {
   });
 
   for (const e of kept) if (e.needsEnd && !e.target) { e.target = newEnd(); delete e.needsEnd; }
+
+  // Who can the flow actually GET to? Everything runs from Start - a flow has no second entry point - so
+  // anything this walk does not reach is dead metadata: a screen the author replaced and left behind, a branch
+  // detached mid-rewrite. Both the End synthesis and the warning below read this one set, so they cannot
+  // disagree about what is dead.
+  const outgoing = new Map();
+  for (const e of kept) {
+    if (!e.target) continue;
+    if (!outgoing.has(e.source)) outgoing.set(e.source, []);
+    outgoing.get(e.source).push(e.target);
+  }
+  const reachable = new Set([START_ID]);
+  const stack = [START_ID];
+  while (stack.length) {
+    for (const t of outgoing.get(stack.pop()) || []) {
+      if (!reachable.has(t)) { reachable.add(t); stack.push(t); }
+    }
+  }
+
   const hasOut = new Set(kept.filter((e) => e.target).map((e) => e.source));
   for (const c of [...cells]) {
     if (c.type === 'df.FlowEnd' || hasOut.has(c.id)) continue;
-    kept.push({ source: c.id, target: newEnd(), kind: 'regular', layoutKind: 'regular', label: null });
+    // An UNREACHABLE element gets no End. Flow Builder draws none either - free-form never draws End at all,
+    // and a detached element in auto-layout is not on a path that can terminate - but the reason is stronger
+    // than fidelity: an End says "this is where a path finishes", and a path that cannot start has no finish.
+    // Attaching one turned a single abandoned screen into a tidy two-card island that read as a deliberate
+    // sub-flow, which is a WRONG claim about the flow rather than a missing one. The warning below still names
+    // it, so the finding is reported rather than dressed up.
+    if (!reachable.has(c.id)) continue;
+    const endId = newEnd();
+    reachable.add(endId);
+    kept.push({ source: c.id, target: endId, kind: 'regular', layoutKind: 'regular', label: null });
   }
   // Collections that ARE converted but have no dedicated `df.Flow*` shape yet, so they land on the generic
   // Action card. Announce every one of them: the card is drawn and the graph stays connected, but the
@@ -779,6 +1085,43 @@ function convert(input, opts = {}) {
     warnings.push(`${missing} of ${realCells.length} elements have no canvas coordinates - laid out with the tidy tree instead of the metadata's partial set`);
   }
   const useCoords = anyCoords && positioned.length === realCells.length;
+  // Does a set of positions put any two REAL cards on top of each other? Flow Builder's coordinates are for
+  // ITS canvas at ITS card size; Diagramforce draws every element at one 210x56 card, so a free-form flow that
+  // a human dragged into place there can collide badly here. Measured across 339 flows from a real org: 300
+  // used metadata coordinates and 106 of them - 35% - overlapped, the worst with 27 colliding pairs.
+  const overlapCount = (list) => {
+    const c = list.filter((x) => x.position && x.size && x.id !== '__flowmeta' && x.id !== '__flowresources');
+    let n = 0;
+    for (let i = 0; i < c.length; i++) {
+      for (let j = i + 1; j < c.length; j++) {
+        const a = c[i], b = c[j];
+        if (a.position.x < b.position.x + b.size.width && b.position.x < a.position.x + a.size.width
+          && a.position.y < b.position.y + b.size.height && b.position.y < a.position.y + a.size.height) n++;
+      }
+    }
+    return n;
+  };
+  const tidyLayout = () => {
+    const pos = opts.computeFlowLayout({ nodes, edges: kept.map((e) => ({ source: e.source, target: e.target, kind: e.layoutKind || e.kind })) });
+    for (const c of cells) { const p = pos.get(c.id); if (p) c.position = { x: Math.round(p.x), y: Math.round(p.y) }; }
+  };
+
+  // UNREACHABLE elements. A flow can carry an element nothing connects to - a screen the author replaced and
+  // left behind, a branch detached during a rewrite. The converter draws it faithfully, which is right, but
+  // silently: it lands off to one side looking like a layout glitch when it is actually a finding about the
+  // FLOW. Saying so turns "why is that card floating there" into "that element is dead". Start is excluded -
+  // having no inbound connector is its whole job.
+  // Reachability, not just "has an inbound connector": a detached A -> B pair gave B an inbound edge, so only
+  // A was ever named and B looked like a legitimate destination. Both are dead.
+  const orphans = cells
+    .filter((c) => c.type !== 'standard.Link' && c.id !== START_ID && c.type !== 'df.FlowEnd'
+      && !reachable.has(c.id))
+    .map((c) => c.id);
+  if (orphans.length) {
+    warnings.push(`${orphans.length} element(s) have no incoming connector and are unreachable: `
+      + `${orphans.slice(0, 5).join(', ')}${orphans.length > 5 ? `, +${orphans.length - 5} more` : ''}`);
+  }
+
   let layoutMode;
   if (useCoords && !opts.forceLayout) {
     layoutMode = 'metadata coordinates';
@@ -810,10 +1153,21 @@ function convert(input, opts = {}) {
       tgt.position = { x, y };
       placed.push(tgt);
     }
+
+    // The author's own layout is worth keeping when it READS, and worthless when it does not. Cards sitting on
+    // top of each other are never acceptable, and the tidy tree resolved every one of those 106 flows to zero
+    // overlaps - so when the metadata layout collides, take the computed one and SAY WHY. Same precedent as
+    // the partial-coordinates fallback above: honest degradation beats a diagram nobody can read.
+    const collisions = overlapCount(cells);
+    if (collisions) {
+      layoutMode = 'computed (tidy tree) - the metadata coordinates overlapped';
+      warnings.push(`the flow's own canvas coordinates put ${collisions} pair(s) of cards on top of each other `
+        + 'at this card size, so the tidy tree layout was used instead');
+      tidyLayout();
+    }
   } else {
     layoutMode = 'computed (tidy tree) - metadata had no coordinates';
-    const pos = opts.computeFlowLayout({ nodes, edges: kept.map((e) => ({ source: e.source, target: e.target, kind: e.layoutKind || e.kind })) });
-    for (const c of cells) { const p = pos.get(c.id); if (p) c.position = { x: Math.round(p.x), y: Math.round(p.y) }; }
+    tidyLayout();
   }
 
   // ── Links ──
@@ -844,6 +1198,11 @@ function convert(input, opts = {}) {
     const link = { id: `lnk_${++li}`, type: 'standard.Link', z: Z_LINK, source: { id: e.source, port: sPort }, target: { id: e.target, port: tPort } };
     if (e.kind === 'fault') link.attrs = { line: { stroke: FAULT_RED } };
     else if (e.kind === 'goto') link.attrs = { line: { stroke: GOTO_BLUE } };
+    // A Loop's two branches carry a durable `flowKind`, which is what earns them an arrowhead in the app
+    // (js/canvas/link-styles.js). They keep the spine's grey and stay solid, so unlike a fault or a Go To their
+    // stroke cannot identify them - and a marker is not allowed to stand in for identity, because a re-anchor
+    // re-applies the style from the type. A prop survives the re-anchor; an attr would be rewritten by it.
+    else if (e.kind === 'loopNext' || e.kind === 'loopExit') link.flowKind = 'loop';
     // Author NO label `position`. The app places an unpositioned flow label itself, and it can do it better than
     // we can from here: it knows the resolved route, so a branch label lands near its TARGET (each branch owns
     // that column) while a fault, a Go To, or a rank-skipping empty branch stays near the source. Computing a
@@ -903,8 +1262,14 @@ function convert(input, opts = {}) {
     // never all 62: the rest are internal working storage and would bury the card.
     ['Inputs', varSignature(md.variables, 'isInput')],
     ['Outputs', varSignature(md.variables, 'isOutput')],
-    ['Resources', ['variables', 'constants', 'formulas', 'textTemplates', 'choices', 'dynamicChoiceSets']
-      .map((k) => (Array.isArray(md[k]) && md[k].length ? `${md[k].length} ${k}` : null)).filter(Boolean).join(', ')],
+    // The full inventory, still counted here even when the Resources card lists them - the card is filtered
+    // (described variables only, machine-named choices folded away) and this row is what it reconciles against.
+    // Names are HUMANISED and pluralised: the raw keys printed "1 formulas" and the camelCase "textTemplates".
+    ['Resources', RESOURCE_KINDS
+      .map(([k, one, many]) => {
+        const n = asList(md[k]).length;
+        return n ? `${n} ${n === 1 ? one : many}` : null;
+      }).filter(Boolean).join(', ')],
   ].filter(([, v]) => v != null && String(v).trim() !== '')
     .map(([k, v]) => [k, String(v).replace(/\s+/g, ' ').trim()]);
 
@@ -914,29 +1279,146 @@ function convert(input, opts = {}) {
   const substantive = meta.filter(([k]) => !(derivedName && k === 'API Name')).length;
   if (substantive) {
     const startCell = cells.find((c) => c.id === START_ID);
-    const TABLE_W = 330, ROW_H = 28, LINE_H = 19, LABEL_H = 26, GAP = 90;
+    // 500 wide (was 330). A flow is tall and narrow and these tables live in the left margin, so width is the
+    // axis there is spare of - and at 330 a Description, an Interview Label or a formula wrapped to four or five
+    // lines and the truncations bit early. The column x is derived from this, so the block simply starts further
+    // left; nothing else moves.
+    const TABLE_W = 500, ROW_H = 28, LINE_H = 19, LABEL_H = 26, GAP = 90;
     // The view re-measures and GROWS DOWNWARD from position.y, so an under-estimate here lands the card on top
-    // of Start - which is exactly what a flat rows*ROW_H estimate did: df.Table wraps long cell text, and a
-    // real flow Description is several lines on its own. Estimate per row from the wrapped line count. The
-    // value column is ~60% of TABLE_W at 13px, so ~30 characters per line.
-    const VALUE_COLS = 30;
-    const estH = LABEL_H + meta.reduce((h, [, v]) => {
-      const lines = Math.max(1, Math.ceil(String(v).length / VALUE_COLS));
-      return h + Math.max(ROW_H, lines * LINE_H + 9);
-    }, 0);
+    // of Start - which is exactly what a flat rows*ROW_H estimate did, and what the numbers below got wrong a
+    // second time. The old comment claimed "the value column is ~60% of TABLE_W", but js/shapes/core.js sizes
+    // columns with `colW = width / cols` - they are EQUAL. Two columns of a 330px table are 165px each, less
+    // 12px of padding, which is about 24 characters at 13px, not 30. Estimating 30 under-counted the wrapped
+    // lines, and a flow with a long Description put the card 37px OVER Start (estimate 468, render 595).
+    // The view also takes each row's height as the max across BOTH columns, so measure both: labels like
+    // "Interview Label" and "Last modified" wrap on their own at 24 characters.
+    // dev/tests/e2e/flow-card-height.spec.js compares the estimate against the RENDER, because that is the
+    // only place the truth lives - position.y is derived from estH, so a JSON-only check is tautological.
+    const VALUE_COLS = Math.floor((TABLE_W / 2 - 12) / CHAR_W);
+    const linesOf = (t) => Math.max(1, Math.ceil(String(t).length / VALUE_COLS));
+    const estH = LABEL_H + meta.reduce((h, [k, v]) =>
+      h + Math.max(ROW_H, Math.max(linesOf(k), linesOf(v)) * LINE_H + 9), 0);
+    // LEFT of the flow, not above it. A flow is tall and narrow - the ID&V sample is 16 cards deep and one
+    // card wide - so stacking annotation above Start makes an already-tall diagram taller, on a monitor that
+    // is wider than it is high. A left column uses the axis the flow does not.
+    const leftX = cells.reduce((m, c) => (c.position && c.size && c.id !== '__flowmeta'
+      ? Math.min(m, c.position.x) : m), Infinity);
+    const colX = (Number.isFinite(leftX) ? leftX : (startCell?.position.x ?? 0)) - TABLE_W - GAP;
+    const topY = cells.reduce((m, c) => (c.position && c.id !== '__flowmeta'
+      ? Math.min(m, c.position.y) : m), Infinity);
     cells.push({
       id: '__flowmeta',
       type: 'df.Table',
-      position: {
-        x: (startCell?.position.x ?? 0) + (W - TABLE_W) / 2,   // centred on the Start column
-        y: (startCell?.position.y ?? 0) - estH - GAP,
-      },
+      position: { x: colX, y: Number.isFinite(topY) ? topY : 0 },
       size: { width: TABLE_W, height: estH },
       z: 2300,
       tableLabel: title,
       rows: meta,
       highlightFirstRow: false,   // a key/value card: the LEFT column is the header, not the top row
       highlightFirstCol: true,
+      // Every cell here is IMPORTED data, not authored prose - a Salesforce Description is a plain-text field,
+      // so interpreting its `*` as markdown is a coincidence rather than an intent. Two flows in a 339-flow
+      // sample have descriptions that render as accidental italics today; a description containing `2 * 3 * 4`
+      // would lose its operators the same way a formula does. The provenance boundary is the rule: a converter
+      // emits data and sets plainCells, a USER authoring a df.Table gets markdown.
+      plainCells: true,
+    });
+  }
+
+  // ── Open in Salesforce ─────────────────────────────────────────────────────
+  // A link card back to the flow in the platform, so a diagram handed to someone is one click from the real
+  // thing rather than a name they have to go and search for.
+  //
+  // It needs an ORG URL, and NEITHER source carries one: a `.flow-meta.xml` has no instance and no id, and a
+  // Tooling response has the `301...` id but still no instance. So the caller supplies `opts.orgUrl`, and
+  // without it no card is emitted - a link to a guessed host would be worse than none.
+  //
+  // With an id we can deep-link into Flow Builder. Without one (the XML path) the best available target is the
+  // Flows list in Setup, which is honest but weaker - so the card SAYS which it is rather than looking like a
+  // deep link that lands somewhere general.
+  const orgUrl = String(opts.orgUrl || '').trim().replace(/\/+$/, '');
+  if (orgUrl) {
+    // `opts.flowId` lets a caller supply an id the SOURCE does not carry - the CLI resolves one from the org
+    // for a .flow-meta.xml, whose file name is the API name but which holds no id.
+    const flowId = opts.flowId || input?.Id || input?.id || null;
+    const url = flowId
+      ? `${orgUrl}/builder_platform_interaction/flowBuilder.app?flowId=${encodeURIComponent(flowId)}`
+      : `${orgUrl}/lightning/setup/Flows/home`;
+    const metaCard = cells.find((c) => c.id === '__flowmeta');
+    const startCell = cells.find((c) => c.id === START_ID);
+    const LINK_W = 220, LINK_H = 44;
+    // ABOVE the flow card, centred on it, so it reads as part of that summary block. Above rather than below
+    // ON PURPOSE: the flow card's height is an ESTIMATE and the view grows it downward, so anything placed
+    // under it can be swallowed by an under-estimate - measured at -1px on the first attempt. Nothing sits
+    // above the card, so this cannot collide however far the estimate is out.
+    const lx = metaCard ? metaCard.position.x + (metaCard.size.width - LINK_W) / 2
+      : (startCell?.position.x ?? 0) + (W - LINK_W) / 2;
+    const ly = metaCard ? metaCard.position.y - LINK_H - 16
+      : (startCell?.position.y ?? 0) - LINK_H - 24;
+    cells.push({
+      id: '__flowlink',
+      type: 'sf.Link',
+      position: { x: lx, y: ly },
+      size: { width: LINK_W, height: LINK_H },
+      z: 2300,
+      url,
+      attrs: {
+        label: { text: flowId ? 'Open in Flow Builder' : 'Open Flows in Setup' },
+        // The whole URL on hover. The old sublabel showed a truncated host ("ma1781552930809. ...") which
+        // told the reader nothing and cost the label its vertical centring.
+      },
+    });
+    if (!flowId) {
+      warnings.push('the org link points at the Flows list, not this flow - a .flow-meta.xml carries no flow id, '
+        + 'so convert the Tooling API response instead if you want a direct link');
+    }
+  }
+
+  // ── Resources card ─────────────────────────────────────────────────────────
+  // A SIDEBAR to the right of the flow body, not another card stacked above Start. A flow is tall and thin, so
+  // HEIGHT is the scarce axis - fit-to-screen is height-bound, and every pixel added above Start zooms the whole
+  // diagram out. To the right, height is absorbed by the flow's own height and costs nothing. It also takes the
+  // load off the height ESTIMATE: __flowmeta has to guess high or it lands on top of Start, whereas nothing sits
+  // below this card, so guessing low is free.
+  // Added LAST, for the same reason __flowmeta is: it must not reach the layout, the End synthesis or the link
+  // pass, all of which have already run.
+  const resRows = resourceRows(md, convertCtx.choiceIdx);
+  if (resRows.length) {
+    // Same width as the flow card above it - two tables of different widths in one column read as a mistake.
+    const RES_W = 500, ROW_H = 28, LINE_H = 19, LABEL_H = 26;   // matches the flow card - one column, one width
+    // Columns are UNIFORM - js/shapes/core.js uses `colW = width / cols`, NOT a weighted split - so each of the
+    // two columns is 220px wide, about 28 characters per wrapped line at 13px. Estimate from the WIDER of the
+    // two cells: this is the first table whose left column carries long API names, and the view sizes each row
+    // by the max across both columns.
+    const RES_COLS = Math.floor((RES_W / 2 - 12) / CHAR_W);   // same derivation as the flow card
+    const lines = (s) => Math.max(1, Math.ceil(String(s).length / RES_COLS));
+    const estH = LABEL_H + resRows.reduce((h, [k, v]) =>
+      h + Math.max(ROW_H, Math.max(lines(k), lines(v)) * LINE_H + 9), 0);
+    // Directly UNDER the flow card, in the SAME left column, so the two read as one block of documentation
+    // running down the side of the flow rather than as two tables in different places.
+    const metaCard = cells.find((c) => c.id === '__flowmeta');
+    const colX = metaCard ? metaCard.position.x : cells.reduce((m, c) => (c.position && c.size
+      ? Math.max(m, c.position.x + c.size.width) : m), 0);
+    const top = metaCard ? metaCard.position.y + metaCard.size.height + 40
+      : cells.reduce((m, c) => (c.position && c.id !== '__flowmeta' ? Math.min(m, c.position.y) : m), Infinity);
+    cells.push({
+      id: '__flowresources',
+      type: 'df.Table',
+      position: { x: colX, y: Number.isFinite(top) ? top : 0 },
+      size: { width: RES_W, height: estH },
+      z: 2300,
+      tableLabel: 'Resources',
+      rows: resRows,
+      highlightFirstRow: false,   // like __flowmeta, the LEFT column is the header
+      highlightFirstCol: true,
+      // Cells hold CODE - a formula's `*` operators are markdown italic markers, so without this
+      // `{!Quantity} * {!UnitPrice} * 1.23` renders with the operators deleted. See js/shapes/markdown-fo.js.
+      plainCells: true,
+      // Ships COLLAPSED once it would outgrow the flow card above it. Short cards stay open - the four rows on a
+      // typical flow are the reason this card exists, and hiding them by default would undo that - but a
+      // 40-row card is ~1100px against the flow card's ~600px, and it turns the annotation column into the
+      // tallest thing on the canvas. Collapsed it is one row, and one click from all of it.
+      ...(resRows.length > RES_COLLAPSE_ABOVE ? { collapsed: true } : {}),
     });
   }
 
@@ -983,7 +1465,21 @@ export function flowLinkPorts(aPos, bPos, kind) {
   // the main path down the spine - the same way Flow Builder draws them.
   if (kind === 'fault' || kind === 'goto') {
     const out = dx >= 0 ? 'port-right' : 'port-left';
-    return [out, Math.abs(dy) > Math.abs(dx) ? (dy > 0 ? 'port-top' : 'port-bottom') : OPPOSITE[out]];
+    // SIDE TO SIDE wherever it can be. The old rule entered the TOP or BOTTOM whenever the vertical distance
+    // dominated - which on a flow, where ranks are stacked, is nearly always. So a Go To left the side of one
+    // card and dived into the top of another, crossing the spine to get there and colliding with the main
+    // path's own top-entry. Leaving a side and arriving at a side keeps the aside in the margin, which is where
+    // it belongs and how Flow Builder draws it. Reported: "Go to connector might look better side to side".
+    //
+    // Two shapes qualify, and the test for both is the same as the return-path rule's: the target must be CLEAR
+    // OF THE SOURCE CARD horizontally. Otherwise the two cards overlap, and a line leaving the right side at
+    // x+W has to travel back PAST a target whose left edge is barely right of the source's - the double-back
+    // that made side entry wrong for a near-vertical aside in the first place. There, top entry is still right.
+    //   · pointing UP - a Go To is usually a back-edge - re-enters the SAME side, the U-turn that reads as "go
+    //     round and repeat" rather than a line crossing the card it came from;
+    //   · pointing DOWN enters the OPPOSITE side, so the two stubs face each other.
+    if (dy < 0 || Math.abs(dx) >= W) return [out, dy < 0 ? out : OPPOSITE[out]];
+    return [out, dy < 0 ? 'port-bottom' : 'port-top'];
   }
   // A flow reads top-to-bottom, so ANY step to a different row leaves the bottom and enters the top -
   // the orthogonal router draws the horizontal jog. Do NOT pick by dominant axis: a branch that moves
@@ -996,7 +1492,12 @@ export function flowLinkPorts(aPos, bPos, kind) {
   // the SAME side, giving the U-turn that reads as "go round and repeat" rather than a crossing.
   // Left by default (matching Flow Builder); right only when the target genuinely sits to the right.
   if (dy < 0 && Math.abs(dy) >= H) {
-    const side = dx > W / 2 ? 'port-right' : 'port-left';
+    // "Genuinely to the right" has to mean CLEAR OF THE SOURCE CARD, not merely a positive dx. At `dx > W/2`
+    // a target only 137px right of a 210px-wide card counted as right-hand - so the two cards overlapped
+    // horizontally and the return path still wrapped round the right, travelling the length of the branch
+    // content that lives there. Requiring a full card width means an overlapping pair takes the default left
+    // gutter, which in a tidy-tree layout is the empty side.
+    const side = dx > W ? 'port-right' : 'port-left';
     return [side, side];
   }
   if (Math.abs(dy) >= H) return ['port-bottom', 'port-top'];

@@ -1,31 +1,34 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.21.7';
-import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.21.7';
-import { pctx } from './persistence/context.js?v=1.21.7';
-export { assertPctxWired } from './persistence/context.js?v=1.21.7';   // S8 wiring self-check (app.js calls it at end of init)
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.22.0';
+import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.22.0';
+import { pctx } from './persistence/context.js?v=1.22.0';
+export { assertPctxWired } from './persistence/context.js?v=1.22.0';   // S8 wiring self-check (app.js calls it at end of init)
 
 // ── Facade (Phase 3, Slice 1): image export + share orchestration now live in
 // sub-modules; re-exported here so the public surface is unchanged. ──
-export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.21.7';
-export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.21.7';
+export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.22.0';
+export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.22.0';
 // remote-store: user-owned cloud storage (Google Drive). Reads pctx like the other
 // sub-modules; no separate init needed. Phase 1 = saveToDrive / openFromDrive.
-export { ensureDriveConfig, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.21.7';
+export { ensureDriveConfig, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.22.0';
 // versioning: contentSignature + classifyVersionDiff are public (tests/templates use them);
 // checkVersionWarning is imported for internal use (loadNamedSave/loadJSONText) + pctx wiring.
 // Local bindings (the re-export above doesn't create them) so init() can wire the Drive-aware backup gate.
-import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.21.7';
-import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.21.7';
+import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.22.0';
+import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.22.0';
 export { contentSignature, classifyVersionDiff };
 // Multi-load version-warning coalescing (item 3): wrap a Load-Selected loop in these so a shared old version
 // prompts once, not per file.
-export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.21.7';
+export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.22.0';
 // json-pipeline: sanitizeGraphJSON is public AND used internally (loadNamedSave);
 // importJSON is a public entry point; loadJSONText + describePastedJSON back the unified Load-from-Paste modal.
-import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.21.7';
-import { importFlowSource, looksLikeFlowXml, looksLikeFlowJson } from './persistence/flow-import.js?v=1.21.7';
+import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.22.0';
+import { importFlowSource, looksLikeFlowXml, looksLikeFlowJson, stripHttpPreamble } from './persistence/flow-import.js?v=1.22.0';
+import { buildDiagram as buildMappingDiagram, fromConnectPayload, parseMappingXmlAll,
+  looksLikeMappingJson as _looksLikeMappingJson, looksLikeMappingXml } from './persistence/mapping-convert.js?v=1.22.0';
+import { looksLikeDataGraphJson as _looksLikeDataGraphJson, parseDataGraph, buildDataGraphDiagram } from './persistence/datagraph-convert.js?v=1.22.0';
 export { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON };
 export { looksLikeFlowXml, looksLikeFlowJson };
 
@@ -52,17 +55,85 @@ export async function loadFlowSource(text, name) {
   else showToast(`Imported ${stats.elements} elements and ${stats.links} connectors.`, 'success');
   return true;
 }
+// Data Cloud field mappings (1.22.0): the ONE-GET route into a `datamapping` diagram.
+//
+//   /services/data/vXX.0/ssot/data-model-object-mappings?dmoDeveloperName=ssot__Individual__dlm
+//
+// Why this exists when the CLI already converts mappings: that path needs a bulk metadata RETRIEVE, so it
+// serves people who can authenticate the Salesforce CLI. This one is a single GET a user can run from
+// Workbench's REST Explorer, which authenticates by browser OAuth and therefore works in orgs where the CLI's
+// connected app is blocked. Being DMO-scoped it also needs no selection step - asking for one DMO IS the
+// diagram. It is exactly the shape the Flow importer already takes, and it makes mappings behave the same way.
+//
+// It costs the two enrichments the metadata path carries: the Connect payload has no `isSourceFormula` and no
+// `filterApplied`, so there are no Formula companion cards and no Expression / Rule values. Measured across a
+// real org that is ~167 of 3661 field rows, about 5%. The toast says so rather than letting the user discover
+// it by noticing something absent.
+// Wrapped rather than re-exported, to strip Workbench's HTTP preamble first. Its REST Explorer renders the
+// whole exchange - "Raw Response", the status line, a dozen headers - above the body, and people copy the lot.
+// Since Workbench IS the route this feature exists for, requiring a hand-trimmed payload would break it for
+// exactly the audience it serves. flow-import.js already solved this; reuse it rather than teaching the shared
+// converter about an HTTP client it should know nothing about.
+export const looksLikeMappingJson = (text) => _looksLikeMappingJson(stripHttpPreamble(String(text || '')))
+  || looksLikeMappingXml(text);
+/** A Data Cloud DATA GRAPH - either the `/ssot/data-graphs/<name>` definition or the preview payload copied
+ *  out of the Data Cloud UI. See js/persistence/datagraph-convert.js for the two shapes and why both matter. */
+export const looksLikeDataGraphJson = (text) => _looksLikeDataGraphJson(stripHttpPreamble(String(text || '')));
+
+export async function loadDataGraph(text, name) {
+  let built;
+  try {
+    const parsed = parseDataGraph(JSON.parse(stripHttpPreamble(String(text || ''))));
+    built = buildDataGraphDiagram(parsed, { appVersion: pctx.appVersion, title: name || null });
+  } catch (e) { showToast(e.message || 'Could not read that data graph.', 'error'); return false; }
+  const ok = await loadJSONText(JSON.stringify(built.diagram), built.diagram.title);
+  if (!ok) return false;
+  const s = built.stats;
+  // Say what the SOURCE could carry rather than a fixed caveat - a preview genuinely has less in it, and the
+  // reader should know the labels they are looking at were derived rather than given.
+  showToast(s.kind === 'preview'
+    ? `${s.objects} objects, ${s.depth} levels. A preview payload has no labels or key flags - names are derived from the API names.`
+    : `${s.objects} objects, ${s.depth} levels, from the data graph definition.`, 'success');
+  return true;
+}
+
+export async function loadDataCloudMapping(text, name) {
+  let diagram, stats;
+  try {
+    // XML or Connect JSON. The XML is the ObjectSourceTargetMap METADATA, and it is the only source that
+    // carries formulas and filters - no Connect or Tooling endpoint exposes `isSourceFormula` at all, which is
+    // why pasting the retrieved file is worth offering rather than only the one-GET response.
+    const raw = String(text || '');
+    const maps = looksLikeMappingXml(raw)
+      ? parseMappingXmlAll(raw)
+      : fromConnectPayload(JSON.parse(stripHttpPreamble(raw)));
+    ({ diagram, stats } = buildMappingDiagram(maps, { title: name || null, appVersion: pctx.appVersion }));
+  } catch (e) { showToast(e.message || 'Could not read those Data Cloud mappings.', 'error'); return false; }
+  const ok = await loadJSONText(JSON.stringify(diagram), diagram.title);
+  if (!ok) return false;
+  // Say what the SOURCE could carry, not a fixed caveat: the XML has formulas and filters, the Connect
+  // response cannot express either, and telling an XML user to "retrieve the metadata" they just pasted is
+  // nonsense.
+  const rich = stats.formulas > 0 || stats.filtered > 0 || looksLikeMappingXml(text);
+  showToast(`Imported ${stats.fieldLinks} field mappings across ${stats.objectMaps} object mappings`
+    + (rich
+      ? `${stats.formulas ? `, ${stats.formulas} formula-sourced` : ''}${stats.filtered ? `, ${stats.filtered} filtered` : ''}.`
+      : '. Formulas and filters are not in a Connect API response - paste the ObjectSourceTargetMap metadata for those.'),
+  'success', { duration: 9000 });
+  return true;
+}
+
 // storage: getNamedSaves/readNamedSave/NAMED_SAVE_PREFIX feed pctx (read by
 // json-pipeline); the rest are the public storage surface.
-import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.21.7';
+import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.22.0';
 export {
   namedSave, isQuotaError, getStorageFootprint, getStorageBreakdown, STORAGE_WARNING_BYTES, evictRedundantArchives, forgetArchivesForDriveFile,
   requestPersistentStorage, getNamedSaves, loadNamedSave, deleteNamedSave, getLastBackupAt,
   exportSelection, exportEverything, maybeShowBackupReminder, markFullBackup,
-} from './persistence/storage.js?v=1.21.7';
+} from './persistence/storage.js?v=1.22.0';
 
 let graph, paper, canvasModule;
-const APP_VERSION = '1.21.7';
+const APP_VERSION = '1.22.0';
 export { APP_VERSION };
 // Wire the version into pctx at module-eval (it's a constant) so the extracted
 // version helpers work even before init() runs — e.g. unit tests calling

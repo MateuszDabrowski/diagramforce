@@ -4,12 +4,12 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.21.7';
-import { finishStandardProps } from './render-core.js?v=1.21.7';
-import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.21.7';
-import { escHtml } from '../util.js?v=1.21.7';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.21.7';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.21.7';
+import { prctx } from './context.js?v=1.22.0';
+import { finishStandardProps } from './render-core.js?v=1.22.0';
+import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.22.0';
+import { escHtml } from '../util.js?v=1.22.0';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.22.0';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.22.0';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -108,28 +108,49 @@ export function renderFlowElementProps(cell) {
   const rows = cell.get('details');
   if (Array.isArray(rows) && rows.length) {
     const meta = section(prctx.bodyEl, 'Metadata');
-    const table = document.createElement('table');
-    table.className = 'df-prop-detail-table';
-    table.innerHTML = rows.map((r) => {
-      const label = escHtml(String(r?.label ?? ''));
-      const value = escHtml(String(r?.value ?? ''));
-      return `<tr><th scope="row">${label}</th><td>${value || '<span class="df-prop-detail-table__empty">-</span>'}</td></tr>`;
-    }).join('');
-    meta.appendChild(table);
-    // State the SUPPRESSION RULE. The converter drops action parameters that are unset or explicitly `false`,
-    // because Salesforce writes the full parameter list whether or not it was configured - on a real Send Email
-    // action that was 20 of 27 rows saying nothing. But a reader cannot tell "hidden because it is off" from
-    // "the app is not showing me something", and that ambiguity is a trust problem, not a data problem
-    // (real-use feedback 2026-07-27: "nie jestem pewna, czy jest to pomocne, czy generuje wiecej szumu").
+    // Two groups. LOUD rows are what the element actually does; QUIET rows are flags Salesforce wrote as
+    // `false`. The owner's call, looking at a real Send Email card: "those false values are actually useful
+    // information... just collapsed by default". So they are kept and folded away rather than dropped - "off"
+    // is an answer, and a reader cannot get it from an absence.
+    const loud = rows.filter((r) => !r?.quiet);
+    const quiet = rows.filter((r) => r?.quiet);
+    const tableFor = (list) => {
+      const t = document.createElement('table');
+      t.className = 'df-prop-detail-table';
+      t.innerHTML = list.map((r) => {
+        const label = escHtml(String(r?.label ?? ''));
+        const value = escHtml(String(r?.value ?? ''));
+        return `<tr><th scope="row">${label}</th><td>${value || '<span class="df-prop-detail-table__empty">-</span>'}</td></tr>`;
+      }).join('');
+      return t;
+    };
+    if (loud.length) meta.appendChild(tableFor(loud));
+
+    if (quiet.length) {
+      // A native <details>, not a custom toggle: it is collapsed by default, keyboard-reachable and
+      // screen-reader-announced for free, and it carries its own open/closed state without any of ours.
+      const d = document.createElement('details');
+      d.className = 'df-prop-detail-more';
+      const sm = document.createElement('summary');
+      sm.textContent = `${quiet.length} setting${quiet.length === 1 ? '' : 's'} turned off`;
+      d.appendChild(sm);
+      d.appendChild(tableFor(quiet));
+      meta.appendChild(d);
+    }
+
+    // State the remaining SUPPRESSION RULE. Explicitly-false flags are now kept (above); what is still dropped
+    // at import is the UNSET parameter, and that stays dropped because it genuinely says nothing - Salesforce
+    // writes the whole parameter list whether or not it was configured, so an untouched `replyToName` is noise.
+    // Measured across 60 real flows / 96 action cards: the false flags are +5% of detail rows, the unset ones a
+    // further +8% that would say nothing at all.
     //
-    // A NOTE rather than a "Show All" toggle, deliberately: the suppressed rows are dropped at IMPORT and are
-    // not in the diagram to reveal, so a toggle would mean persisting them - measured at +181% on that card's
-    // details, in localStorage AND every save AND every share URL. It would also exceed DETAIL_CAP (20) and
-    // render "+7 more", so the button would not even show all. And because this is a panel string rather than
-    // baked data, it works on flows imported BEFORE this release, which storing rows never could.
+    // Still a NOTE rather than a toggle for the unset ones, and for the original reason: they are dropped at
+    // IMPORT and are not in the diagram to reveal, so a toggle would mean persisting them - in localStorage,
+    // every save and every share URL. And because this is a panel string rather than baked data, it is right
+    // for flows imported BEFORE this release too, which storing rows never could be.
     const note = document.createElement('p');
     note.className = 'df-prop-detail-note';
-    note.textContent = 'Values that are unset or false are hidden.';
+    note.textContent = 'Parameters that were never set are hidden.';
     meta.appendChild(note);
   }
 

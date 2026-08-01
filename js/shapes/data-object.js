@@ -1,10 +1,10 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.21.7';
-import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.21.7';
-import { portGroups } from './ports.js?v=1.21.7';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.21.7';
+import { sctx } from './context.js?v=1.22.0';
+import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.22.0';
+import { portGroups } from './ports.js?v=1.22.0';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.22.0';
 
 export function registerDataObject() {
   // --- DataObject ---
@@ -66,6 +66,16 @@ export function registerDataObject() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fill: '#FFFFFF',
           text: 'Object',
+          // TRUNCATE. Without a textWrap, JointJS renders the raw string with no width constraint, so a long
+          // API name (`Experience_Cloud_Event_Connecto_699733F3` - Data Cloud generates plenty) runs straight
+          // out past the card edge and over whatever sits beside it. Every other label shape in the app
+          // already carries one; this one was simply missed.
+          // maxLineCount 1 because the header is a fixed 32px band - wrapping would spill below it. The width
+          // tracks the x inset, which updateDataObjectHeaderLayout moves 12 -> 32 when an icon is present.
+          // `w - 54`, not `w - 24`: the header's right end carries the visible-field COUNT BADGE ("8/8"),
+          // measured at x = w-36 on a 260 card. Reserving only the left inset let a long name run straight
+          // under it - the label ended at 247 while the badge started at 224.
+          textWrap: { width: 'calc(w - 54)', maxLineCount: 1, ellipsis: true },
         },
       },
       ports: {
@@ -480,6 +490,20 @@ export function registerDataObject() {
       chev.setAttribute('fill', 'none'); chev.setAttribute('stroke', 'var(--text-muted)');
       chev.setAttribute('stroke-width', '1.5'); chev.setAttribute('stroke-linecap', 'round');
       chev.setAttribute('stroke-linejoin', 'round'); chev.setAttribute('pointer-events', 'none');
+      // COLLAPSED, say HOW MANY fields are hidden. A bare chevron tells the reader a card is collapsed but not
+      // whether it is hiding three fields or ninety, which is the fact they want before deciding to open it.
+      // Left of the centred chevron, so the chevron stays where the eye already expects it.
+      if (collapsed) {
+        const n = getVisibleDataObjectFields(model).length;
+        const cnt = document.createElementNS(ns, 'text');
+        cnt.setAttribute('x', String(cxc - 12)); cnt.setAttribute('y', String(cyc));
+        cnt.setAttribute('text-anchor', 'end'); cnt.setAttribute('dominant-baseline', 'central');
+        cnt.setAttribute('font-size', '10');
+        cnt.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
+        cnt.setAttribute('fill', 'var(--text-muted)'); cnt.setAttribute('pointer-events', 'none');
+        cnt.textContent = `${n} ${n === 1 ? 'field' : 'fields'}`;
+        tg.appendChild(cnt);
+      }
       tg.appendChild(chev);
       thit.addEventListener('mousedown', (evt) => evt.stopPropagation());
       thit.addEventListener('click', (evt) => {

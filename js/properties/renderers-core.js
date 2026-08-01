@@ -5,16 +5,16 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.21.7';
-import { prctx } from './context.js?v=1.21.7';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.21.7';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.21.7';
-import { startImageAddFlow } from '../image-component.js?v=1.21.7';
-import { recolorCellIcon } from './color-schema.js?v=1.21.7';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.21.7';
-import { renderFieldEditor } from './field-editor.js?v=1.21.7';
-import { finishStandardProps } from './render-core.js?v=1.21.7';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.21.7';
+import * as history from '../history.js?v=1.22.0';
+import { prctx } from './context.js?v=1.22.0';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.22.0';
+import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.22.0';
+import { startImageAddFlow } from '../image-component.js?v=1.22.0';
+import { recolorCellIcon } from './color-schema.js?v=1.22.0';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.22.0';
+import { renderFieldEditor } from './field-editor.js?v=1.22.0';
+import { finishStandardProps } from './render-core.js?v=1.22.0';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.22.0';
 
 /** df.Placeholder — Label + Description, and deliberately nothing else.
  *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
@@ -317,9 +317,14 @@ export function renderLinkElementProps(cell) {
   });
   addText(content, 'URL', cell.get('url') || '', v => {
     cell.set('url', v);
-    const domain = extractLinkDomain(v);
-    cell.attr('domain/text', domain);
-    cell.attr('label/y', domain ? 'calc(0.5 * h - 8)' : 'calc(0.5 * h)');
+    // The URL is shown on hover, not as a sublabel. At 10px inside a 220px pill the sublabel truncated to
+    // noise ("ma1781552930809. ...") and pushed the label off centre; the hover tip has room for the whole URL
+    // and is there when wanted rather than always. Nothing to write here - js/canvas/cell-tooltip.js reads
+    // `url` off the model at hover time. Clearing `domain/text` heals a diagram saved before 1.22.0, which
+    // still carries the old sublabel.
+    cell.attr('domain/text', '');
+    cell.attr('domain/visibility', 'hidden');
+    cell.attr('label/y', 'calc(0.5 * h)');
   });
 
   // Appearance — canonical: Fill → Border → typography (Label color, Font size)

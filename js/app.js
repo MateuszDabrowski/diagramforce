@@ -1,30 +1,30 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.21.7';
-import * as icons       from './icons.js?v=1.21.7';
-import { getAllStencilSvgs } from './components.js?v=1.21.7';
-import * as shapes      from './shapes.js?v=1.21.7';
-import * as canvas      from './canvas.js?v=1.21.7';
-import * as stencil     from './stencil.js?v=1.21.7';
-import * as selection   from './selection.js?v=1.21.7';
-import * as history     from './history.js?v=1.21.7';
-import * as clipboard   from './clipboard.js?v=1.21.7';
-import * as templates    from './templates.js?v=1.21.7';
-import * as keyboard    from './keyboard.js?v=1.21.7';
-import * as toolbar     from './toolbar.js?v=1.21.7';
-import * as properties  from './properties.js?v=1.21.7';
-import * as persistence from './persistence.js?v=1.21.7';
-import * as tabs        from './tabs.js?v=1.21.7';
-import * as mermaidImport from './mermaid-import.js?v=1.21.7';
-import * as tableView    from './table-view.js?v=1.21.7';
-import * as walkthrough  from './walkthrough.js?v=1.21.7';
-import * as whatsNew     from './whats-new.js?v=1.21.7';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.21.7';
-import * as externalImport from './persistence/external-import.js?v=1.21.7';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.21.7';
-import { seedDefaultPalette } from './brand-palette.js?v=1.21.7';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.21.7';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.22.0';
+import * as icons       from './icons.js?v=1.22.0';
+import { getAllStencilSvgs } from './components.js?v=1.22.0';
+import * as shapes      from './shapes.js?v=1.22.0';
+import * as canvas      from './canvas.js?v=1.22.0';
+import * as stencil     from './stencil.js?v=1.22.0';
+import * as selection   from './selection.js?v=1.22.0';
+import * as history     from './history.js?v=1.22.0';
+import * as clipboard   from './clipboard.js?v=1.22.0';
+import * as templates    from './templates.js?v=1.22.0';
+import * as keyboard    from './keyboard.js?v=1.22.0';
+import * as toolbar     from './toolbar.js?v=1.22.0';
+import * as properties  from './properties.js?v=1.22.0';
+import * as persistence from './persistence.js?v=1.22.0';
+import * as tabs        from './tabs.js?v=1.22.0';
+import * as mermaidImport from './mermaid-import.js?v=1.22.0';
+import * as tableView    from './table-view.js?v=1.22.0';
+import * as walkthrough  from './walkthrough.js?v=1.22.0';
+import * as whatsNew     from './whats-new.js?v=1.22.0';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.22.0';
+import * as externalImport from './persistence/external-import.js?v=1.22.0';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.22.0';
+import { seedDefaultPalette } from './brand-palette.js?v=1.22.0';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.22.0';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -93,8 +93,10 @@ async function main() {
   history.setLoadingGuard(canvas.isLoadingJSON);
   clipboard.init(graph, paper, selection);
 
-  // Custom templates library (capture from multi-select, drop from stencil).
-  templates.init(graph, selection, history);
+  // Custom templates library (capture from multi-select, drop from stencil). The 4th arg is the post-insert
+  // heal for OFFICIAL templates (compacted saves): the same migrateLinks+migrateNodes the load path runs,
+  // injected so templates.js stays importable in node tests (no JointJS global there).
+  templates.init(graph, selection, history, () => { canvas.migrateLinks(); canvas.migrateNodes(); });
 
   // Data Mapping table view (read-only projection; toggled from the toolbar).
   tableView.init({ graph });

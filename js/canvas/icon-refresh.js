@@ -5,7 +5,7 @@
 // every element's icon (current normalized viewBoxes). registerIconRefresh(cctx) exposes
 // refreshAllIconHrefs + freqClockUri (the frequency-label clock-glyph builder used by the inline
 // link-styles frequency label) on cctx. Reads the live graph via cctx.
-import { cctx } from './context.js?v=1.21.7';
+import { cctx } from './context.js?v=1.22.0';
 
 let _iconDataUriFn = null;
 export function setIconDataUriFn(fn) { _iconDataUriFn = fn; }

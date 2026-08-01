@@ -1,10 +1,10 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.21.7';
-import { portGroups, portItems } from './ports.js?v=1.21.7';
-import { sanitizeCssColor } from '../util.js?v=1.21.7';
-import { getIconDataUri } from '../icons.js?v=1.21.7';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.22.0';
+import { portGroups, portItems } from './ports.js?v=1.22.0';
+import { sanitizeCssColor } from '../util.js?v=1.22.0';
+import { getIconDataUri } from '../icons.js?v=1.22.0';
 
 // The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
 // than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a
@@ -633,6 +633,11 @@ export function registerCore() {
       tableLabel: '',
       highlightFirstRow: true,
       highlightFirstCol: false,
+      // Render cells LITERALLY instead of as inline markdown. Off by default, so every table authored before
+      // this keeps its current rendering. Turn it on when the cells hold CODE rather than prose: a Salesforce
+      // formula's `*` operators are markdown italic markers, so `{!a} * {!b} * 2` renders as
+      // `{!a} <em> {!b} </em> 2` with the operators silently deleted.
+      plainCells: false,
       fontSize: 13,
       tableFill: 'var(--node-bg)',
       tableBorder: 'var(--node-border)',   // the rename "Grid & Border": also tints the inner grid lines
@@ -711,7 +716,7 @@ export function registerCore() {
       // (on `body`) stays visible because the selection override no longer hides it.
       this.el.classList.add('df-table-el');
       this.listenTo(this.model,
-        'change:rows change:size change:tableLabel change:highlightFirstRow change:highlightFirstCol change:fontSize change:tableFill change:tableBorder change:tableTextColor',
+        'change:rows change:size change:tableLabel change:highlightFirstRow change:highlightFirstCol change:plainCells change:fontSize change:tableFill change:tableBorder change:tableTextColor change:collapsed',
         () => this._renderTable());
       // Hover cross-highlight: a delegated handler (one listener for the whole table) tints the hovered cell's
       // row + column. Cheap — just toggles opacity + repositions two cached rects; no re-render.
@@ -747,15 +752,25 @@ export function registerCore() {
       const old = this.el.querySelector(':scope > g.df-table-g');
       if (old) old.remove();
 
-      const rows = model.get('rows') || [];
+      // COLLAPSED (1.22.0) - header plus a count, the same idea as sf.DataObject's collapse. It lets a card
+      // carry the FULL data and cost one row of canvas until someone wants it, which is what the Resources card
+      // on a flow diagram now does.
+      // Rendered as ONE synthetic single-column row so every geometry, grid and measurement path below is the
+      // one that is already proven, rather than a second layout that has to be kept in step.
+      const isCollapsed = model.get('collapsed') === true;
+      const allRows = model.get('rows') || [];
+      const hidden = allRows.length;
+      const rows = isCollapsed
+        ? [[`${hidden} ${hidden === 1 ? 'row' : 'rows'} hidden`]]
+        : allRows;
       if (!rows.length) {
         this.el.querySelectorAll(':scope > foreignObject[data-md^="cell-"]').forEach(fo => fo.remove());
         return;
       }
       const fontSize = Math.max(6, Number(model.get('fontSize')) || 13);
       const labelText = String(model.get('tableLabel') || '');
-      const hlRow = !!model.get('highlightFirstRow');
-      const hlCol = !!model.get('highlightFirstCol');
+      const hlRow = !isCollapsed && !!model.get('highlightFirstRow');
+      const hlCol = !isCollapsed && !!model.get('highlightFirstCol');
       // Colours are interpolated into SVG attrs + a CSS string → sanitise via the shared security primitive.
       const safeColor = sanitizeCssColor;
       const tableFill = safeColor(model.get('tableFill'), 'var(--node-bg)');
@@ -764,6 +779,8 @@ export function registerCore() {
       const cols = Math.max(1, ...rows.map(r => (Array.isArray(r) ? r.length : 0)), 1);
       const { width } = model.size();
       const colW = width / cols;
+      // Cells are CODE, not prose - render them literally instead of as markdown. See ensureMarkdownFO.
+      const plainCells = model.get('plainCells') === true;
       const labelFont = fontSize + 2;   // the label reads one notch larger than the cells
       const labelH = labelText ? Math.round(labelFont + 12) : 0;
       const PAD_X = 6, PAD_Y = 5;
@@ -791,6 +808,10 @@ export function registerCore() {
           ensureMarkdownFO(this, key, text, {
             x: Math.round(c * colW + PAD_X), y: 0, width: Math.max(0, colW - PAD_X * 2), height: 4000,
             css: cellCss(bold),
+            // Opt-in literal mode for tables whose cells hold CODE. Default false, so every table shipped
+            // before this keeps rendering markdown exactly as it did. The flow converter's Resources card
+            // sets it because a formula's `*` operators are markdown italic markers and would disappear.
+            plain: plainCells,
           });
           cellList.push({ key, r, text });
         }
@@ -861,6 +882,59 @@ export function registerCore() {
       this._hoverCol = rect(0, labelH, 0, tableH, 'var(--selection-color)', null, 0); this._hoverCol.setAttribute('opacity', '0'); this._hoverCol.setAttribute('class', 'df-table-hl-col'); g.appendChild(this._hoverCol);
       this._geom = { rowY: rowY.slice(), rowH: rowH.slice(), colW, labelH, tableH, width, cols };
       // Insert the chrome <g> BEFORE the first cell FO so the markdown text paints on top of the fill/tints.
+      // ── Collapse / expand toggle (always present, both states) ──────────────────────────────────────────
+      // Deliberately the SAME control as sf.DataObject's (js/shapes/data-object.js): an 18px strip with a
+      // chevron, `mousedown` stopped so it never starts a drag, `click` toggling `collapsed`. The owner asked
+      // for "the same collapse/uncollapse mechanism as Object", and a second idiom for the same gesture would be
+      // worse than none. Touch works via the browser's synthesised click, matching DataObject.
+      const TOGGLE_H = 18;
+      const ty = totalH;
+      const tg = document.createElementNS(ns, 'g');
+      tg.setAttribute('class', 'df-table-collapse-toggle');
+      tg.setAttribute('cursor', 'pointer');
+      const thit = document.createElementNS(ns, 'rect');
+      thit.setAttribute('x', '0'); thit.setAttribute('y', String(ty));
+      thit.setAttribute('width', String(width)); thit.setAttribute('height', String(TOGGLE_H));
+      thit.setAttribute('fill', 'transparent'); thit.setAttribute('pointer-events', 'all');
+      tg.appendChild(thit);
+      // COLLAPSED, the summary row is a click target too. The row text lives in a foreignObject that is
+      // `pointer-events: none` (so a click reaches the JointJS geometry beneath), which meant the only way to
+      // expand was the 18px chevron strip - reported as "clicking there doesn't expand... can clicking on that
+      // text also expand?". A second transparent hit rect over the row makes the obvious target the real one.
+      // Only when collapsed: on an expanded table that area is the first data row, and swallowing clicks there
+      // would break selecting and dragging the card by its own body.
+      if (isCollapsed) {
+        const rhit = document.createElementNS(ns, 'rect');
+        rhit.setAttribute('x', '0'); rhit.setAttribute('y', String(labelH));
+        rhit.setAttribute('width', String(width)); rhit.setAttribute('height', String(Math.max(0, totalH - labelH)));
+        rhit.setAttribute('class', 'df-table-collapse-rowhit');
+        rhit.setAttribute('fill', 'transparent'); rhit.setAttribute('pointer-events', 'all');
+        rhit.setAttribute('cursor', 'pointer');
+        rhit.addEventListener('mousedown', (evt) => evt.stopPropagation());
+        rhit.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          this.model.prop('collapsed', false);
+        });
+        tg.appendChild(rhit);
+      }
+      const cxc = width / 2, cyc = ty + TOGGLE_H / 2;
+      const chev = document.createElementNS(ns, 'path');
+      chev.setAttribute('d', isCollapsed
+        ? `M ${cxc - 5} ${cyc - 2} L ${cxc} ${cyc + 3} L ${cxc + 5} ${cyc - 2}`
+        : `M ${cxc - 5} ${cyc + 2} L ${cxc} ${cyc - 3} L ${cxc + 5} ${cyc + 2}`);
+      chev.setAttribute('fill', 'none'); chev.setAttribute('stroke', 'var(--text-muted)');
+      chev.setAttribute('stroke-width', '1.5'); chev.setAttribute('stroke-linecap', 'round');
+      chev.setAttribute('stroke-linejoin', 'round'); chev.setAttribute('pointer-events', 'none');
+      tg.appendChild(chev);
+      thit.addEventListener('mousedown', (evt) => evt.stopPropagation());
+      thit.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        // One prop write. `collapsed` is in history.js CONTENT_PROPS, so this undoes in a single step together
+        // with the `change:size` the re-render triggers - they merge inside the same idle window.
+        this.model.prop('collapsed', !this.model.get('collapsed'));
+      });
+      g.appendChild(tg);
+
       this.el.insertBefore(g, this.el.querySelector(':scope > foreignObject[data-md^="cell-"]'));
 
       // 4. Resize the model to the measured content height — but ONLY when the CONTENT or WIDTH changed (a fit
@@ -871,11 +945,20 @@ export function registerCore() {
         this._mdRetryCount = 0;
         // Include the label: adding / removing / resizing it changes labelH (totalH), so it MUST re-fit the model
         // height — else the resize corners + the selection bounds lag at the pre-label size (the reported bug).
-        const fitKey = width + '|' + fontSize + '|' + JSON.stringify(labelText) + '|' + JSON.stringify(rows);
+        // `isCollapsed` is REDUNDANT today and kept deliberately. Because the collapsed state is rendered by
+        // deriving a one-row synthetic `rows`, the JSON.stringify below already differs between states, so a
+        // mutation test that removes this term still passes. It stays because the key should name the state the
+        // fit actually depends on: a later refactor that renders the collapse WITHOUT swapping `rows` would
+        // otherwise skip the resize and leave an expanded box around one line of content, silently.
+        const fitKey = width + '|' + fontSize + '|' + JSON.stringify(labelText) + '|' + JSON.stringify(rows)
+          + '|' + isCollapsed;
         const cur = model.size();
-        if (fitKey !== this._lastFitKey && Math.abs(cur.height - totalH) > 0.5 && !model._fitting) {
+        // TOGGLE_H is part of the card: fitting to `totalH` alone clips the strip the click target lives in, so
+        // the control would be unreachable on a freshly fitted table.
+        const fitH = totalH + TOGGLE_H;
+        if (fitKey !== this._lastFitKey && Math.abs(cur.height - fitH) > 0.5 && !model._fitting) {
           model._fitting = true;
-          try { model.resize(width, totalH); } finally { model._fitting = false; }
+          try { model.resize(width, fitH); } finally { model._fitting = false; }
         }
         this._lastFitKey = fitKey;
       } else if (!this._mdRetry && this.el && this.el.parentNode && (this._mdRetryCount = (this._mdRetryCount || 0) + 1) <= 8) {
