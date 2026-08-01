@@ -1,17 +1,17 @@
 ---
 name: diagramforce
 description: >-
-  Author an importable Diagramforce diagram - from a description, from an existing diagram (a screenshot,
-  draw.io, or Mermaid), or from real Salesforce Flow metadata (a .flow-meta.xml source file or Tooling API JSON) - then hand the user a
-  file to open in Diagramforce. Diagramforce is a no-backend browser editor for Salesforce/CRM
-  architecture, data models (ERD), Data Cloud field mappings, process flows, Salesforce Flows, org
-  charts, Gantt timelines, and UML sequence diagrams. Use it whenever the user wants to visualize,
-  diagram, map, model, draw, or recreate any of those as an editable diagram - especially in a
-  Salesforce, Marketing Cloud, or Data Cloud context, and even when they don't name Diagramforce (e.g. 'turn
-  this into an ERD', 'map these fields into the Individual DMO', 'diagram this Flow from my org', 'redraw
-  this architecture screenshot'). It outputs diagram JSON validated to import intact - no account, no
-  backend. Do NOT use it for data charts or dashboards, for writing code, or for reviewing a design
-  without drawing it.
+  Author an importable Diagramforce diagram - from a description, from an existing diagram (a
+  screenshot, draw.io, or Mermaid), or from real Salesforce metadata (Flows, objects, Data Cloud
+  mappings, data graphs) - then hand the user a file to open in Diagramforce. Diagramforce is a
+  no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data Cloud field
+  mappings, process flows, Salesforce Flows, org charts, Gantt timelines, and UML sequence diagrams.
+  Use it whenever the user wants to visualize, diagram, map, model, draw, or recreate any of those as
+  an editable diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context, even when
+  they don't name Diagramforce (e.g. 'turn this into an ERD', 'map these fields into the Individual
+  DMO', 'diagram this Flow from my org'). It outputs diagram JSON validated to import intact - no
+  account, no backend. Do NOT use it for data charts or dashboards, for writing code, or for reviewing
+  a design without drawing it.
 ---
 
 # Diagramforce diagram authoring
