@@ -24,7 +24,13 @@
 const CARD_W = 380;                     // narrower than the ERD's - a tree gets wide fast
 const COL_GAP = 140, ROW_GAP = 56;
 const HEADER_H = 32, ROW_H = 22, CARD_PAD = 18;
-const ACCENTS = ['#1D73C9', '#7F56D9', '#E8912D', '#12B76A', '#D92D20', '#0E7490', '#B54708'];
+// One accent per tree DEPTH, so adjacent entries are the two columns a reader compares side by side.
+// RESTATED from DF_ACCENT_CYCLE in js/persistence/diagram-palette.js (prefix of 7) rather than imported - this
+// file is import-free so it can be hand-copied to the skill verbatim; dev/tests/diagram-palette.test.js fails
+// if these drift from the palette. Every entry clears 3:1 on BOTH the light (#FAFAFA) and dark (#1A1A1A)
+// canvas; the previous set had #E8912D at 2.36 and #12B76A at 2.51 on light, and a data graph is shared by URL
+// into whichever theme the reader happens to run.
+const ACCENTS = ['#1D73C9', '#BE5C2A', '#008B46', '#B652A7', '#00849E', '#DA4E55', '#8467C9'];
 
 /** A Data Cloud DMO name reads as `ssot__ContactPointEmail__dlm`; a card wants "Contact Point Email". */
 export const humaniseDmo = (name) => String(name || '')

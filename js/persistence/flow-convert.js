@@ -19,6 +19,17 @@
 // Card geometry + z-tiers. These MIRROR the app's own (FLOW_W/FLOW_H in js/shapes/flow.js, Z_ELEMENT /
 // Z_LINK in js/canvas/z-tiers.js) and are restated rather than imported to keep this file import-free.
 const W = 210, H = 56, Z_EL = 2000, Z_LINK = 3000;
+// These two are NOT free colour choices, and the both-themes palette rule does not reach them: a flow connector
+// stores no type prop, so `flowConnectorType()` in js/canvas/link-styles.js derives the type FROM THE STROKE -
+// red is Fault, this exact blue is Go To, anything else is Standard. The value is a protocol token the renderer
+// parses, so changing it here alone would not recolour a Go To, it would stop the app recognising one: no dotted
+// line, no blue italic destination label, and then repainted standard grey on load.
+//
+// FAULT_RED is fine anyway - Salesforce's brand red scores 4.45 light / 3.74 dark, clearing both floors.
+// GOTO_BLUE does NOT: 6.42 light but 2.60 on the dark canvas, under the 3:1 floor. Left as-is deliberately.
+// Fixing it is a coordinated change - link-styles.js FLOW_GOTO_COLOR (accepting the old hex too, or every
+// already-saved flow loses its Go To identity), this constant, DIAGRAM_JSON_SPEC.md, and the two e2e specs that
+// author the hex - and it is tracked in Documentation/backlog/backlog.md rather than half-done here.
 const FAULT_RED = '#EA001E';
 const GOTO_BLUE = '#0B5CAB';
 
@@ -255,6 +266,167 @@ const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
       .filter(Boolean).join(', ') || null,
   ].filter(Boolean).join(' \u00b7 '),
 }));
+
+// \u2500\u2500 Stage step EXPANSION (opts.expandStages) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// OFF BY DEFAULT, and that is a contract rather than a preference: this changes a converted orchestration's cell
+// count, its ids and its whole layout, and orchestrations have been importable since 1.21.2. Every existing
+// import must keep producing exactly what it produced yesterday, so the expansion is reached only by an explicit
+// opt-in (`--expand-stages` on the CLI).
+//
+// What it buys: the rows above are the ONLY place a step's approver currently lives, and they live in a panel
+// nobody opens while reading a diagram. On the canvas the stage is one card reading "Legal Review / Stage" - it
+// names the queue and answers none of the questions an approval audit actually asks (who signs, is the record
+// locked, what gates the next step). Expanded, the stage becomes a BAND: the stage card, then one card per step.
+//
+// Steps reuse EXISTING shapes rather than getting a df.FlowStageStep of their own. That is not a shortcut - an
+// approval step IS an action call (Salesforce's own standard_approvals__EvaluateApproval), a background step
+// invokes a flow, and an interactive step puts a screen in front of a person - so the card a reader already
+// knows how to read is the correct card.
+const STEP_SHAPE = {
+  stepApproval: 'df.FlowAction',
+  stepBackground: 'df.FlowSubflow',
+  // UNTESTED against real metadata: the flow this was built from has no interactive step, and neither does any
+  // flow in the 339-flow corpus. Mapped anyway because the shape is unarguable and drawing it as a generic
+  // Action would be a worse guess - but the card stays conservative (`components` is left UNSET, since an
+  // interactive step names an action, not a field list, so any value would be invented) and the run warns.
+  stepInteractive: 'df.FlowScreen',
+};
+/** `Legal_Reviewers` -> `Legal Reviewers`. A public group is STORED by API name and RECOGNISED by its label. */
+const humanName = (s) => String(s || '').replace(/_/g, ' ').trim();
+const ASSIGNEE_KIND = { Group: 'Public group', User: 'User', Queue: 'Queue' };
+/** WHO the step falls to, and whether that is a fixed group or a per-record user - the first question an
+ *  approval audit asks, and the one difference `stageStepRows` above flattens away. An elementReference is
+ *  resolved AT RUNTIME ({!Get_Record_Data.Outputs.coachUsername} is a different person on every record), so it
+ *  prints as the reference rather than being dressed up as a name we do not have. */
+function assigneeText(a) {
+  const kind = ASSIGNEE_KIND[a?.assigneeType] || a?.assigneeType || 'Assignee';
+  const ref = a?.assignee?.elementReference;
+  if (ref) return `${kind} {!${ref}}`;
+  const raw = pickValue(a?.assignee);
+  if (!raw) return kind;
+  // Both forms, label first: the row reads as English and still greps against the org's metadata.
+  const human = humanName(raw);
+  return human !== raw ? `${kind} ${human} (${raw})` : `${kind} ${raw}`;
+}
+// `standard_approvals__EvaluateApproval` is Salesforce's OWN approval action with a fixed three-parameter
+// contract, so its `ActionInput__` prefix is plumbing and the names can be read out in English. Any OTHER
+// action keeps its raw parameter name: that is the author's own identifier and the only trace from the card
+// back to the metadata, which is worth more than the two words renaming it would save.
+const APPROVAL_INPUT = {
+  ActionInput__RecordId: 'Record',
+  ActionInput__CustomEmailSubject: 'Email subject',
+  ActionInput__CustomEmailBody: 'Email body',
+};
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Which fields the rest of the flow reads off a step's output. A background step exists to PRODUCE something,
+ *  and nothing on its card said what: `outputParameters` is empty on every real step measured, because an
+ *  orchestration step stores its result on itself and the flow reaches it as `{!<step>.Outputs.<field>}`. So
+ *  the answer is not in the step at all - it is in the references elsewhere in the flow, which is what this
+ *  scans for. First-seen order; the field name is what the reader greps. */
+function stepOutputsRead(stepName, serialized) {
+  if (!stepName) return null;
+  const seen = [];
+  const re = new RegExp(escapeRe(stepName) + '\\.Outputs\\.([A-Za-z0-9_]+)', 'g');
+  for (const m of String(serialized).matchAll(re)) if (!seen.includes(m[1])) seen.push(m[1]);
+  return seen.length ? seen.join(', ') : null;
+}
+/** A step's panel rows: the audit questions first - what kind of step, who it falls to, whether the record is
+ *  locked while it waits, what has to be true before it starts - then the action's own parameters. */
+function stepRows(st, ctx) {
+  const out = [];
+  const type = String(st.actionType || '');
+  const kind = STEP_KIND[type] || type || 'unknown';
+  out.push({ label: 'Step type', value: `${kind.charAt(0).toUpperCase()}${kind.slice(1)} step${type ? ` (${type})` : ''}` });
+
+  const who = asList(st.assignees).map(assigneeText).filter(Boolean);
+  if (who.length) out.push({ label: type === 'stepApproval' ? 'Approver' : 'Assigned to', value: who.join(', ') });
+  // A background step runs unattended BY DEFINITION, so saying so is an answer. A HUMAN step with no assignee
+  // is a finding about the flow - somebody has to act on it and the metadata names nobody - so the two must
+  // not read the same way.
+  else out.push({ label: 'Assigned to', value: type === 'stepBackground' ? 'Nobody - runs unattended' : 'nobody named in the metadata' });
+
+  // Record locking is an approval concept (Salesforce locks the record while the approval is pending) and "No"
+  // is as much of an answer as "Yes" when the question is whether the record could change under the approver -
+  // so an approval step always states it, and any other kind only when locking is actually on.
+  const locks = st.shouldLock === true || st.shouldLock === 'true';
+  if (type === 'stepApproval' || locks) out.push({ label: 'Record locked while pending', value: locks ? 'Yes' : 'No' });
+
+  // ORCHESTRATOR SEMANTICS, stated exactly. A step with no entry conditions starts when the STAGE does, not
+  // when the card above it finishes. The band draws steps in document order because that is the order the
+  // metadata declares them and a reader needs a reading order - but that chain is not a dependency unless an
+  // entry condition makes it one, so an ungated LATER step must not inherit the first step's (accurate)
+  // "as soon as the stage opens" and quietly turn a reading order into a claim about sequencing.
+  const entry = summarizeConditions(st.entryConditions, st.entryConditionLogic);
+  out.push({ label: 'Entry conditions', value: entry || (ctx.first
+    ? 'None - runs as soon as the stage opens'
+    : 'None - starts with the stage, not gated on the step above') });
+  const exit = summarizeConditions(st.exitConditions, st.exitConditionLogic);
+  if (exit) out.push({ label: 'Exit conditions', value: exit });
+  if (st.entryActionName) out.push({ label: 'Entry action', value: String(st.entryActionName) });
+  if (st.exitActionName) out.push({ label: 'Exit action', value: String(st.exitActionName) });
+  // df.FlowScreen has no card field an action name fits into, so without this row an interactive step would
+  // draw as a card that never says what it runs.
+  if (type === 'stepInteractive' && st.actionName) out.push({ label: 'Screen action', value: String(st.actionName) });
+
+  for (const p of asList(st.inputParameters)) {
+    if (!p?.name) continue;
+    const label = APPROVAL_INPUT[p.name] || `Input ${p.name}`;
+    // Same rule as actionParamRows: an explicitly-false flag IS an answer and rides the collapsed disclosure,
+    // while a parameter Salesforce emitted but nobody set says nothing and is dropped.
+    const falseFlag = p.value?.booleanValue != null && String(p.value.booleanValue).trim() === 'false';
+    const v = pickValue(p.value);
+    if (falseFlag) out.push({ label, value: 'false', quiet: true });
+    else if (v != null && String(v).trim() !== '') out.push({ label, value: String(v) });
+  }
+  for (const o of asList(st.outputParameters)) {
+    if (o?.name && o.assignToReference) out.push({ label: o.name, value: `-> {!${o.assignToReference}}` });
+  }
+  if (ctx.outputsRead) out.push({ label: 'Outputs read downstream', value: ctx.outputsRead });
+  // The two flags that decide what an approver may DO. Both are false on every step measured, and both are
+  // still worth stating - "the approver cannot edit the record" is exactly what somebody auditing an approval
+  // wants confirmed - so they ride the collapsed disclosure. Human steps only: neither means anything on a
+  // step with no assignee.
+  if (type !== 'stepBackground') {
+    const yn = (v) => (v === true || v === 'true' ? 'Yes' : 'No');
+    out.push({ label: 'Approver can edit the record', value: yn(st.canAssigneeEdit), quiet: st.canAssigneeEdit !== true });
+    out.push({ label: 'Runs as the assignee', value: yn(st.runAsUser), quiet: st.runAsUser !== true });
+  }
+  return capRows(out);
+}
+/** "1 approval step, then 1 background step" - what the stage card owes the reader once every step has a card
+ *  of its own and the per-step rows would only say it twice. Consecutive steps of one kind collapse to a count. */
+function stageStepSummary(steps) {
+  const runs = [];
+  for (const st of steps) {
+    const kind = STEP_KIND[st.actionType] || st.actionType || 'step';
+    const last = runs[runs.length - 1];
+    if (last && last.kind === kind) last.n++;
+    else runs.push({ kind, n: 1 });
+  }
+  return runs.map((r) => `${r.n} ${r.kind} step${r.n === 1 ? '' : 's'}`).join(', then ') || null;
+}
+/** The one fact about a stage that no step card can carry. */
+const stageExitText = (el) => summarizeConditions(el.exitConditions, el.exitConditionLogic)
+  || 'None - the stage ends when its steps complete';
+/** An entry condition as a CONNECTOR label. The full condition stays on the card; the label drops the qualifier
+ *  when it names the step the connector is LEAVING, because the connector already says that - the difference
+ *  between "approvalDecision = Approve" and a 64-character reference nobody reads at link size. */
+function stepEdgeLabel(text, prevStepName) {
+  if (!text) return null;
+  let v = String(text);
+  if (prevStepName) v = v.split(`${prevStepName}.Outputs.`).join('').split(`${prevStepName}.`).join('');
+  return capText(v, 60);
+}
+// The stage BAND: dashed, and behind everything on the Zone tier (z 0), so it reads as a region rather than as
+// another card. `#1D73C9` and NOT the df.FlowStage chip's own navy `#032D60`: a band outline has to survive both
+// canvas themes and that navy scores 1.33:1 on the dark one. This is `blue` from js/persistence/diagram-palette.js
+// (4.63 light / 3.60 dark), restated rather than imported because this file is import-free by contract - see the
+// header. BAND_FILL is the same colour at 5%.
+const BAND_BLUE = '#1D73C9';
+const BAND_FILL = 'rgba(29, 115, 201, 0.05)';
+// Asymmetric on purpose: the band's own label sits inside the top edge, so the top needs room for it.
+const BAND_PAD_X = 24, BAND_PAD_TOP = 34, BAND_PAD_BOTTOM = 24;
+
 /** How a data element gets its records IN. `inputAssignments` is field-by-field; `inputReference` is a whole
  *  collection - the standard bulk pattern inside a loop, and the one that rendered a completely EMPTY card. */
 const inputRows = (el) => {
@@ -779,9 +951,15 @@ const COLLECTIONS = [
   // Orchestrator / ApprovalWorkflow. Connectors need NO special handling: this falls into the generic `else`
   // below, which already routes `connector` / `connectors[]`, and `faultConnector` is handled for every
   // collection - which is why stages were never dropped even while they drew as generic Action cards.
-  ['orchestratedStages', () => 'df.FlowStage', (e) => ({
+  ['orchestratedStages', () => 'df.FlowStage', (e, ctx) => ({
     stageSteps: asList(e.stageSteps).map((s) => s.label || s.name).join(' → ') || null,
-    details: stageStepRows(e),
+    // EXPANDED, each step has a card carrying its own rows, so repeating them here would be the same content
+    // twice in two places that can disagree. What the stage card still owes the reader is the SHAPE of the band
+    // (how many steps, of which kinds) and its own exit condition, which belongs to no step.
+    details: ctx?.expandStages && asList(e.stageSteps).length
+      ? [{ label: 'Steps', value: stageStepSummary(asList(e.stageSteps)) },
+        { label: 'Exit conditions', value: stageExitText(e) }]
+      : stageStepRows(e),
   })],
   ['subflows', () => 'df.FlowSubflow', (e) => ({ flowName: e.flowName, details: subflowRows(e) })],
   ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${pickValue(a.value)}`).join('; ') || null })],
@@ -935,12 +1113,72 @@ function convert(input, opts = {}) {
 
   // ── Every other collection ──
   const warn = (m) => warnings.push(m);
+  const expandStages = !!opts.expandStages;
+  const stepIds = new Set();   // the expanded step cards - excluded from the metadata-coordinate test below
+  const bands = [];            // { id, label, memberIds } - drawn AFTER layout, from where the cards landed
   // Flow-wide context for the extractors, which otherwise only see their own element.
-  const convertCtx = { choiceIdx: buildChoiceIndex(md) };
+  const convertCtx = { choiceIdx: buildChoiceIndex(md), expandStages };
+  // Serialised ONCE and only when it is asked for: stepOutputsRead scans the whole flow per background step,
+  // and re-stringifying a 300KB metadata blob per step would be quadratic for a documentation row.
+  let mdText = null;
+  const serialized = () => (mdText === null ? (mdText = JSON.stringify(md)) : mdText);
+
+  // Turn one stage's `stageSteps` into cards chained under the stage card, in document order, and return the id
+  // the stage's OWN outgoing connectors should now leave from. That is the LAST step, not the stage: the stage
+  // does not continue until its steps are done, so a connector still leaving the stage card would draw a path
+  // that skips the work. A stage with NO steps is left completely alone and gets no band - an empty rectangle
+  // labelled "Stage: Archive" around a single card is decoration, not documentation.
+  const expandStage = (stage) => {
+    const steps = asList(stage.stageSteps).filter((s) => s && (s.name || s.label));
+    if (!steps.length) return stage.name;
+    const memberIds = [stage.name];
+    let prev = stage.name, prevStep = null;
+    steps.forEach((st, i) => {
+      // The `step_` prefix is what keeps a step id out of the element namespace, but it cannot GUARANTEE that -
+      // a flow is free to contain an element literally called `step_Publish_Article`. Qualify rather than let
+      // addNode drop the card and silently break the rest of the chain with it.
+      let id = `step_${st.name || `${stage.name}_${i + 1}`}`;
+      if (seen.has(id)) id = `step_${stage.name}_${st.name || i + 1}`;
+      const type = STEP_SHAPE[st.actionType] || 'df.FlowAction';
+      if (!STEP_SHAPE[st.actionType]) {
+        warnings.push(`stage step "${st.label || st.name}" has actionType "${st.actionType || '(none)'}", `
+          + 'which has no shape mapping - drawn as a generic Action card');
+      } else if (st.actionType === 'stepInteractive') {
+        warnings.push(`stage step "${st.label || st.name}" is an interactive step, drawn as a Screen card - `
+          + 'that mapping has never been checked against real interactive-step metadata, so read its card twice');
+      }
+      const props = {
+        details: stepRows(st, {
+          first: i === 0,
+          // Only a background step earns the scan: a human step's result is the approval decision, which the
+          // next step's entry condition already spells out on the connector.
+          outputsRead: st.actionType === 'stepBackground' ? stepOutputsRead(st.name, serialized()) : null,
+        }),
+      };
+      if (type === 'df.FlowSubflow') props.flowName = st.actionName;
+      else if (type === 'df.FlowAction') { props.actionName = st.actionName; props.actionType = st.actionType; }
+      if (!addNode(id, type, st.label || st.name, props, st)) return;
+      edges.push({
+        source: prev, target: id, kind: 'regular', layoutKind: 'regular',
+        label: stepEdgeLabel(summarizeConditions(st.entryConditions, st.entryConditionLogic), prevStep),
+      });
+      memberIds.push(id);
+      prev = id;
+      prevStep = st.name;
+    });
+    if (memberIds.length < 2) return stage.name;   // every step lost its id race - no band, no rerouting
+    for (const id of memberIds.slice(1)) stepIds.add(id);
+    bands.push({ id: `zone_${stage.name}`, label: `Stage: ${stage.label || stage.name}`, memberIds });
+    return prev;
+  };
+
   for (const [key, typeOf, fieldsOf] of COLLECTIONS) {
     for (const el of md[key] || []) {
       if (!el?.name) { warnings.push(`${key} entry without a name - skipped`); continue; }
       if (!addNode(el.name, typeOf(el, warn), el.label || el.name, fieldsOf(el, convertCtx), el)) continue;
+      // Where this element's outgoing connectors leave from. Identical to the element for everything except an
+      // EXPANDED stage, whose continuation hangs off its last step.
+      const outFrom = (key === 'orchestratedStages' && expandStages) ? expandStage(el) : el.name;
 
       // Connectors live in a DIFFERENT place per element type - this is the whole edge model.
       if (key === 'decisions') {
@@ -970,10 +1208,12 @@ function convert(input, opts = {}) {
           else addDeadBranch(el.name, p.name || p.label);
         }
       } else {
-        addEdge(el.name, null, el.connector);
+        addEdge(outFrom, null, el.connector);
         // Legacy `steps` carry a `connectors` ARRAY rather than a single `connector`.
-        for (const c of el.connectors || []) addEdge(el.name, null, c, c.label || null);
+        for (const c of el.connectors || []) addEdge(outFrom, null, c, c.label || null);
       }
+      // The fault stays on the ELEMENT, not on `outFrom`. The metadata hangs a faultConnector off the STAGE, so
+      // that is what failed; attributing it to the last step would be a claim the metadata does not make.
       if (el.faultConnector) addEdge(el.name, null, el.faultConnector, 'Fault', 'fault');
     }
   }
@@ -1077,14 +1317,26 @@ function convert(input, opts = {}) {
   // and fall back to the tidy tree (which needs no coordinates at all) when the set is incomplete. The
   // synthesised Ends never have coordinates by construction, so they are excluded from the count, as is
   // Start, which is repositioned onto its successor's column below regardless.
-  const realCells = cells.filter((c) => c.type !== 'df.FlowEnd' && c.id !== START_ID);
+  //
+  // EXPANDED STEPS are excluded from this count for the same reason the synthesised Ends are: Flow Builder
+  // stores locationX/locationY on a stage and NOTHING AT ALL on a step, so a step has no coordinate to be
+  // missing. Counting them would make every expanded orchestration look like a partial-coordinate flow and
+  // report the wrong reason for the fallback below.
+  const realCells = cells.filter((c) => c.type !== 'df.FlowEnd' && c.id !== START_ID && !stepIds.has(c.id));
   const positioned = realCells.filter((c) => { const p = coords.get(c.id); return p && (p.x || p.y); });
   const anyCoords = positioned.length > 0;
   if (anyCoords && positioned.length < realCells.length) {
     const missing = realCells.length - positioned.length;
     warnings.push(`${missing} of ${realCells.length} elements have no canvas coordinates - laid out with the tidy tree instead of the metadata's partial set`);
   }
-  const useCoords = anyCoords && positioned.length === realCells.length;
+  // Expansion FORFEITS the metadata layout, and there is no partial credit available: honouring the stages'
+  // own coordinates while the steps had none would pile every step onto (0,0). The tidy tree needs no
+  // coordinates, and it is what puts a step directly under its stage - which is what makes a band a band.
+  if (anyCoords && stepIds.size) {
+    warnings.push('stage steps were expanded, and Flow Builder stores no canvas coordinate for a step - the '
+      + "whole flow was laid out with the tidy tree instead of the metadata's own coordinates");
+  }
+  const useCoords = anyCoords && positioned.length === realCells.length && !stepIds.size;
   // Does a set of positions put any two REAL cards on top of each other? Flow Builder's coordinates are for
   // ITS canvas at ITS card size; Diagramforce draws every element at one 210x56 card, so a free-form flow that
   // a human dragged into place there can collide badly here. Measured across 339 flows from a real org: 300
@@ -1101,8 +1353,28 @@ function convert(input, opts = {}) {
     }
     return n;
   };
+  // A BAND is handed to the layout as ONE node - the stage, carrying its steps as `stack` - rather than as a
+  // stage plus N ranked siblings. That is what keeps a stage and its steps in one column, and it is not a
+  // convenience: ranked separately they are subject to the layout's same-rank resolver, which pushes a card
+  // right to clear a fault lateral WITHOUT moving its parent. Measured on dev/tests/fixtures/orchestration-flow.json
+  // before this: a stage held column 2 while its own step was pushed to column 2.5, and the band drawn round the
+  // pair then contained the unrelated fault card sitting between them.
+  //
+  // The band is a legitimate unit to rank, not a fudge: a stage and its steps have exactly one way in and one
+  // way out and nothing branches between them. So the layout sees edges into the STAGE and out of the STAGE
+  // (`anchor`), the step-to-step edges collapse to self-edges and are dropped, and computeFlowLayout hands back
+  // a position for every member.
+  const bandOf = new Map();   // step id -> the stage id whose band owns it
+  for (const b of bands) for (const id of b.memberIds.slice(1)) bandOf.set(id, b.memberIds[0]);
+  const anchor = (id) => bandOf.get(id) || id;
   const tidyLayout = () => {
-    const pos = opts.computeFlowLayout({ nodes, edges: kept.map((e) => ({ source: e.source, target: e.target, kind: e.layoutKind || e.kind })) });
+    const stacked = new Map(bands.map((b) => [b.memberIds[0], b.memberIds.slice(1).map((id) => ({ id, h: H }))]));
+    const layoutNodes = nodes.filter((n) => !bandOf.has(n.id))
+      .map((n) => (stacked.has(n.id) ? { ...n, stack: stacked.get(n.id) } : n));
+    const pos = opts.computeFlowLayout({
+      nodes: layoutNodes,
+      edges: kept.map((e) => ({ source: anchor(e.source), target: anchor(e.target), kind: e.layoutKind || e.kind })),
+    });
     for (const c of cells) { const p = pos.get(c.id); if (p) c.position = { x: Math.round(p.x), y: Math.round(p.y) }; }
   };
 
@@ -1166,8 +1438,55 @@ function convert(input, opts = {}) {
       tidyLayout();
     }
   } else {
-    layoutMode = 'computed (tidy tree) - metadata had no coordinates';
+    layoutMode = anyCoords && stepIds.size
+      ? 'computed (tidy tree) - stage steps were expanded, and a step has no metadata coordinate'
+      : 'computed (tidy tree) - metadata had no coordinates';
     tidyLayout();
+  }
+
+  // ── Stage bands ────────────────────────────────────────────────────────────
+  // AFTER the layout, never before. A band is the bounding box of cards computeFlowLayout has already placed,
+  // which is the whole reason the layout function owns the placement: a hand-authored band on a fixed stride
+  // is only correct until a stage gains a step or a branch changes width.
+  //
+  // Pushed into `cells` HERE - after the End synthesis, before the links - so it reaches neither. A zone is not
+  // a flow element: it must never be ranked, never be given an End, and never be wired to a port. It IS in
+  // `cells` before the two annotation tables are placed, on purpose, so their left margin clears the band
+  // rather than the cards inside it.
+  //
+  // Deliberately NOT `embeds`/`parent`. Embedding would make the band the cards' JointJS parent, which moves
+  // and resizes with them - and the app's auto-layout writes element positions directly, so re-running it
+  // inside the app would drag every band's members around by their band. A plain rectangle behind the cards
+  // survives a re-layout; a parent does not.
+  for (const b of bands) {
+    const members = b.memberIds.map((id) => cells.find((c) => c.id === id)).filter((c) => c?.position && c?.size);
+    if (!members.length) continue;
+    const x0 = Math.min(...members.map((c) => c.position.x));
+    const y0 = Math.min(...members.map((c) => c.position.y));
+    const x1 = Math.max(...members.map((c) => c.position.x + c.size.width));
+    const y1 = Math.max(...members.map((c) => c.position.y + c.size.height));
+    cells.push({
+      id: b.id,
+      type: 'sf.Zone',
+      position: { x: x0 - BAND_PAD_X, y: y0 - BAND_PAD_TOP },
+      size: { width: (x1 - x0) + BAND_PAD_X * 2, height: (y1 - y0) + BAND_PAD_TOP + BAND_PAD_BOTTOM },
+      z: 0,
+      attrs: {
+        body: {
+          width: 'calc(w)', height: 'calc(h)', rx: 8, ry: 8,
+          fill: BAND_FILL, stroke: BAND_BLUE, strokeWidth: 1, strokeDasharray: '8 4',
+        },
+        label: {
+          x: 10, y: 16, textAnchor: 'start', textVerticalAnchor: 'middle',
+          fontSize: 11, fontFamily: 'system-ui, -apple-system, sans-serif',
+          // The LABEL is theme-driven, unlike the outline: it sits on the canvas background rather than on the
+          // band's own 5% tint, so the app's own muted-text token is both correct and automatically readable
+          // in either theme.
+          fill: 'var(--text-muted)', fontWeight: '600', text: b.label,
+          textWrap: { width: 'calc(w - 24)', maxLineCount: 1, ellipsis: true },
+        },
+      },
+    });
   }
 
   // ── Links ──
@@ -1435,6 +1754,8 @@ function convert(input, opts = {}) {
     goto: kept.filter((e) => e.kind === 'goto').length,
     fault: kept.filter((e) => e.kind === 'fault').length,
     ends: endN,
+    steps: stepIds.size,
+    bands: bands.length,
     layoutMode,
     warnings,
   };
@@ -1449,6 +1770,9 @@ function convert(input, opts = {}) {
  * @param {(g:{nodes:Array,edges:Array}) => Map} opts.computeFlowLayout - the app's tidy-tree layout.
  * @param {string} [opts.appVersion] - stamped into the envelope.
  * @param {boolean} [opts.forceLayout] - ignore metadata coordinates and always compute.
+ * @param {boolean} [opts.expandStages] - draw one card per orchestration STEP inside a stage band. Off by
+ *   default and must stay that way: it changes the cell count, the ids and the layout of every orchestration
+ *   already importable today. Forces the computed layout, because a step has no metadata coordinate.
  * @returns {{diagram: object, stats: object}}
  */
 const OPPOSITE = { 'port-top': 'port-bottom', 'port-bottom': 'port-top', 'port-left': 'port-right', 'port-right': 'port-left' };

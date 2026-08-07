@@ -1,14 +1,14 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.22.0';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.22.0';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.22.0';
-import { sanitizeCssColor } from './util.js?v=1.22.0';
+import { getIconDataUri } from './icons.js?v=1.22.1';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.22.1';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.22.1';
+import { sanitizeCssColor } from './util.js?v=1.22.1';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.22.0';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.22.0';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.22.1';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.22.1';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -511,11 +511,19 @@ export const DATAMAPPING_CATEGORIES = [
     id: 'dm-layers',
     label: 'Mapping Layers',
     components: [
+      // The four stage accents are the SAME hexes mapping-convert.js STAGES emits, and they have to be: a zone
+      // dragged from here and a zone a converted org lands on are the same lane, and for one release they were
+      // two different ambers. `accentColor` becomes body/stroke + label/fill (see the sf.Zone case below), so
+      // this is a line and a caption on the canvas, not a filled block - it answers to the 3:1 non-text floor
+      // against BOTH #FAFAFA and #1A1A1A. DLO amber #F6B355 scored 1.75:1 on the light canvas and Activation
+      // green #27AE60 2.75:1; both moved DOWN IN LIGHTNESS ONLY (hue 75->78 and 150->150) so the lanes still
+      // read as amber and green. Source-blue and DMO-red already cleared both floors and are byte-identical.
+      // Single source: js/persistence/diagram-palette.js. Do not edit one side of this pair alone.
       { type: 'sf.Zone', label: 'Source',            stencilSvg: SVG.zone, accentColor: '#1D73C9', layerStage: 'source' },
       { type: 'sf.Zone', label: 'Data Stream',       stencilSvg: SVG.zone, accentColor: '#1D73C9', layerStage: 'datastream' },
-      { type: 'sf.Zone', label: 'Data Lake Object',  stencilSvg: SVG.zone, accentColor: '#F6B355', layerStage: 'dlo' },
+      { type: 'sf.Zone', label: 'Data Lake Object',  stencilSvg: SVG.zone, accentColor: '#A06F03', layerStage: 'dlo' },
       { type: 'sf.Zone', label: 'Data Model Object', stencilSvg: SVG.zone, accentColor: '#DA4E55', layerStage: 'dmo' },
-      { type: 'sf.Zone', label: 'Activation',        stencilSvg: SVG.zone, accentColor: '#27AE60', layerStage: 'activation' },
+      { type: 'sf.Zone', label: 'Activation',        stencilSvg: SVG.zone, accentColor: '#008B46', layerStage: 'activation' },
       { type: 'sf.Zone', label: 'Layer',             stencilSvg: SVG.zone },
     ],
   },
@@ -891,16 +899,29 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
       const attrs = { label: { text: label || '' } };
       // Style based on event type — distinct fill + border colors so each
       // type is unambiguously recognizable in both light and dark themes.
+      //
+      // The RING is what carries the event: a 1.5px circle plus a glyph, drawn straight onto the canvas, so it
+      // answers to the same 3:1 non-text floor as any other line the app chooses (js/persistence/diagram-palette.js).
+      // Two of the three failed it on the LIGHT canvas - intermediate amber #F6B355 at 1.75:1 and start green
+      // #4FAE7B at 2.62:1 - which is why an intermediate event went nearly invisible in a light-theme export while
+      // the end event beside it (red, 3.87:1) stayed crisp. Both moved to the palette entry at the SAME HUE
+      // (amber 75->78, green 156->150) so the type is still recognisable at a glance; end-red already passed and
+      // is untouched. Keep this block and the Type select in js/properties/renderers-process.js identical - they
+      // are the two entry points to one look, and only one of them runs when a user switches an existing event.
+      //
+      // The pale BODY fills stay as they are. A wash inside a ring is not a mark against the canvas (the ring is),
+      // and it is the same construction the Zone presets use via hexToRgba(accent, 0.05) - a 1.07:1 tint there is
+      // the design, not a defect.
       if (eventType === 'end') {
         attrs.body = { fill: '#F9E3E5', stroke: '#DA4E55', strokeWidth: 4 };
         attrs.icon = { fill: '#DA4E55' };
       } else if (eventType === 'intermediate') {
-        attrs.body = { fill: '#FDF1DC', stroke: '#F6B355', strokeWidth: 1.5 };
-        attrs.innerRing = { stroke: '#F6B355', strokeWidth: 1.5 };
-        attrs.icon = { fill: '#F6B355' };
+        attrs.body = { fill: '#FDF1DC', stroke: '#A06F03', strokeWidth: 1.5 };
+        attrs.innerRing = { stroke: '#A06F03', strokeWidth: 1.5 };
+        attrs.icon = { fill: '#A06F03' };
       } else {
-        attrs.body = { fill: '#DCF1E2', stroke: '#4FAE7B', strokeWidth: 1.5 };
-        attrs.icon = { fill: '#4FAE7B' };
+        attrs.body = { fill: '#DCF1E2', stroke: '#008B46', strokeWidth: 1.5 };
+        attrs.icon = { fill: '#008B46' };
       }
       return new joint.shapes.sf.BpmnEvent({ position, attrs, eventType });
     }

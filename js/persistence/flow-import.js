@@ -14,10 +14,10 @@
 // the service worker precaches the ?v= URL, so a bare specifier misses the cache and breaks offline boot;
 // and a bare './context.js' is a DIFFERENT module URL from './context.js?v=…', which instantiates a SECOND
 // pctx singleton whose appVersion is never set - stamping every imported flow appVersion "1".
-import { convertFlowMetadata } from './flow-convert.js?v=1.22.0';
-import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.22.0';
-import { pctx } from './context.js?v=1.22.0';
-import { parseScalar, foldChild } from './flow-xml.js?v=1.22.0';
+import { convertFlowMetadata } from './flow-convert.js?v=1.22.1';
+import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.22.1';
+import { pctx } from './context.js?v=1.22.1';
+import { parseScalar, foldChild } from './flow-xml.js?v=1.22.1';
 
 // The SCHEMA rules (which keys are lists, how a leaf scalar is typed, how a child folds into its parent) live
 // in flow-xml.js, shared byte-identically with the skill - so the browser's DOMParser path below and the

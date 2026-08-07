@@ -4,12 +4,12 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.22.0';
-import { finishStandardProps } from './render-core.js?v=1.22.0';
-import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.22.0';
-import { escHtml } from '../util.js?v=1.22.0';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.22.0';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.22.0';
+import { prctx } from './context.js?v=1.22.1';
+import { finishStandardProps } from './render-core.js?v=1.22.1';
+import { addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.22.1';
+import { escHtml } from '../util.js?v=1.22.1';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.22.1';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.22.1';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just

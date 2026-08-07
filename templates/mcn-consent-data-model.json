@@ -89,11 +89,11 @@
         ],
         "attrs": {
           "body": {
-            "fill": "rgba(127,43,130,0.04)",
-            "stroke": "#7F2B82"
+            "fill": "rgba(182,82,167,0.04)",
+            "stroke": "#B652A7"
           },
           "label": {
-            "fill": "#7F2B82",
+            "fill": "#B652A7",
             "text": "Consent & Subscription"
           }
         }
@@ -137,7 +137,7 @@
         "type": "sf.DataObject",
         "size": {
           "width": 480,
-          "height": 138
+          "height": 116
         },
         "z": 2000,
         "objectName": "Unified Individual",
@@ -150,13 +150,6 @@
             "keyType": "pk",
             "fid": "uind_id",
             "required": true
-          },
-          {
-            "label": "Individual Id",
-            "apiName": "ssot__IndividualId__c",
-            "type": "Text",
-            "keyType": "fk",
-            "fid": "uind_ind"
           },
           {
             "label": "First Name",
@@ -199,30 +192,22 @@
         "type": "sf.DataObject",
         "size": {
           "width": 480,
-          "height": 116
+          "height": 94
         },
         "z": 2000,
         "objectName": "Unified Link Individual",
         "headerColor": "#1D73C9",
         "fields": [
           {
-            "label": "Id",
-            "apiName": "ssot__Id__c",
-            "type": "Text",
-            "keyType": "pk",
-            "fid": "ulink_id",
-            "required": true
-          },
-          {
             "label": "Source Record Id",
-            "apiName": "ssot__SourceRecordId__c",
+            "apiName": "SourceRecordId__c",
             "type": "Text",
             "keyType": "fk",
             "fid": "ulink_src"
           },
           {
             "label": "Unified Record Id",
-            "apiName": "ssot__UnifiedRecordId__c",
+            "apiName": "UnifiedRecordId__c",
             "type": "Text",
             "keyType": "fk",
             "fid": "ulink_uni"
@@ -566,7 +551,7 @@
         },
         "z": 2000,
         "objectName": "Device",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -644,10 +629,10 @@
         "parent": "z-prof",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -668,7 +653,7 @@
         },
         "z": 2000,
         "objectName": "Software Application",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -718,10 +703,10 @@
         "parent": "z-prof",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -742,7 +727,7 @@
         },
         "z": 2000,
         "objectName": "Contact Point Consent",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -827,10 +812,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerLabel": {
             "text": "Contact Point Consent"
@@ -848,7 +833,7 @@
         },
         "z": 2000,
         "objectName": "Communication Subscription",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -891,10 +876,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -915,7 +900,7 @@
         },
         "z": 2000,
         "objectName": "Comm Subscription Consent",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1000,10 +985,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerLabel": {
             "text": "Comm Subscription Consent"
@@ -1021,7 +1006,7 @@
         },
         "z": 2000,
         "objectName": "Consent Status",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1057,10 +1042,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -1081,7 +1066,7 @@
         },
         "z": 2000,
         "objectName": "Data Use Purpose",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1145,10 +1130,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -1169,7 +1154,7 @@
         },
         "z": 2000,
         "objectName": "Data Use Legal Basis",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1212,10 +1197,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -1236,7 +1221,7 @@
         },
         "z": 2000,
         "objectName": "Party Consent",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1314,10 +1299,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerLabel": {
             "text": "Party Consent"
@@ -1936,7 +1921,7 @@
         },
         "z": 2000,
         "objectName": "Comm Subscription Channel Type",
-        "headerColor": "#7F2B82",
+        "headerColor": "#B652A7",
         "fields": [
           {
             "label": "Id",
@@ -1972,10 +1957,10 @@
         "parent": "z-con",
         "attrs": {
           "header": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerCover": {
-            "fill": "#7F2B82"
+            "fill": "#B652A7"
           },
           "headerIcon": {
             "width": 16,
@@ -2162,7 +2147,7 @@
             },
             "sourceMarker": {
               "type": "path",
-              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
               "stroke": "#1D73C9",
               "stroke-width": 2,
@@ -3428,11 +3413,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3440,7 +3425,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3508,11 +3493,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3520,7 +3505,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3594,11 +3579,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3606,7 +3591,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3674,11 +3659,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3686,7 +3671,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3754,11 +3739,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3766,7 +3751,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3840,11 +3825,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3852,7 +3837,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -3920,11 +3905,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -3932,7 +3917,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -4000,11 +3985,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -4012,7 +3997,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -4086,11 +4071,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -4098,7 +4083,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -4172,11 +4157,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -4184,7 +4169,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -4864,11 +4849,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -4876,7 +4861,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -4950,11 +4935,11 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -4962,7 +4947,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -5113,11 +5098,11 @@
         "parent": "z-con",
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -5125,7 +5110,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -5194,11 +5179,11 @@
         "parent": "z-con",
         "attrs": {
           "line": {
-            "stroke": "#7F2B82",
+            "stroke": "#B652A7",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -5206,7 +5191,7 @@
               "type": "path",
               "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#7F2B82",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }

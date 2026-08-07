@@ -11,35 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.22.0';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.22.0';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.22.0';
-import { SF_FIELD_TYPES } from './properties.js?v=1.22.0';
-import { keyImpliesRequired } from './field-model.js?v=1.22.0';
-import { buildModal, showToast, showError } from './feedback.js?v=1.22.0';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.22.0';
-import { triggerDownload } from './persistence.js?v=1.22.0';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.22.0';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.22.0';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.22.1';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.22.1';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.22.1';
+import { SF_FIELD_TYPES } from './properties.js?v=1.22.1';
+import { keyImpliesRequired } from './field-model.js?v=1.22.1';
+import { buildModal, showToast, showError } from './feedback.js?v=1.22.1';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.22.1';
+import { triggerDownload } from './persistence.js?v=1.22.1';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.22.1';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.22.1';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
-  buildData, buildModelData, buildGanttData, sortRows,
+  buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
-} from './table-view/builders.js?v=1.22.0';
+} from './table-view/builders.js?v=1.22.1';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.22.0';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.22.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view
 let paperEl = null;        // #paper (hidden while the table shows)
 let _active = false;
 let _showUnmapped = true;  // CR: on by default
+let _showAllCols = false;  // C2: read-mode "Show All Columns" toggle - off = all-blank columns auto-hidden
 let _sortKey = null;       // column key currently sorted by (null = graph order)
 let _sortDir = 'asc';      // 'asc' | 'desc'
 let _lastRows = [];        // rows as currently rendered — feeds the CSV export
+let _lastCols = null;      // columns as currently rendered (C2 may thin them) - feeds Copy as Markdown
 let _rerenderTimer = null;
 // Which projection is showing: 'mapping' (Data Mapping lineage) or 'model' (Data Model per-field schema,
 // v1.16.1). Set in show() from the active diagram type; stable while the table is up (a tab change resets
@@ -171,14 +173,10 @@ const COLUMNS = [
   { key: 'tgtSampleValues', label: 'Sample Values', csv: 'Target Sample Values', section: 'tgt', sortable: true },
   { key: 'tgtDeprecated', label: 'Deprecated',    csv: 'Target Deprecated',     section: 'tgt', exportOnly: true },
 ];
-// Columns shown in the on-screen table (export-only columns are CSV-only). The header
-// colspans, section dividers, and row rendering all use VIS; the CSV export uses COLUMNS.
+// Columns shown in the on-screen table (export-only columns are CSV-only). Row rendering uses
+// VIS - possibly thinned by the C2 auto-suppression at render time; the CSV export uses COLUMNS.
+// Header colspans + section dividers are computed in render() from the LIVE column set.
 const VIS = COLUMNS.filter(c => !c.exportOnly);
-const SRC_COUNT = VIS.filter(c => c.section === 'src').length;   // 10 (visible)
-const MAP_COUNT = VIS.filter(c => c.section === 'map').length;   // 3 (visible)
-const TGT_COUNT = VIS.filter(c => c.section === 'tgt').length;   // 10 (visible)
-// VISIBLE column indices where a section boundary falls (for the vertical dividers).
-const SECTION_STARTS = new Set(VIS.map((c, i) => (i > 0 && c.section !== VIS[i - 1].section) ? i : -1).filter(i => i > 0));
 
 // ── Data MODEL schema table (v1.16.1) ───────────────────────────────────────
 // One row per field across every object — the on-screen twin of the Data Model CSV export
@@ -195,10 +193,12 @@ const MODEL_COLUMNS = [
   { key: 'fk',                label: 'FK',             section: 'mdl' },
   { key: 'fqk',               label: 'FQK',            section: 'mdl' },
   { key: 'nullable',          label: 'Nullable',       section: 'mdl' },
+  // C4 (1.22.0): the object a field-anchored ER relationship points at ('unlinked' on a dangling
+  // FK/FQK; blank otherwise). Table-only - the schema CSV contract (buildObjectSchemaCsv) is unchanged.
+  { key: 'srcReferences',     label: 'References',     section: 'mdl', sortable: true },
   { key: 'srcDeprecatedEdit', label: 'Deprecated',     section: 'mdl' },
   { key: 'srcSampleValues',   label: 'Sample Values',  section: 'mdl', sortable: true },
 ];
-const NO_DIVIDERS = new Set();
 
 // ── Gantt project-plan schema table (Phase 5) ───────────────────────────────
 // One row per sf.GanttTask bar (in ganttRowLayout order, so grouped bars stay together), across every
@@ -214,9 +214,7 @@ const GANTT_COLUMNS = [
   { key: 'dependencies', label: 'Dependencies', section: 'gantt' },
   { key: 'group',        label: 'Group',        section: 'gantt', sortable: true },
 ];
-const schemaOf = () => isGanttMode() ? { cols: GANTT_COLUMNS, starts: NO_DIVIDERS }
-  : isModelMode() ? { cols: MODEL_COLUMNS, starts: NO_DIVIDERS }
-  : { cols: VIS, starts: SECTION_STARTS };
+const schemaOf = () => isGanttMode() ? GANTT_COLUMNS : isModelMode() ? MODEL_COLUMNS : VIS;
 
 // Inline SLDS-style glyphs (no sprite symbols for these — same inline-SVG
 // convention the toolbar buttons use).
@@ -298,22 +296,38 @@ export function render() {
   if (!container || !graph) return;
   const isModel = isModelMode();
   const isGantt = isGanttMode();
-  const { cols, starts } = schemaOf();
+  const baseCols = schemaOf();
   const built = isGantt ? buildGanttData(graph) : isModel ? buildModelData(graph) : buildData(graph, { showUnmapped: _showUnmapped });
   const rows = sortRows(built.rows, { sortKey: _sortKey, sortDir: _sortDir });
   _lastRows = rows;
+  // C2: measure the all-blank columns in READ mode (gantt is exempt - its 8 fixed columns never
+  // horizontal-scroll and the plan's em-dash placeholders are informative). Suppression applies
+  // only while the Show-All-Columns toggle is off; EDIT mode always renders the full set (the
+  // first sample value must be typeable into a currently-empty column).
+  const sup = (!isGantt && !_editing) ? suppressColumns(baseCols, rows) : { cols: baseCols, hidden: 0, typeNote: '' };
+  const cols = (_editing || _showAllCols) ? baseCols : sup.cols;
+  const typeNote = (_editing || _showAllCols) ? '' : sup.typeNote;
+  _lastCols = cols;
+  // Section boundaries (vertical dividers) follow the LIVE column set - C2 can thin a section.
+  const starts = new Set(cols.map((c, i) => (i > 0 && c.section !== cols[i - 1].section) ? i : -1).filter(i => i > 0));
   const { mappingCount, objectCount, unmappedCount, fieldCount, taskCount } = built;
 
   const revHdr = _editing ? '<th rowspan="2" class="df-tbl__revcol" aria-label="Revert row"></th>' : '';
   // Gantt edit mode gets a trailing per-row actions column (drag-reorder handle + delete).
   const ganttEdit = isGantt && _editing;
   const actHdr = ganttEdit ? '<th rowspan="2" class="df-tbl__actcol" aria-label="Row actions"></th>' : '';
+  // Mapping-mode section colspans count the LIVE columns per section; a section C2 emptied
+  // entirely (e.g. an all-unmapped diagram's target side) is skipped rather than left colspan-0.
+  const secTh = (sec, label) => {
+    const n = cols.filter(c => c.section === sec).length;
+    return n ? `<th colspan="${n}" class="df-tbl__sec df-tbl__sec--${sec}">${label}</th>` : '';
+  };
   const tier1 = (isModel || isGantt)
     ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl">${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
     : `<tr class="df-tbl__sections">${revHdr}
-        <th colspan="${SRC_COUNT}" class="df-tbl__sec df-tbl__sec--src">Data Sources</th>
-        <th colspan="${MAP_COUNT}" class="df-tbl__sec df-tbl__sec--map">Data Mapping</th>
-        <th colspan="${TGT_COUNT}" class="df-tbl__sec df-tbl__sec--tgt">Data Targets</th>
+        ${secTh('src', 'Data Sources')}
+        ${secTh('map', 'Data Mapping')}
+        ${secTh('tgt', 'Data Targets')}
       </tr>`;
   const tier2 = `<tr class="df-tbl__cols">${cols.map((c, i) => {
     const div = starts.has(i) ? ' df-tbl__divider' : '';
@@ -486,13 +500,16 @@ export function render() {
 
   // In edit mode the note becomes a live unsaved-change tally; otherwise a mode-specific summary.
   const changeCount = _editing ? pendingChangeCount() : 0;
-  const note = _editing
+  // C2: when the type column(s) collapsed (one distinct type - nothing for the type check to
+  // compare), the fact they carried moves into the note line so no information is lost.
+  const note = (_editing
     ? `${changeCount} unsaved change${changeCount === 1 ? '' : 's'}`
     : isGantt
       ? `${taskCount} task${taskCount === 1 ? '' : 's'}`
       : isModel
         ? `${fieldCount} field${fieldCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}`
-        : `${mappingCount} mapping${mappingCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}` + (unmappedCount ? ` · ${unmappedCount} unmapped field${unmappedCount === 1 ? '' : 's'}` : '');
+        : `${mappingCount} mapping${mappingCount === 1 ? '' : 's'} across ${objectCount} object${objectCount === 1 ? '' : 's'}` + (unmappedCount ? ` · ${unmappedCount} unmapped field${unmappedCount === 1 ? '' : 's'}` : ''))
+    + (typeNote ? ` · ${typeNote}` : '');
   const toggleLabel = 'Show Unmapped Fields';   // static label; the checkbox tick shows on/off state
   const csvLabel = isGantt ? 'Export Plan to CSV' : isModel ? 'Export Schema to CSV' : 'Export Mapping to CSV';
 
@@ -503,14 +520,19 @@ export function render() {
   const csvBtn = `<button type="button" id="tbl-csv" class="df-tbl__csv" title="Export the visible rows as a CSV file">${ICON_DOWNLOAD}<span>${escHtml(csvLabel)}</span></button>`;
   // Copy as Markdown — the visible table as a GFM table on the clipboard (Confluence / Jira / Notion / GitHub).
   const mdBtn = `<button type="button" id="tbl-md" class="df-tbl__csv" title="Copy the visible table as a Markdown table - paste into Confluence, Jira, Notion or GitHub">${ICON_COPY}<span>Copy as Markdown</span></button>`;
+  // C2: the Show-All-Columns toggle appears only when columns ARE auto-hidden (or the user already
+  // toggled them back on and needs the way out) - a table with nothing to hide gains zero chrome.
+  const colsBtn = (!isGantt && !_editing && (sup.hidden > 0 || _showAllCols))
+    ? `<button type="button" id="tbl-show-cols" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showAllCols ? ' is-checked' : ''}" title="${sup.hidden ? `${sup.hidden} all-blank column${sup.hidden === 1 ? '' : 's'} hidden - toggle the full column set` : 'Showing the full column set'}">${ICON_CHECKBOX}Show All Columns</button>`
+    : '';
   const topbarActions = _editing
     ? `<button type="button" id="tbl-edit-cancel" class="df-tbl__csv df-tbl__push">Cancel</button>
        <button type="button" id="tbl-edit-save" class="df-tbl__csv df-tbl__csv--primary">Save</button>`
     : isGantt
       ? `${editBtn}${mdBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + Copy MD + CSV)
       : isModel
-        ? `${editBtn}${mdBtn}${csvBtn}`
-        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${editBtn}${mdBtn}${csvBtn}`;
+        ? `${colsBtn}${editBtn}${mdBtn}${csvBtn}`
+        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${colsBtn}${editBtn}${mdBtn}${csvBtn}`;
 
   container.innerHTML = `<div class="df-tbl${_editing ? ' df-tbl--editing' : ''}">
       <div class="df-tbl__topbar">
@@ -572,6 +594,7 @@ export function render() {
   } else {
     container.querySelector('#tbl-edit')?.addEventListener('click', beginEdit);
     container.querySelector('#tbl-show-unmapped')?.addEventListener('click', () => { _showUnmapped = !_showUnmapped; render(); });
+    container.querySelector('#tbl-show-cols')?.addEventListener('click', () => { _showAllCols = !_showAllCols; render(); });
     container.querySelector('#tbl-csv')?.addEventListener('click', exportCsv);
     container.querySelector('#tbl-md')?.addEventListener('click', copyTableAsMarkdown);
     container.querySelectorAll('.df-tbl__th--sortable').forEach(th => {
@@ -1049,20 +1072,26 @@ function downloadCsv(csv, suffix) {
   triggerDownload(url, `df_${sanitizeFilenamePart(getActiveTabName(), 'tab')}_${suffix}.csv`);
 }
 
-// In-view export button: the schema CSV in model mode (reuses data-export.js for an identical file),
-// otherwise exactly the mapping rows on screen (current sort + Show-Unmapped state).
+// In-view export button: "the visible rows", literally, in every mode. Model mode passes the
+// RENDERED row order to buildObjectSchemaCsv (C7, 1.22.0) so the current column sort survives into
+// the file - it used to rebuild in graph order, silently discarding the sort while mapping + gantt
+// honoured it. Column set + values stay identical to the Save-menu export (which remains
+// graph-ordered on purpose: it renders without the table open, so there is no visible order).
 function exportCsv() {
   if (isGanttMode()) exportRowsCsv(_lastRows, GANTT_COLUMNS, 'plan');
-  else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph), 'schema');
+  else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph, _lastRows.map(r => ({ objId: r._srcObjId, fid: r._srcFid }))), 'schema');
   else exportRowsCsv(_lastRows);
 }
 
-// Copy the VISIBLE table (current mode's columns + the rendered rows, in the current sort / Show-Unmapped
-// state) to the clipboard as a GitHub-Flavored-Markdown table - ready to paste into Confluence, Jira,
-// Notion or a GitHub comment. Mirrors the on-screen columns (schemaOf), not the wider CSV column set.
+// Copy the VISIBLE table (current mode's columns + the rendered rows, in the current sort / Show-Unmapped /
+// C2 column-suppression state) to the clipboard as a GitHub-Flavored-Markdown table - ready to paste into
+// Confluence, Jira, Notion or a GitHub comment. Mirrors the on-screen columns, not the wider CSV set -
+// but headers reuse the CSV's prefixed labels where they exist (M1, 1.22.0): the colour-coded sections
+// that disambiguate the two on-screen "Object Name" columns do not survive a paste, so a mapping-mode
+// paste needs "Source Object Name" / "Target Object Name" exactly like the flat CSV does.
 function copyTableAsMarkdown() {
-  const { cols } = schemaOf();
-  const headers = cols.map((c) => c.label);
+  const cols = _lastCols || schemaOf();
+  const headers = cols.map((c) => c.csv || c.label);
   const rows = (_lastRows || []).map((r) => cols.map((c) => r[c.key]));
   const title = isGanttMode() ? 'Project Plan' : isModelMode() ? 'Field Schema' : 'Field Mapping';
   const md = toMarkdownTable(headers, rows, title);

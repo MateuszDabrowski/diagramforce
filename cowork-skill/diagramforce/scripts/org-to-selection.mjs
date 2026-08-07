@@ -19,6 +19,15 @@
 // Format is auto-detected: a CSV with a `QualifiedApiName` column is FieldDefinition; JSON containing
 // `dataModelObject` is Data Cloud.
 //
+//   OWD / sharing model (JSON), one query for every object:
+//     sf data query -o <org> -t --json -q "SELECT QualifiedApiName, InternalSharingModel, \
+//        ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName IN ('Account','Contact')" > owd.json
+//   record counts (JSON), one REST call for every object:
+//     sf api request rest "/services/data/v67.0/limits/recordCount?sObjects=Account,Contact" -o <org> > vol.json
+//
+// Pass either or both with `--owd owd.json` / `--volume vol.json`; objects-to-diagramforce.mjs turns them into
+// badges on the cards.
+//
 // ── What it infers, and what it deliberately does not ───────────────────────────────────────────────────────
 // INFERS (all mechanical, all things you should not hand-type):
 //   · `keyType` - a field literally named `Id` is the pk; a Lookup/Master-Detail with a resolvable target is an
@@ -29,11 +38,15 @@
 //     render as a dangling stub, so those are dropped and counted.
 //   · a per-object `headerColor`, so the cards are not all one blue.
 //
+// PASSES THROUGH (facts the org states, which nothing can derive from field metadata - see `--owd` / `--volume`
+// below): `sharing` (the org-wide default) and `records` (the row count). Merged by object name, never guessed.
+//
 // DOES NOT infer: WHICH objects and WHICH fields belong in the diagram. That is judgement, and it is the whole
 // reason this is a draft rather than an import. 4 core objects came back as 612 fields in the org this was
 // built against; the hand-built MCN Consent Data Model uses 3-14 fields per object. `--keys-only` gets you most
 // of the way (keys + required), but read the result before drawing it.
 import { readFileSync } from 'node:fs';
+import { DF_ACCENT_CYCLE } from './diagram-palette.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
@@ -58,7 +71,75 @@ function parseCsv(text) {
     .map((r) => Object.fromEntries(head.map((h, i) => [h.trim(), r[i] ?? ''])));
 }
 
-const PALETTE = ['#1D73C9', '#5B5FC7', '#2A9D8F', '#DD7A01', '#8A033E', '#396547', '#321D71', '#64A1D9'];
+// One accent per object, cycled by index. IMPORTED, not restated: this script is CLI-only Node ESM, so it has
+// none of the `?v=` cache-key rewriting that forces the app-side converters to restate their literals.
+// The previous eight were chosen for variety alone and five of them failed the both-themes contrast rule -
+// #321D71 at 1.28:1 on the dark canvas being the one the owner caught in a screenshot. It matters twice over,
+// because objects-to-diagramforce.mjs paints each RELATIONSHIP in its child card's headerColor: an unreadable
+// header is an unreadable connector, and a connector is 2px of it.
+const PALETTE = DF_ACCENT_CYCLE.slice(0, 8);
+
+// ── Annotations: what the org SAYS about an object, as opposed to what it can be derived to be ──────────────
+// Both readers below take the RAW org response, unedited. That is the point: the moment an agent has to reshape
+// a payload by hand it can quietly get a value wrong, and neither of these is checkable from the diagram. They
+// are also strictly separate flags because they are strictly separate calls - one SOQL over EntityDefinition
+// for the sharing models, one REST call for the counts - and an author often wants only one of them.
+//
+// Provenance keys (`__source`, `__note`) are skipped rather than rejected, so a saved payload can carry a note
+// about when and from which org it was pulled. Nothing else is invented: an object with no entry gets no badge
+// and is NAMED on stderr, because "the OWD query missed this object" and "this object has no OWD" look identical
+// on the canvas otherwise.
+
+/**
+ * `--owd <file>` -> Map<objectNameLower, { internal, external }>.
+ *
+ * Accepts the raw `sf data query --json` envelope, a bare `{ records: [...] }`, or a plain
+ * `{ "Account": { "internal": "ReadWrite", "external": "Read" } }` map - the last being the same shape the
+ * merged selection carries, so a hand-written annotation file and a hand-written selection read alike.
+ */
+export function parseSharingModels(raw) {
+  const out = new Map();
+  const add = (name, internal, external) => {
+    if (!name || !internal) return;
+    out.set(String(name).toLowerCase(),
+      { internal: String(internal), ...(external ? { external: String(external) } : {}) });
+  };
+  const rows = raw?.result?.records || raw?.records || (Array.isArray(raw) ? raw : null);
+  if (rows) {
+    for (const r of rows) add(r.QualifiedApiName || r.name, r.InternalSharingModel, r.ExternalSharingModel);
+    return out;
+  }
+  for (const [name, v] of Object.entries(raw || {})) {
+    if (name.startsWith('__')) continue;
+    if (typeof v === 'string') add(name, v);
+    else add(name, v?.internal ?? v?.InternalSharingModel, v?.external ?? v?.ExternalSharingModel);
+  }
+  return out;
+}
+
+/**
+ * `--volume <file>` -> Map<objectNameLower, recordCount>.
+ *
+ * The documented source is `/limits/recordCount?sObjects=A,B,C`, which returns every object in ONE call -
+ * versus one `SELECT COUNT()` per object. They do not measure quite the same thing: recordCount reads the org's
+ * storage stats and counts every row, `SELECT COUNT()` respects sharing and any filter you write, so on `User`
+ * they differ by the inactive and integration users (185 vs 113 in the org this was built against). A plain
+ * `{ "Account": 92 }` map is therefore accepted too - that is the escape hatch for an author who wants the
+ * queried number rather than the stored one.
+ */
+export function parseRecordCounts(raw) {
+  const out = new Map();
+  const add = (name, n) => {
+    const v = Number(n);
+    if (name && Number.isFinite(v)) out.set(String(name).toLowerCase(), v);
+  };
+  if (Array.isArray(raw?.sObjects)) { for (const s of raw.sObjects) add(s.name, s.count); return out; }
+  for (const [name, v] of Object.entries(raw || {})) {
+    if (name.startsWith('__')) continue;
+    add(name, v && typeof v === 'object' ? (v.records ?? v.count) : v);
+  }
+  return out;
+}
 
 /** `{"referenceTo":["Account"]}` -> 'Account'. Tolerates the null form and any non-JSON surprise. */
 function refTarget(raw) {
@@ -272,6 +353,20 @@ export function buildSelection(input, opts = {}) {
     }
   }
 
+  // Merge the annotations onto the objects that SURVIVED pruning, so the counts on stderr describe the diagram
+  // that will actually be drawn rather than the draft before `--only`.
+  const unmatched = [];
+  let annotatedSharing = 0, annotatedRecords = 0;
+  for (const o of objects) {
+    const key = String(o.name).toLowerCase();
+    const sharing = opts.sharing?.get(key);
+    const records = opts.records?.get(key);
+    if (sharing) { o.sharing = sharing; annotatedSharing++; }
+    else if (opts.sharing?.size) unmatched.push(`${o.name} (no sharing model)`);
+    if (records !== undefined) { o.records = records; annotatedRecords++; }
+    else if (opts.records?.size) unmatched.push(`${o.name} (no record count)`);
+  }
+
   objects.forEach((o, i) => {
     o.headerColor = o.headerColor || PALETTE[i % PALETTE.length];
     o.fields.forEach((f) => delete f._refTo);
@@ -295,6 +390,7 @@ export function buildSelection(input, opts = {}) {
       fields: objects.reduce((n, o) => n + o.fields.length, 0),
       relationships: kept.length,
       droppedRels, prunedFields, lostToPruning, pinnedFields, missingFields,
+      annotatedSharing, annotatedRecords, unmatched,
     },
   };
 }
@@ -352,18 +448,32 @@ if (isMain) {
   const file = args.find((a) => !a.startsWith('--'));
   const val = (flag) => { const i = args.indexOf(flag); return i > -1 ? args[i + 1] : null; };
   if (!file) die('usage: node scripts/org-to-selection.mjs <fields.csv|dmos.json> [--only A,B] [--keys-only]'
-    + ' [--max-fields N|all] [--fields Obj.Field,Obj.Other] [--title T]');
+    + ' [--max-fields N|all] [--fields Obj.Field,Obj.Other] [--owd owd.json] [--volume counts.json] [--title T]');
   let raw;
   try { raw = readFileSync(file, 'utf8'); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
   // The Salesforce CLI prints warnings before JSON, so find the payload rather than trusting position.
   const i = raw.indexOf('{');
   const input = (i > -1 && /"dataModelObject"/.test(raw)) ? JSON.parse(raw.slice(i)) : raw;
 
+  /** Read an annotation payload straight from the CLI. Sliced from the first `{` or `[` for the same reason the
+   *  DMO catalogue is: `sf` prints its update banner before the JSON on some versions. */
+  const annotation = (flag, parse) => {
+    const path = val(flag);
+    if (!path) return null;
+    let text;
+    try { text = readFileSync(path, 'utf8'); } catch (e) { return die(`Could not read ${path}: ${e.message}`); }
+    const start = text.search(/[[{]/);
+    if (start < 0) return die(`${path} contains no JSON - ${flag} takes the raw org response.`);
+    try { return parse(JSON.parse(text.slice(start))); } catch (e) { return die(`Could not parse ${path}: ${e.message}`); }
+  };
+
   const { selection, stats } = buildSelection(input, {
     only: (val('--only') || '').split(',').map((s) => s.trim()).filter(Boolean),
     keysOnly: args.includes('--keys-only'),
     maxFields: parseMaxFields(val('--max-fields')),
     fields: (() => { try { return parseFieldList(val('--fields')); } catch (e) { die(e.message); } })(),
+    sharing: annotation('--owd', parseSharingModels),
+    records: annotation('--volume', parseRecordCounts),
     title: val('--title'),
   });
   console.log(JSON.stringify(selection, null, 2));
@@ -375,5 +485,9 @@ if (isMain) {
     + `${stats.prunedFields ? `\n  pruned ${stats.prunedFields} field(s)` : ''}`
     + `${stats.lostToPruning ? ` — which cost ${stats.lostToPruning} relationship(s); re-run with a larger --max-fields to keep them` : ''}`
     + `${stats.droppedRels ? `\n  ${stats.droppedRels} relationship(s) point outside the selection and were dropped (add those objects with --only to keep them)` : ''}`
+    + `${stats.annotatedSharing ? `\n  sharing model on ${stats.annotatedSharing} object(s)` : ''}`
+    + `${stats.annotatedRecords ? `\n  record count on ${stats.annotatedRecords} object(s)` : ''}`
+    + `${stats.unmatched?.length ? `\n  NOT ANNOTATED: ${stats.unmatched.join(', ')}`
+      + ' - the object is missing from the --owd / --volume payload, so it gets no badge' : ''}`
     + `\n  REVIEW BEFORE DRAWING - which objects and fields belong is a judgement this cannot make.`);
 }

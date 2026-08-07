@@ -86,8 +86,17 @@ export function packLabels(items, obstacles = []) {
 /**
  * Measure every flow connector label, resolve collisions along each label's own path, and write the winning
  * `distance` back. No-op on a diagram with no flow cards. Call from the load pass, inside the JSON-loading guard.
+ *
+ * `collisionOnly` (1.22.0, architecture/org/process): skip the target-centred ideal entirely - a label moves
+ * ONLY if it collides, and then to the nearest clear point on its own path. Flow branch labels and datamodel
+ * join labels describe the card they ARRIVE at, so hovering over the target reads right. An architecture label
+ * ("REST", "Event Bus") describes the PIPE - the midpoint is the semantically-right spot, and the only defect
+ * after Auto Layout is collision. Measured on a 7-label architecture corridor + a 3-label org chart: with the
+ * ideal candidate in play a colliding org label jumped 151px to its target and even NON-colliding labels moved
+ * 24-58px; collision-only moved the same colliding label 8px and left every non-collider exactly at the
+ * midpoint. When set, `preferTargetCentre` is moot (there is no ideal candidate to prefer).
  */
-export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, seededLabels = null, scope = 'flow' } = {}) {
+export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, seededLabels = null, scope = 'flow', collisionOnly = false } = {}) {
   const { graph, paper } = cctx;
   if (!graph || !paper) return null;
   const elements = graph.getElements();
@@ -102,10 +111,15 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
   paper.updateViews();
 
   const labelled = graph.getLinks().filter((l) => (l.labels() || []).length);
-  // The <2 early-out holds for BOTH scopes. Considered relaxing it to 1 under 'any', and measured instead:
-  // after a layout, a lone parent-child link is straight, so its midpoint seed already sits centred above the
-  // target - the placement the resolver would compute anyway. Unobservable behaviour stays unshipped.
-  if (labelled.length < 2) return null;
+  // The <2 early-out holds for both TARGET-CENTRED scopes. Considered relaxing it to 1 under 'any', and measured
+  // instead: after a layout, a lone parent-child link is straight, so its midpoint seed already sits centred
+  // above the target - the placement the resolver would compute anyway. Unobservable behaviour stays unshipped.
+  //
+  // Under `collisionOnly` the reasoning inverts: the defect there is label-on-CARD, and one label is enough to
+  // produce it. Measured on an org chart with a single labelled dotted-line report: after Auto Layout the lone
+  // pill sat on the VP card (78px^2 of overlap) and the <2 gate skipped the fix entirely. Cards are obstacles in
+  // the pack, so a lone label is a real 1-item search, not a no-op.
+  if (labelled.length < (collisionOnly ? 1 : 2)) return null;
 
   const items = [];
   for (const link of labelled) {
@@ -144,7 +158,10 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     const tgt = graph.getCell(link.get('target')?.id);
     const tPort = String(link.get('target')?.port || '');
     let idealD = null;
-    if (tgt?.position) {
+    // `collisionOnly` suppresses the ideal COMPLETELY rather than merely demoting it: demoted, it still sits
+    // ahead of the grid, so a colliding label would jump to the target centre before the nearest clear spot was
+    // even tried - measured on the org fixture as a 151px jump where the nearest clear grid point was 8px away.
+    if (!collisionOnly && tgt?.position) {
       const tp = tgt.position(), ts = tgt.size();
       const vertical = !tPort || tPort.includes('top') || tPort.includes('bottom');
       const want = vertical ? tp.x + ts.width / 2 : tp.y + ts.height / 2;
@@ -199,7 +216,8 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     }
     items.push({ id: link.id, slack: len - w, candidates });
   }
-  if (items.length < 2) return null;
+  // Mirrors the labelled-count gate above: collision-only mode packs a single label against the cards.
+  if (items.length < (collisionOnly ? 1 : 2)) return null;
 
   const obstacles = elements.map((e) => {
     const p = e.position(), s = e.size();

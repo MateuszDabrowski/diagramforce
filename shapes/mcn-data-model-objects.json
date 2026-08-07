@@ -19,13 +19,6 @@
           "required": true
         },
         {
-          "label": "Individual Id",
-          "apiName": "ssot__IndividualId__c",
-          "type": "Text",
-          "keyType": "fk",
-          "fid": "uind_ind"
-        },
-        {
           "label": "First Name",
           "apiName": "ssot__FirstName__c",
           "type": "Text",
@@ -48,23 +41,15 @@
       "headerColor": "#1D73C9",
       "fields": [
         {
-          "label": "Id",
-          "apiName": "ssot__Id__c",
-          "type": "Text",
-          "keyType": "pk",
-          "fid": "ulink_id",
-          "required": true
-        },
-        {
           "label": "Source Record Id",
-          "apiName": "ssot__SourceRecordId__c",
+          "apiName": "SourceRecordId__c",
           "type": "Text",
           "keyType": "fk",
           "fid": "ulink_src"
         },
         {
           "label": "Unified Record Id",
-          "apiName": "ssot__UnifiedRecordId__c",
+          "apiName": "UnifiedRecordId__c",
           "type": "Text",
           "keyType": "fk",
           "fid": "ulink_uni"

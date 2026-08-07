@@ -67,9 +67,9 @@ node scripts/flow-to-diagramforce.mjs flow-response.json diagram.json
 node scripts/validate-diagram.mjs diagram.json
 ```
 
-**`--org <alias>` adds an "Open in Flow Builder" card** so the diagram is one click from the real flow. It is
-the only flag you need - it resolves both the org's instance URL and, for a `.flow-meta.xml`, the flow's version
-id:
+**`--org <alias>` adds an "Open in Flow Builder" card** so the diagram is one click from the real flow. For most
+flows it is the only flag you need - it resolves both the org's instance URL and, for a `.flow-meta.xml`, the
+flow's version id:
 
 ```bash
 node scripts/flow-to-diagramforce.mjs My_Flow.flow-meta.xml diagram.json --org <alias>
@@ -85,6 +85,22 @@ node scripts/flow-to-diagramforce.mjs flow-response.json diagram.json --org-url 
 
 Given explicitly, `--org-url` wins over whatever the alias resolves to. With neither flag no card is emitted, on
 purpose: a guessed host is worse than none.
+
+**`--expand-stages` opens up an ORCHESTRATION.** Without it a stage is a single card naming its queue, and the
+approver, the record-lock setting and the gate to the next step live only in a properties panel nobody opens
+while reading a diagram. With it each stage becomes a band: the stage card, then one card per step, drawn with
+the shape that step really is - an approval step is an Action, a background step is a Subflow, an interactive
+step is a Screen.
+
+```bash
+node scripts/flow-to-diagramforce.mjs Order_Orchestration.flow-meta.xml diagram.json --org <alias> --expand-stages
+```
+
+Off by default on purpose: it changes the cell count, the ids and the layout, so every orchestration converted
+before this flag existed keeps converting to exactly what it did before. Use it when the question is "who
+approves what, in what order"; leave it off when the question is "what is the shape of this orchestration".
+Expect roughly 50-60% more cells (measured: 27 to 43 on a four-stage orchestration), so on a very large
+orchestration check the output loads before handing it over.
 
 A **Tooling response** carries the `301...` id, so it deep-links with `--org-url` alone. A **`.flow-meta.xml`**
 has no id: with `--org` it is looked up (the LATEST version, which is what `sf project retrieve` gave you), and
@@ -170,7 +186,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.21.0",
+  "appVersion": "1.22.1",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -283,6 +299,65 @@ exactly the part a script cannot do.
 Read the stderr summary: it tells you how many relationships were dropped for pointing outside the selection
 (add those objects) and how many were lost to field pruning (raise `--max-fields`).
 
+#### Access posture: OWD + record-volume badges
+
+An ERD says how objects relate. It does not say **who can see them** or **how much is in them** - and those are
+usually the next two questions in an architecture review. Two optional flags add both as badges above each card,
+plus a key explaining the colour ramp.
+
+**Add them when the user asks about sharing, access, security, data volume, or "how big is this org" - and offer
+them when the ERD is for a review, an audit, or a migration.** Do not add them to every diagram by reflex: they
+are a second layer of meaning on the same cards, and a plain schema diagram is cleaner without them.
+
+```bash
+# OWD - ONE query for every object
+sf data query -o <org> -t --json -q "SELECT QualifiedApiName, InternalSharingModel, ExternalSharingModel \
+   FROM EntityDefinition WHERE QualifiedApiName IN ('Account','Contact','Case')" > owd.json
+
+# Record counts - ONE REST call for every object
+sf api request rest "/services/data/v67.0/limits/recordCount?sObjects=Account,Contact,Case" -o <org> > vol.json
+
+node scripts/org-to-selection.mjs fields.csv --max-fields 25 --owd owd.json --volume vol.json \
+  --title "Sales Core" > selection.json
+node scripts/objects-to-diagramforce.mjs selection.json diagram.json
+```
+
+Both flags take the **raw** response - do not reshape it. Each is independent; pass either, both, or neither.
+Objects missing from a payload get no badge and are **named on stderr** - relay that, because a missing badge and
+a missing OWD look identical on the canvas.
+
+`limits/recordCount` reads the org's storage stats and counts every row. `SELECT COUNT() FROM <object>` respects
+sharing and any filter you write, so the two disagree where that matters - on `User` they differed by 72 in the
+org this was built against (185 stored vs 113 queried), because the stored count includes inactive and
+integration users. When the user wants the queried number, run the counts yourself and pass a plain
+`{"Account": 92, "Contact": 144}` map to `--volume` instead.
+
+The badge colour is the **internal** sharing model, on a green -> red exposure ramp (`Private` is the org sharing
+nothing by default, `FullAccess` is every user already holding the record). `ControlledBy...` sits **off** the
+ramp in indigo, because access there is inherited from a parent record rather than granted at org level. The
+external community/portal model is appended only where it differs. The record count is deliberately grey - a row
+count is data, not a judgement.
+
+#### Authoring the badges by hand
+
+Writing the selection yourself? Put `sharing` and `records` on the object and the converter does the rest -
+colour, width, right-alignment, the key. **Do not hand-pick badge colours or hand-place the key.**
+
+```json
+{ "name": "Account", "label": "Account",
+  "sharing": { "internal": "ReadWrite", "external": "Read" }, "records": 92,
+  "fields": [ ... ] }
+```
+
+`sharing.internal` is `EntityDefinition.InternalSharingModel`: `Private`, `Read`, `ReadSelect`, `ReadWrite`,
+`ReadWriteTransfer`, `FullAccess`, or any `ControlledBy...` value. `external` and `records` are optional. A value
+the converter does not recognise is still drawn - in the neutral grey, with a warning naming it.
+
+**Never put the OWD on the card itself.** `objectName`, `attrs.headerLabel.text` and `fields[]` are the object's
+identity and its schema: the properties panel, the table view and the CSV export all key off them, so "Account
+(Private)" or a fake `OWD` field corrupts a round-trip that has to stay lossless. The badge is a separate
+`df.Pill` cell for exactly that reason - which also means the reader can move, recolour or delete it.
+
 **Data Cloud** works the same way - pass the DMO catalogue instead, and remember to paginate:
 ```bash
 sf api request rest "/services/data/v67.0/ssot/data-model-objects?limit=200" -o <org> > dmos.json
@@ -311,13 +386,32 @@ normalise to **Other** (AccountContact, Salesforce's standard Related-category D
 the official template). Only DLO and DMO cards carry `category`; Source and Data Stream cards OMIT the key
 entirely - do not invent one when you author by hand.
 
+`--org` also draws the **Source lane from org fact**: `/ssot/data-streams` states the real chain
+(`connectorDetails.sourceObject` -> stream -> `dataLakeObjectInfo.name`), so each stream card states its
+actual origin as its FIRST row - a details row like **"Source: Prospect (SalesforceDotCom_Home)"** (or
+**"Source: via &lt;connector&gt;"** when the org names the pipe but no object). No org reachable?
+`--streams data-streams.json` accepts a saved copy (one page or an array of pages - **follow `nextPageUrl`
+when you save it yourself**; the endpoint's offset paging is 1-indexed and SKIPS, so only the nextPageUrl
+chain is complete). An **Ingestion API** stream has no connector detail in the org, so its card keeps its
+real name plus an "(Ingestion API)" note and gets NO invented source row. **Relay the stderr mode line to
+the user**: it says whether the Source lane was drawn from ORG FACT or named by NAME-MATCHING over the
+mapping metadata - without a stream payload the lane shows the stream's own name wearing a Source caption,
+which looks authoritative while being unverified. On the one-GET Connect path this same flag is what creates
+the Source lane at all (that payload carries no ingest maps), with the stream minted carrying just its
+"Source: …" row and the stream -> DLO chain drawn as object edges.
+
 The metadata path also draws the owner-convention **formula input connectors**: a formula that reads source
 data (`sourceField['X']` in its expression) gets a left-to-left connector from each referenced source field
-row into its formula row; static formulas get none. Draw the same convention when you author by hand: one
-plain `Standard` mapping link per referenced source field, from the source row's LEFT port to the formula
-row's LEFT port (`field-left-<fid>` at BOTH ends, so the link runs down the shared column edge), and set NO
-`expressionRule` on it - the expression already rides the companion's Formula link. A static formula reads no
-source data, so it gets no input connector at all.
+row into its formula row; static formulas get none. A formula that reads ANOTHER formula's output
+(`formulaField['X']`) gets a **chain** connector between two rows of the SAME Formulas card - drawn only when
+the referenced name IS a formula row on that card (a `formulaField` ref to a directly-mapped column is left
+undrawn and counted on the stderr report; resolving it would assert semantics the metadata does not state).
+Draw the same conventions when you author by hand: one plain `Standard` mapping link per referenced source
+field, from the source row's LEFT port to the formula row's LEFT port (`field-left-<fid>` at BOTH ends, so
+the link runs down the shared column edge), and set NO `expressionRule` on it - the expression already rides
+the companion's Formula link; a formula-to-formula chain uses the same link shape with both ends on the ONE
+card (the router loops it off the left edge). A static formula reads no source data, so it gets no input
+connector at all.
 
 There is a second, lighter source the same script accepts - **one GET**, DMO-scoped, so it needs no `--only`:
 
@@ -352,6 +446,15 @@ Two things to tell the user when you hand it over:
   `mappingType: "Formula"` links. That is the convention the official `data360-contact-mapping` template uses,
   and it means the formula gets the connector's **F** badge plus the **Expression / Rule** column in the Table
   view. A companion card is NOT an object in the org - say so when you hand the diagram over.
+- **The stream's origin is a details row ON the stream card, and only when you actually know it.** When you
+  author by hand, follow the converter's fact-mode convention: the true source - object plus connector, e.g.
+  "Source: Prospect (SalesforceDotCom_Home)", "Source: via &lt;connector&gt;" when only the pipe is known, or
+  the source system name the user gave you - is the stream card's FIRST field row, with `label` and `apiName`
+  both the full string, `"type": ""` and `"keyType": null`. Do NOT draw the origin as a separate header-only
+  card with an edge into the stream: an empty box plus an arrow says no more than the row does (that form was
+  built and removed on owner review - "What value does empty object give?"). And do NOT invent an origin for
+  an Ingestion API stream - the org itself cannot name what calls the API, so the honest form is the stream
+  card alone captioned "&lt;name&gt; (Ingestion API)", with no "Source:" row.
 
 ### Data Cloud DATA GRAPHS
 
@@ -421,17 +524,26 @@ paste steps, and pass on any converter warning (e.g. a Custom Error element show
 
 ## Staying in sync (for maintainers)
 
-Three files are **verbatim copies** of the app's, snapshotted at the version in the spec's "Spec
-snapshot" marker. Re-copy them from the repo on each Diagramforce release:
+These files are **verbatim copies** of the app's, snapshotted at the version in the spec's "Spec
+snapshot" marker. `npm run package:skill` only ZIPS this folder - it does not copy - so re-copy them
+from the repo on each Diagramforce release. `dev/tests/skill-sync.test.js` fails if any drifts:
 
 | Bundled copy | Source in the app |
 |---|---|
 | `references/DIAGRAM_JSON_SPEC.md` | `DIAGRAM_JSON_SPEC.md` |
 | `scripts/diagram-schema.js` | `js/persistence/diagram-schema.js` |
+| `scripts/diagram-palette.js` | `js/persistence/diagram-palette.js` |
+| `scripts/flow-convert.js` | `js/persistence/flow-convert.js` |
+| `scripts/mapping-convert.js` | `js/persistence/mapping-convert.js` |
+| `scripts/datagraph-convert.js` | `js/persistence/datagraph-convert.js` |
 | `scripts/flow-layout.js` | `js/canvas/flow-layout.js` |
 
 Keeping the schema current is what stops the validator drifting from the renderer - it is the guard: a
-shape the copy doesn't know is flagged rather than silently accepted. `flow-layout.js` matters less
+shape the copy doesn't know is flagged rather than silently accepted. The three `*-convert.js` files are
+the conversions themselves, shared so a diagram built here and one built in the app are byte-identical.
+`diagram-palette.js` carries the colour rule every converter obeys - every colour it hands out clears
+WCAG's 3:1 non-text floor against BOTH canvas backgrounds (#FAFAFA light, #1A1A1A dark), because a
+diagram travels as a share URL into whichever theme its reader runs. `flow-layout.js` matters less
 often (only the computed-layout path uses it) but should track the app so converted flows keep looking
 like Flow Builder. `flow-to-diagramforce.mjs` reads its `appVersion` straight from the bundled spec, so
 re-syncing the spec is enough to stamp the right version.

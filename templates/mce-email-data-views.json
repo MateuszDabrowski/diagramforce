@@ -129,7 +129,7 @@
         },
         "z": 2000,
         "objectName": "_Job",
-        "headerColor": "#F6B355",
+        "headerColor": "#A06F03",
         "fields": [
           {
             "label": "JobID",
@@ -432,10 +432,10 @@
         "keyFieldsOnly": false,
         "attrs": {
           "header": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerCover": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerLabel": {
             "text": "_Job"
@@ -1509,11 +1509,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1521,7 +1521,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1587,11 +1587,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1599,7 +1599,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1665,11 +1665,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1677,7 +1677,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1743,11 +1743,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1755,7 +1755,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1821,11 +1821,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1833,7 +1833,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1899,11 +1899,11 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#f6b355",
+            "stroke": "#A06F03",
             "targetMarker": {
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
               "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
@@ -1911,7 +1911,7 @@
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#f6b355",
+              "stroke": "#A06F03",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }

@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.22.0';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.22.0';
-import { ER_MARKER_D } from '../er-markers.js?v=1.22.0';
+import { cctx } from './context.js?v=1.22.1';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.22.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.22.1';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -20,7 +20,19 @@ import { ER_MARKER_D } from '../er-markers.js?v=1.22.0';
 // with properties.js (panel reclassify).
 export function setMappingModeGetter(fn) { cctx.getMappingMode = fn; }
 
-export const MAPPING_LINK_COLOR = '#F6B355'; // brand amber/accent — distinguishes mappings from grey ER links (canvas.js reroute/defaultLink import it)
+// The amber every Data Cloud field connector in the product is painted with. It reaches every mapping link the
+// app DRAWS or heals - a converter import, a link the user adds, a legacy link migration.js repaints - which is
+// why it was the single biggest contrast exposure in the app: #F6B355 scored 1.75:1 against the light canvas
+// (#FAFAFA), and a mapping link is a 1px line, so on a light-theme screen a template with a thousand of them drew
+// a thousand near-invisible hairlines. #A06F03 is the palette's amber (js/persistence/diagram-palette.js) - hue 75 -> 78, lightness L* 77.6
+// -> 50.5 - and clears 4.22:1 light / 3.95:1 dark.
+//
+// Deliberately the SAME hex as the DLO lane accent, as before: the lane and the links crossing it are one visual
+// family, and DF_NEUTRAL_LINK exists precisely so the object-level ER relationships between the same two cards
+// have somewhere else to be. NOT a protocol token, unlike FLOW_GOTO_COLOR below - a mapping link is identified by
+// `linkKind`, and migration.js gates its heal on standard.Link's untouched (#333333, 2px) default - so moving it
+// recolours new and healed links only, and a diagram where the user chose their own colour still keeps it.
+export const MAPPING_LINK_COLOR = '#A06F03'; // (canvas.js reroute/defaultLink import it)
 
 // Router for Data Cloud mapping links: a short horizontal stub off each field port
 // (left ports exit left, right ports exit right) so the line leaves and arrives

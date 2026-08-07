@@ -3,13 +3,13 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.22.0';
+import { cctx } from './context.js?v=1.22.1';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.0';
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.1';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.22.0';
-import { flowConnectorType } from './link-styles.js?v=1.22.0';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.0';
+import { computeFlowLayout } from './flow-layout.js?v=1.22.1';
+import { flowConnectorType } from './link-styles.js?v=1.22.1';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.1';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -425,12 +425,17 @@ export function applyFlowLayout() {
 }
 
 /**
- * Target-centred label placement for NON-flow diagrams - the datamodel Auto Layout's second pass (1.22.0).
- * The same resolver applyFlowLayout uses, opened up via `scope: 'any'` (no df.Flow gate). Call AFTER
- * snapLinksToPorts inside recordPositionsBatch, for the same undo-batching
- * reason documented above resolveFlowLabelCollisions' call in applyFlowLayout: the batch captures the label
- * diffs as part of the one layout undo step. `preferTargetCentre` because snapLinksToPorts has just reset
- * every label to its path midpoint - a seed, not a placement worth preserving.
+ * Post-layout label placement for NON-flow diagrams - the Auto Layout second pass (1.22.0). The same resolver
+ * applyFlowLayout uses, opened up via `scope: 'any'` (no df.Flow gate). Call AFTER snapLinksToPorts inside
+ * recordPositionsBatch, for the same undo-batching reason documented above resolveFlowLabelCollisions' call in
+ * applyFlowLayout: the batch captures the label diffs as part of the one layout undo step.
+ *
+ * Two modes, chosen per diagram type by what the label MEANS (measured, see the toolbar.js call sites):
+ *  - datamodel (no opts): `preferTargetCentre` - a join label describes the card it arrives at, so it is
+ *    hoisted over the target. snapLinksToPorts has just reset every label to its path midpoint - a seed, not
+ *    a placement worth preserving.
+ *  - architecture/org/process (`{ collisionOnly: true }`): a pipe/outcome label describes the CONNECTOR, so
+ *    the midpoint stays authoritative and only genuine collisions move a label, minimally, along its own path.
  */
 export function resolveConnectorLabels(opts = {}) {
   resolveFlowLabelCollisions(cctx, { preferTargetCentre: true, scope: 'any', ...opts });

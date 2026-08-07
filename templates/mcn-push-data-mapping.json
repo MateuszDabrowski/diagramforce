@@ -58,11 +58,11 @@
         ],
         "attrs": {
           "body": {
-            "fill": "rgba(246,179,85,0.05)",
-            "stroke": "#F6B355"
+            "fill": "rgba(160,111,3,0.05)",
+            "stroke": "#A06F03"
           },
           "label": {
-            "fill": "#F6B355",
+            "fill": "#A06F03",
             "text": "Data Lake Object"
           }
         }
@@ -124,11 +124,11 @@
         ],
         "attrs": {
           "body": {
-            "fill": "rgba(39,174,96,0.05)",
-            "stroke": "#27AE60"
+            "fill": "rgba(0,139,70,0.05)",
+            "stroke": "#008B46"
           },
           "label": {
-            "fill": "#27AE60",
+            "fill": "#008B46",
             "text": "Activation"
           }
         }
@@ -166,7 +166,7 @@
         "type": "sf.DataObject",
         "size": {
           "width": 480,
-          "height": 138
+          "height": 116
         },
         "z": 2000,
         "objectName": "Unified Individual",
@@ -179,13 +179,6 @@
             "keyType": "pk",
             "fid": "uind_id",
             "required": true
-          },
-          {
-            "label": "Individual Id",
-            "apiName": "ssot__IndividualId__c",
-            "type": "Text",
-            "keyType": "fk",
-            "fid": "uind_ind"
           },
           {
             "label": "First Name",
@@ -233,30 +226,22 @@
         "type": "sf.DataObject",
         "size": {
           "width": 480,
-          "height": 116
+          "height": 94
         },
         "z": 2000,
         "objectName": "Unified Link Individual",
         "headerColor": "#DA4E55",
         "fields": [
           {
-            "label": "Id",
-            "apiName": "ssot__Id__c",
-            "type": "Text",
-            "keyType": "pk",
-            "fid": "ulink_id",
-            "required": true
-          },
-          {
             "label": "Source Record Id",
-            "apiName": "ssot__SourceRecordId__c",
+            "apiName": "SourceRecordId__c",
             "type": "Text",
             "keyType": "fk",
             "fid": "ulink_src"
           },
           {
             "label": "Unified Record Id",
-            "apiName": "ssot__UnifiedRecordId__c",
+            "apiName": "UnifiedRecordId__c",
             "type": "Text",
             "keyType": "fk",
             "fid": "ulink_uni"
@@ -402,11 +387,11 @@
         "type": "sf.DataObject",
         "size": {
           "width": 480,
-          "height": 226
+          "height": 160
         },
         "z": 2000,
         "objectName": "Contact DLO",
-        "headerColor": "#F6B355",
+        "headerColor": "#A06F03",
         "fields": [
           {
             "label": "Id",
@@ -443,27 +428,6 @@
             "type": "Text",
             "keyType": null,
             "fid": "dcon_ln"
-          },
-          {
-            "label": "Data Source Id",
-            "apiName": "DataSourceId__c",
-            "type": "Text",
-            "keyType": null,
-            "fid": "dcon_dsrc"
-          },
-          {
-            "label": "Internal Organization Id",
-            "apiName": "InternalOrganizationId__c",
-            "type": "Text",
-            "keyType": null,
-            "fid": "dcon_mid"
-          },
-          {
-            "label": "Received Date Time",
-            "apiName": "ReceivedDateTime__c",
-            "type": "Date Time",
-            "keyType": null,
-            "fid": "dcon_recv"
           }
         ],
         "position": {
@@ -477,10 +441,10 @@
         "category": "Profile",
         "attrs": {
           "header": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerCover": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerIcon": {
             "width": 16,
@@ -988,7 +952,7 @@
         },
         "z": 2000,
         "objectName": "Device Registration DLO",
-        "headerColor": "#F6B355",
+        "headerColor": "#A06F03",
         "fields": [
           {
             "label": "Id",
@@ -1101,10 +1065,10 @@
         "category": "Profile",
         "attrs": {
           "header": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerCover": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerIcon": {
             "width": 16,
@@ -1190,7 +1154,7 @@
         },
         "z": 2000,
         "objectName": "Mobile Engagement DLO",
-        "headerColor": "#F6B355",
+        "headerColor": "#A06F03",
         "fields": [
           {
             "label": "Event Id",
@@ -1310,10 +1274,10 @@
         "category": "Engagement",
         "attrs": {
           "header": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerCover": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerIcon": {
             "width": 16,
@@ -1907,7 +1871,7 @@
         },
         "z": 2000,
         "objectName": "Consent DLO",
-        "headerColor": "#F6B355",
+        "headerColor": "#A06F03",
         "fields": [
           {
             "label": "Id",
@@ -1999,10 +1963,10 @@
         "category": "Other",
         "attrs": {
           "header": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerCover": {
-            "fill": "#F6B355"
+            "fill": "#A06F03"
           },
           "headerIcon": {
             "width": 16,
@@ -2088,7 +2052,7 @@
         },
         "z": 2000,
         "objectName": "Push (MC Next Send)",
-        "headerColor": "#27AE60",
+        "headerColor": "#008B46",
         "fields": [
           {
             "label": "Device End Point Id",
@@ -2117,10 +2081,10 @@
         "category": "Other",
         "attrs": {
           "header": {
-            "fill": "#27AE60"
+            "fill": "#008B46"
           },
           "headerCover": {
-            "fill": "#27AE60"
+            "fill": "#008B46"
           },
           "headerIcon": {
             "width": 16,
@@ -2154,7 +2118,7 @@
           {
             "label": "Email",
             "apiName": "Email",
-            "type": "varchar(255)",
+            "type": "Email",
             "keyType": null,
             "fid": "crm_email"
           },
@@ -2540,7 +2504,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -2550,7 +2514,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -2609,7 +2573,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -2619,7 +2583,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -2678,7 +2642,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -2688,7 +2652,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -2747,7 +2711,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -2757,7 +2721,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -2837,7 +2801,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -2851,7 +2815,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -2865,7 +2829,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -2875,361 +2839,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
-              "stroke-width": 1,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "ds-contact",
-          "port": "field-right-ds-contact_dsrc"
-        },
-        "target": {
-          "id": "dlo-contact",
-          "port": "field-left-dcon_dsrc"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "map-6",
-        "z": 3000,
-        "linkKind": "mapping",
-        "mappingType": "Formula",
-        "expressionRule": "Static value 'Salesforce CRM'",
-        "labels": [
-          {
-            "markup": [
-              {
-                "tagName": "title",
-                "selector": "badgeTitle"
-              },
-              {
-                "tagName": "rect",
-                "selector": "badgeBox"
-              },
-              {
-                "tagName": "text",
-                "selector": "badgeText"
-              }
-            ],
-            "attrs": {
-              "badgeTitle": {
-                "text": "Formula: Static value 'Salesforce CRM'"
-              },
-              "badgeText": {
-                "text": "F",
-                "fill": "#F6B355",
-                "fontSize": 9,
-                "fontWeight": 700,
-                "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
-                "textAnchor": "middle",
-                "textVerticalAnchor": "middle"
-              },
-              "badgeBox": {
-                "ref": "badgeText",
-                "refWidth": 10,
-                "refHeight": 6,
-                "refX": -5,
-                "refY": -3,
-                "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
-                "stroke-width": 1,
-                "rx": 3,
-                "ry": 3
-              }
-            },
-            "position": {
-              "distance": -20,
-              "offset": 0
-            }
-          }
-        ],
-        "attrs": {
-          "line": {
-            "stroke": "#F6B355",
-            "strokeWidth": 1,
-            "targetMarker": {
-              "d": "M 0 -6 L -14 0 L 0 6 z",
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M 0 0 L -12 0",
-              "fill": "none",
-              "stroke": "#F6B355",
-              "stroke-width": 1,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "ds-contact",
-          "port": "field-right-ds-contact_mid"
-        },
-        "target": {
-          "id": "dlo-contact",
-          "port": "field-left-dcon_mid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "map-7",
-        "z": 3000,
-        "linkKind": "mapping",
-        "mappingType": "Formula",
-        "expressionRule": "Static Internal Organization Id (MID)",
-        "labels": [
-          {
-            "markup": [
-              {
-                "tagName": "title",
-                "selector": "badgeTitle"
-              },
-              {
-                "tagName": "rect",
-                "selector": "badgeBox"
-              },
-              {
-                "tagName": "text",
-                "selector": "badgeText"
-              }
-            ],
-            "attrs": {
-              "badgeTitle": {
-                "text": "Formula: Static Internal Organization Id (MID)"
-              },
-              "badgeText": {
-                "text": "F",
-                "fill": "#F6B355",
-                "fontSize": 9,
-                "fontWeight": 700,
-                "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
-                "textAnchor": "middle",
-                "textVerticalAnchor": "middle"
-              },
-              "badgeBox": {
-                "ref": "badgeText",
-                "refWidth": 10,
-                "refHeight": 6,
-                "refX": -5,
-                "refY": -3,
-                "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
-                "stroke-width": 1,
-                "rx": 3,
-                "ry": 3
-              }
-            },
-            "position": {
-              "distance": -20,
-              "offset": 0
-            }
-          }
-        ],
-        "attrs": {
-          "line": {
-            "stroke": "#F6B355",
-            "strokeWidth": 1,
-            "targetMarker": {
-              "d": "M 0 -6 L -14 0 L 0 6 z",
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M 0 0 L -12 0",
-              "fill": "none",
-              "stroke": "#F6B355",
-              "stroke-width": 1,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "ds-contact",
-          "port": "field-right-ds-contact_recv"
-        },
-        "target": {
-          "id": "dlo-contact",
-          "port": "field-left-dcon_recv"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "map-8",
-        "z": 3000,
-        "linkKind": "mapping",
-        "mappingType": "Formula",
-        "expressionRule": "System-populated ingestion timestamp",
-        "labels": [
-          {
-            "markup": [
-              {
-                "tagName": "title",
-                "selector": "badgeTitle"
-              },
-              {
-                "tagName": "rect",
-                "selector": "badgeBox"
-              },
-              {
-                "tagName": "text",
-                "selector": "badgeText"
-              }
-            ],
-            "attrs": {
-              "badgeTitle": {
-                "text": "Formula: System-populated ingestion timestamp"
-              },
-              "badgeText": {
-                "text": "F",
-                "fill": "#F6B355",
-                "fontSize": 9,
-                "fontWeight": 700,
-                "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
-                "textAnchor": "middle",
-                "textVerticalAnchor": "middle"
-              },
-              "badgeBox": {
-                "ref": "badgeText",
-                "refWidth": 10,
-                "refHeight": 6,
-                "refX": -5,
-                "refY": -3,
-                "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
-                "stroke-width": 1,
-                "rx": 3,
-                "ry": 3
-              }
-            },
-            "position": {
-              "distance": -20,
-              "offset": 0
-            }
-          }
-        ],
-        "attrs": {
-          "line": {
-            "stroke": "#F6B355",
-            "strokeWidth": 1,
-            "targetMarker": {
-              "d": "M 0 -6 L -14 0 L 0 6 z",
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M 0 0 L -12 0",
-              "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3288,7 +2898,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3298,7 +2908,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3357,7 +2967,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3367,7 +2977,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3426,7 +3036,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3436,7 +3046,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3516,7 +3126,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -3530,7 +3140,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -3544,7 +3154,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3554,7 +3164,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3634,7 +3244,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -3648,7 +3258,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -3662,7 +3272,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3672,7 +3282,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3752,7 +3362,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -3766,7 +3376,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -3780,7 +3390,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3790,7 +3400,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3870,7 +3480,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -3884,7 +3494,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -3898,7 +3508,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3908,7 +3518,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -3967,7 +3577,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -3977,7 +3587,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4036,7 +3646,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4046,7 +3656,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4105,7 +3715,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4115,7 +3725,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4174,7 +3784,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4184,7 +3794,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4243,7 +3853,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4253,7 +3863,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4312,7 +3922,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4322,7 +3932,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4381,7 +3991,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4391,7 +4001,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4450,7 +4060,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4460,7 +4070,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4519,7 +4129,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4529,7 +4139,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4588,7 +4198,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4598,7 +4208,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4657,7 +4267,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4667,7 +4277,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4726,7 +4336,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4736,7 +4346,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4795,7 +4405,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4805,7 +4415,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4864,7 +4474,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4874,7 +4484,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -4933,7 +4543,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -4943,7 +4553,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5002,7 +4612,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5012,7 +4622,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5072,7 +4682,7 @@
         "expressionRule": "Custom (not in bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5082,7 +4692,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5142,7 +4752,7 @@
         "expressionRule": "Device ID -> Contact Point App.Device (bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5152,7 +4762,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5212,7 +4822,7 @@
         "expressionRule": "Application ID -> Software Application (bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5222,7 +4832,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5282,7 +4892,7 @@
         "expressionRule": "Subscriber Key -> Party (bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5292,7 +4902,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5372,7 +4982,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -5386,7 +4996,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -5400,7 +5010,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5410,7 +5020,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5470,7 +5080,7 @@
         "expressionRule": "Engagement Channel -> Engagement Channel Type (bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5480,7 +5090,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5560,7 +5170,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -5574,7 +5184,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -5588,7 +5198,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5598,7 +5208,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5678,7 +5288,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -5692,7 +5302,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -5706,7 +5316,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5716,7 +5326,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5796,7 +5406,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -5810,7 +5420,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -5824,7 +5434,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5834,7 +5444,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -5914,7 +5524,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -5928,7 +5538,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -5942,7 +5552,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -5952,7 +5562,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6032,7 +5642,7 @@
               },
               "badgeText": {
                 "text": "ST",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -6046,7 +5656,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -6060,7 +5670,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6070,7 +5680,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6129,7 +5739,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6139,7 +5749,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6198,7 +5808,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6208,7 +5818,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6267,7 +5877,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6277,7 +5887,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6336,7 +5946,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6346,7 +5956,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6405,7 +6015,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6415,7 +6025,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6474,7 +6084,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6484,7 +6094,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6543,7 +6153,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6553,7 +6163,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6612,7 +6222,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6622,7 +6232,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6682,7 +6292,7 @@
         "expressionRule": "Subscriber Key -> Individual",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6692,7 +6302,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6751,7 +6361,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6761,7 +6371,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6820,7 +6430,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6830,7 +6440,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6889,7 +6499,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6899,7 +6509,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -6958,7 +6568,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -6968,7 +6578,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7028,7 +6638,7 @@
         "expressionRule": "Custom (UMA bundle maps Sdk Version Nbr)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7038,7 +6648,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7098,7 +6708,7 @@
         "expressionRule": "Message ID -> Engagement Asset (bundle)",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7108,7 +6718,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7167,7 +6777,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7177,7 +6787,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7257,7 +6867,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -7271,7 +6881,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -7285,7 +6895,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7295,7 +6905,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7375,7 +6985,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -7389,7 +6999,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -7403,7 +7013,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7413,7 +7023,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7493,7 +7103,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -7507,7 +7117,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -7521,7 +7131,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7531,7 +7141,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7611,7 +7221,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -7625,7 +7235,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -7639,7 +7249,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7649,7 +7259,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7708,7 +7318,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7718,7 +7328,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7777,7 +7387,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7787,7 +7397,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7846,7 +7456,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7856,7 +7466,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7915,7 +7525,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7925,7 +7535,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -7984,7 +7594,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -7994,7 +7604,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8053,7 +7663,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8063,7 +7673,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8143,7 +7753,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -8157,7 +7767,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -8171,7 +7781,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8181,7 +7791,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8240,7 +7850,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8250,7 +7860,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8330,7 +7940,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -8344,7 +7954,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -8358,7 +7968,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8368,7 +7978,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8427,7 +8037,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8437,7 +8047,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8496,7 +8106,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8506,7 +8116,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8586,7 +8196,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -8600,7 +8210,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -8614,7 +8224,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8624,7 +8234,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8683,7 +8293,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8693,7 +8303,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8752,7 +8362,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8762,7 +8372,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8842,7 +8452,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -8856,7 +8466,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -8870,7 +8480,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8880,7 +8490,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -8961,7 +8571,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -8975,7 +8585,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -8989,7 +8599,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -8999,7 +8609,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -9080,7 +8690,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -9094,7 +8704,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -9108,7 +8718,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -9118,7 +8728,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -9199,7 +8809,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -9213,7 +8823,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -9227,7 +8837,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -9237,7 +8847,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -9318,7 +8928,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -9332,7 +8942,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -9346,7 +8956,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -9356,7 +8966,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -9437,7 +9047,7 @@
               },
               "badgeText": {
                 "text": "F",
-                "fill": "#F6B355",
+                "fill": "#A06F03",
                 "fontSize": 9,
                 "fontWeight": 700,
                 "fontFamily": "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
@@ -9451,7 +9061,7 @@
                 "refX": -5,
                 "refY": -3,
                 "fill": "var(--bg-canvas, #FFFFFF)",
-                "stroke": "#F6B355",
+                "stroke": "#A06F03",
                 "stroke-width": 1,
                 "rx": 3,
                 "ry": 3
@@ -9465,7 +9075,7 @@
         ],
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "d": "M 0 -6 L -14 0 L 0 6 z",
@@ -9475,7 +9085,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1,
               "stroke-dasharray": "none"
             }
@@ -9553,7 +9163,7 @@
             },
             "sourceMarker": {
               "type": "path",
-              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
               "stroke": "#1D73C9",
               "stroke-width": 2,
@@ -11215,7 +10825,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11225,7 +10835,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11248,7 +10858,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11258,7 +10868,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11281,7 +10891,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11291,7 +10901,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11314,7 +10924,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11324,7 +10934,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11346,7 +10956,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11356,7 +10966,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11378,7 +10988,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11388,7 +10998,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11411,7 +11021,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11421,7 +11031,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11443,7 +11053,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11453,7 +11063,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11475,7 +11085,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11485,7 +11095,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11508,7 +11118,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11518,7 +11128,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11541,7 +11151,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11551,7 +11161,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11574,7 +11184,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11584,7 +11194,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11606,7 +11216,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11616,7 +11226,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11638,7 +11248,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11648,7 +11258,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11671,7 +11281,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11681,7 +11291,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11704,7 +11314,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11714,7 +11324,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11737,7 +11347,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11747,7 +11357,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11770,7 +11380,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11780,7 +11390,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11803,7 +11413,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11813,7 +11423,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11836,7 +11446,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11846,7 +11456,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11869,7 +11479,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11879,7 +11489,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11902,7 +11512,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11912,7 +11522,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11935,7 +11545,7 @@
         "mappingType": "Formula",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11945,7 +11555,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }
@@ -11968,7 +11578,7 @@
         "mappingType": "Standard",
         "attrs": {
           "line": {
-            "stroke": "#F6B355",
+            "stroke": "#A06F03",
             "strokeWidth": 1,
             "targetMarker": {
               "type": "path",
@@ -11978,7 +11588,7 @@
               "type": "path",
               "d": "M 0 0 L -12 0",
               "fill": "none",
-              "stroke": "#F6B355",
+              "stroke": "#A06F03",
               "stroke-width": 1
             }
           }

@@ -1,9 +1,9 @@
 // Save & Export manager (CLEANUP S4) — the quick Save modal + the full Save Manager (browser saves, Drive copies, export selection) + uniqueSaveName/wireSelectAll. Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.22.0';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.22.0';
-import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.22.0';
-import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.22.0';
-import { btn, tctx } from './context.js?v=1.22.0';
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.22.1';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.22.1';
+import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.22.1';
+import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.22.1';
+import { btn, tctx } from './context.js?v=1.22.1';
 
 function uniqueSaveName(baseName, dateSuffix, existingNames) {
   // Strip trailing date if it already matches today's suffix

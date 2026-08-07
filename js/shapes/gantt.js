@@ -1,7 +1,7 @@
 // Gantt-chart shapes (GanttTask/Milestone/Marker/Timeline/Group) (CLEANUP S3). registerGantt() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttRowLayout, ganttSummaryLaneH, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.22.0';
+import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttRowLayout, ganttSummaryLaneH, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.22.1';
 
 export function registerGantt() {
   // --- GanttTask ---

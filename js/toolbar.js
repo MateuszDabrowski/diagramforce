@@ -1,30 +1,30 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.22.0';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.22.0';
-import { resizeDataObjectToFit } from './components.js?v=1.22.0';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.22.0';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.22.0';
+import { diagramHasImage } from './image-component.js?v=1.22.1';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.22.1';
+import { resizeDataObjectToFit } from './components.js?v=1.22.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.22.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.22.1';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.22.0';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.0';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.22.0';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.22.0';
-import { renderTemplateThumbnail } from './templates.js?v=1.22.0';
-import { showWhatsNewNow } from './whats-new.js?v=1.22.0';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.22.0';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.22.0';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.22.0';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.22.0';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.22.0';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.22.0';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.22.0';
+import { pctx } from './persistence/context.js?v=1.22.1';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.1';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.22.1';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.22.1';
+import { renderTemplateThumbnail } from './templates.js?v=1.22.1';
+import { showWhatsNewNow } from './whats-new.js?v=1.22.1';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.22.1';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.22.1';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.22.1';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.22.1';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.22.1';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.22.1';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.22.1';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.22.0';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.22.0';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.22.0';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.22.1';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.22.1';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.22.1';
 
 let modules = {};
 export function init(_modules) {
@@ -390,6 +390,12 @@ export function init(_modules) {
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
         modules.canvas.autoLayout(direction, { align: 'barycenter' });
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+        // Outcome labels ("Yes", "No, notify owner") describe the PIPE, not the target - so unlike datamodel
+        // below, collision-only: a label moves off its route midpoint ONLY if it collides, and then to the
+        // nearest clear point on its own path. Measured on a two-gateway BPMN fixture: two outcome labels
+        // stacked at their corridor midpoints (133px^2); collision-only cleared it moving ONE label 9px,
+        // where target-centring moved all four labels 17-66px for the same zero-overlap result.
+        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch {}
       } else if (type === 'datamodel') {
         // Data Model (1.22.0): the generic layout, with TWO deviations measured on a real 10-object data
         // graph. (a) `maxRankExtent: 0` - rank wrapping off. The M7 cap wrapped 7 same-parent siblings into
@@ -404,8 +410,16 @@ export function init(_modules) {
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
         try { modules.canvas.resolveConnectorLabels(); } catch {}
       } else {
+        // Architecture + org. snapLinksToPorts reseeds every label to its route midpoint, and until 1.22.0
+        // nothing resolved them afterwards - labels could land on cards or each other. NOT the datamodel
+        // mode: an architecture label ("REST", "Event Bus") or an org dotted-line label describes the PIPE,
+        // so the midpoint is the semantically-right spot and only collisions need fixing. Measured (7-label
+        // architecture corridor + 3-label org chart): target-centring dragged an org label 151px onto its
+        // target card's axis and moved non-colliding labels 23-58px; collision-only fixed the same overlaps
+        // (0 label-label, 0 label-card) moving ONLY the colliding label, 8-99px to the nearest clear spot.
         modules.canvas.autoLayout(direction, opts);
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch {}
       }
     }, () => { try { modules.canvas.fitContent(); } catch {} });   // re-fit on undo/redo so the camera follows the layout
     document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');

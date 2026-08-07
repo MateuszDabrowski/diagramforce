@@ -30,9 +30,25 @@
 const ROW_GAP = 72;   // vertical gap between ranks
 const COL_GAP = 64;   // horizontal gap between adjacent columns
 
+// STACKED nodes. A node may carry `stack: [{id, h}, ...]` - further ids laid out as ONE unit directly below it, in
+// its column, in the order given. That is exactly what an orchestration STAGE BAND is: a stage card and its steps
+// have one entry and one exit and nothing branches between them, so they are one thing to rank and one thing to
+// place, and expressing that here is what GUARANTEES the band stays a rectangle with nothing foreign inside it.
+//
+// Ranking them as ordinary sibling nodes does not hold. The same-rank resolver at the bottom of this file pushes
+// a node right to clear whatever shares its rank - a fault lateral, which takes `source column + 1` and so can
+// land on a half column - and it moves that node WITHOUT moving its parent. Measured on the orchestration
+// fixture: a stage held column 2 while its own step was pushed to 2.5, and the band drawn round the pair then
+// contained the fault card sitting between them. As one unit there is nothing to push apart.
+const stackOf = (n) => n.stack || [];
+/** A node's height FOR LAYOUT: its own, plus every stacked member and the row gap above it. */
+const unitH = (n) => stackOf(n).reduce((h, s) => h + ROW_GAP + (s.h || n.h), n.h);
+
 /**
- * @param {{ nodes: {id:string,w:number,h:number}[], edges: {source:string,target:string,kind?:string}[] }} topology
- * @returns {Map<string,{x:number,y:number}>} top-left position per node id
+ * @param {{ nodes: {id:string,w:number,h:number,stack?:{id:string,h:number}[]}[],
+ *           edges: {source:string,target:string,kind?:string}[] }} topology
+ * @returns {Map<string,{x:number,y:number}>} top-left position per node id - one entry per node AND per stacked
+ *   member (a stacked member is not a node: it carries no edges and is never ranked on its own).
  */
 export function computeFlowLayout(topology) {
   const nodes = topology?.nodes || [];
@@ -147,17 +163,25 @@ export function computeFlowLayout(topology) {
   const rowY = [];
   let y = 0;
   for (let r = 0; r < ranks.length; r++) {
-    const h = ranks[r] ? Math.max(...ranks[r].map((id) => byId.get(id).h)) : 0;
+    const h = ranks[r] ? Math.max(...ranks[r].map((id) => unitH(byId.get(id)))) : 0;
     rowY[r] = y;
     y += h + ROW_GAP;
   }
   for (const n of nodes) {
     const r = rank.get(n.id);
-    const rowH = ranks[r] ? Math.max(...ranks[r].map((id) => byId.get(id).h)) : n.h;
-    out.set(n.id, {
-      x: Math.round((col.get(n.id) - minCol) * colPitch),
-      y: Math.round(rowY[r] + (rowH - n.h) / 2),
-    });
+    const rowH = ranks[r] ? Math.max(...ranks[r].map((id) => unitH(byId.get(id)))) : unitH(n);
+    const x = Math.round((col.get(n.id) - minCol) * colPitch);
+    const top = Math.round(rowY[r] + (rowH - unitH(n)) / 2);
+    out.set(n.id, { x, y: top });
+    // Members follow straight down the SAME column at the rank pitch, so a band's internal spacing is the
+    // spacing between any two ranks - the connectors between the steps get the same clearance as every other
+    // connector on the canvas, and a band reads as a run of ordinary rows rather than as a denser thing.
+    let cy = top + n.h;
+    for (const s of stackOf(n)) {
+      cy += ROW_GAP;
+      out.set(s.id, { x, y: Math.round(cy) });
+      cy += (s.h || n.h);
+    }
   }
   return out;
 }

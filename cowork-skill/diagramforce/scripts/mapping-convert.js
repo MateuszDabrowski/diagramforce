@@ -97,17 +97,31 @@ export function looksLikeMappingJson(text) {
 
 // Layers, left to right. This is the Data Cloud pipeline, and the datamapping diagram type models it directly:
 // a Zone per stage, carrying `layerStage`, which is what makes it a LAYER rather than a decorative box.
-// Accents are the OOTB Mapping Layer ones from js/components.js, NOT invented. A zone that carries only
-// `layerStage` renders as the generic "Layer" preset, so an imported diagram sat beside a hand-built one
-// looked like a different tool made it - and, worse, read as a CUSTOM layer duplicating the built-in.
+// A zone that carries only `layerStage` renders as the generic "Layer" preset, so an imported diagram sat
+// beside a hand-built one looked like a different tool made it - and, worse, read as a CUSTOM layer
+// duplicating the built-in. `layerStage` is what the app READS; the accent is what the reader sees.
+//
+// The accents were the OOTB Mapping Layer ones from js/components.js. Two of the four could not stay: the DLO
+// amber #F6B355 scored 1.75:1 and the Activation green #27AE60 2.75:1 against the light canvas (#FAFAFA), and
+// a zone accent is a stroke plus a label, not a filled block - at 1.75 the lane boundary is a suggestion.
+// Both moved DOWN IN LIGHTNESS ONLY, hue held, so Source-blue / DLO-amber / DMO-red / Activation-green still
+// read as themselves: amber L* 77.6 -> 50.5 at hue 78 (was 75), green L* 63.0 -> 50.6 at hue 150 (unchanged).
+// Source blue and DMO red are byte-identical to before - they already cleared both floors.
+// RESTATED from js/persistence/diagram-palette.js (import-free file, hand-copied to the skill);
+// dev/tests/diagram-palette.test.js fails if they drift.
+//
+// The stencil presets (js/components.js) and the bundled templates/*.json carried the OLD amber and green for
+// one release, so a converted DLO lane was a shade darker than one dragged fresh from the stencil. They have
+// caught up, and the parity is now asserted rather than promised: dev/tests/shipped-palette.test.js compares
+// these five literals against the stencil block and against every staged lane in every shipped template.
 const STAGES = [
   { key: 'source', label: 'Source', color: '#1D73C9' },
   { key: 'datastream', label: 'Data Stream', color: '#1D73C9' },
-  { key: 'dlo', label: 'Data Lake Object', color: '#F6B355' },
+  { key: 'dlo', label: 'Data Lake Object', color: '#A06F03' },
   { key: 'dmo', label: 'Data Model Object', color: '#DA4E55' },
-  { key: 'activation', label: 'Activation', color: '#27AE60' },
+  { key: 'activation', label: 'Activation', color: '#008B46' },
 ];
-/** `#F6B355` -> `rgba(246,179,85,0.05)`. Mirrors hexToRgba in components.js, inlined because this module is
+/** `#A06F03` -> `rgba(160,111,3,0.05)`. Mirrors hexToRgba in components.js, inlined because this module is
  *  shared with the skill and must not import app code. */
 const rgba05 = (hex) => {
   const h = String(hex).replace('#', '');
@@ -141,6 +155,59 @@ export function fieldCatalogue(json) {
   for (const o of (json?.dataModelObject || json?.dataLakeObject || [])) {
     if (!o?.name) continue;
     out.set(o.name, (o.fields || []).map((f) => ({ apiName: f.name, label: f.label || f.name })).filter((f) => f.apiName));
+  }
+  return out;
+}
+
+/** DMO-to-DMO relationships out of a `/ssot/metadata?entityType=DataModelObject` payload (one, or an array of
+ *  them). The org DECLARES these - `fromEntity`/`toEntity` plus a real `cardinality` - and it is the same array
+ *  the Data Cloud UI's Relationships tab renders, so a mapping diagram can state the model's own structure
+ *  between DMO cards it is already drawing instead of falling back to the ingest default.
+ *
+ *  DEDUPED, because the payload states each relationship TWICE - once under each end's entity. Measured on a
+ *  real org: 137 entities, 442 rows, 222 distinct, 0 naming an entity the payload does not define.
+ *
+ *  The two ATTRIBUTE names are part of the identity, not decoration: 6 of the 213 ordered pairs are related
+ *  through more than one field pair, and those are genuinely different relationships even though the diagram
+ *  draws one connector per pair. Cardinality is deliberately NOT in the key - measured, no 4-tuple ever
+ *  disagreed with itself, so including it could only ever have hidden a contradiction. */
+export function entityRelationships(json) {
+  const out = new Map();
+  for (const payload of (Array.isArray(json) ? json : [json])) {
+    for (const e of (payload?.metadata || [])) {
+      for (const r of (e?.relationships || [])) {
+        if (!r?.fromEntity || !r?.toEntity) continue;
+        const k = [r.fromEntity, r.fromEntityAttribute, r.toEntity, r.toEntityAttribute].join('\u0000');
+        if (!out.has(k)) out.set(k, { from: r.fromEntity, to: r.toEntity, cardinality: r.cardinality || null });
+      }
+    }
+  }
+  return [...out.values()];
+}
+
+/** The org's source -> stream -> DLO chain out of `/ssot/data-streams` (one page or an array of pages - the
+ *  caller follows `nextPageUrl`; the endpoint's offset paging is 1-indexed and SKIPS, so ONLY that chain is
+ *  complete - see limits/gotchas-testing.md). Keyed by the DLO name lower-cased, because the DLO card is the
+ *  end a mapping canvas already has.
+ *
+ *  `connectorDetails` is null on every Ingestion API stream (measured: 14 of 58 in the org this was built
+ *  against), and only CRM-connector streams state a `sourceObject` (30 of 58) - StreamingApp and UploadedFiles
+ *  streams name the CONNECTOR and nothing narrower. So `sourceObject` may be null while `connectorName` is
+ *  not, and both may be null; the consumer degrades per level rather than inventing the missing link. */
+export function streamLineage(json) {
+  const out = new Map();
+  for (const payload of (Array.isArray(json) ? json : [json])) {
+    for (const s of (payload?.dataStreams || [])) {
+      const dlo = s?.dataLakeObjectInfo?.name;
+      if (!s?.name || !dlo) continue;
+      const cd = s.connectorInfo?.connectorDetails || null;
+      out.set(String(dlo).toLowerCase(), {
+        stream: s.name, dlo,
+        connectorType: s.connectorInfo?.connectorType || null,
+        connectorName: cd?.name || null,
+        sourceObject: cd?.sourceObject || null,
+      });
+    }
   }
   return out;
 }
@@ -211,27 +278,45 @@ export function buildDiagram(maps, opts = {}) {
   // Owner convention, and the official template draws it: a formula that READS source data gets a left-to-left
   // connector from each referenced source field row into its formula row - the template's Name row takes two
   // (FirstName and LastName feed a concat), while its static rows (DataSource, SfdcOrganizationId, ...) take
-  // none. The expression syntax gives the references away: `sourceField['IsConverted']`. Deliberately v1-narrow:
-  // only `sourceField[...]` accessors resolve - `formulaField[...]` references a DERIVED value, the template has
-  // no convention for it, and the owner's rule names DSO data specifically.
+  // none. The expression syntax gives the references away: `sourceField['IsConverted']`.
   //
   // A POST-pass over the collected rels, not inline in the field loop: a formula can reference a column whose
   // direct mapping registers LATER in the same file, and resolving early would mint a duplicate row for it.
   // Refs are matched against the source card's rows tolerantly (formulas say `IsConverted`, direct rows say
   // `IsConverted__c` - measured across CRM, csv and V2 streams, every stream column suffixes __c); a referenced
   // column with no direct mapping gains a row, which the prune below removes again if its formula dies.
-  const formulaSourceRefs = (expr) => [...new Set(
-    [...String(expr || '').matchAll(/sourceField\s*\[\s*(['"])([^'"\]]+)\1\s*\]/g)].map((mm) => mm[2]))];
+  //
+  // `formulaField[...]` is the OTHER accessor real orgs write (15 refs measured org-wide): it names a DERIVED
+  // field - another formula's output in the SAME stream - so its row, when it exists, is a row on the SAME
+  // "<Stream> Formulas" companion the referencing formula lives on, and the chain draws left-to-left between
+  // two rows of one card (probe-verified: sfMappingRouter loops it off the left edge, readably, even for
+  // adjacent rows). Resolved against EXISTING companion rows ONLY, never minting: measured, 13 of the org's 15
+  // refs name a directly-mapped column instead (`formulaField['EventDateTime']` where EventDateTime__c is a
+  // plain copy) - the accessor CLAIMS a derived field, and drawing it into the source column would assert
+  // semantics the metadata does not state. Those stay unresolved and are COUNTED (stats.formulaChainUnresolved,
+  // stamped per referencing rel so the count follows the prune like every other stat here).
+  const accessorRefs = (expr, accessor) => [...new Set(
+    [...String(expr || '').matchAll(new RegExp(`${accessor}\\s*\\[\\s*(['"])([^'"\\]]+)\\1\\s*\\]`, 'g'))]
+      .map((mm) => mm[2]))];
+  const tolerant = (card, ref) => (card ? [...card.fields.keys()].find((k) => k === ref
+    || k.toLowerCase() === `${ref}__c`.toLowerCase() || k.toLowerCase() === ref.toLowerCase()) : undefined);
   for (const r of [...rels]) {
     if (r.mappingType !== 'Formula' || !r.srcObj) continue;
     const sCard = objs.get(r.srcObj);
-    if (!sCard) continue;
-    for (const ref of formulaSourceRefs(r.expression)) {
-      const hit = [...sCard.fields.keys()].find((k) => k === ref
-        || k.toLowerCase() === `${ref}__c`.toLowerCase() || k.toLowerCase() === ref.toLowerCase());
-      const api = hit || `${ref}__c`;
-      if (!sCard.fields.has(api)) sCard.fields.set(api, { apiName: api, label: pretty(api) });
-      rels.push({ from: [sCard.name, api], to: r.from.slice(), leftLeft: true });
+    if (sCard) {
+      for (const ref of accessorRefs(r.expression, 'sourceField')) {
+        const api = tolerant(sCard, ref) || `${ref}__c`;
+        if (!sCard.fields.has(api)) sCard.fields.set(api, { apiName: api, label: pretty(api) });
+        rels.push({ from: [sCard.name, api], to: r.from.slice(), leftLeft: true });
+      }
+    }
+    const host = objs.get(r.from[0]);   // the "<Stream> Formulas" companion this formula's row lives on
+    for (const ref of accessorRefs(r.expression, 'formulaField')) {
+      const hit = tolerant(host, ref);
+      // A hit that is the referencing row ITSELF (a formula naming its own output) would be a same-port
+      // degenerate link - counted with the unresolved rather than drawn. 0 in the measured corpus.
+      if (!hit || hit === r.from[1]) { r.chainUnresolved = (r.chainUnresolved || 0) + 1; continue; }
+      rels.push({ from: [host.name, hit], to: r.from.slice(), leftLeft: true, chain: true });
     }
   }
 
@@ -283,6 +368,64 @@ export function buildDiagram(maps, opts = {}) {
   // An object nobody mapped a field to or from would draw as an empty card; drop it rather than show a stub.
   for (const [k, o] of objs) if (!o.fields.size) objs.delete(k);
 
+  // ── Source facts from the ORG (opts.streams, built by streamLineage) ───────────────────────────────────────
+  // Without it, everything left of the DLO lane is NAMED from the mapping metadata: an ingest map's
+  // sourceObjectName IS the stream's name (`Prospect_Home`), so the lane shows the stream wearing a Source
+  // caption while the actual origin - the `Prospect` object read through the SalesforceDotCom_Home connector -
+  // is nowhere on the canvas. `/ssot/data-streams` states the real chain, so when the caller supplies it:
+  //   · a connector-backed stream states its origin ON ITS OWN CARD - a `Source: Prospect
+  //     (SalesforceDotCom_Home)` details row, first row of the card, object and pipe both org-declared. The
+  //     first cut drew the origin as a separate HEADER-ONLY card with an object edge into the stream; the
+  //     owner's review ("What value does empty object give?") measured that box at nothing - the org states
+  //     the source's NAME, not its schema, and a name fits on a row. Same call as the IR importer removal:
+  //     see approaches/index.md "Stream-lineage upstream source cards".
+  //   · a stream that states a connector but no source object (StreamingApp / UploadedFiles) says
+  //     `Source: via <connector>` - the org names the pipe and nothing narrower.
+  //   · an Ingestion API stream has NO upstream anywhere (connectorDetails is null on all 14 in the measured
+  //     org), so its card SAYS so instead of inventing one - the "(Ingestion API)" header caption stays.
+  //   · a stream whose ingest map is not in the selection is minted carrying just its details row - the
+  //     Connect path carries no ingest maps at all, and this is what gives that path a Source lane it
+  //     never had.
+  // AFTER the empty-card drop above, deliberately: a minted stream card may carry no field rows (Ingestion
+  // API on the Connect path), and a chain the org states must not be culled as "nobody mapped it".
+  let streamsMatched = 0, streamsIngestApi = 0, dlosWithoutStream = 0, streamSources = 0;
+  const lineageEdges = [];
+  if (opts.streams) {
+    const keyByLower = new Map([...objs.keys()].map((k) => [k.toLowerCase(), k]));
+    for (const dlo of [...objs.values()]) {
+      // ` formulas` companions share the 'dlo' stage but are drawing devices, not DLOs - same exclusion the
+      // object-relationship pass makes.
+      if (dlo.stage !== 'dlo' || / formulas$/i.test(dlo.name)) continue;
+      const entry = opts.streams.get(String(dlo.name).toLowerCase());
+      if (!entry) { dlosWithoutStream++; continue; }
+      streamsMatched++;
+      // The stream's card is the DSO the ingest maps drew (the two share a name, case-insensitively - these
+      // names come from different endpoints).
+      const sKey = keyByLower.get(entry.stream.toLowerCase()) || entry.stream;
+      const sCard = want(sKey, { stage: 'source', label: pretty(entry.stream) });
+      if (entry.sourceObject || entry.connectorName) {
+        // The row states the object AND the pipe it arrives through - the same system-plus-object reading the
+        // official template hand-writes as "Salesforce CRM Contact", one row instead of one box.
+        const srcText = entry.sourceObject
+          ? `Source: ${entry.sourceObject} (${entry.connectorName || entry.connectorType})`
+          : `Source: via ${entry.connectorName}`;
+        // FIRST row, ahead of the ingest field rows - it captions the card, it does not extend the schema.
+        // `detail: true` keeps it out of the Text type column; label === apiName so the renderer dedupes and
+        // shows the string once. A stream feeding several selected DLOs stamps the row once (Map key).
+        if (!sCard.fields.has(srcText)) {
+          streamSources++;
+          sCard.fields = new Map([[srcText, { apiName: srcText, label: srcText, detail: true }], ...sCard.fields]);
+        }
+      } else {
+        // No connector detail = Ingestion API: the upstream is whatever external system calls the API, which
+        // the org cannot name - say so on the card rather than let the stream read as self-originating.
+        streamsIngestApi++;
+        sCard.label = `${sCard.label || pretty(sCard.name)} (Ingestion API)`;
+      }
+      lineageEdges.push([sCard.name, dlo.name]);
+    }
+  }
+
   // ── Cards ──────────────────────────────────────────────────────────────────
   const usedFids = new Set();
   const fid = (obj, api) => {
@@ -329,8 +472,10 @@ export function buildDiagram(maps, opts = {}) {
     const zoneY = (stage.key === 'datastream' && sourceZoneBottom != null) ? sourceZoneBottom + ZONE_GAP : 0;
     let y = zoneY + ZONE_TOP;
     members.forEach((o, i) => {
+      // A `detail` row (the stream's org-stated source) gets an EMPTY type: "Text" would claim the row is a
+      // field of the schema, and the blank type column is what gives the full-width label room to render.
       const fields = [...o.fields.values()].map((f) => ({
-        label: f.label, apiName: f.apiName, type: 'Text', keyType: null, fid: fid(o.name, f.apiName),
+        label: f.label, apiName: f.apiName, type: f.detail ? '' : 'Text', keyType: null, fid: fid(o.name, f.apiName),
       }));
       const cat = catByName.get(String(o.name).toLowerCase()) || null;
       if (cat) categorised++;
@@ -436,29 +581,39 @@ export function buildDiagram(maps, opts = {}) {
   // field connectors running between the same two cards.
   const REL_ONE = 'M -12 -8 L -12 8 M -12 0 L 0 0';
   const REL_ONE_MANY = 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8';
-  const REL_GREY = '#98A2B3';
+  // DF_NEUTRAL_LINK, restated (see diagram-palette.js). "Plain" has to mean low CHROMA, not low contrast:
+  // #98A2B3 was 2.47:1 on the light canvas, which made the object-level structure a rumour rather than a
+  // subdued line. Same L* as the accents, chroma 4.
+  const REL_GREY = '#74797F';
   // Its OWN counter. `li` is the field-link count and `stats.fieldLinks` reports it, so sharing it would have
   // the summary claim object-level connectors as field mappings.
-  let ri = 0;
+  let ri = 0, dmoRels = 0, dmoRelsOffCanvas = 0, dmoRelsSelf = 0;
   if (opts.objectRelationships !== false) {
     const seen = new Set();
-    for (const r of rels) {
-      const a = cardOf.get(r.from[0]), b = cardOf.get(r.to[0]);
-      if (!a || !b || a.cell.id === b.cell.id) continue;
-      // NOT from a Formulas companion. That card is a drawing device - it exists because a formula mapping has
-      // no source field of its own - and it is not an object in the org, so an ER relationship leaving it would
-      // assert a structure that does not exist. Its FIELD links are real and stay.
-      if (/ formulas$/i.test(r.from[0]) || / formulas$/i.test(r.to[0])) continue;
-      const key = `${a.cell.id}\u0000${b.cell.id}`;
-      if (seen.has(key)) continue;            // ONE connector per object PAIR, however many fields they share
+    /** ONE connector between two cards, whichever pass asked for it. `toMany` puts the crow's foot at the
+     *  TARGET end, so a caller states a to-many relationship PARENT FIRST. Returns whether it drew. */
+    const objRel = (fromName, toName, toMany) => {
+      const a = cardOf.get(fromName), b = cardOf.get(toName);
+      if (!a || !b || a.cell.id === b.cell.id) return false;
+      // ONE connector per object PAIR, however many fields they share - and the pair is UNORDERED, or a
+      // reciprocal mapping (a field read back out of the DMO) draws a second line straight over the first. The
+      // declared relationship set below makes that reachable rather than theoretical: 8 of the org's 213
+      // ordered DMO pairs are stated in BOTH directions.
+      const key = [a.cell.id, b.cell.id].sort().join('\u0000');
+      if (seen.has(key)) return false;
       seen.add(key);
       const fwd = a.cell.position.x <= b.cell.position.x;
-      const card = opts.cardinality?.[`${r.from[0]}\u0000${r.to[0]}`];
-      const toMany = card ? card !== 'ONETOONE' : true;
       cells.push({
         id: `objrel-${ri++}`, type: 'standard.Link', z: 2900,   // UNDER the mapping links (3000)
         source: { id: a.cell.id, port: fwd ? 'er-right' : 'er-left', magnet: 'circle' },
-        target: { id: b.cell.id, port: fwd ? 'er-left' : 'er-right', magnet: 'circle' },
+        // SAME COLUMN leaves on the SAME side. Two DMOs both live in the DMO lane, so er-right -> er-left
+        // between them exits the right edge and then has to come back round to a left edge at the same x - a
+        // horseshoe over every card stacked in between, and a real org draws 100+ of these. Same-side is not an
+        // invention: templates/mcn-consent-data-model.json draws its four near-column relationships
+        // `er-right -> er-right` for exactly this geometry. RIGHT and not left because the lane's left gutter
+        // is where the amber field-mapping links run, and structure must not compete with them.
+        target: { id: b.cell.id, magnet: 'circle',
+          port: a.cell.position.x === b.cell.position.x ? 'er-right' : fwd ? 'er-left' : 'er-right' },
         router: { name: 'sfManhattan' },
         connector: { name: 'rounded', args: { radius: 8 } },
         attrs: { line: {
@@ -467,6 +622,49 @@ export function buildDiagram(maps, opts = {}) {
           targetMarker: { d: toMany ? REL_ONE_MANY : REL_ONE, fill: 'none', stroke: REL_GREY, 'stroke-width': 2, 'stroke-dasharray': 'none' },
         } },
       });
+      return true;
+    };
+    for (const r of rels) {
+      // NOT from a Formulas companion. That card is a drawing device - it exists because a formula mapping has
+      // no source field of its own - and it is not an object in the org, so an ER relationship leaving it would
+      // assert a structure that does not exist. Its FIELD links are real and stay.
+      if (/ formulas$/i.test(r.from[0]) || / formulas$/i.test(r.to[0])) continue;
+      const card = opts.cardinality?.[`${r.from[0]}\u0000${r.to[0]}`];
+      objRel(r.from[0], r.to[0], card ? card !== 'ONETOONE' : true);
+    }
+    // ── Source lineage edges (opts.streams) ──────────────────────────────────────────────────────────────────
+    // The org-stated stream -> DLO hop (the origin itself is a details row on the stream card, not an edge).
+    // The pair usually exists already (its ingest field maps connected it in the loop above) and the pair
+    // dedupe makes this a no-op there - the edge only materialises where no field-level ingest detail was
+    // available, which is every Connect-path stream.
+    // to-many at the stream end for the same reason the pipeline default is: an ingest genuinely IS to-many.
+    for (const [from, to] of lineageEdges) objRel(from, to, true);
+    // ── DECLARED DMO-to-DMO relationships (`opts.relationships`, built by entityRelationships) ────────────────
+    // Everything above pairs datastream -> DLO -> DMO, which no API states a cardinality for. The DMO LAYER is
+    // the exception: the org declares its own relationships there, so these are MEASURED, not assumed.
+    //
+    // SCOPED BY THE CANVAS, which is the whole design. A standalone whole-DMO ERD would draw 137 cards of which
+    // only 62 are mapped - 55% catalogue nobody asked for. Drawing a relationship only where BOTH ends are
+    // already cards keeps the diagram about what the user selected, and it costs nothing: those cards exist
+    // either way, so this is connectors over a canvas that is already right.
+    //
+    // Case-insensitive on the API name, the same rule the category lookup uses one screen up: these names come
+    // from a different endpoint than the mapping metadata, and Salesforce API names are case-insensitive.
+    //
+    // NTOONE reads `from` MANY -> `to` ONE, so the connector is stated PARENT FIRST (`to` as the source end) to
+    // land the crow's foot on the child - the source-is-ONE convention the pipeline connectors already use.
+    const cardKeyOf = new Map([...cardOf.keys()].map((k) => [k.toLowerCase(), k]));
+    for (const r of (opts.relationships || [])) {
+      const from = cardKeyOf.get(String(r.from || '').toLowerCase());
+      const to = cardKeyOf.get(String(r.to || '').toLowerCase());
+      // The two undrawable cases are COUNTED rather than dropped quietly, because each hides something a
+      // reader would otherwise have no way to know is missing. Measured on a real org: 6 of the 222 declared
+      // relationships are self-references, which a header-to-header connector cannot express - the ERD
+      // importer draws those on FIELD ports, and this diagram type has no field to hang them on. A pair the
+      // pipeline pass already connected needs no second line and is not a loss, so it is not counted.
+      if (!from || !to) { dmoRelsOffCanvas++; continue; }
+      if (from === to) { dmoRelsSelf++; continue; }
+      if (objRel(to, from, r.cardinality !== 'ONETOONE')) dmoRels++;
     }
   }
 
@@ -482,14 +680,31 @@ export function buildDiagram(maps, opts = {}) {
       layers: present.map((s) => `${s.label} ${[...objs.values()].filter((o) => o.stage === s.key).length}`),
       fieldLinks: li,
       objectLinks: ri,
+      // The subset of `objectLinks` that came from the org's DECLARED DMO-to-DMO model rather than from an
+      // inferred pipeline pair, plus the two kinds of declared relationship this canvas cannot draw. Those two
+      // are the scoping rule made visible - same discipline as the off-canvas DMO note: say what the picture
+      // leaves out rather than let it look complete.
+      dmoRels, dmoRelsOffCanvas, dmoRelsSelf,
       // Counted from the SURVIVING relationships, not from the parse. The prune below can remove a formula
       // whose target field never reaches a DMO, and reporting the pre-prune total said "25 formula-sourced"
       // on a diagram that draws 10.
       formulas: rels.filter((r) => r.mappingType === 'Formula').length,
       // Left-to-left inputs that SURVIVED the prune - a formula input dies with its formula.
-      formulaInputs: rels.filter((r) => r.leftLeft).length,
+      formulaInputs: rels.filter((r) => r.leftLeft && !r.chain).length,
+      // Formula-to-formula chains (`formulaField[...]`), same-card left-to-left, that survived the prune - a
+      // chain dies when the formula it FEEDS dies (the backward walk then keeps the fed-FROM row alive).
+      formulaChains: rels.filter((r) => r.chain).length,
+      // Refs that named a derived field with no formula row to land on - counted off the SURVIVING referencing
+      // formulas, same discipline as `formulas` above, so a pruned formula does not report its dangling refs.
+      formulaChainUnresolved: rels.filter((r) => r.mappingType === 'Formula')
+        .reduce((n, r) => n + (r.chainUnresolved || 0), 0),
       filtered: rels.filter((r) => r.filtered).length,
       unmapped, prunedUpstream, categorised,
+      // Source-lane lineage - meaningful only when `opts.streams` was supplied (fact mode); all zero without.
+      // The wrapper's report is REQUIRED to say which mode named the lane, and these are what it says it with.
+      // `streamSources` counts the org-stated source FACTS found - they render as details rows on the stream
+      // cards now, not as cards of their own.
+      streamsMatched, streamSources, streamsIngestApi, dlosWithoutStream,
       cells: cells.length,
     },
   };

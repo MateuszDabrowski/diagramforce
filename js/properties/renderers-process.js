@@ -2,11 +2,11 @@
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
 // Build via widgets + finishStandardProps (render-core) + TYPE_LABELS (type-meta), reading graph + the panel DOM
 // refs via prctx; never imports the facade. The showProperties() dispatch imports the eight back.
-import { prctx } from './context.js?v=1.22.0';
-import { contrastTextColor } from '../components.js?v=1.22.0';
-import { finishStandardProps } from './render-core.js?v=1.22.0';
-import { TYPE_LABELS } from './type-meta.js?v=1.22.0';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.22.0';
+import { prctx } from './context.js?v=1.22.1';
+import { contrastTextColor } from '../components.js?v=1.22.1';
+import { finishStandardProps } from './render-core.js?v=1.22.1';
+import { TYPE_LABELS } from './type-meta.js?v=1.22.1';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.22.1';
 
 export function renderBpmnEventProps(cell) {
   // Content
@@ -21,7 +21,10 @@ export function renderBpmnEventProps(cell) {
     { value: 'end',          label: 'End' },
   ], v => {
     cell.set('eventType', v);
-    // Apply the per-type color/stroke palette used at creation time.
+    // Apply the per-type color/stroke palette used at creation time. MUST stay byte-identical to the sf.BpmnEvent
+    // case in js/components.js: dropping an intermediate event and switching an existing one to intermediate are
+    // two paths to one look, and a user who does the second never sees the first. The ring colours moved off
+    // #F6B355 (1.75:1 on the light canvas) and #4FAE7B (2.62:1) for the reason written out there.
     if (v === 'end') {
       cell.attr('body/fill', '#F9E3E5');
       cell.attr('body/stroke', '#DA4E55');
@@ -30,17 +33,17 @@ export function renderBpmnEventProps(cell) {
       cell.attr('icon/fill', '#DA4E55');
     } else if (v === 'intermediate') {
       cell.attr('body/fill', '#FDF1DC');
-      cell.attr('body/stroke', '#F6B355');
+      cell.attr('body/stroke', '#A06F03');
       cell.attr('body/strokeWidth', 1.5);
-      cell.attr('innerRing/stroke', '#F6B355');
+      cell.attr('innerRing/stroke', '#A06F03');
       cell.attr('innerRing/strokeWidth', 1.5);
-      cell.attr('icon/fill', '#F6B355');
+      cell.attr('icon/fill', '#A06F03');
     } else {
       cell.attr('body/fill', '#DCF1E2');
-      cell.attr('body/stroke', '#4FAE7B');
+      cell.attr('body/stroke', '#008B46');
       cell.attr('body/strokeWidth', 1.5);
       cell.attr('innerRing/stroke', 'none');
-      cell.attr('icon/fill', '#4FAE7B');
+      cell.attr('icon/fill', '#008B46');
     }
   });
 

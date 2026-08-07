@@ -23,11 +23,17 @@
 //   "zones":   [ { "label": "Contact Points", "objects": ["ssot__ContactPointEmail__dlm"] } ],
 //   "objects": [ { "name": "ssot__ContactPointEmail__dlm", "label": "Contact Point Email",
 //                  "category": "Profile", "headerColor": "#1D73C9",
+//                  "sharing": { "internal": "Private", "external": "Private" }, "records": 92,
 //                  "fields": [ { "label": "Id", "apiName": "ssot__Id__c", "type": "Text",
 //                                "keyType": "pk", "required": true } ] } ],
 //   "relationships": [ { "from": "ssot__ContactPointEmail__dlm.ssot__PartyId__c",
 //                        "to":   "ssot__Individual__dlm.ssot__Id__c" } ]
 // }
+//
+// `sharing` and `records` are OPTIONAL and produce the badge strip above each card plus a key. `sharing.internal`
+// is the org-wide default (EntityDefinition.InternalSharingModel: Private / Read / ReadSelect / ReadWrite /
+// ReadWriteTransfer / FullAccess / ControlledBy...); `external` is the community-and-portal model and is shown
+// only when it differs. Omit both and the output is exactly what it was before badges existed.
 //
 // `relationships` are ONE-to-MANY as written: `to` is the ONE end (the parent's key), `from` is the MANY end
 // (the child's foreign key) - which is how a Salesforce lookup reads, so `Contact.AccountId -> Account.Id`.
@@ -42,8 +48,9 @@
 //                  (paginate - the default is 50) and, for DMO-to-DMO relationships,
 //                  sf org list metadata -m FieldSrcTrgtRelationship -o <org>
 //
-// Zero dependencies. Emits the standard single-diagram envelope, validated by scripts/validate-diagram.mjs.
+// Emits the standard single-diagram envelope, validated by scripts/validate-diagram.mjs.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { DF_COLORS, DF_SEVERITY_RAMP, DF_NEUTRAL_LINK, onAccentInk } from './diagram-palette.js';
 
 // Verbatim from js/er-markers.js. A pure ER relationship carries NO `linkKind` - its absence is what marks it as
 // one (a `linkKind` of 'mapping' would make it a Data Cloud field mapping instead), and the app does not derive
@@ -54,8 +61,11 @@ const ER_MANY = 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0';
 // foreign key - so a card and every arrow leaving it read as one thing. Colouring by the `to` end was measured
 // and rejected: 47 of 126 relationships in a 21-object model land on `User.Id`, so keying off the parent gives
 // one colour to exactly the bundle it is supposed to separate.
-// #1D73C9 remains the fallback for a selection that names no headerColor - the same default a card takes.
-const LINK_COLOR = '#1D73C9';
+// The palette blue remains the fallback for a selection that names no headerColor - the same default a card
+// takes. It is `DF_COLORS.blue` (#1D73C9, unchanged by the both-themes palette work: 4.63 light / 3.60 dark).
+// A selection MAY still name any headerColor it likes; org-to-selection.mjs only ever writes palette values,
+// but a hand-edited selection is not policed here - the rule lives in DIAGRAM_JSON_SPEC.md for that author.
+const LINK_COLOR = DF_COLORS.blue;
 
 // Card geometry. Height tracks the field count because the app sizes a DataObject from its rows; getting this
 // roughly right means the imported diagram does not need an Auto Size pass to be readable.
@@ -63,8 +73,94 @@ const LINK_COLOR = '#1D73C9';
 // plus a type column, and at 260 (the DATA MAPPING width) every row truncates mid-name.
 const CARD_W = 480, HEADER_H = 44, ROW_H = 22, CARD_PAD = 12;
 const COL_GAP = 120, ROW_GAP = 80;
+const LEFT_MARGIN = 40;
 
 const die = (msg) => { console.error(msg); process.exit(1); };
+
+// ── OWD + record-volume badges ───────────────────────────────────────────────────────────────────────────────
+// Drawn ONLY when the selection carries `sharing` / `records` (org-to-selection.mjs `--owd` / `--volume`), so an
+// ERD that says nothing about access is byte-identical to what this script drew before badges existed.
+//
+// WHY A SEPARATE CELL AND NOT THE CARD. Every place on sf.DataObject that could hold this is already spoken for:
+// `objectName` and `attrs.headerLabel.text` are the object's IDENTITY - the properties panel, the table view and
+// the CSV export all key off them, so appending "(Private)" corrupts a round-trip that has to stay lossless; a
+// `fields[]` row would export as a field the org does not have; and `category` has a platform-enforced Data Cloud
+// vocabulary (Profile / Engagement / Other) that DMO diagrams depend on. A df.Pill is a first-class shape in
+// every stencil, so the badge is also something the reader can move, delete or recolour without touching schema.
+//
+// THE RAMP is DF_SEVERITY_RAMP, in order of EXPOSURE: Private is the org sharing nothing by default, FullAccess
+// is every user already holding the record with rights to approve it. It is the palette's ramp and not a local
+// one for the reason the palette argues - a second set of colours is a second set to keep in contrast - and
+// every rung therefore clears 3:1 on both canvases, which matters here because a badge floats on bare canvas
+// above its card rather than on the card's own fill.
+const OWD_COLOR = {
+  Private: DF_SEVERITY_RAMP[0],
+  Read: DF_SEVERITY_RAMP[1],
+  // ReadSelect is "Public Read Only" wearing the API's name for it on a handful of objects. Same rung.
+  ReadSelect: DF_SEVERITY_RAMP[1],
+  ReadWrite: DF_SEVERITY_RAMP[2],
+  ReadWriteTransfer: DF_SEVERITY_RAMP[3],
+  FullAccess: DF_SEVERITY_RAMP[4],
+};
+// ControlledByCampaign / ControlledByParent / ControlledByLeadOrContact... are NOT a rung on that ramp: access is
+// INHERITED from a parent record rather than granted at org level, so the object has no exposure of its own to
+// rank. Off-ramp indigo says "different kind of answer" instead of implying a severity it does not have.
+const INHERIT_COLOR = DF_COLORS.indigo;
+// The count is data, not a judgement, so it gets the palette's deliberately-plain neutral - chroma 4. A coloured
+// volume badge would read as a second severity scale and there is no such thing as a dangerous row count.
+const VOLUME_COLOR = DF_NEUTRAL_LINK;
+/** An unrecognised model (`None`, or a value newer than this map) still gets drawn, in the neutral, and warned
+ *  about. Dropping it would be indistinguishable on the canvas from the object having no OWD at all. */
+const owdColor = (v) => (/^ControlledBy/i.test(String(v)) ? INHERIT_COLOR : (OWD_COLOR[v] || VOLUME_COLOR));
+
+// Mirrors df.Pill._fitWidth (js/shapes/core.js) EXACTLY: max(h, round(len * fontSize * 0.62) + round(h * 0.55)).
+// The shape re-fits at CONSTRUCTION, so a width authored to any other formula is silently overwritten on load -
+// and because the strip is right-aligned to the card edge, one wrong width shifts every pill beside it. Same
+// discipline the card height above already applies, and the reason both are stated rather than guessed.
+const PILL_H = 22, PILL_FS = 12, PILL_GAP = 8, PILL_LIFT = 6;
+const pillWidth = (txt) =>
+  Math.max(PILL_H, Math.round(String(txt).length * PILL_FS * 0.62) + Math.round(PILL_H * 0.55));
+
+/** Mirrors df.Legend._fitWidth: a fixed 28px swatch lead, ~0.6em per char, 10px trailing, min 48. */
+const LEGEND_H = 26, LEGEND_FS = 13, LEGEND_STEP = 28;
+const legendWidth = (txt) => Math.max(48, 28 + Math.round(String(txt).length * LEGEND_FS * 0.6) + 10);
+
+const pill = (id, x, y, text, fill) => ({
+  id, type: 'df.Pill',
+  position: { x, y },
+  size: { width: pillWidth(text), height: PILL_H },
+  // ABOVE the z 3000 relationships, deliberately: a badge a connector can be drawn through is not a badge.
+  z: 3500,
+  pillText: text,
+  attrs: {
+    body: { fill, stroke: 'none' },
+    // The ink follows the fill rather than the other way round - see onAccentInk in diagram-palette.js. The
+    // obvious white-on-colour badge fails the 4.5:1 text floor on this palette (4.04-4.42), because the
+    // both-themes rule parks these fills mid-band where black is the readable one.
+    label: { text, fontSize: PILL_FS, fill: onAccentInk(fill), fontWeight: '700' },
+  },
+});
+
+const legendKey = (id, x, y, swatch, text) => ({
+  id, type: 'df.Legend',
+  position: { x, y },
+  size: { width: legendWidth(text), height: LEGEND_H },
+  z: 2400,
+  attrs: { swatch: { fill: swatch }, label: { text, fontSize: LEGEND_FS } },
+});
+
+// A ramp is not self-evident, so it gets a Key (DIAGRAM_JSON_SPEC.md, "Add a Key when colour carries meaning").
+// Rows are emitted only for the tiers the diagram actually USES - a key explaining five levels of sharing to a
+// diagram that has two is noise. Wording is the effect on the reader's org, not the API constant restated.
+const OWD_KEY = [
+  ['Private', 'Private - record owner and the role hierarchy above them'],
+  ['Read', 'Read - every user sees it, only the owner edits'],
+  ['ReadSelect', 'ReadSelect - every user sees it, only the owner edits'],
+  ['ReadWrite', 'ReadWrite - every user sees and edits it'],
+  ['ReadWriteTransfer', 'ReadWriteTransfer - every user sees, edits and reassigns'],
+  ['FullAccess', 'FullAccess - every user sees, edits, reassigns and approves'],
+];
+const INHERIT_KEY = 'ControlledBy... - access inherited from the parent record';
 
 /** A stable, collision-free field id. Field ports are `field-<fid>`, so this has to be deterministic: a
  *  regenerated diagram must keep the same ports or every link silently detaches. */
@@ -97,7 +193,18 @@ const normType = (t) => {
   return TYPE_MAP[raw.toLowerCase().replace(/[\s-]/g, '')] || TYPE_MAP[raw.toLowerCase()] || 'Text';
 };
 
-export function buildDiagram(spec, appVersion = '1.21.7') {
+// Read the version from the bundled spec's "Spec snapshot: vX" marker rather than hardcoding it, the way
+// flow-to-diagramforce.mjs already does. The hardcoded default sat at '1.21.7' through two releases and stamped
+// every converted data model with a version the app had moved past - and because the caller at the bottom of
+// this file never passes the argument, the default WAS the shipped value, not a fallback.
+const SPEC_VERSION = (() => {
+  try {
+    const spec = readFileSync(new URL('../references/DIAGRAM_JSON_SPEC.md', import.meta.url), 'utf8');
+    return (spec.match(/Spec snapshot: v([\d.]+)/) || [])[1] || '1';
+  } catch { return '1'; }
+})();
+
+export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   const objects = spec.objects || [];
   if (!objects.length) die('The selection lists no objects.');
 
@@ -138,7 +245,7 @@ export function buildDiagram(spec, appVersion = '1.21.7') {
       // The API name lives on every field already; the card shows the readable name. `category` drives the
       // Data Cloud styling when present and is simply absent for core objects.
       ...(o.category ? { category: o.category } : {}),
-      headerColor: o.headerColor || '#1D73C9',
+      headerColor: o.headerColor || LINK_COLOR,
       showLabels: true, showFieldLengths: false,
       fields,
     };
@@ -225,7 +332,7 @@ export function buildDiagram(spec, appVersion = '1.21.7') {
     for (const b of best.buckets) columns.push({ zone: null, members: b });
   }
 
-  let x = 40;
+  let x = LEFT_MARGIN;
   const ZONE_PAD = 20, ZONE_TOP = 48;
   columns.forEach((col) => {
     const inZone = !!col.zone;
@@ -380,6 +487,82 @@ export function buildDiagram(spec, appVersion = '1.21.7') {
     });
   });
 
+  // ── Badges: org-wide default + record volume ───────────────────────────────
+  // Right-aligned to the card's own right edge, so the pair reads as one strip pinned to its top-right corner
+  // rather than as two loose cells. Built left-to-right and then offset by the total, which keeps the alignment
+  // correct when an object has only one of the two annotations.
+  //
+  // The strip sits in the ROW_GAP above the card (y - 28 to y - 6), which is empty by construction: the layout
+  // stacks cards 80px apart in columns and relationships route through the COLUMN gutters. For a card inside a
+  // zone that lands in the bottom 22px of the zone's 48px header band, clear of the zone label, which renders
+  // left-aligned at the zone's own x + 10 while the strip ends 20px short of the zone's right edge.
+  const tiersUsed = new Set();
+  let inheritSeen = false, volumeSeen = false, badges = 0;
+  objects.forEach((o, i) => {
+    const { cell } = byName.get(o.name);
+    const strip = [];
+    if (o.sharing?.internal) {
+      const { internal, external } = o.sharing;
+      // The bare word is the INTERNAL model - the org-wide default. The external community/portal model is
+      // appended ONLY where it differs, so the common case stays a badge and not a sentence.
+      strip.push(['owd', `OWD ${internal}${external && external !== internal ? ` · ext ${external}` : ''}`,
+        owdColor(internal)]);
+      if (/^ControlledBy/i.test(internal)) inheritSeen = true;
+      else if (OWD_COLOR[internal]) tiersUsed.add(internal);
+      else warnings.push(`objects[${i}] (${o.name}) has an unrecognised sharing model "${internal}" - `
+        + 'badged in the neutral grey and left out of the key.');
+    }
+    if (Number.isFinite(o.records)) {
+      strip.push(['vol', `${Number(o.records).toLocaleString('en-US')} records`, VOLUME_COLOR]);
+      volumeSeen = true;
+    }
+    if (!strip.length) return;
+    const widths = strip.map(([, t]) => pillWidth(t));
+    const total = widths.reduce((a, b) => a + b, 0) + PILL_GAP * (strip.length - 1);
+    let px = cell.position.x + cell.size.width - total;
+    const py = cell.position.y - PILL_H - PILL_LIFT;
+    // Keyed off the OBJECT index, not a running badge counter, so `owd-3` always belongs to `obj-3` even when
+    // the object before it had no annotation at all.
+    strip.forEach(([kind, text, fill], k) => {
+      cells.push(pill(`${kind}-${i}`, px, py, text, fill));
+      px += widths[k] + PILL_GAP;
+      badges++;
+    });
+  });
+
+  if (badges) {
+    // Below the whole block and flush to its left margin. The specimen hand-placed this into the ragged corner
+    // of one particular layout; that only works for that layout. Below-left is the one position that is correct
+    // for every column count, and the columns are balanced by height, so there is no reliable ragged corner to
+    // tuck it into anyway.
+    const bottom = Math.max(...cells.filter((c) => c.position && c.size)
+      .map((c) => c.position.y + c.size.height));
+    const ky = bottom + ROW_GAP;
+    const rows = [
+      ...OWD_KEY.filter(([tier]) => tiersUsed.has(tier)).map(([tier, text]) => [owdColor(tier), text]),
+      ...(inheritSeen ? [[INHERIT_COLOR, INHERIT_KEY]] : []),
+      ...(volumeSeen ? [[VOLUME_COLOR, 'Grey badge - live record count in this org']] : []),
+    ];
+    // Says what it explains. A diagram carrying only volume badges has no access posture to caption.
+    const title = tiersUsed.size || inheritSeen
+      ? 'Access posture key - badge colour = org-wide default sharing'
+      : 'Record volume key';
+    cells.push({
+      id: 'key-title', type: 'sf.TextLabel',
+      // Width sized to the string: sf.TextLabel WRAPS at size.width rather than auto-fitting like the two shapes
+      // above, and an under-sized box pushes the second line down onto the first key row.
+      position: { x: LEFT_MARGIN, y: ky },
+      size: { width: Math.round(title.length * 15 * 0.62) + 24, height: 28 }, z: 2000,
+      attrs: { label: {
+        x: 0, y: 'calc(0.5 * h)', textAnchor: 'start', textVerticalAnchor: 'middle',
+        fontSize: 15, fontWeight: '700', fontFamily: 'system-ui, -apple-system, sans-serif',
+        fill: 'var(--text-primary)', text: title,
+      } },
+    });
+    rows.forEach(([swatch, text], k) =>
+      cells.push(legendKey(`key-${k}`, LEFT_MARGIN, ky + 40 + k * LEGEND_STEP, swatch, text)));
+  }
+
   return {
     diagram: {
       version: 1, appVersion, title: spec.title || 'Imported Data Model',
@@ -388,8 +571,11 @@ export function buildDiagram(spec, appVersion = '1.21.7') {
     stats: {
       objects: objects.length,
       fields: objects.reduce((n, o) => n + (o.fields || []).length, 0),
-      links: (spec.relationships || []).length - warnings.length,
+      // COUNTED, not derived by subtracting `warnings` from the relationship count - the badge pass below can
+      // warn too, and that subtraction would have silently under-reported the links because of it.
+      links: cells.filter((c) => c.type === 'standard.Link').length,
       zones: (spec.zones || []).length,
+      badges,
       warnings,
     },
   };
@@ -408,5 +594,6 @@ if (isMain) {
   if (outPath) writeFileSync(outPath, json); else console.log(json);
   console.error(`✓ ${diagram.title}
   objects ${stats.objects} · fields ${stats.fields} · relationships ${stats.links} · zones ${stats.zones}${
+    stats.badges ? ` · badges ${stats.badges}` : ''}${
     stats.warnings.length ? `\n  warnings:\n${stats.warnings.map((w) => `    - ${w}`).join('\n')}` : ''}`);
 }

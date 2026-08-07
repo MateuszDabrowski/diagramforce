@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.22.0** — matches the app's current `appVersion`; set `"appVersion": "1.22.0"` in generated files.
+> **Spec snapshot: v1.22.1** — matches the app's current `appVersion`; set `"appVersion": "1.22.1"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.22.0"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.22.1"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.0", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.0" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.1", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.1" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.0", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.1", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.0" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.1" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -365,7 +365,7 @@ Links connect two elements via ports:
 | `vertices` | No | Array of `{ "x": n, "y": n }` waypoints for manual routing |
 | `labels` | No | Array of label objects (see below) |
 | `lineStyle` | No | Dashed/dotted dash pattern as a raw SVG `stroke-dasharray` string (`"8 4"` dashed, `"2 4"` dotted, `"6 4"` for sequence replies). Stored as a **top-level cell property** — NOT `attrs.line.strokeDasharray`. Rendered as a bg-coloured overlay clone because Safari leaks `stroke-dasharray` into `<marker>` content. Omitted / `null` means solid. |
-| `linkKind` | No | `"mapping"` marks a Data Cloud source→DMO field mapping (v1.15.0); absent ⇒ an ER relationship. Top-level cell property. A field→field link drawn while the diagram's mapping mode is on is auto-tagged; mapping links render with a distinct colour (`#F6B355`, the brand accent), a single direction arrow, **1 px** stroke, and custom routing that flows cleanly left→right like the Data Cloud mapping canvas: `router: { name: "sfMappingRouter" }` adds a short horizontal stub off each field port and `connector: { name: "sfMappingConnector" }` draws that straight stub + a cubic bézier, so the line leaves and arrives **perpendicular** to the port edge (never parallel / hugging it). The ends use `source`/`target` `connectionPoint: { name: "anchor", args: { offset: 12 } }` (overriding the default 16 px offset) so the line reads as landing on its specific field port with the arrow tip right at the object edge — not diving over the field text. |
+| `linkKind` | No | `"mapping"` marks a Data Cloud source→DMO field mapping (v1.15.0); absent ⇒ an ER relationship. Top-level cell property. A field→field link drawn while the diagram's mapping mode is on is auto-tagged; mapping links render with a distinct colour (`#A06F03`, the palette amber), a single direction arrow, **1 px** stroke, and custom routing that flows cleanly left→right like the Data Cloud mapping canvas: `router: { name: "sfMappingRouter" }` adds a short horizontal stub off each field port and `connector: { name: "sfMappingConnector" }` draws that straight stub + a cubic bézier, so the line leaves and arrives **perpendicular** to the port edge (never parallel / hugging it). The ends use `source`/`target` `connectionPoint: { name: "anchor", args: { offset: 12 } }` (overriding the default 16 px offset) so the line reads as landing on its specific field port with the arrow tip right at the object edge — not diving over the field text. |
 | `mappingType` | No | Data Cloud transform classification of a mapping link (v1.15.0): one of `"Standard"` (direct copy, the default applied to a fresh mapping), `"Formula"`, `"Streaming Transform"`, `"Batch Transform"`, or `"Calculated Insight"`. Top-level cell property, authored via the link inspector's **Mapping type** picklist; surfaced in the table view's **Mapping Type** column. A **non-Standard** value renders an outlined **monospace** code token (`F` / `ST` / `BT` / `CI`, tinted to the connector colour) as a link label on the target stub (see Link Labels); **Standard renders no token**. `migrateLinks` re-syncs tokens on load. A legacy `mapsTo` / `transform` attribute on an older draft is read as a fallback. |
 | `expressionRule` | No | The transform **expression / rule** note for a non-Standard mapping link (v1.15.0; was briefly `mappingLabel` pre-release, still read as a fallback). Top-level cell property, authored via the link inspector's progressively-disclosed **Expression / rules** field (shown whenever `mappingType` ≠ `"Standard"`); surfaced in the table view's **Expression / Rule** column (empty ⇒ dimmed em-dash). Distinct from the link's visual `labels`. |
 | `mapsTo` | No | *Legacy (read-only fallback).* Superseded by `mappingType` above; loaders still read it when `mappingType` is absent, and preserve it if an older draft has it. |
@@ -441,6 +441,42 @@ When you hardcode a colour (a hex like `"#FFFFFF"` or `rgb()/rgba()`), it is **f
 2. **If you hardcode `body.fill`, you don't need to hand-pick the text colour** — the importer **auto-contrasts** a node's `label`/`subtitle` against an explicit solid `body.fill` (dark text on a light card, light text on a dark card) for any text still on the theme default. So a hardcoded "white card" stays legible in dark mode. *(You can still set `label.fill`/`subtitle.fill` explicitly to override; an explicit text colour is always respected.)*
 3. **Use hardcoded colour where it carries meaning, on the parts that read on any background** — `stroke` (borders), `accent` (Container/Zone bars), brand-coloured `body.fill`. A coloured *stroke* on a theme-default body reads on both themes; a coloured *body* with white text (`label.fill: "#FFFFFF"`) reads on both themes.
 4. **Translucent fills** (`rgba(…, 0.03)` Zone/Layer tints) intentionally show the canvas through them, so they stay theme-adaptive and are *not* auto-contrasted — leave their labels on the theme default.
+5. **Every hardcoded colour must clear 3:1 against BOTH canvas backgrounds.** See below - this is the rule that makes point 3's "reads on any background" checkable instead of a hope.
+
+### The both-themes rule (pick colours from this palette)
+
+The canvas is `--bg-canvas`: **`#FAFAFA`** in light, **`#1A1A1A`** in dark. A diagram travels as a share URL and gets opened by someone in the other theme, so "it looked fine while I authored it" is not evidence. Any colour you hardcode on a **card header, zone accent, connector stroke, marker or badge** must clear **WCAG's 3:1 non-text-contrast floor against both**.
+
+This bites hardest on connectors, because a card header is a filled block and a connector is 2px of the same value. A `#321D71` header is merely dim on dark; the relationship line inheriting it is **1.28:1 - invisible**.
+
+Pick from this palette and the rule is satisfied by construction. Every entry is >= 3.5:1 on both, and no two are closer than deltaE 26.8, so they stay tellable apart:
+
+| Name | Hex | vs `#FAFAFA` | vs `#1A1A1A` |
+|---|---|---|---|
+| blue | `#1D73C9` | 4.63 | 3.60 |
+| orange | `#BE5C2A` | 4.23 | 3.94 |
+| green | `#008B46` | 4.21 | 3.96 |
+| purple | `#B652A7` | 4.23 | 3.94 |
+| cyan | `#00849E` | 4.20 | 3.97 |
+| red | `#DA4E55` | 3.87 | 4.31 |
+| indigo | `#8467C9` | 4.22 | 3.95 |
+| teal | `#008877` | 4.20 | 3.97 |
+| amber | `#A06F03` | 4.22 | 3.95 |
+| olive | `#747F00` | 4.21 | 3.96 |
+| neutral (plain structural lines) | `#74797F` | 4.21 | 3.96 |
+
+Use them **in that order** when you need N distinct accents (one per object, per layer, per tree depth): the order is tuned so neighbouring entries are the most different, which is what matters when the reader sees them side by side. For a severity or risk ramp use `green -> olive -> amber -> orange -> red`.
+
+Two things the numbers explain that are otherwise surprising:
+
+- **Every entry is a mid-tone.** Clearing 3:1 on a near-white *and* a near-black background confines relative luminance to a narrow band, and the best any single colour can do on both at once is 4.13:1. So there are no pale pastels and no deep navies here - all the separation comes from hue and chroma. Do not "brighten" one of these; you will push it off the dark canvas or off the light one.
+- **Two Data Cloud stage colours moved.** The DLO amber and Activation green were `#F6B355` and `#27AE60`, which score 1.75 and 2.75 on light. The palette keeps their hue and drops their lightness, so `#A06F03` and `#008B46` still read as amber and green. The converters, the stencil presets and the bundled templates all carry the new values; a diagram you are shown carrying the old ones was authored before 1.22.0.
+
+Colours that are **not** on the canvas (modal chrome, export-only text fills) are outside this rule - they answer to the contrast of whatever surface they sit on.
+
+**Two hexes in this spec are PROTOCOL tokens, not colour choices, and you must use them exactly as written:** the Flow fault red `#EA001E` and the Flow Go To blue `#0B5CAB`. A flow connector stores no type field, so the loader reads its **stroke** to decide what kind of connector it is. Substitute a palette colour and you do not recolour a Go To - you stop it being one (no dotted line, no destination label). The Go To blue is under the floor on the dark canvas (2.60:1) and is a known exception; use it anyway.
+
+> The app's converters are held to this automatically: the palette lives in `js/persistence/diagram-palette.js` (bundled as `scripts/diagram-palette.js`) and `dev/tests/diagram-palette.test.js` fails the build on any converter hex that misses the floor.
 
 > ⚠️ The auto-contrast safety net covers `sf.SimpleNode` label/subtitle. For richer shapes (Container header, DataObject), prefer theme defaults or pair a coloured bar with `"#FFFFFF"` text.
 
@@ -1910,9 +1946,9 @@ A layer is an `sf.Zone` carrying a `layerStage` property. **Place every DataObje
 |---|---|---|---|
 | `Source` | `"source"` | `#1D73C9` (blue) | External/origin systems as they exist (CRM, ERP, S3, Marketing Cloud, DB). Native source data types. |
 | `Data Stream` | `"datastream"` | `#1D73C9` (blue — same as Source; the stencil's Data Stream preset and the stacked-in-the-Source-column layout make the two zones read as one ingestion column) | The OOTB Data Stream mapping step — statics + calculated key + system timestamp (see below). **Not its own column**: stack this Zone in the Source column, below the Source Zone. |
-| `Data Lake Object` | `"dlo"` | `#F6B355` (amber) | Raw ingestion — data as landed in Data Cloud, one DLO per source stream. |
+| `Data Lake Object` | `"dlo"` | `#A06F03` (amber) | Raw ingestion — data as landed in Data Cloud, one DLO per source stream. |
 | `Data Model Object` | `"dmo"` | `#DA4E55` (red) | Harmonized target entities unified by Identity Resolution (Individual, Account Contact Point, …). |
-| `Activation` | `"activation"` | `#27AE60` (green) | Outbound targets where harmonized data is pushed (Email, SMS, Ad Audience, Snowflake share, webhook). |
+| `Activation` | `"activation"` | `#008B46` (green) | Outbound targets where harmonized data is pushed (Email, SMS, Ad Audience, Snowflake share, webhook). |
 
 - **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO — omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
 - **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do. Only the stream's own companion object lives in the Data Stream Zone - every real source table (in an org import, the suffix-less DSO names; DLOs carry `__dll`, DMOs `__dlm`) MUST stay in the Source Zone above. Start the Data Stream Zone ~56 px below the Source Zone's bottom edge so the two read as one ingestion column.
@@ -1973,10 +2009,10 @@ the validator proves a diagram LOADS, not that it reads right.
 > built-in one. Match what the stencil produces:
 > ```json
 > { "type": "sf.Zone", "layerStage": "dlo",
->   "attrs": { "body":  { "stroke": "#F6B355", "fill": "rgba(246,179,85,0.05)" },
->              "label": { "text": "Data Lake Object", "fill": "#F6B355" } } }
+>   "attrs": { "body":  { "stroke": "#A06F03", "fill": "rgba(160,111,3,0.05)" },
+>              "label": { "text": "Data Lake Object", "fill": "#A06F03" } } }
 > ```
-> Accents: `source`/`datastream` `#1D73C9`, `dlo` `#F6B355`, `dmo` `#DA4E55`, `activation` `#27AE60`. Each
+> Accents: `source`/`datastream` `#1D73C9`, `dlo` `#A06F03`, `dmo` `#DA4E55`, `activation` `#008B46`. Each
 > card's `headerColor` takes its own lane's accent.
 
 **Field mix on an ERD card:** 105 of the official model's 169 fields carry NO key, 43 are fk, 21 are pk. Do not
@@ -1998,7 +2034,7 @@ A mapping link carries one attribute from a source-side field to a target-side f
 }
 ```
 
-That is the **minimal** correct form — endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#F6B355`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
+That is the **minimal** correct form — endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#A06F03`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
 
 The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour — which is how a user's deliberate recolour survives a reload. Authoring the canonical amber explicitly is still valid and produces an identical result. (Before v1.22.0 the colour was *not* auto-applied, so pre-existing JSON that sets it is unaffected.)
 
@@ -2014,7 +2050,7 @@ For any **non-`Standard`** type, add **`expressionRule`** (top-level string) wit
 
 **Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column — e.g. a Source object feeding the Data Stream Zone stacked below it — anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
 
-**Formula inputs are explicit links.** A Data Stream formula row that READS source data - the calculated key, or any expression over payload fields - MUST receive one input link per source field it references: source row `field-left-<fid>` to formula row `field-left-<fid>`, a plain `linkKind:"mapping"` + `mappingType:"Standard"` link with NO `expressionRule` (the formula itself lives on the Data-Stream-to-DLO `Formula` link, not on its inputs). A static row (Data Source, Internal Organization / MID, a literal channel like `'EMAIL'`, the system timestamp) reads nothing, so it MUST get no input link.
+**Formula inputs are explicit links.** A Data Stream formula row that READS source data - the calculated key, or any expression over payload fields - MUST receive one input link per source field it references: source row `field-left-<fid>` to formula row `field-left-<fid>`, a plain `linkKind:"mapping"` + `mappingType:"Standard"` link with NO `expressionRule` (the formula itself lives on the Data-Stream-to-DLO `Formula` link, not on its inputs). A static row (Data Source, Internal Organization / MID, a literal channel like `'EMAIL'`, the system timestamp) reads nothing, so it MUST get no input link. A formula that reads ANOTHER formula's output (`formulaField['X']` in Data Cloud expressions) chains **between two rows of the same Data Stream card**: referenced formula row `field-left-<fid>` to reading formula row `field-left-<fid>`, same link shape - the router draws it as a small loop off the card's left edge. Chain only to a row that EXISTS as a formula output on that card; a `formulaField` reference to a directly-mapped column is not a derived field and gets no link.
 
 ```json
 { "id": "in-key", "type": "standard.Link",
@@ -2053,7 +2089,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.22.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.22.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2070,16 +2106,16 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
     { "id": "zone-dlo", "type": "sf.Zone", "position": { "x": 520, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "dlo", "embeds": ["obj-dlo"],
-      "attrs": { "body": { "fill": "rgba(246,179,85,0.05)", "stroke": "#F6B355", "strokeWidth": 1, "strokeDasharray": "8 4" },
-        "label": { "text": "Data Lake Object", "fill": "#F6B355" } } },
+      "attrs": { "body": { "fill": "rgba(160,111,3,0.05)", "stroke": "#A06F03", "strokeWidth": 1, "strokeDasharray": "8 4" },
+        "label": { "text": "Data Lake Object", "fill": "#A06F03" } } },
     { "id": "obj-dlo", "type": "sf.DataObject", "position": { "x": 560, "y": 100 }, "size": { "width": 260, "height": 102 }, "z": 2000,
-      "parent": "zone-dlo", "objectName": "Contact DLO", "headerColor": "#F6B355", "category": "Profile",
+      "parent": "zone-dlo", "objectName": "Contact DLO", "headerColor": "#A06F03", "category": "Profile",
       "fields": [
         { "label": "Id", "apiName": "Id__c", "type": "Text", "keyType": "fqk", "fid": "d_id", "required": true },
         { "label": "Email", "apiName": "Email__c", "type": "Text", "keyType": null, "fid": "d_email" },
         { "label": "First Name", "apiName": "FirstName__c", "type": "Text", "keyType": null, "fid": "d_fname" }
       ],
-      "attrs": { "header": { "fill": "#F6B355" }, "headerCover": { "fill": "#F6B355" }, "headerLabel": { "text": "Contact DLO" } } },
+      "attrs": { "header": { "fill": "#A06F03" }, "headerCover": { "fill": "#A06F03" }, "headerLabel": { "text": "Contact DLO" } } },
 
     { "id": "zone-dmo", "type": "sf.Zone", "position": { "x": 1000, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "dmo", "embeds": ["obj-dmo"],
@@ -2096,13 +2132,13 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
     { "id": "map-1", "type": "standard.Link", "source": { "id": "obj-src", "port": "field-right-s_email" }, "target": { "id": "obj-dlo", "port": "field-left-d_email" },
       "linkKind": "mapping", "mappingType": "Standard",
-      "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
     { "id": "map-2", "type": "standard.Link", "source": { "id": "obj-dlo", "port": "field-right-d_email" }, "target": { "id": "obj-dmo", "port": "field-left-m_email" },
       "linkKind": "mapping", "mappingType": "Standard",
-      "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
+      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
     { "id": "map-3", "type": "standard.Link", "source": { "id": "obj-dlo", "port": "field-right-d_fname" }, "target": { "id": "obj-dmo", "port": "field-left-m_fname" },
       "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "PROPERCASE(FirstName__c)",
-      "attrs": { "line": { "stroke": "#F6B355", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } }
+      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } }
   ] }
 }
 ```
@@ -2131,7 +2167,7 @@ A syntactically valid mapping can still be **incomplete** — a box or field wit
 - ✅ Every DataObject is **embedded** in its layer Zone: object `parent` = zone id **and** zone `embeds` includes the object id.
 - ✅ Object typing is `category` = `Profile`/`Engagement`/`Other` (top-level, set on every DLO/DMO) — **not** `objectCategory`.
 - ✅ Field links reference ports via the endpoint **`port`** key as `field-right-<fid>` / `field-left-<fid>` — **not** `<fid>#fieldRight`. Source side uses `field-right-…`, target side `field-left-…`.
-- ✅ Mapping links: `linkKind:"mapping"`, amber `#F6B355` stroke, `strokeWidth:1`, `mappingType` from the five-value set; add `expressionRule` for non-`Standard`. Do **not** set `sfManhattan` on a mapping link — the app applies `sfMappingRouter`.
+- ✅ Mapping links: `linkKind:"mapping"`, amber `#A06F03` stroke, `strokeWidth:1`, `mappingType` from the five-value set; add `expressionRule` for non-`Standard`. Do **not** set `sfManhattan` on a mapping link — the app applies `sfMappingRouter`.
 - ✅ ER relationship links: **no** `linkKind`, header ports (`er-left`/`er-right`), `sfManhattan` router, crow's-foot markers.
 - ✅ Mark any field you connect with a `fid`; never list field ports in `ports.items`.
 - ✅ Keep every OOTB port — **never** drop ports that have no connector. They are the user's attachment points for edits made after generation.
@@ -2156,7 +2192,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2188,7 +2224,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2315,7 +2351,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2345,7 +2381,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2378,7 +2414,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2421,7 +2457,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2467,7 +2503,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.0",
+  "appVersion": "1.22.1",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

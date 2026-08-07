@@ -12,6 +12,13 @@
 // Point it at a directory of `*.objectSourceTargetMap-meta.xml` files, a single one, or a saved Connect
 // response. The format is detected from the CONTENT.
 //
+// `--org` (or a saved `--categories` payload) adds TWO things off one `/ssot/metadata` GET: the object
+// categories, and the org's declared DMO-to-DMO relationships, drawn as header-to-header ER connectors
+// wherever both DMOs already have a card here. `--org` (or a saved `--streams` payload) also draws the
+// Source lane from `/ssot/data-streams` FACT - the real source object and connector stated as a details row
+// on each stream's card - instead of naming it from the mapping metadata; the stderr report says which mode
+// named the lane.
+//
 // The conversion itself lives in ./mapping-convert.js - a VERBATIM copy of the app's
 // js/persistence/mapping-convert.js, so the skill and the app's own Load & Import produce byte-identical
 // diagrams from the same mappings. This file supplies only the file I/O, the selection flags and the report.
@@ -23,7 +30,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { buildDiagram, parseMappingXml, fromConnectPayload, looksLikeMappingJson, fieldCatalogue, normaliseCategory } from './mapping-convert.js';
+import { buildDiagram, parseMappingXml, fromConnectPayload, looksLikeMappingJson, fieldCatalogue,
+  normaliseCategory, entityRelationships, streamLineage } from './mapping-convert.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
@@ -43,7 +51,7 @@ if (isMain) {
   const args = process.argv.slice(2);
   const target = args.find((a) => !a.startsWith('--'));
   const val = (f) => { const i = args.indexOf(f); return i > -1 ? args[i + 1] : null; };
-  if (!target) die('usage: node scripts/mappings-to-diagramforce.mjs <dir|file> [--only A,B] [--no-lineage] [--with-fields dmos.json] [--org <alias> | --categories metadata.json] [--title T] [--max-cells N]');
+  if (!target) die('usage: node scripts/mappings-to-diagramforce.mjs <dir|file> [--only A,B] [--no-lineage] [--with-fields dmos.json] [--org <alias> | --categories metadata.json] [--streams data-streams.json] [--title T] [--max-cells N]');
 
   // Detect the SOURCE SHAPE from the content, not the extension: a saved Connect response is `.json`, but so
   // is anything else, and a directory of metadata is neither. Getting this from the bytes means the user does
@@ -131,8 +139,13 @@ if (isMain) {
   //   --org <alias>       one GET per entity type against /ssot/metadata, through the CLI's own auth
   //   --categories <file> a saved copy of the same payload(s), for orgs where the sf CLI cannot connect
   //                       (Workbench REST Explorer paste; accepts one payload or an array of them)
+  //
+  // The SAME payload also carries the org's declared DMO-to-DMO `relationships[]`, so both routes collect it
+  // here rather than paying for a second GET - `/ssot/metadata` is one call and it answers both questions.
   const categories = {};
+  const metaPayloads = [];
   const takeMeta = (payload) => {
+    metaPayloads.push(payload);
     for (const e of (payload?.metadata || [])) {
       const cat = normaliseCategory(e?.category);
       if (e?.name && cat) categories[e.name] = cat;
@@ -157,7 +170,46 @@ if (isMain) {
     } catch { console.error(`  note: could not read ${catFile} - cards stay uncategorised`); }
   }
 
-  try { ({ diagram, stats } = buildDiagram(maps, { title: val('--title'), catalogue, categories })); }
+  const relationships = entityRelationships(metaPayloads);
+
+  // SOURCE LANE FROM ORG FACT. Without a stream payload the lane is assembled by NAME-MATCHING: the ingest
+  // map's sourceObjectName is the stream's name, so the "source" the lane shows is really the stream, and the
+  // actual origin object plus its connector are absent. `/ssot/data-streams` states the real chain
+  // (connectorDetails.sourceObject -> stream -> dataLakeObjectInfo.name), so:
+  //   --org <alias>              fetches it here - and follows `nextPageUrl` to completion, because the
+  //                              endpoint's offset paging is 1-indexed and SKIPS (a naive offset loop measured
+  //                              29 of 66; ONLY the nextPageUrl chain is complete - limits/gotchas-testing.md)
+  //   --streams <file>           a saved copy of the same payload - one page, or an array of pages - for orgs
+  //                              where the sf CLI cannot connect (mirrors --categories)
+  // A partial chain is DISCARDED, not used: a half-fetched lane is precisely the looks-authoritative-while-
+  // being-arbitrary defect this exists to remove. The report below always names the mode the lane came from.
+  let streamPayloads = null;
+  if (orgAlias) {
+    try {
+      const pages = [];
+      let url = '/services/data/v64.0/ssot/data-streams';
+      for (let guard = 0; url && guard < 40; guard++) {
+        const page = JSON.parse(execFileSync('sf', ['api', 'request', 'rest', url, '-o', orgAlias],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 * 1024 * 1024 }));
+        pages.push(page);
+        url = page.nextPageUrl || null;
+      }
+      streamPayloads = pages;
+    } catch {
+      streamPayloads = null;
+      console.error(`  note: could not fetch /ssot/data-streams from ${orgAlias} - the Source lane stays name-matched`);
+    }
+  }
+  const streamsFile = val('--streams');
+  if (streamsFile) {
+    try {
+      const parsed = JSON.parse(readFileSync(streamsFile, 'utf8'));
+      streamPayloads = (streamPayloads || []).concat(Array.isArray(parsed) ? parsed : [parsed]);
+    } catch { console.error(`  note: could not read ${streamsFile} - the Source lane stays name-matched`); }
+  }
+  const streams = streamPayloads ? streamLineage(streamPayloads) : null;
+
+  try { ({ diagram, stats } = buildDiagram(maps, { title: val('--title'), catalogue, categories, relationships, streams })); }
   catch (e) { die(`${e.message} Check the path, and --only if you used it.`); }
   const cap = Number(val('--max-cells')) || 2000;
   if (stats.cells > cap) {
@@ -170,8 +222,18 @@ if (isMain) {
   object mappings ${stats.objectMaps} · ${stats.layers.join(' · ')}
   field links ${stats.fieldLinks}${stats.formulas ? ` · ${stats.formulas} formula-sourced (drawn from a "… Formulas" companion card - a formula map has no source field of its own)` : ''}${
   stats.formulaInputs ? ` · ${stats.formulaInputs} formula input(s) drawn left-to-left from the source fields they read` : ''}${
+  stats.formulaChains ? ` · ${stats.formulaChains} formula chain(s) drawn between rows of one Formulas card - a formula reading another formula's output` : ''}${
+  stats.formulaChainUnresolved ? ` · ${stats.formulaChainUnresolved} formulaField reference(s) NOT drawn - they name a derived field with no formula row on this canvas` : ''}${
   stats.categorised ? `\n  ${stats.categorised} card(s) categorised from the org` : ''}${
   stats.filtered ? ` · ${stats.filtered} filtered` : ''}${
+  stats.dmoRels ? `\n  ${stats.dmoRels} DMO-to-DMO relationship(s) drawn from the org's declared model`
+    + `${stats.dmoRelsOffCanvas ? ` · ${stats.dmoRelsOffCanvas} more declared but not drawn - one end is not a card on this canvas` : ''}`
+    + `${stats.dmoRelsSelf ? ` · ${stats.dmoRelsSelf} self-reference(s), which a header-to-header connector cannot show` : ''}` : ''}${
+  streams ? `\n  Source lane drawn from ORG FACT (/ssot/data-streams): ${stats.streamsMatched} stream(s) matched to DLO cards`
+    + `${stats.streamSources ? ` · ${stats.streamSources} source(s) stated as a "Source: …" row on their stream cards` : ''}`
+    + `${stats.streamsIngestApi ? ` · ${stats.streamsIngestApi} Ingestion API stream(s) - the org cannot name their upstream, so none is drawn` : ''}`
+    + `${stats.dlosWithoutStream ? ` · ${stats.dlosWithoutStream} DLO(s) with no stream in the payload` : ''}`
+  : `\n  Source lane named by NAME-MATCHING over the mapping metadata (unverified against the org) - pass --org or --streams to draw the source -> stream -> DLO chain from org fact`}${
   stats.unmapped ? `\n  + ${stats.unmapped} unmapped field(s) shown from the catalogue - the gaps to discuss` : ''}${
   lineageAdded ? `\n  + ${lineageAdded} upstream map(s) added to complete the lineage (--no-lineage to skip)` : ''}${
   stats.prunedUpstream ? `\n  - ${stats.prunedUpstream} upstream mapping(s) dropped: ingested but never forwarded to a data model object `

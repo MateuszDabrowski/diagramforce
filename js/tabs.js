@@ -1,26 +1,26 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.22.0';
-import { tbctx } from './tabs/context.js?v=1.22.0';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.22.0';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.22.0';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.22.0';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.22.0';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.22.1';
+import { tbctx } from './tabs/context.js?v=1.22.1';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.22.1';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.22.1';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.22.1';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.22.1';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.22.0';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.22.0';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.0';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.22.0';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.22.0';
-import { wireMenuDismiss } from './menu.js?v=1.22.0';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.22.0';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.22.0';
-import { getPalette } from './brand-palette.js?v=1.22.0';
-import { getAllIcons } from './icons.js?v=1.22.0';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.22.0';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.22.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.22.1';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.1';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.22.1';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.22.1';
+import { wireMenuDismiss } from './menu.js?v=1.22.1';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.22.1';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.22.1';
+import { getPalette } from './brand-palette.js?v=1.22.1';
+import { getAllIcons } from './icons.js?v=1.22.1';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.22.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

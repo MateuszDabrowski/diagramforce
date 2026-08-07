@@ -19,8 +19,8 @@
 // NB per-kind keys avoid JointJS built-in cell attributes (source/target/vertices/router) — `transformTarget`,
 // not `target`, so a change-listener never misfires on a link's endpoint change (caught in S1 e2e).
 
-import { portGroups, portItems } from './ports.js?v=1.22.0';
-import { getIconDataUri } from '../icons.js?v=1.22.0';
+import { portGroups, portItems } from './ports.js?v=1.22.1';
+import { getIconDataUri } from '../icons.js?v=1.22.1';
 
 // Uniform card size for every element (decision #8/S1: "Uniform default size for all classes"). MUST equal the
 // DEFAULT_SIZES entries in properties/type-meta.js or "Auto Size" snaps to a different box.
@@ -74,8 +74,10 @@ export const FLOW_ELEMENTS = [
   { cls: 'Exit',                 label: 'Exit from a Flow',                 icon: 'outcome',              accent: C.interaction, meta: '(UI-only, REMOVE_FROM_FLOW)', fields: [] },
   // Orchestrator / ApprovalWorkflow. Filed under Interaction because a stage is a container of HUMAN steps
   // (stepApproval / stepInteractive) - it belongs with Screen and Action, not with Decision and Loop. There is
-  // deliberately no df.FlowStageStep sibling: steps live inside a stage, carry no routing of their own, and a
-  // card each would double the element count while adding nothing to the graph.
+  // still deliberately no df.FlowStageStep sibling, but no longer because a step does not deserve a card: the
+  // converter's opt-in `--expand-stages` draws one per step (see js/persistence/flow-convert.js). It reuses the
+  // shapes above instead, because an approval step IS an action call, a background step invokes a flow, and an
+  // interactive step puts a screen in front of a person - a fourth class would only rename what these already say.
   { cls: 'Stage',                label: 'Stage',                            icon: 'stage',                accent: C.interaction, meta: 'orchestratedStages', fields: ['stageSteps'] },
   // ── Logic (orange) ───────────────────────────────────────────────────────
   { cls: 'Assignment',           label: 'Assignment',                       icon: 'assignment',           accent: C.logic,       meta: 'assignments',        fields: ['assignmentItems'] },

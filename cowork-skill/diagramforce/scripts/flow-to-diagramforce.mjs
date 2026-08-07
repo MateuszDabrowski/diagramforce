@@ -40,8 +40,12 @@ const orgAlias = (() => { const i = argv.indexOf('--org'); return i > -1 ? argv[
 // conversion running where the sf CLI is not installed. Given explicitly, it WINS - an operator naming a host
 // outranks whatever an alias resolves to.
 const orgUrlFlag = (() => { const i = argv.indexOf('--org-url'); return i > -1 ? argv[i + 1] : null; })();
+// OPT-IN, and it has to stay opt-in: expanding an orchestration's stages into one card per step changes the
+// cell count, the ids and the layout of a diagram type that has been importable since 1.21.2. Default off means
+// every conversion anybody has already run keeps producing exactly what it produced before.
+const expandStages = argv.includes('--expand-stages');
 const [inPath, outPath] = argv.filter((a) => !a.startsWith('--') && a !== orgUrlFlag && a !== orgAlias);
-if (!inPath) { console.error('usage: node flow-to-diagramforce.mjs <flow.flow-meta.xml|flow.json> [out.json] [--org <alias>] [--org-url https://…my.salesforce.com]'); process.exit(1); }
+if (!inPath) { console.error('usage: node flow-to-diagramforce.mjs <flow.flow-meta.xml|flow.json> [out.json] [--org <alias>] [--org-url https://…my.salesforce.com] [--expand-stages]'); process.exit(1); }
 // Resolve the instance url from the alias when it was not given. Read-only (`sf org display`), best-effort: a
 // failure just means no card, which is the same as passing neither flag.
 let orgUrl = orgUrlFlag;
@@ -209,11 +213,12 @@ function resolveReferences(diagram, alias) {
     queries: (keys.size ? 1 : 0) + (subs.size ? 1 : 0) + (chans.size ? 1 : 0) + (segs.size ? 1 : 0) };
 }
 
-const { diagram, stats } = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion, orgUrl, flowId });
+const { diagram, stats } = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion, orgUrl, flowId, expandStages });
 const refs = resolveReferences(diagram, orgAlias);
 const json = JSON.stringify(diagram, null, 2);
 if (outPath) writeFileSync(outPath, json); else console.log(json);
 console.error(`✓ ${diagram.title}
-  elements ${stats.elements} (incl. ${stats.ends} synthesised End) · links ${stats.links} (${stats.goto} Go To, ${stats.fault} fault)
+  elements ${stats.elements} (incl. ${stats.ends} synthesised End) · links ${stats.links} (${stats.goto} Go To, ${stats.fault} fault)${stats.steps ? `
+  stage steps: ${stats.steps} card(s) in ${stats.bands} band(s)` : ''}
   layout: ${stats.layoutMode}${refs.asked ? `
   references: ${refs.resolved} of ${refs.asked} named from ${orgAlias} in ${refs.queries} quer${refs.queries === 1 ? 'y' : 'ies'} (the id is kept, the name added)` : ''}${stats.warnings.length ? `\n  warnings:\n${stats.warnings.map((w) => `    - ${w}`).join('\n')}` : ''}`);

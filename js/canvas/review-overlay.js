@@ -10,8 +10,8 @@
 //
 // Colours mirror the manual Shape-state palette (properties.js SHAPE_STATE_STYLES) so a review
 // reads the same as a baked-in highlight: Added = green, Changed = amber, Removed = red.
-import { cctx } from './context.js?v=1.22.0';
-import { createOverlay } from './overlay-layer.js?v=1.22.0';
+import { cctx } from './context.js?v=1.22.1';
+import { createOverlay } from './overlay-layer.js?v=1.22.1';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const COL_ADDED = '#2E9E5B';
