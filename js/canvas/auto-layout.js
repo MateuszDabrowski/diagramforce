@@ -3,13 +3,13 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.22.1';
+import { cctx } from './context.js?v=1.22.3';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.1';
+import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.3';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.22.1';
-import { flowConnectorType } from './link-styles.js?v=1.22.1';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.1';
+import { computeFlowLayout } from './flow-layout.js?v=1.22.3';
+import { flowConnectorType } from './link-styles.js?v=1.22.3';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.3';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────

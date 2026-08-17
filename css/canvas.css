@@ -441,6 +441,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
   }
   .df-tbl__note { white-space: normal; }   /* a long count string wraps instead of overflowing its line */
   .df-tbl__push { margin-left: 0; }         /* drop the right-edge push so the buttons flow + wrap as a group */
+  .df-tbl__filter { flex: 1 1 100%; width: auto; }   /* the wrapping bar gives the input its own full-width, tappable row */
 }
 .df-tbl__table {
   border-collapse: separate;
@@ -490,6 +491,31 @@ foreignObject[data-md] del { text-decoration: line-through; }
   color: var(--text-primary);
 }
 .df-tbl__table tbody tr:hover td { background: rgba(127, 127, 127, 0.07); }
+/* Flow Table view stacks one table per section in the shared scroller - separate them. */
+.df-tbl__table + .df-tbl__table { margin-top: 22px; }
+/* The Flow Table's five sections share one scroller and one right edge. The stack carries a measured
+   min-width (alignSectionWidths in flow-table.js) so every table's width:100% resolves against the
+   WIDEST section rather than the scroller's visible box - without it the overflowing section runs to
+   1424px while the rest stop at the viewport, and the sections end ragged. Block-level, so a window
+   wider than the pin still fills normally. */
+.df-tbl__stack { min-width: 100%; }
+/* .df-tbl__table is white-space:nowrap, and a measured decision condition ran to 435 characters whose
+   entire canvas presence was the words "Skip Screen". One nowrap cell that wide drags every OTHER
+   section off-screen too, because all three tables share one horizontal scroller. `pre-line` also lets
+   the multi-writer Elements cell put one writer per line without markup. `overflow-wrap: anywhere` is
+   the other half: `pre-line` alone only breaks at whitespace, so a space-free run - a
+   {!record.Related.Field} merge chain, a URL, a concatenated formula - stayed one unbreakable token and
+   blew straight past max-width, which an auto-layout table honours only when the content CAN shrink.
+   `min-width` is the 2026-08 correction, learned on a real 93-element flow: `anywhere` (unlike
+   `break-word`) also collapses the column's MIN-content width to a single glyph, so once the nowrap
+   columns' text alone approaches the scroller width (~630px of Element/apiName/Type on that flow),
+   auto layout starves exactly the columns carrying the MOST content down to one word per line - and
+   the table, still able to "fit", never grows into its own horizontal scroller. The floor (~38
+   characters at this font; the median Previous/Next entry measures 29) keeps every wrap column
+   readable at word-boundary wrapping, pushes an over-wide table into .df-tbl__scroll instead (the
+   designed outcome), and demotes mid-word breaking back to the last resort it was added for: the
+   genuinely space-free run. */
+.df-tbl__cell--wrap { white-space: pre-line; overflow-wrap: anywhere; min-width: 240px; max-width: 520px; }
 .df-tbl__center { text-align: center; }
 .df-tbl__placeholder { color: var(--text-muted); font-style: italic; }
 /* Deprecated field — its API Name / Label cells render struck-through + dimmed. */
@@ -505,6 +531,81 @@ foreignObject[data-md] del { text-decoration: line-through; }
 /* divider between the blue (source) & orange (target) sections */
 .df-tbl__divider { border-left: 2px solid var(--border-color-strong); }
 .df-tbl__row--unmapped td { color: var(--text-muted); font-style: italic; }
+/* Click-to-focus (flow), second design: the whole-row click shipped first and leaving the table by
+   an accidental click anywhere on a row proved too easy (owner-reported), so the affordance is now
+   an explicit icon-only button in a dedicated first cell. The cell renders on EVERY row of every
+   section - empty where a row names N elements (pivot, assets) - because section geometry must
+   never differ between paints: a per-ROW control is what the geometry rule forbids, a per-COLUMN
+   one is what it prescribes. Same bare-button language as .df-tbl__check above. */
+.df-tbl__nav { width: 28px; padding: 2px 4px 2px 10px; }
+.df-tbl__navbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.df-tbl__navbtn:hover { color: var(--color-primary); }
+.df-tbl__navbtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+/* The way back (properties panel -> Table view): the returned-to row flashes once so the user lands
+   where they left. One-shot by design; renderers-flow.js restarts it on a repeat visit by re-adding
+   the class around a reflow, and the class then STAYS (an ended animation paints nothing) so the
+   landing is a stable fact rather than a remove-on-animationend race. Chrome variables only. */
+.df-tbl__row--flash td { animation: df-tbl-row-flash 1.2s ease-out 1; }
+@keyframes df-tbl-row-flash {
+  0% { background-color: color-mix(in srgb, var(--color-primary) 28%, transparent); }
+  100% { background-color: transparent; }
+}
+
+/* ── Filter + Search (mapping / model / flow read-mode tables) ──
+   A plain topbar input in the existing chrome variables - no new colours. */
+.df-tbl__filter {
+  height: 30px;
+  width: 180px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+}
+.df-tbl__filter:focus { outline: none; border-color: var(--border-color-strong); }
+/* An invalid /regex/ tints the border + swaps the tooltip - never a toast, because typing '/[' on
+   the way to '/[abc]/' is the normal path this feature invites, not an error to shout at. */
+.df-tbl__filter--invalid { border-color: var(--brand-amber); }
+/* The live " · N of M" count riding a flow section's coloured header band - quieter than the
+   uppercase title it follows (the band's own colour + white text are inherited). While a section is
+   COLLAPSED the same slot carries the structural " · N rows" instead (flow-table.js paintSeccount). */
+.df-tbl__seccount { font-weight: 400; text-transform: none; letter-spacing: normal; opacity: 0.9; }
+
+/* ── Collapsible flow sections - the stencil's category-header language on the tier1 band ──
+   The whole band is the toggle ([data-sec] scopes it to flow's bands; the model/mapping bands carry
+   no data-sec and stay inert). Collapse hides the tier2 column row + tbody TOGETHER while the band
+   always renders, chevron included, on every paint - only a user toggle flips the class, so section
+   geometry never differs between an empty and a populated paint of the same mode. The chevron is the
+   stencil's glyph and rule verbatim: DOWN when expanded, rotated -90deg to point right when collapsed. */
+.df-tbl__sec[data-sec] { cursor: pointer; user-select: none; }
+.df-tbl__sec-chevron {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: -1px;
+  transition: transform var(--transition-fast);
+  transform-origin: center;
+}
+.df-tbl__table--collapsed .df-tbl__sec-chevron { transform: rotate(-90deg); }
+.df-tbl__table--collapsed .df-tbl__cols,
+.df-tbl__table--collapsed tbody { display: none; }
+/* The zero-matches line (inserted lazily by the filter pass). Quotes the live query, which is what
+   distinguishes it from the structural empty copy; tighter padding than .df-tbl__empty because it
+   is a row-sized note, not a view-sized state. */
+.df-tbl__nomatch-cell { padding: 10px 14px; font-style: italic; }
 
 /* ── Inline field-level edit mode (Edit Fields → Save / Cancel) ── */
 /* The Save button reads as the primary action — brand amber (matches the changed-cell tint). */

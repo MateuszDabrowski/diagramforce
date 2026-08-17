@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.22.1';
+const CACHE_VERSION = '1.22.3';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -143,6 +143,7 @@ const PRECACHE_URLS = [
   `./js/components/stencil-kit.js?v=${CACHE_VERSION}`,
   `./js/table-view.js?v=${CACHE_VERSION}`,
   `./js/table-view/builders.js?v=${CACHE_VERSION}`,
+  `./js/table-view/flow-table.js?v=${CACHE_VERSION}`,
   `./js/table-view/gantt-plan.js?v=${CACHE_VERSION}`,
   `./js/walkthrough.js?v=${CACHE_VERSION}`,
   `./js/whats-new.js?v=${CACHE_VERSION}`,

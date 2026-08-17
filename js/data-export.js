@@ -3,9 +3,9 @@
 // source→target mapping lineage instead, reusing table-view.js — see the dispatch in toolbar.js.)
 // Columns mirror the per-object field CSV in properties.js (fieldsToCsv), prefixed with an
 // Object column so a flat, multi-object export stays unambiguous.
-import { sanitizeFilenamePart } from './util.js?v=1.22.1';
-import { getActiveTabName } from './tabs.js?v=1.22.1';
-import { triggerDownload } from './persistence.js?v=1.22.1';
+import { sanitizeFilenamePart } from './util.js?v=1.22.3';
+import { getActiveTabName } from './tabs.js?v=1.22.3';
+import { triggerDownload } from './persistence.js?v=1.22.3';
 
 const COLUMNS = ['Object', 'API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
 
@@ -21,8 +21,11 @@ const objNameOf = o => (o && o.attr && o.attr('headerLabel/text')) || (o && o.ge
  *  already exported what you see; model mode silently discarded the sort). Omitted -> graph order
  *  (the Save-menu export renders without the table open and stays graph-ordered on purpose).
  *  Any field the order misses (or that has no fid) is appended in graph order so the file never
- *  silently loses a row; entries that no longer resolve are skipped. */
-export function buildObjectSchemaCsv(graph, rowOrder = null) {
+ *  silently loses a row; entries that no longer resolve are skipped.
+ *  `exact` (table filter, post-1.22.2): emit ONLY the rowOrder rows. The append exists so a stale
+ *  SORT order can never lose a row - but a FILTERED export passes a deliberately partial set, and
+ *  appending the rest would silently undo the very filter the `_filtered` filename advertises. */
+export function buildObjectSchemaCsv(graph, rowOrder = null, { exact = false } = {}) {
   const objects = graph.getElements().filter(e => e.get('type') === 'sf.DataObject');
   const lines = [COLUMNS.map(esc).join(',')];
   const push = (o, f) => lines.push([
@@ -38,10 +41,12 @@ export function buildObjectSchemaCsv(graph, rowOrder = null) {
     push(o, f);
     seen.add(`${objId}::${fid}`);
   }
-  for (const o of objects) {
-    for (const f of (o.get('fields') || [])) {
-      if (!f || (f.fid && seen.has(`${o.id}::${f.fid}`))) continue;
-      push(o, f);
+  if (!exact) {
+    for (const o of objects) {
+      for (const f of (o.get('fields') || [])) {
+        if (!f || (f.fid && seen.has(`${o.id}::${f.fid}`))) continue;
+        push(o, f);
+      }
     }
   }
   // A UTF-8 BOM keeps Excel honest about the encoding; CRLF line ends match the table-view export.

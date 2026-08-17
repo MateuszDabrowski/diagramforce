@@ -1,6 +1,6 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.22.1';
-import { btn, tctx } from './context.js?v=1.22.1';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.22.3';
+import { btn, tctx } from './context.js?v=1.22.3';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
 
@@ -39,14 +39,15 @@ export function updateDisplayMenuVisibility() {
   const isDataMapping = type === 'datamapping';
   const isDataObjectType = isDataModel || isDataMapping; // both use sf.DataObject
   const isSequence = type === 'sequence';
+  const isFlow = type === 'flow';          // Salesforce Flow - gains a Table view in 1.22.2
 
-  // Diagram | Table view switch — shown for Data Mapping (lineage), Data Model (schema) and Gantt
-  // (plan). Use inline display (not the `hidden` attr): `.df-toolbar__group { display:flex }`
-  // outranks `[hidden]`, so the attribute alone wouldn't hide it. Reset to the Diagram view on any
-  // tab change so the table never lingers showing another tab's data.
+  // Diagram | Table view switch - shown for Data Mapping (lineage), Data Model (schema), Gantt
+  // (plan) and Flow (element details). Use inline display (not the `hidden` attr):
+  // `.df-toolbar__group { display:flex }` outranks `[hidden]`, so the attribute alone wouldn't hide it.
+  // Reset to the Diagram view on any tab change so the table never lingers showing another tab's data.
   const vsGroup = document.getElementById('view-switch-group');
   const vsSep = document.getElementById('view-switch-sep');
-  const hasTable = isDataObjectType || isGantt;   // Data Mapping (lineage) + Data Model (schema) + Gantt (plan)
+  const hasTable = isDataObjectType || isGantt || isFlow;   // Mapping (lineage) + Model (schema) + Gantt (plan) + Flow (details)
   if (vsGroup) vsGroup.style.display = hasTable ? '' : 'none';
   if (vsSep) vsSep.style.display = hasTable ? '' : 'none';
   if (tctx.modules.tableView?.isActive?.()) setViewMode('diagram');
@@ -62,10 +63,11 @@ export function updateDisplayMenuVisibility() {
   // The desktop toolbar groups live in .df-toolbar__left, which is hidden on mobile,
   // so without these the Table view + Map bridge were unreachable on a phone.
   const hmbView = document.getElementById('hmb-view-toggle');
-  // Mirror the desktop gate (hasTable above): Data Mapping + Data Model + Gantt all have a Table view.
-  // Data Model was omitted here, so on mobile its Table switch was unreachable (the desktop control is
-  // CSS-hidden on narrow viewports, leaving the hamburger as the only path).
-  if (hmbView) hmbView.style.display = (isDataObjectType || isGantt) ? '' : 'none';
+  // Reads the same `hasTable` const as the desktop gate above, deliberately: a RE-TYPED copy of the
+  // predicate is what broke Data Model on mobile (v1.19.0) - the desktop gate was widened and the
+  // hamburger's copy was not, and the desktop control is CSS-hidden on narrow viewports, so the
+  // hamburger was the only path. Sharing the const makes that class of bug unrepresentable.
+  if (hmbView) hmbView.style.display = hasTable ? '' : 'none';
   const hmbMap = document.getElementById('hmb-map');
   if (hmbMap) hmbMap.style.display = isDataModel ? '' : 'none';
 

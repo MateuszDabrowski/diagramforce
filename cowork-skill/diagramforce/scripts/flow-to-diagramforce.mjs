@@ -115,6 +115,8 @@ if (!flowId && orgAlias && orgUrl && queryable) {
 //   communicationSubscriptionId    0XlHn000000siRuKAI
 //   commSubscriptionChannelTypeId  0eBHn000000siW2MAI
 //   start.segment                  1sgHn00000000oyIAA          (MarketSegment)
+//   senderId                       005Hn00000JQGOX             (User - added when the Assets table showed
+//                                                              it as the one bare id on a fully-named row)
 //
 // None of that answers the question a reader has, which is WHICH email, WHICH subscription, WHICH segment. Note
 // the contrast with the Omni-Channel routing parameters, which look similar and are deliberately NOT resolved
@@ -154,7 +156,7 @@ function resolveReferences(diagram, alias) {
   const rows = [];
   for (const c of diagram.graph.cells) for (const r of (c.details || [])) rows.push(r);
 
-  const keys = new Set(), subs = new Set(), chans = new Set(), segs = new Set();
+  const keys = new Set(), subs = new Set(), chans = new Set(), segs = new Set(), users = new Set();
   for (const r of rows) {
     const v = String(r.value ?? '');
     const m = CMS_KEY.exec(v);
@@ -162,6 +164,9 @@ function resolveReferences(diagram, alias) {
     if (/^0Xl[A-Za-z0-9]{12,15}$/.test(v)) subs.add(v);
     else if (/^0eB[A-Za-z0-9]{12,15}$/.test(v)) chans.add(v);
     else if (/^1sg[A-Za-z0-9]{12,15}$/.test(v)) segs.add(v);
+    // senderId on the marketing send actions is a User id. It sat unresolved while everything beside it
+    // got a name - the one bare id on an otherwise fully-named Assets row, which is how the gap was found.
+    else if (/^005[A-Za-z0-9]{12,15}$/.test(v)) users.add(v);
   }
   const names = new Map();
   if (keys.size) {
@@ -186,6 +191,9 @@ function resolveReferences(diagram, alias) {
   if (segs.size) {
     for (const rec of orgQuery(alias, `SELECT Id, Name FROM MarketSegment WHERE Id IN (${quoteIn([...segs])})`)) setId(rec);
   }
+  if (users.size) {
+    for (const rec of orgQuery(alias, `SELECT Id, Name FROM User WHERE Id IN (${quoteIn([...users])})`)) setId(rec);
+  }
   let hit = 0;
   for (const r of rows) {
     const v = String(r.value ?? '');
@@ -209,8 +217,8 @@ function resolveReferences(diagram, alias) {
       });
     }
   }
-  return { resolved: hit, asked: keys.size + subs.size + chans.size + segs.size,
-    queries: (keys.size ? 1 : 0) + (subs.size ? 1 : 0) + (chans.size ? 1 : 0) + (segs.size ? 1 : 0) };
+  return { resolved: hit, asked: keys.size + subs.size + chans.size + segs.size + users.size,
+    queries: (keys.size ? 1 : 0) + (subs.size ? 1 : 0) + (chans.size ? 1 : 0) + (segs.size ? 1 : 0) + (users.size ? 1 : 0) };
 }
 
 const { diagram, stats } = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion, orgUrl, flowId, expandStages });

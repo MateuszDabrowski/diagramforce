@@ -11,26 +11,36 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.22.1';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.22.1';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.22.1';
-import { SF_FIELD_TYPES } from './properties.js?v=1.22.1';
-import { keyImpliesRequired } from './field-model.js?v=1.22.1';
-import { buildModal, showToast, showError } from './feedback.js?v=1.22.1';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.22.1';
-import { triggerDownload } from './persistence.js?v=1.22.1';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.22.1';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.22.1';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.22.3';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.22.3';
+// The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.22.3';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.22.3';
+import { SF_FIELD_TYPES } from './properties.js?v=1.22.3';
+import { keyImpliesRequired } from './field-model.js?v=1.22.3';
+import { buildModal, showToast, showError } from './feedback.js?v=1.22.3';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.22.3';
+import { triggerDownload } from './persistence.js?v=1.22.3';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.22.3';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.22.3';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
-} from './table-view/builders.js?v=1.22.1';
+  parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
+} from './table-view/builders.js?v=1.22.3';
+// The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
+// properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
+// debounced input handler - never from render() - so graph-change re-renders stay silent.
+import { announce } from './a11y.js?v=1.22.3';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.22.1';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.22.3';
+// 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
+// context shape as gantt-plan.js - it never imports this facade back.
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE } from './table-view/flow-table.js?v=1.22.3';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -40,6 +50,16 @@ let _showUnmapped = true;  // CR: on by default
 let _showAllCols = false;  // C2: read-mode "Show All Columns" toggle - off = all-blank columns auto-hidden
 let _sortKey = null;       // column key currently sorted by (null = graph order)
 let _sortDir = 'asc';      // 'asc' | 'desc'
+// ── Filter + Search (post-1.22.2) ── the topbar text filter for the mapping/model grids (gantt is
+// excluded: it is an EDIT surface, and hiding rows during a session risks edits landing relative to
+// hidden rows; flow keeps its own twin state in flow-table.js - the two never show simultaneously).
+// The query survives a Diagram|Table flip (like _showUnmapped) but clears on graph `reset`: a sort
+// is a visible generic preference (its arrow shows), a stale query silently hides rows of a diagram
+// it was never typed against - the cross-mode bleed flow-table.js calls a flaw not to replicate.
+let _filterQuery = '';       // the raw query as typed - written on every input event
+let _filterTimer = null;     // the 120 ms debounce (the stencil search precedent, Gap 28)
+let _filterAnnounced = false;// last announcement had an active query -> clearing announces once
+let _filterMatches = null;   // rows matched by the ACTIVE query (null = no query) - feeds the exports
 let _lastRows = [];        // rows as currently rendered — feeds the CSV export
 let _lastCols = null;      // columns as currently rendered (C2 may thin them) - feeds Copy as Markdown
 let _rerenderTimer = null;
@@ -49,6 +69,10 @@ let _rerenderTimer = null;
 let _mode = 'mapping';
 const isModelMode = () => _mode === 'model';
 const isGanttMode = () => _mode === 'gantt';   // Phase 5: a Gantt project-plan table (peer of the chart)
+const isFlowMode = () => _mode === 'flow';     // 1.22.2: the stacked-sections Flow Details projection
+// The container's aria-label in index.html is hardcoded to the mapping wording, so every mode was
+// announced as "Field mapping table"; show() now sets it from the live mode instead.
+const modeTitle = () => isFlowMode() ? FLOW_TABLE_TITLE : isGanttMode() ? 'Project Plan' : isModelMode() ? 'Field Schema' : 'Field Mapping';
 
 // ── Inline FIELD-level edit session (Edit Fields → Save / Cancel) ──
 // A session holds an unapplied working COPY of every editable field (keyed objId::fid),
@@ -221,6 +245,10 @@ const schemaOf = () => isGanttMode() ? GANTT_COLUMNS : isModelMode() ? MODEL_COL
 const ICON_DOWNLOAD = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8v8"/><path d="M4.8 6.6 8 9.8l3.2-3.2"/><path d="M2.4 11.4v1.3a1.1 1.1 0 0 0 1.1 1.1h9a1.1 1.1 0 0 0 1.1-1.1v-1.3"/></svg>';
 const ICON_CHECKBOX = '<svg class="df-toolbar__checkbox" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_COPY = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.3"/><path d="M10.5 5.5V3.8a1.3 1.3 0 0 0-1.3-1.3H3.8a1.3 1.3 0 0 0-1.3 1.3v5.4a1.3 1.3 0 0 0 1.3 1.3h1.7"/></svg>';
+// The flow table's click-to-focus nav button: the SAME glyph the flow tab carries
+// (tabs/diagram-types.js), so "this row, on the diagram" is said by artwork the user already reads
+// as "the flow diagram" - no new icon to learn, none to draw.
+const ICON_DIAGRAM = `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">${diagramTypeIconMarkup('flow')}</svg>`;
 const ICON_WARN = '<svg class="df-tbl__warn" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M7.13 1.85 .9 12.9a1 1 0 0 0 .87 1.5h12.46a1 1 0 0 0 .87-1.5L8.87 1.85a1 1 0 0 0-1.74 0Z" fill="#FE9339"/><rect x="7.15" y="5.4" width="1.7" height="4.5" rx="0.85" fill="#412700"/><circle cx="8" cy="11.7" r="0.95" fill="#412700"/></svg>';
 const ICON_PENCIL = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.4 2.3a1.3 1.3 0 0 1 1.8 0l.5.5a1.3 1.3 0 0 1 0 1.8L5.4 13.4l-3 .6.6-3z"/><path d="M10.3 3.4l2.3 2.3"/></svg>';
 // Counter-clockwise revert arrow (per-row "reset to original").
@@ -237,12 +265,20 @@ export function init(modules) {
   // call after a live mutation (syncGanttDraft re-snapshots the bar draft; render re-draws; the dep
   // editor's onClose refreshes only while an edit session is open).
   initGanttPlan({ graph, syncGanttDraft, render, isEditSession: () => _active && _editing });
+  // The Flow Table view renders its own container payload; the icons are consts in this file, so they
+  // are injected rather than imported back (that import would be the cycle gantt-plan.js forbids).
+  initFlowTable({ graph, container, icons: { download: ICON_DOWNLOAD, copy: ICON_COPY, check: ICON_CHECKBOX, diagram: ICON_DIAGRAM } });
   // Live refresh: re-evaluate + redraw whenever the active graph changes structurally
   // (guarded so it's inert while the diagram view is showing). Coalesced to one frame.
   if (graph) {
     // change:parent / change:embeds keep the Source/Target DATA LAYER columns live when an
     // object is dragged into or out of a mapping-layer zone (its parent container changes).
-    graph.on('add remove reset change:source change:target change:fields change:attrs change:linkKind change:labels change:mappingType change:expressionRule change:parent change:embeds', scheduleRerender);
+    // The trailing flow card props (1.22.2) keep the Flow Details table live: `change:labels` already
+    // covered a decision connector relabel, so renaming an element or editing a Flow Details field left
+    // the table stale with no cue - and the working relabel case made the gap harder to spot by hand.
+    // Deliberately NOT added to onDiagramSchemaEdit below: that guard early-returns on !_editing and
+    // flow has no session to protect.
+    graph.on('add remove reset change:source change:target change:fields change:attrs change:linkKind change:labels change:mappingType change:expressionRule change:parent change:embeds change:details change:name change:apiName change:object change:filters', scheduleRerender);
     // Phase 5: keep the Gantt plan table live as bars/dependencies change on the canvas (dates, label,
     // progress, assignee, order, group, a drawn/removed ganttDep link, the timeline's groups[]).
     graph.on('change:startDate change:endDate change:taskLabel change:progress change:assignee change:order change:groupId change:depType change:lag change:groups', scheduleRerender);
@@ -255,6 +291,10 @@ export function init(modules) {
     // A graph swap (tab close/switch, session restore, import-replace) invalidates the draft —
     // abort the session silently so it can't zombie a lock or write into the wrong graph.
     graph.on('reset', abortSessionOnReset);
+    // The filter query clears on the same signal (both renderers): mode cannot change without a tab
+    // change (_mode derives from the tab type), so this one hook covers tab switch, mode switch and
+    // diagram switch. See the _filterQuery comment above for why it clears where the sort bleeds.
+    graph.on('reset', clearFilterOnReset);
   }
 }
 
@@ -276,11 +316,20 @@ export function show() {
   // Stable while the table is up — a tab change resets the toolbar to Diagram view first.
   if (!_editing) {
     const t = getActiveTabType?.();
-    _mode = t === 'gantt' ? 'gantt' : t === 'datamodel' ? 'model' : 'mapping';
+    // Flow must be named here as well as in the display-options gate: the trailing arm falls through to
+    // 'mapping', so widening only the gate would render the MAPPING projection over a flow graph - a
+    // "Field Mapping" title and "No mapping connectors on this diagram yet".
+    _mode = t === 'gantt' ? 'gantt' : t === 'flow' ? 'flow' : t === 'datamodel' ? 'model' : 'mapping';
   }
   _active = true;
-  render();                       // clean re-evaluation of the active graph cells
+  container.setAttribute('aria-label', `${modeTitle()} table`);
+  // UN-HIDE FIRST, then render. Both happen in one task, so no paint lands between them and the user
+  // sees no flash of an empty table - but a renderer that MEASURES needs a laid-out container, and
+  // rendering into a `hidden` one gives every element offsetWidth 0. That is exactly what silently
+  // defeated the flow table's section-width alignment: it measured the widest section during render,
+  // read 0 for all five, and pinned nothing. Order matters here; do not swap these back.
   container.hidden = false;
+  render();                       // clean re-evaluation of the active graph cells
   if (paperEl) paperEl.style.visibility = 'hidden';
 }
 
@@ -294,6 +343,11 @@ export function hide() {
 
 export function render() {
   if (!container || !graph) return;
+  // Flow: a stacked-sections READ-ONLY projection with its own chrome (./table-view/flow-table.js).
+  // Early return, because every line below interleaves the field/gantt EDIT-session markup
+  // (renderEditableCell / cellChanged / revertCell / actCell are called inline per cell) and flow
+  // `details` are import-only by design - there is no session to render and none to protect.
+  if (isFlowMode()) { renderFlowTable(); return; }
   const isModel = isModelMode();
   const isGantt = isGanttMode();
   const baseCols = schemaOf();
@@ -534,10 +588,25 @@ export function render() {
         ? `${colsBtn}${editBtn}${mdBtn}${csvBtn}`
         : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${colsBtn}${editBtn}${mdBtn}${csvBtn}`;
 
+  // The input renders in EVERY read-mode paint - DISABLED when there are no rows, never absent.
+  // It was gated on rows.length at first ("chrome only when there is something to filter"), and that
+  // gate flaked 3% of firefox edit-spec runs: the table's first paint can be EMPTY (the 80 ms
+  // scheduleRerender settles the graph after the view opens), so the populated re-render ADDED the
+  // input and shifted every button right of it ~188px in exactly the window between Playwright's
+  // hit-test and its coordinate click - #tbl-edit clicks landed on nothing and beginEdit never ran.
+  // Measured: gated = 1-2 flakes per 65 runs; unconditional = 130/130 clean. Topbar geometry must
+  // not change between an empty and a populated paint of the same mode. Gantt is out by scope (see
+  // the state block above). Mid-edit the whole read topbar collapses to Cancel/Save, so the input is
+  // SUSPENDED, not cleared: the surviving _filterQuery re-applies when the session ends.
+  const filterHtml = (!isGantt && !_editing)
+    ? `<input type="search" id="tbl-filter" class="df-tbl__filter" placeholder="Filter rows" aria-label="Filter table rows" title="${escHtml(FILTER_TITLE)}" value="${escHtml(_filterQuery)}"${rows.length ? '' : ' disabled'} /><span class="df-tbl__note" id="tbl-filter-note"></span>`
+    : '';
+
   container.innerHTML = `<div class="df-tbl${_editing ? ' df-tbl--editing' : ''}">
       <div class="df-tbl__topbar">
-        <h2 class="df-tbl__title">${isGantt ? 'Project Plan' : isModel ? 'Field Schema' : 'Field Mapping'}</h2>
+        <h2 class="df-tbl__title">${modeTitle()}</h2>
         <span class="df-tbl__note" id="tbl-note">${escHtml(note)}</span>
+        ${filterHtml}
         ${topbarActions}
       </div>
       <div class="df-tbl__scroll">
@@ -603,7 +672,102 @@ export function render() {
       th.addEventListener('click', go);
       th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     });
+    const filterEl = container.querySelector('#tbl-filter');
+    filterEl?.addEventListener('input', () => {
+      // The query is written IMMEDIATELY (an interleaved graph-change re-render must paint the
+      // correct value=); only the row pass + the announcement are debounced. 120 ms = the stencil
+      // search precedent - below the ~150 ms feels-instant threshold, still coalescing bursts.
+      _filterQuery = filterEl.value;
+      clearTimeout(_filterTimer);
+      _filterTimer = setTimeout(() => {
+        const r = applyFilter();
+        if (r.active) { announce(`${r.n} of ${r.m} rows match`); _filterAnnounced = true; }
+        else if (_filterAnnounced) { announce('Filter cleared'); _filterAnnounced = false; }
+      }, 120);
+    });
   }
+  // Re-apply the surviving query after ANY re-render (sort click, graph change, edit-session end) -
+  // silently: only the debounced input handler above may announce. No-ops mid-edit and in gantt/flow.
+  applyFilter();
+}
+
+// ── Filter + Search: the visibility pass ────────────────────────────────────
+// A pure-DOM pass, deliberately NOT a re-render: render() rebuilds container.innerHTML wholesale,
+// so filtering through it would destroy the input and drop focus on every keystroke. Render emits
+// every row; this toggles `hidden` per <tr> and paints the counts in place. It also freezes the C2
+// column set while typing - suppressColumns keeps measuring ALL rows, so columns cannot pop in and
+// out per keystroke and the haystack cannot change under the query mid-type (no circularity between
+// matching and suppression). Sorting composes for free: filtering is an order-preserving subset and
+// sortRows is stable, so filter-then-sort equals sort-then-filter.
+// Returns { active, n, m } for the debounced announcer; render()-driven re-applies ignore it.
+function applyFilter() {
+  const inert = { active: false, n: 0, m: 0 };
+  if (!container || _editing || isGanttMode() || isFlowMode()) return inert;
+  const input = container.querySelector('#tbl-filter');
+  if (!input) { _filterMatches = null; return inert; }   // edit mode / gantt (no input rendered)
+  // Zero rows: the input renders DISABLED for geometry stability (see filterHtml), so no query can
+  // arrive - but a stale one can survive in _filterQuery. Bail before the row pass, or the
+  // structural empty <tr> (which the trs selector cannot tell from a data row) gets hidden and the
+  // view looks broken instead of empty.
+  if (!_lastRows.length) { _filterMatches = null; return inert; }
+  const matcher = parseFilter(_filterQuery);
+  // The invalid-regex signal: a border tint + aria + a swapped tooltip, never a toast - typing
+  // '/[' on the way to '/[abc]/' is the normal path this feature invites, not an error to shout at.
+  input.classList.toggle('df-tbl__filter--invalid', !!matcher.invalid);
+  if (matcher.invalid) { input.setAttribute('aria-invalid', 'true'); input.title = FILTER_TITLE_INVALID; }
+  else { input.removeAttribute('aria-invalid'); input.title = FILTER_TITLE; }
+  const tbody = container.querySelector('.df-tbl__table tbody');
+  if (!tbody) return inert;
+  const trs = [...tbody.querySelectorAll('tr:not(.df-tbl__nomatch)')];
+  const noteEl = container.querySelector('#tbl-filter-note');
+  let nomatch = tbody.querySelector('.df-tbl__nomatch');
+  if (matcher.empty) {
+    trs.forEach(tr => { tr.hidden = false; });
+    nomatch?.remove();
+    if (noteEl) noteEl.textContent = '';
+    _filterMatches = null;
+    return inert;
+  }
+  const cols = _lastCols || [];
+  const matched = [];
+  trs.forEach((tr, i) => {
+    const row = _lastRows[i];   // render() emits rows in _lastRows order, 1:1 (read mode, non-empty)
+    const hit = !!row && rowMatchesFilter(row, cols, matcher);
+    tr.hidden = !hit;
+    if (hit && row) matched.push(row);
+  });
+  _filterMatches = matched;
+  // The structural #tbl-note is NEVER rewritten - the measured counts stay the structural truth;
+  // the filtered tally lives in its own span beside the input.
+  if (noteEl) noteEl.textContent = `${matched.length} of ${_lastRows.length} rows`;
+  if (!matched.length) {
+    // The no-matches line is inserted LAZILY (never emitted by render) so the tbody row count stays
+    // the structural truth for everything that counts rows. Its copy QUOTES the live query - which
+    // is what distinguishes it from the structural empty state (whose copy never quotes anything).
+    if (!nomatch) {
+      nomatch = document.createElement('tr');
+      nomatch.className = 'df-tbl__nomatch';
+      nomatch.appendChild(Object.assign(document.createElement('td'), { className: 'df-tbl__empty df-tbl__nomatch-cell' }));
+      tbody.appendChild(nomatch);
+    }
+    const td = nomatch.querySelector('td');
+    td.colSpan = cols.length || 1;
+    td.textContent = `No rows match "${_filterQuery.trim()}".`;   // textContent - no HTML injection path
+  } else {
+    nomatch?.remove();
+  }
+  return { active: true, n: matched.length, m: _lastRows.length };
+}
+
+// Both renderers' filters clear together on a graph swap - see the init() wiring for why `reset`
+// is the right (and sufficient) signal.
+function clearFilterOnReset() {
+  clearTimeout(_filterTimer);
+  _filterTimer = null;
+  _filterQuery = '';
+  _filterMatches = null;
+  _filterAnnounced = false;
+  resetFlowTableFilter();
 }
 
 // ── Edit session lifecycle ──────────────────────────────────────────────────
@@ -1077,10 +1241,18 @@ function downloadCsv(csv, suffix) {
 // the file - it used to rebuild in graph order, silently discarding the sort while mapping + gantt
 // honoured it. Column set + values stay identical to the Save-menu export (which remains
 // graph-ordered on purpose: it renders without the table open, so there is no visible order).
+// An ACTIVE filter narrows the in-view exports too (export-what-you-see - the same written contract
+// as the C7 sort and the Show-Unmapped toggle), and the `_filtered` filename suffix says so honestly.
+// Columns are untouched: the CSV keeps the full declared column contract either way. The Save-menu
+// exports (exportMappingCsv below, data-export.js) stay unfiltered - they rebuild from the graph
+// without the table open, so there is no visible state to honour.
 function exportCsv() {
-  if (isGanttMode()) exportRowsCsv(_lastRows, GANTT_COLUMNS, 'plan');
-  else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph, _lastRows.map(r => ({ objId: r._srcObjId, fid: r._srcFid }))), 'schema');
-  else exportRowsCsv(_lastRows);
+  const filtered = !!_filterMatches;
+  const rows = _filterMatches || _lastRows;
+  const sfx = s => filtered ? `${s}_filtered` : s;
+  if (isGanttMode()) exportRowsCsv(_lastRows, GANTT_COLUMNS, 'plan');   // gantt has no filter (edit surface)
+  else if (isModelMode()) downloadCsv(buildObjectSchemaCsv(graph, rows.map(r => ({ objId: r._srcObjId, fid: r._srcFid })), { exact: filtered }), sfx('schema'));
+  else exportRowsCsv(rows, COLUMNS, sfx('mapping'));
 }
 
 // Copy the VISIBLE table (current mode's columns + the rendered rows, in the current sort / Show-Unmapped /
@@ -1092,13 +1264,19 @@ function exportCsv() {
 function copyTableAsMarkdown() {
   const cols = _lastCols || schemaOf();
   const headers = cols.map((c) => c.csv || c.label);
-  const rows = (_lastRows || []).map((r) => cols.map((c) => r[c.key]));
+  // Export-what-you-see: the active filter narrows the copied rows (see exportCsv), and the toast
+  // carries the N-of-M so a partial paste can never masquerade as the whole table.
+  const src = _filterMatches || _lastRows || [];
+  const toastMsg = _filterMatches
+    ? `Copied as Markdown (${src.length} of ${(_lastRows || []).length} rows, filtered) - paste into Confluence, Jira, Notion or GitHub ✓`
+    : 'Copied as Markdown - paste into Confluence, Jira, Notion or GitHub ✓';
+  const rows = src.map((r) => cols.map((c) => r[c.key]));
   const title = isGanttMode() ? 'Project Plan' : isModelMode() ? 'Field Schema' : 'Field Mapping';
   const md = toMarkdownTable(headers, rows, title);
   if (!md) { showError('There is nothing to copy yet.'); return; }
   if (!navigator.clipboard?.writeText) { showError('Clipboard copy is not available in this browser.'); return; }
   navigator.clipboard.writeText(md)
-    .then(() => showToast('Copied as Markdown - paste into Confluence, Jira, Notion or GitHub ✓', 'success'))
+    .then(() => showToast(toastMsg, 'success'))
     .catch(() => showError('Could not copy to the clipboard.'));
 }
 

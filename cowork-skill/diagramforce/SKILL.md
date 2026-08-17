@@ -109,8 +109,9 @@ note if the org is running a DIFFERENT version as Active than the file you conve
 
 **`--org` also names the references the metadata carries only as ids.** A marketing flow's cards would
 otherwise read as bare identifiers: CMS content keys on Send Email / SMS / WhatsApp / Push / In-App actions,
-Communication Subscriptions (`0Xl...`), their Channel Types (`0eB...`), and the segment a segment-triggered
-flow starts from (`1sg...`, MarketSegment). The id is always KEPT and the name APPENDED - `0XlHn... (Marketing)`
+Communication Subscriptions (`0Xl...`), their Channel Types (`0eB...`), the segment a segment-triggered
+flow starts from (`1sg...`, MarketSegment), and the sender a send acts as (`005...`, User). The id is always
+KEPT and the name APPENDED - `0XlHn... (Marketing)`
 - because the id is what a user pastes into a URL or hands to support. The segment is named on BOTH of its
 surfaces, the Start card's details row and its configuration line. `start.dataGraph` is already a developer
 name, so it is never looked up. The script prints how many references it resolved - relay that line with the
@@ -186,7 +187,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.1",
+  "appVersion": "1.22.3",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
