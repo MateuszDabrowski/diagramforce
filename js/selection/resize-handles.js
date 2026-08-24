@@ -6,9 +6,10 @@
 // initResizeHandles({ graph, paper, selectedIds }) wires the live refs (selectedIds is the SAME Set
 // selection.js mutates - shared by reference, so peer collection sees the live selection). Reads
 // history + the Gantt geometry helpers + the canvas date-chip forwarders.
-import * as history from '../history.js?v=1.22.3';
-import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.22.3';
-import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.22.3';
+import * as history from '../history.js?v=1.23.0';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.23.0';
+import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.23.0';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.23.0';
 
 // Live refs wired by selection.init() via initResizeHandles.
 let graph, paper, selectedIds;
@@ -174,6 +175,10 @@ export function addResizeHandles(view) {
         // A df.Legend resize is a deliberate width → stop it auto-fitting back to the label (sticks until
         // "Auto size"). Set once at the start of the drag.
         if (type === 'df.Legend' && !model.get('manualWidth')) model.set('manualWidth', true);
+        // Same idea for a container-ish frame: dragging its handle is a deliberate size, so pin it and stop
+        // the embedding content-hug from snapping it back to its children on the next child drag. Cleared by
+        // "Auto size". HALO_PARENT_TYPES is the exact set fitParentToChildren wraps.
+        if (HALO_PARENT_TYPES.has(type) && !model.get('manualSize')) model.set('manualSize', true);
 
         model.position(newX, newY);
         model.resize(newW, newH);

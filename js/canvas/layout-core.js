@@ -696,3 +696,157 @@ export function layoutGraphSubset(units, edges = [], opts = {}) {
   }
   return pos;
 }
+
+// ── Lane normalisation (v1.23.0) ─────────────────────────────────────
+// "Match Container Height" for process-diagram Container lanes. PURE: takes plain geometry, returns a plan,
+// never touches the graph — so it unit-tests without a browser (dev/tests/lane-normalisation.test.js) and the
+// graph-mutating apply step stays a thin adapter in auto-layout.js.
+//
+// The problem it solves: sizing each lane to its own card count turns a set of lanes into a bar chart, and
+// packing every lane from its own top means "row 2" denotes something different in each one. Both are what an
+// LLM-authored process diagram produces by default (DIAGRAM_JSON_SPEC.md "Container lanes" documents the
+// invariants; this is the in-app way to satisfy them).
+//
+// The reference lane — the one with the most cards — supplies the common top and height AND the row rhythm:
+// its own cards spread evenly down its inner box, and every other lane's cards are then pulled to the
+// barycentre of whatever they connect to in an already-placed lane. That is the same "spine straightening"
+// idea layoutGraphSubset uses on the cross axis, scoped to lanes.
+
+/** Vertical inset from a lane's top to its first card: the 40px accent header + the frame pad. */
+const LANE_TOP_INSET = 88;
+/** Vertical inset from the last card's bottom to the lane's bottom edge — matches PARENT_FIT_PADDING. */
+const LANE_BOTTOM_INSET = 48;
+/** Smallest vertical gap left between two cards in one lane. */
+const LANE_MIN_GAP = 24;
+
+/** Mean of an array; NaN-safe for the empty case (callers check length first). */
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/**
+ * Plan uniform lane geometry + cross-lane row alignment.
+ *
+ * @param {Array<{id:string, x:number, y:number, height:number, cards:Array<{id:string, y:number, height:number}>}>} lanes
+ *        Top-level container lanes and their embedded cards. Lanes with no cards are ignored.
+ * @param {Array<{source:string, target:string}>} links  card-id → card-id (links to anything else are ignored).
+ * @param {{topInset?:number, bottomInset?:number, minGap?:number}} [opts]
+ * @returns {{referenceId:string, top:number, height:number,
+ *            lanes:Array<{id:string, y:number, height:number, cards:Array<{id:string, y:number}>}>}|null}
+ *        null when there is nothing to normalise (fewer than two lanes carry cards).
+ */
+export function planLaneNormalisation(lanes, links = [], opts = {}) {
+  const topInset = opts.topInset ?? LANE_TOP_INSET;
+  const bottomInset = opts.bottomInset ?? LANE_BOTTOM_INSET;
+  const minGap = opts.minGap ?? LANE_MIN_GAP;
+
+  const filled = (lanes || []).filter((l) => l && Array.isArray(l.cards) && l.cards.length > 0);
+  if (filled.length < 2) return null;   // one lane has nothing to match against
+
+  // ── Reference: most cards, then tallest, then leftmost. Deterministic so repeated runs are idempotent.
+  const reference = filled.reduce((best, l) => {
+    if (l.cards.length !== best.cards.length) return l.cards.length > best.cards.length ? l : best;
+    if (l.height !== best.height) return l.height > best.height ? l : best;
+    return l.x <= best.x ? (l.x === best.x ? best : l) : best;
+  });
+
+  // ── Common geometry. The reference supplies both, but the height is floored so NO lane's own content is
+  // clipped — a lane with fewer but much taller cards can need more room than the reference does.
+  const needed = (l) => topInset + l.cards.reduce((s, c) => s + c.height, 0)
+    + (l.cards.length - 1) * minGap + bottomInset;
+  const top = reference.y;
+  const height = Math.max(reference.height, ...filled.map(needed));
+
+  const innerTop = top + topInset;
+  const innerBottom = top + height - bottomInset;
+
+  /** Lay cards out at `targets` (desired CENTRE y, index-aligned), de-overlapped and clamped into the box. */
+  const place = (cards, targets) => {
+    const order = cards.map((c, i) => ({ c, t: targets[i] })).sort((a, b) => a.t - b.t);
+    let cursor = innerTop;
+    for (const o of order) {
+      o.y = Math.max(o.t - o.c.height / 2, cursor);
+      cursor = o.y + o.c.height + minGap;
+    }
+    // Overflow → slide the whole stack up by the excess, then clamp the top. (Step "height" above makes this
+    // unreachable for well-formed input; it keeps a hand-shrunk lane from pushing cards out of the frame.)
+    const overflow = (cursor - minGap) - innerBottom;
+    if (overflow > 0) for (const o of order) o.y = Math.max(innerTop, o.y - overflow);
+    return order.map((o) => ({ id: o.c.id, y: Math.round(o.y) }));
+  };
+
+  /** Spread cards evenly down the inner box — EQUAL GAPS, so mixed card heights stay evenly separated. */
+  const spread = (cards) => {
+    const sorted = [...cards].sort((a, b) => a.y - b.y);
+    const total = sorted.reduce((s, c) => s + c.height, 0);
+    if (sorted.length === 1) {
+      const c = sorted[0];
+      return [{ id: c.id, y: Math.round(innerTop + Math.max(0, (innerBottom - innerTop - c.height) / 2)) }];
+    }
+    const gap = Math.max(minGap, ((innerBottom - innerTop) - total) / (sorted.length - 1));
+    const out = [];
+    let y = innerTop;
+    for (const c of sorted) { out.push({ id: c.id, y: Math.round(y) }); y += c.height + gap; }
+    return out;
+  };
+
+  // ── Card → lane index, and the card-level adjacency the barycentre pass reads.
+  const laneOf = new Map();
+  const cardById = new Map();
+  filled.forEach((l) => l.cards.forEach((c) => { laneOf.set(c.id, l.id); cardById.set(c.id, c); }));
+  const neighbours = new Map();
+  for (const { source, target } of links || []) {
+    if (!cardById.has(source) || !cardById.has(target)) continue;      // link to a free shape → not a spine
+    if (laneOf.get(source) === laneOf.get(target)) continue;           // same-lane hop carries no cross-lane signal
+    if (!neighbours.has(source)) neighbours.set(source, []);
+    if (!neighbours.has(target)) neighbours.set(target, []);
+    neighbours.get(source).push(target);
+    neighbours.get(target).push(source);
+  }
+
+  // ── Place the reference, then walk outward. Lane adjacency = "some card here links to some card there", so
+  // the walk reaches left AND right of a mid-chain reference, and a `visited` set makes cycles harmless.
+  const placed = new Map();   // card id → final centre y
+  const result = new Map();   // lane id → [{id, y}]
+  const commit = (lane, cardYs) => {
+    result.set(lane.id, cardYs);
+    cardYs.forEach(({ id, y }) => placed.set(id, y + cardById.get(id).height / 2));
+  };
+  commit(reference, spread(reference.cards));
+
+  const laneById = new Map(filled.map((l) => [l.id, l]));
+  const laneNeighbours = (laneId) => {
+    const out = new Set();
+    for (const c of laneById.get(laneId).cards) for (const n of neighbours.get(c.id) || []) out.add(laneOf.get(n));
+    out.delete(laneId);
+    return [...out];
+  };
+  const queue = laneNeighbours(reference.id);
+  const seen = new Set([reference.id]);
+  while (queue.length) {
+    const id = queue.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const lane = laneById.get(id);
+    // Barycentre of the already-placed cards this one connects to. A card with no placed neighbour keeps its
+    // position in the lane's existing order — mapped into the new box so it can't sort itself to the top.
+    const span = Math.max(1, Math.max(...lane.cards.map((c) => c.y)) - Math.min(...lane.cards.map((c) => c.y)));
+    const minY = Math.min(...lane.cards.map((c) => c.y));
+    const targets = lane.cards.map((c) => {
+      const ns = (neighbours.get(c.id) || []).filter((n) => placed.has(n));
+      if (ns.length) return mean(ns.map((n) => placed.get(n)));
+      return innerTop + ((c.y - minY) / span) * Math.max(0, innerBottom - innerTop - c.height) + c.height / 2;
+    });
+    commit(lane, place(lane.cards, targets));
+    for (const n of laneNeighbours(id)) if (!seen.has(n)) queue.push(n);
+  }
+
+  // ── Lanes with no link path to the reference form their own component: nothing to align to, so they get the
+  // same even spread the reference got. Still uniform in height and top, which is the other half of the ask.
+  for (const lane of filled) if (!result.has(lane.id)) commit(lane, spread(lane.cards));
+
+  return {
+    referenceId: reference.id,
+    top,
+    height,
+    lanes: filled.map((l) => ({ id: l.id, y: top, height, cards: result.get(l.id) })),
+  };
+}

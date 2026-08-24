@@ -6,10 +6,10 @@
 // action-provider, style, capture) live here now; selection.js re-exports their setters + copySelectionAsPng
 // so app.js / keyboard.js wiring is unchanged.
 
-import * as clipboard from '../clipboard.js?v=1.22.3';
-import * as history from '../history.js?v=1.22.3';
-import { wireMenuDismiss } from '../menu.js?v=1.22.3';
-import { saveSelectionAsTemplate } from '../templates.js?v=1.22.3';
+import * as clipboard from '../clipboard.js?v=1.23.0';
+import * as history from '../history.js?v=1.23.0';
+import { wireMenuDismiss } from '../menu.js?v=1.23.0';
+import { saveSelectionAsTemplate } from '../templates.js?v=1.23.0';
 
 // ── Injected selection context (wired by selection.init → initContextMenu). Read at CALL time; the
 // selectedIds Set is shared BY REFERENCE with selection.js so the menu sees the live selection. ──
@@ -62,6 +62,10 @@ export function cancelLongPressMenu() {
 // doesn't import properties.js (which imports selection — that would be a module cycle).
 let _autoSizer = null;
 export function setAutoSizer(fn) { _autoSizer = fn; }
+// Match Container Height (1.23.0), injected rather than imported — same reason as _autoSizer/_actionProvider:
+// this module must not reach into js/properties/. `{ label, isAvailable, run(laneIds) }`, wired in app.js.
+let _laneMatcher = null;
+export function setLaneMatcher(api) { _laneMatcher = api; }
 
 // "Copy as PNG" — rasters the current selection to the OS clipboard (paste into Slack / docs / chat as an image).
 // Wired in app.js to persistence.copyCellsAsPng. Absent → the menu item is hidden.
@@ -191,6 +195,8 @@ const CTX_ICON = {
   copyStyle: _ctxSvg('<path d="M8 2c0 0 4 4.5 4 7a4 4 0 0 1-8 0c0-2.5 4-7 4-7z"/>'),
   pasteStyle: _ctxSvg('<path d="M12 3l1 1-5 5-1.5.5.5-1.5zM6.5 8.5L3 12l-1 2 2-1 3.5-3.5"/>'),
   autosize: _ctxSvg('<path d="M3 7V3h4M13 9v4H9M3 3l4 4M13 13l-4-4"/>'),
+  // Match Container Height — two lanes squared off to a common top and bottom, with a row rule across them.
+  matchHeight: _ctxSvg('<rect x="2" y="2.5" width="4.5" height="11" rx="1"/><rect x="9.5" y="2.5" width="4.5" height="11" rx="1"/><path d="M1 8h14"/>'),
   saveShape: _ctxSvg('<path d="M4 2h8a1 1 0 011 1v11l-5-3-5 3V3a1 1 0 011-1z"/>'),   // bookmark = save to My Shapes
   // Convert / Bring-to-Front / Send-to-Back (#6) — filled glyphs matching the properties-panel buttons.
   convert: _ctxSvg('<path d="M1 4h11l-3-3M15 12H4l3 3"/>'),
@@ -358,6 +364,15 @@ export function showContextMenu(clientX, clientY, model, opts = {}) {
       addItem('Copy', () => clipboard.copy(), { icon: CTX_ICON.copy });
       addCopyPng();
       if (_autoSizer) addItem('Auto size', () => autoSizeSelection(), { icon: CTX_ICON.autosize });
+      // Match Container Height across the SELECTION (the single-container entry does the whole diagram). Needs at
+      // least two selected top-level containers — one lane has nothing to match against, and a nested container
+      // is content rather than a lane.
+      if (_laneMatcher?.isAvailable?.()) {
+        const laneIds = els.filter((c) => c.get('type') === 'sf.Container' && !c.get('parent')).map((c) => c.id);
+        if (laneIds.length >= 2) {
+          addItem(_laneMatcher.label, () => _laneMatcher.run(laneIds), { icon: CTX_ICON.matchHeight });
+        }
+      }
       // Save as Template — the whole-selection counterpart to single-select "Save Shape": capture every selected
       // shape + connector as one reusable My Templates block (mirrors the multi-select properties footer button).
       // Its own separated group, matching where Save Shape sits after Auto size in the single-element menu.

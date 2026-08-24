@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.22.3** — matches the app's current `appVersion`; set `"appVersion": "1.22.3"` in generated files.
+> **Spec snapshot: v1.23.0** — matches the app's current `appVersion`; set `"appVersion": "1.23.0"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,12 +48,12 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.22.3"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.23.0"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
 | `graph` | object | Yes | Contains `cells` array — the JointJS graph data |
-| `viewport` | object | No | Pan/zoom state. Omit to auto-fit on load |
+| `viewport` | object | No | Pan/zoom state **only**. Omit and the app zooms to fit the content on load; it never moves or resizes a cell. See [Layout Tips](#layout-tips) - import is verbatim |
 | `group` | object | No | `{ "name", "icon", "color" }` of the tab GROUP this diagram belonged to. Present only when the diagram was saved/exported from a named tab group. On load the app recreate-or-REJOINS a group of that name and drops the tab into it (so reopening one grouped diagram restores its group). Omit for ungrouped diagrams. Added v1.17.0 |
 
 > ⚠️ **Always set `diagramType` to match the shapes in the diagram.** If it is missing or wrong, the diagram opens as an architecture tab and the type-specific tools (the sequence Auto Layout, the data-model stencil, the Gantt timeline controls, etc.) are gated off until the tab is recreated. **Pick the type by the QUESTION your diagram answers using [Choosing the right diagram type](#choosing-the-right-diagram-type) - not by the shapes that first come to mind - before you author any cells.**
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.3", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.3" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.22.3", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.22.3" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -214,6 +214,8 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 - ✗ `sf.BpmnEvent`/`sf.BpmnGateway` with only the discriminator (`eventType`/`gatewayType`) and default `attrs` - it's inert on load (the colour/glyph are applied only at stencil-drop) → ✓ also emit the matching `attrs`: a gateway needs `attrs.marker.text` (exclusive `×`, parallel `+`, inclusive `○`, event `◇`); a non-start event needs its `body` fill/stroke (see the BpmnEvent reference).
 - ✗ `targetMarker: {type:"none"}` (or any markerless object) on a flow you want arrowed - the loader skips markers with no `d`, so it loads undirected → ✓ OMIT `targetMarker` for a directed flow. `sourceMarker` is NOT auto-arrowed.
 - ✗ linking TO a `sf.BpmnPool` (it has no ports) → ✓ attach links to the step shapes (Task/Event/Gateway); embed steps with `parent:"pool-id"` + the id in the pool's `embeds[]`.
+- ✗ `sf.Container` lanes drawn BEHIND their cards with an empty `embeds[]` → ✓ set BOTH sides on every card (`embeds[]` + `parent`); an undeclared frame is decorative and doesn't group-move. See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
+- ✗ varying card size to make a layout fit, or sizing each lane to its own card count → ✓ ONE card size for the whole diagram and ONE height for every lane. See [Container lanes](#container-lanes-columns-of-grouped-cards).
 
 **`flow`** (Salesforce Flow - see the [Flow Shapes](#flow-shapes-salesforce-flow-diagrams) reference)
 - ✗ putting the element name/label inside `attrs.label.text` → ✓ set the TOP-LEVEL `name` prop (it drives the card label via the model); the element TYPE renders as the grey subtitle automatically (shown once `name` differs from the type); `apiName`, `description` + the per-kind fields are also top-level documentation metadata (edited in the panel, NOT shown on the card). Nothing element-specific goes in `attrs`.
@@ -633,7 +635,14 @@ Group node with a coloured accent bar header. Can visually contain child element
 { "id": "node-1", "type": "sf.SimpleNode", "parent": "container-1", ... }
 ```
 
-Position children so they fall within the container's bounds (below the 40px header).
+Position children so they fall within the container's bounds - **48px** clear of the left, right and bottom
+edges, and at least 48px below the 40px header (`container.y + 88`). Less than 32px and the connectors into
+those children draw on the container's own border; see [Layout Tips](#layout-tips).
+
+**`manualSize` (since v1.23.0)** — Optional top-level boolean. `true` pins the frame's geometry: the in-app
+content-hug (which otherwise re-wraps a frame around its children on every child move) skips it. Set this when
+the frame is deliberately bigger than its contents - uniform lane heights, reserved space. Cleared by the
+right-click **Auto size** action; a resize-handle drag sets it. Absent/false = the frame hugs its children.
 
 **Accent colors:** Change `accent/fill` and `accentFill/fill` together to set the header bar color. Common Salesforce colours:
 - Sales: `#032E61`, Service: `#7F2B82`, Marketing: `#F49825`
@@ -2089,7 +2098,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.22.3", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.23.0", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2192,7 +2201,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2224,7 +2233,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2351,7 +2360,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2381,7 +2390,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2414,7 +2423,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2457,7 +2466,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2503,7 +2512,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.22.3",
+  "appVersion": "1.23.0",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
@@ -2529,12 +2538,105 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 
 ## Layout Tips
 
-- **Spacing:** Leave ~100-140px horizontal gaps and ~80-100px vertical gaps between elements for clean routing.
-- **Grid:** The canvas uses a 16px grid. Align positions to multiples of 16 for neatness.
-- **Container children:** Position children at least 50px below the container's top (to clear the 40px header bar) and 10px from edges.
-- **Zones:** Place zones first (z=0) and size them to encompass their child elements with ~30px padding.
+- **Import never moves your cells.** Every `position` and `size` you author loads **verbatim** - neither the
+  file/paste import nor the `postMessage` "Open in Diagramforce" path runs a layout pass. **Auto Layout** runs
+  only when the user picks it from the **Display** menu, after load. So if the render doesn't match your
+  numbers, your numbers are the diagram - look at the JSON, not at the app.
+- **Spacing:** Leave ~100-140px horizontal gaps and ~80-100px vertical gaps between TOP-LEVEL elements for clean
+  routing. Cards stacked inside one container are a different case - see *Container lanes* below.
+- **Frame padding is 48px, and the number is not cosmetic.** A link into an embedded card turns **32px** out
+  from the port (the router's stub) and its arrow tip lands **16px** out. A frame padded by less than 32px
+  therefore draws the connector **on its own border**: at 16px the arrow tips sit exactly on the edge, and at
+  ~30px the vertical fan-out trunk does. Pad a `sf.Container` / `sf.Zone` by **48px** on left, right and bottom
+  (and keep children ≥ 48px below the 40px header, i.e. `container.y + 88`). This is also what the in-app
+  auto-size produces, so a 48px frame is already at its resting size and won't shift on the first edit.
+- **Zones:** Place zones first (z=0) and size them to encompass their child elements with the same 48px padding.
 - **Links:** The `sfManhattan` router auto-routes orthogonal paths. You rarely need `vertices` — only add them for specific waypoint control.
 - **Port selection:** Use `port-right`/`port-left` for horizontal flows, `port-top`/`port-bottom` for vertical flows. The router handles the rest.
+
+### Capture: put cards INSIDE a frame, don't just draw one behind them
+
+`sf.Container`, `sf.Zone`, `sf.TaskGroup`, `sf.BpmnPool`, `sf.BpmnSubprocess` and `sf.BpmnLoop` are **capture
+frames**: on the canvas, dropping an element inside one embeds it. A generated diagram must declare that
+relationship itself - **geometry alone does not create it**. A frame whose bounds enclose cards but whose
+`embeds` is empty is a decorative rectangle:
+
+- it does **not** group-move (drag the lane, the cards stay behind),
+- it does **not** auto-size to its contents,
+- selecting it selects nothing else, and Ungroup has nothing to release.
+
+Set **both** sides on every child - the id in the frame's `embeds[]` **and** `parent: "<frame-id>"` on the
+child. The loader does not reconcile a half-declared embed, and `validate-diagram.mjs` warns on both the
+one-sided case and the zero-sided case above.
+
+```json
+{ "id": "env-qa", "type": "sf.Container", "embeds": ["card-1", "card-2"], … }
+{ "id": "card-1", "type": "sf.BpmnTask", "parent": "env-qa", … }
+```
+
+**Auto-size (what happens AFTER load).** Once children are embedded, moving or resizing one re-hugs the frame
+to its contents: the **top is anchored** (the header lives there) and **left / right / bottom grow *and shrink***
+to a 48px inset - so hugging the left also **moves** the frame. Import never triggers this, so your authored
+geometry loads intact, but a frame that is deliberately larger than its contents collapses on the first edit.
+Two ways to keep it:
+
+- author the frame at its resting size (48px inset on left/right/bottom) so the hug is already satisfied, or
+- set **`"manualSize": true`** on the frame (top-level cell property, since v1.23.0). That pins its geometry -
+  the content-hug skips it entirely. It is a cell property, so it **travels with the file** (saves, share URLs,
+  `postMessage` import). The user releases it with **Auto size** in the right-click menu; a resize-handle drag
+  sets it. Use it whenever the layout means something the hug would destroy - lanes at one uniform height, a
+  frame with deliberate breathing room, a placeholder frame sized for content not yet added.
+
+### Container lanes (columns of grouped cards)
+
+Swimlanes, environment columns, stage columns - a row of `sf.Container`s each holding a vertical stack of cards
+wired left to right. **A lane's height is a property of the DIAGRAM, not of the lane.** Sizing each lane to its
+own card count produces a bar chart, not a set of lanes.
+
+| Quantity | Value |
+|---|---|
+| Card size | ONE size for every card in the diagram (`180 x 60` reads well; `sf.BpmnTask` defaults to `120 x 60`) |
+| Card inset in lane | `48` left and right (see *Frame padding* above) |
+| Lane width | card width + 96 |
+| Lane gap | `80`-`120` between one lane's right edge and the next lane's left edge |
+| Lane top `y` | IDENTICAL for every lane |
+| First card `y` | lane `y` + `88` minimum (40px header + 48px pad) |
+| Row pitch | card height + `24` - the unit of the shared row grid |
+| Lane height | `(deepest card bottom across ALL lanes) - lane.y + 48`, applied to EVERY lane |
+
+**Rows are shared, not per-lane.** Pick the row grid once for the whole diagram (`y = firstRowY + n * rowPitch`),
+then place each card on the row its STAGE occupies, leaving a row empty in lanes that skip that stage. Do not
+pack each lane from its own top - that gives every lane a different meaning for "row 2".
+
+Then place each card by what it connects to, working outward from the lane with the most cards:
+
+- **One-to-one:** a card and the single card it feeds share a `y`, so the connector is a flat horizontal line.
+- **Fan-out:** a card that feeds SEVERAL cards sits at their midpoint - the average of their centres, minus half
+  its own height. **This is usually BETWEEN rows, and that is correct**: it makes the fan read as symmetric
+  instead of hanging off the topmost branch. Same rule mirrored for fan-in.
+- **Unconnected:** keep the card on its row, in its lane's existing order.
+- Never let two cards in a lane come closer than `24`, and never push one above `lane.y + 88` or below
+  `lane.y + height - 48`.
+
+Uniform lane heights are **larger** than the hug would produce, so pin them: give every lane
+`"manualSize": true`, or accept that the first card drag re-hugs each lane to its own contents.
+
+> **In the app:** right-click any lane on a `process` diagram (or select several lanes and right-click) →
+> **Match Container Height**. It computes exactly the geometry above - one top, one height taken from the lane
+> with the most cards, one-to-one rows flat, fan-outs centred - and pins the result with `manualSize`. A diagram
+> authored to this section is a **fixed point** of that action: running it changes nothing. That makes it a free
+> self-check - if the diagram visibly moves, your generated geometry did not satisfy the rules above.
+
+**Self-check before you emit.** Every one of these must hold:
+
+1. Every card in the diagram has the same `size`.
+2. Every lane has the same `position.y`, and every lane has the same `size.height`. No lane's height is a
+   function of its own card count.
+3. Every card `y` is `firstRowY + n * rowPitch` for some integer `n`.
+4. Every pair of cards joined by a link shares a `y`, unless the link is a deliberate fan-out.
+5. Both sides of every embed are set (`embeds[]` **and** `parent`), and lanes with a non-resting height carry
+   `"manualSize": true`.
+6. Left and right insets are 48 on both edges of every lane; no card sits less than 88px below its lane's top.
 
 ## Limits
 

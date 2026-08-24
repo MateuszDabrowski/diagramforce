@@ -93,6 +93,9 @@ const CONTENT_PROPS = [
   'rows', 'headerRow', 'tableLabel', 'highlightFirstRow', 'highlightFirstCol', 'fontSize', 'tableFill', 'tableBorder', 'tableTextColor',
   // df.Legend: a user-pinned width (set by the Width control / a resize, cleared by Auto size) — undoable.
   'manualWidth',
+  // Container/Zone/BPMN grouper: a user-pinned SIZE — set by a resize-handle drag, cleared by Auto size.
+  // Opts the frame out of the embedding content-hug so a deliberately tall lane survives a child drag.
+  'manualSize',
   // Gantt dependency link (Phase 3): typed predecessor relationship props (linkKind has its own handler)
   'depType', 'lag',
   // Flow elements (df.Flow*): the uniform trio + every per-kind free-text field. Keep in step with FLOW_ELEMENTS

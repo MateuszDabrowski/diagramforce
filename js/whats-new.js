@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.22.3';
-import { buildModal } from './feedback.js?v=1.22.3';
+import { compareSemver } from './util.js?v=1.23.0';
+import { buildModal } from './feedback.js?v=1.23.0';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,24 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.23.0 — covers EVERYTHING since 1.22.0, i.e. the 1.22.1 / .2 / .3 patches plus the unreleased 1.22.4 work,
+  // (1.22.4 was bumped but never tagged, so no user ever saw it — every user-facing "since" reference says 1.23.0),
+  // because `isNewerRelease` only fires on major/minor: a user last seen on 1.22.0 never got an overlay for any
+  // of the patches, so this entry is their only sighting of Table View — which is why it leads. Deliberately
+  // OMITTED (owner call, 1.23.0 cut): the tab-menu Rename and the connector-label collision pass. Both are real,
+  // both are chrome, and a changelog that lists chrome next to Table View reads as if it ran out of substance.
+  {
+    version: '1.23.0',
+    title: "What's new in Diagramforce",
+    intro: 'A table view that reads a marketing flow back to you, one action that squares up a lane diagram, and frames that keep the shape you give them.',
+    highlights: [
+      { icon: 'rows', text: '<strong>Read a flow as a table.</strong> Flow diagrams gained a Table View: every element in execution order, the fields the flow writes and where a later step overwrites an earlier one, each decision with the condition that takes its branch, and every marketing asset it touches. Sections collapse and carry their own counts.' },
+      { icon: 'apps', text: '<strong>Search the tables, jump back to the canvas.</strong> The Flow, Data Model and Data Mapping tables narrow to a search term and report how many of the total you are seeing. Click a row and the canvas focuses that shape.' },
+      { icon: 'hierarchy', text: '<strong>Match Container Height.</strong> Right-click a container on a process diagram and every lane squares up to one top and one height, taken from the lane holding the most shapes - with the rows aligned across lanes, so each spine runs flat.' },
+      { icon: 'layers', text: '<strong>Containers and zones keep the shape you give them.</strong> A frame you resize by hand stops shrinking back to hug its contents, and the setting travels with the diagram; Auto size hands it back. Frames also leave room now for a connector to arrive inside them instead of drawing over their own border.' },
+      { icon: 'data_mapping', text: '<strong>Data Cloud imports got more accurate.</strong> A formula field derived from another field on the same card now draws that link. Converted diagrams carry data model object relationships, org-wide default badges and orchestration steps, in one palette that reads on both the light and dark canvas.' },
+    ],
+  },
   // 1.22.0 — the ORG IMPORT release. Four converters (objects / mappings / data graphs / richer flows) all
   // reached through the Claude skill's CLI scripts, so the copy deliberately leads with the capability rather
   // than an in-app button - there isn't one; the einstein item carries the install route. Final wording is the

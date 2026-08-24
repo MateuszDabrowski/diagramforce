@@ -1,26 +1,26 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.22.3';
-import { tbctx } from './tabs/context.js?v=1.22.3';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.22.3';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.22.3';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.22.3';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.22.3';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.23.0';
+import { tbctx } from './tabs/context.js?v=1.23.0';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.0';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.23.0';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.23.0';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.23.0';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.22.3';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.22.3';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.22.3';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.22.3';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.22.3';
-import { wireMenuDismiss } from './menu.js?v=1.22.3';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.22.3';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.22.3';
-import { getPalette } from './brand-palette.js?v=1.22.3';
-import { getAllIcons } from './icons.js?v=1.22.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.22.3';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.23.0';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.23.0';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.23.0';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.23.0';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.23.0';
+import { wireMenuDismiss } from './menu.js?v=1.23.0';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.23.0';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.23.0';
+import { getPalette } from './brand-palette.js?v=1.23.0';
+import { getAllIcons } from './icons.js?v=1.23.0';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.23.0';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -1324,6 +1324,21 @@ const COMPARE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" s
 // Right-click a tab → clone / export / share it, or assign it to a group (ungroup / create a new group).
 function openTabGroupMenu(anchorEl, tab) {
   openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
+    // Rename — the same inline editor double-clicking the tab label opens, reached from the menu so the
+    // rename is discoverable (the dblclick affordance is invisible). Mirrors "Rename group" above: look the
+    // rendered tab up by its data-tab-id and bail if it isn't in the DOM (e.g. inside a collapsed group).
+    // menuItem closes the popover BEFORE the callback runs, so the label element is free to be replaced.
+    panel.appendChild(menuItem('Rename', () => {
+      // Rename IN PLACE on whichever chip was right-clicked. `anchorEl` is the real tab for a tab-strip
+      // right-click and the ACTIVE-TAB PIN PROXY for a pinrail one — and the proxy OVERLAYS the real tab, so
+      // editing the list element there would put the input underneath it, invisible. Both carry a
+      // `.df-tab__label`; fall back to the list element only if the anchor somehow has none.
+      const host = anchorEl?.querySelector?.('.df-tab__label')
+        ? anchorEl
+        : tabListEl.querySelector(`.df-tab[data-tab-id="${tab.id}"]`);
+      const labelEl = host?.querySelector('.df-tab__label');
+      if (host && labelEl) startInlineRename(host, labelEl, tab);
+    }, { icon: 'edit' }));
     // Clone — an exact duplicate of this diagram as a NEW tab named "<name> (clone)". Deep-copies the cells into
     // a separate graph (ids may repeat across tabs - each tab is its own isolated graph), so the copy is
     // byte-identical in layout. importDiagramAsTab uniquifies the name and fits the new tab.

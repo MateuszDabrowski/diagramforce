@@ -7,12 +7,14 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.22.3';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.22.3';
+import { cctx } from './context.js?v=1.23.0';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.23.0';
 
 // ── Routing geometry constants ──
-const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
-const PAD = 16;   // clearance around obstacles (must be < STUB so stubs are outside padded zones)
+export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
+export const PAD = 16;   // clearance around obstacles (must be < STUB so stubs are outside padded zones)
+// Exported because the container auto-fit (canvas/embedding.js) derives its wrap padding from them: a frame
+// must clear a routed link's first turn (STUB) by PAD, or the connector draws ON the container border.
 const CP_PERP_OFFSET = 16; // matches the original anchor offset — perpendicular stand-off from the cell edge to the visual line end
 const SNAP_STRAIGHT = 4; // collapse a near-collinear orthogonal link to DEAD-STRAIGHT when its two ends' cross-axis
 // coords differ by <= this (px). The few-px residual that barycentre/side-port centring leaves between a parent and a

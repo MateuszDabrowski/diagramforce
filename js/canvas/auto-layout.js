@@ -3,13 +3,14 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.22.3';
+import { cctx } from './context.js?v=1.23.0';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis } from './layout-core.js?v=1.22.3';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.23.0';
+import { startBatch, endBatch } from '../history.js?v=1.23.0';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.22.3';
-import { flowConnectorType } from './link-styles.js?v=1.22.3';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.22.3';
+import { computeFlowLayout } from './flow-layout.js?v=1.23.0';
+import { flowConnectorType } from './link-styles.js?v=1.23.0';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.23.0';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -643,4 +644,64 @@ export function applySequenceAutoLayout(plan) {
       if (Math.abs(cp.x - targetX) > 0.5) c.position(targetX, cp.y);
     }
   }
+}
+
+// ── Match Container Height (v1.23.0) ─────────────────────────────────
+// Process diagrams drawn as Container lanes: unify every lane's top + height and align the rows across them,
+// taking the lane with the most cards as the reference for both. The planning is pure
+// (layout-core.js planLaneNormalisation, unit-tested in dev/tests/lane-normalisation.test.js); this is the
+// thin graph-mutating adapter.
+//
+// Batching: startBatch/endBatch, NOT recordPositionsBatch — this changes a PROP (`manualSize`) as well as
+// positions and sizes, and recordPositionsBatch only snapshots geometry. Same choice, for the same reason, as
+// applySequenceAutoLayout (toolbar.js wraps that in startBatch too).
+//
+// @param {string[]|null} [laneIds]  restrict to these lanes (a multi-selection). Omit for every lane in the
+//        diagram — the single-container menu entry, where "uniform" can only sensibly mean the whole set.
+// @returns {{status:'applied'|'empty', lanes:number, referenceId?:string, height?:number}}
+export function matchContainerHeights(laneIds = null) {
+  const { graph } = cctx;
+  if (!graph) return { status: 'empty', lanes: 0 };
+
+  // Top-level Containers only. A Container nested in a Zone (or in another Container) is content, not a lane —
+  // normalising it would fight its own parent's geometry.
+  const only = laneIds ? new Set(laneIds) : null;
+  const lanes = graph.getElements().filter((el) => el.get('type') === 'sf.Container' && !el.get('parent')
+    && (!only || only.has(el.id)));
+  const laneInput = lanes.map((el) => {
+    const p = el.position();
+    return {
+      id: el.id, x: p.x, y: p.y, height: el.size().height,
+      cards: el.getEmbeddedCells().filter((c) => c.isElement?.())
+        .map((c) => ({ id: c.id, y: c.position().y, height: c.size().height })),
+    };
+  });
+  const links = graph.getLinks()
+    .map((l) => ({ source: l.get('source')?.id, target: l.get('target')?.id }))
+    .filter((l) => l.source && l.target);
+
+  const plan = planLaneNormalisation(laneInput, links);
+  if (!plan) return { status: 'empty', lanes: laneInput.filter((l) => l.cards.length).length };
+
+  startBatch();
+  try {
+    for (const lp of plan.lanes) {
+      const lane = graph.getCell(lp.id);
+      if (!lane) continue;
+      // Pin FIRST. fitParentToChildren early-returns on `manualSize`, so every move/resize below is safe from
+      // the content-hug re-entering and shrink-wrapping the lane we are deliberately over-sizing. Without this
+      // the uniform height survives exactly until the user drags any card.
+      lane.set('manualSize', true);
+      // position()/resize() on a parent do NOT cascade to embeds (only an interactive drag does), so each card
+      // is moved explicitly to the absolute y the plan computed.
+      lane.position(lane.position().x, lp.y);
+      lane.resize(lane.size().width, lp.height);
+      for (const c of lp.cards) {
+        const card = graph.getCell(c.id);
+        if (card) card.position(card.position().x, c.y);
+      }
+    }
+  } finally { endBatch(); }
+
+  return { status: 'applied', lanes: plan.lanes.length, referenceId: plan.referenceId, height: plan.height };
 }

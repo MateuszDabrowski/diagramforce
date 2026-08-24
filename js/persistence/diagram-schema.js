@@ -174,6 +174,36 @@ export function validateDiagram(diagram) {
     }
   }
 
+  // ZERO-sided embed: a frame whose bounds geometrically enclose elements that declare NO relationship to it
+  // (neither in its `embeds[]` nor carrying `parent`). The one-sided check above cannot see this - it only walks
+  // declared links - so a generated diagram with five containers and 17 free-floating cards inside them validates
+  // CLEAN while every container is a decorative rectangle: the frame doesn't group-move, doesn't content-hug, and
+  // dragging it leaves its cards behind. Geometry is the only signal available here, so require FULL containment
+  // of >= 2 elements before warning - one stray overlap is a layout accident, a whole stack is a missed embed.
+  const CAPTURE_FRAMES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
+  const boxOf = (c) => (c && c.position && c.size
+    && Number.isFinite(c.position.x) && Number.isFinite(c.position.y)
+    && Number.isFinite(c.size.width) && Number.isFinite(c.size.height))
+    ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height } : null;
+  for (const c of cells) {
+    if (!c || !CAPTURE_FRAMES.has(c.type)) continue;
+    if (Array.isArray(c.embeds) && c.embeds.length) continue;   // already declares children - the checks above cover it
+    const fb = boxOf(c);
+    if (!fb) continue;
+    const inside = [];
+    for (const o of cells) {
+      if (!o || o === c || typeof o.id !== 'string') continue;
+      if (o.parent != null) continue;                 // already owned by some frame
+      if (CAPTURE_FRAMES.has(o.type)) continue;       // nested frames are a different (legitimate) pattern
+      const ob = boxOf(o);
+      if (!ob) continue;
+      if (ob.x >= fb.x && ob.y >= fb.y && ob.x + ob.w <= fb.x + fb.w && ob.y + ob.h <= fb.y + fb.h) inside.push(o.id);
+    }
+    if (inside.length >= 2) {
+      warnings.push(`Cell "${c.id}" (${c.type}) visually contains ${inside.length} element(s) (${inside.slice(0, 3).join(', ')}${inside.length > 3 ? ', …' : ''}) but its \`embeds\` is empty and none of them set \`parent\` - the frame is DECORATIVE (it won't group-move or auto-size, and dragging it leaves the cells behind). Set BOTH sides: the ids in \`embeds[]\` AND \`parent: "${c.id}"\` on each child.`);
+    }
+  }
+
   // Gantt: `order` IS the row slot - two GanttTasks with the same order collide in one row. (A MISSING order is
   // auto-healed from the bar's Y on load, so only the un-healed duplicate is flagged.)
   const ganttRow = new Map();   // order value -> first task id that claimed it

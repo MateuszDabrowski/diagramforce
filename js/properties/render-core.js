@@ -8,14 +8,17 @@
 // Reads graph/selection + the panel DOM refs (bodyEl/footerEl) via prctx; imports the convert/widgets/clipboard/
 // components/type-meta leaves; never imports the facade. The facade re-exports autoSizeCell + buildCellActions
 // (app.js namespace access) and the staying renderers import finishStandardProps + autoSizeCell back.
-import { prctx } from './context.js?v=1.22.3';
-import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.22.3';
-import { resizeDataObjectToFit } from '../components.js?v=1.22.3';
-import { saveCellAsShape } from '../templates.js?v=1.22.3';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.22.3';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.22.3';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.22.3';
-import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.22.3';
+import { prctx } from './context.js?v=1.23.0';
+import { cctx } from '../canvas/context.js?v=1.23.0';   // leaf context object (no imports of its own) — safe here
+import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.23.0';
+import { showToast } from '../feedback.js?v=1.23.0';
+import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.23.0';
+import { resizeDataObjectToFit } from '../components.js?v=1.23.0';
+import { saveCellAsShape } from '../templates.js?v=1.23.0';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.23.0';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.23.0';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.23.0';
+import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.23.0';
 
 /** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
  *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and
@@ -23,6 +26,11 @@ import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteB
 export function autoSizeCell(cell) {
   if (!cell || !cell.isElement || !cell.isElement()) return;
   const type = cell.get('type');
+  // "Auto size" ALWAYS releases a user-pinned size first (v1.23.0), on EVERY capture frame - not just
+  // sf.Container. resize-handles.js pins any HALO_PARENT_TYPES frame you drag a handle on, so without this a
+  // hand-resized Zone / BpmnPool / Subprocess / Loop / Task stayed opted out of the content-hug permanently,
+  // with no route back through the UI. Cleared before the type branches so every path below inherits it.
+  if (cell.get('manualSize')) cell.set('manualSize', false);
   if (type === 'sf.DataObject') { resizeDataObjectToFit(cell); return; }
   // A Note fits its HEIGHT to the rendered description (item 1.2) rather than snapping to the default 200x120 -
   // its view measures the content and grows/shrinks to it. Fall back to the default size if the view is absent.
@@ -52,6 +60,10 @@ export function autoSizeCell(cell) {
   if (type === 'sf.Container') {
     const embeds = cell.getEmbeddedCells().filter((c) => c.isElement());
     if (embeds.length > 0) {
+      // Run the SAME content-hug a child drag runs, so the button and the drag can't disagree (they used to:
+      // 60/20/20/20 here vs the embedding fit's padding). The pin was already released above. Falls through to
+      // the default size only if the shared fit isn't wired (non-canvas context) or throws.
+      try { if (cctx.fitParentToChildren) { cctx.fitParentToChildren(cell); return; } } catch { /* fall through */ }
       try { cell.fitEmbeds({ padding: { top: 60, left: 20, right: 20, bottom: 20 } }); return; } catch { /* fall through */ }
     }
   }
@@ -73,6 +85,26 @@ export function autoSizeCell(cell) {
   }
   const def = DEFAULT_SIZES[type];
   if (def) cell.resize(def.width, def.height);
+}
+
+/** True on a process diagram — the same `canvas-container` dataset gate link-props.js reads. */
+export function isProcessDiagram() {
+  return document.getElementById('canvas-container')?.dataset.diagramType === 'process';
+}
+
+export const MATCH_HEIGHT_LABEL = 'Match Container Height';
+
+/** Run the lane normalisation and report it. `laneIds` scopes it to a selection; omit for the whole diagram.
+ *  Shared by the single-container and multi-select menus so the two can never drift apart. */
+export function runMatchContainerHeights(laneIds = null) {
+  const r = matchContainerHeights(laneIds);
+  if (r.status === 'empty') {
+    showToast('Match Container Height needs at least two containers with shapes inside them.', 'warning', { duration: 3500 });
+    return r;
+  }
+  prctx.refresh?.();
+  showToast(`Matched ${r.lanes} containers ✓`, 'success');
+  return r;
 }
 
 export function buildCellActions(cell) {
@@ -105,12 +137,21 @@ export function buildCellActions(cell) {
     acts.push({ label: 'Convert to Node', iconKey: 'convert', group: 'convert', handler: () => convertToNode(cell) });
   }
 
+
   // Order (z within the same tier).
   acts.push({ label: 'Bring to Front', iconKey: 'front', group: 'order', handler: () => bringToFront(cell) });
   acts.push({ label: 'Send to Back', iconKey: 'back', group: 'order', handler: () => sendToBack(cell) });
 
   // Auto size (every element type except sf.Image, which the panel omits).
   if (type !== 'sf.Image') acts.push({ label: 'Auto size', iconKey: 'autosize', group: 'size', handler: () => autoSizeCell(cell) });
+  // Match Container Height (1.23.0) — process diagrams drawn as Container lanes. From the SINGLE-container menu
+  // it acts on EVERY lane in the diagram, not just this one: a uniform height is a property of the set, so
+  // scoping it to the one you right-clicked would be meaningless. (The multi-select menu scopes it to the
+  // selection instead — selection.js, same helper.) Process-only because it assumes the lanes-of-cards idiom.
+  if (type === 'sf.Container' && isProcessDiagram()) {
+    acts.push({ label: MATCH_HEIGHT_LABEL, iconKey: 'matchHeight', group: 'size', handler: () => runMatchContainerHeights() });
+  }
+
 
   // Save Shape - stash this shape (content + style) in My Shapes for reuse (the single-shape counterpart to the
   // multi-select "Save as Template"). Images can't be saved (storage). Its own group so it reads apart.

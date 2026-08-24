@@ -12,8 +12,9 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.22.3';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.22.3';
+import { cctx } from './context.js?v=1.23.0';
+import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.23.0';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.23.0';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -226,7 +227,7 @@ function taskRightColumnLeft(task) {
 function taskWrapBounds(task, extraBBoxes, excludeId) {
   const { graph, paper } = cctx;
   const pp = task.position();
-  const pad = (paper?.options.gridSize || 4) * (paper?.options.drawGrid?.args?.scaleFactor || 4);
+  const pad = gridPad(paper);   // Task row keeps the tight one-dot inset (see gridPad)
   const def = task.constructor?.prototype?.defaults?.size || { width: 540, height: 160 };
   const colLeft = pp.x + taskRightColumnLeft(task) + pad;
   const colTop = pp.y + pad;
@@ -265,8 +266,10 @@ export function tuckChildInside(child, parent) {
   if (!child || !parent) return;
   const cp = child.position();
   const pp = parent.position();
-  const pad = (paper?.options.gridSize || 4) * (paper?.options.drawGrid?.args?.scaleFactor || 4);
   const ptype = parent.get('type');
+  // Mirror the fit: a Task row tucks by the tight grid inset, every other frame by the wrap padding, so a
+  // tucked child lands exactly where fitParentToChildren will then wrap it.
+  const pad = ptype === 'sf.Task' ? gridPad(paper) : PARENT_FIT_PADDING;
   // RACI Task: keep cards in the RIGHT column so the left stays for label/desc.
   // Clamp x past the divider and y below a small top margin (no top header bar).
   if (ptype === 'sf.Task') {
@@ -375,6 +378,18 @@ export function findEmbeddingParent(elementView) {
 // ── Auto-fit engine ─────────────────────────────────────────────────
 // Don't shrink a parent below this height — a Container header bar is ~32 px, so
 // 48 keeps a small body strip visible even for a single tiny child near the top.
+// ── Wrap padding (v1.23.0) ──────────────────────────────────────────
+// The gap a Container/Zone leaves around its embedded children. Derived from the ROUTER, not from the
+// grid: a link into an embedded card turns `STUB` (32px) out from the port and its arrow tip lands
+// `CP_PERP_OFFSET` (16px) out, so a frame padded by less than STUB draws the connector ON its own border.
+// Measured on the 1.22.3 default (one grid dot = 16px): the arrow TIP landed exactly on the edge; at the
+// ~30px the spec used to suggest, the vertical fan-out trunk did. STUB + PAD clears the turn by a full PAD
+// (trunk 16px inside the border, arrow tip 32px inside).
+const PARENT_FIT_PADDING = ROUTER_STUB + ROUTER_PAD;   // 48
+// The RACI Task card is a fixed two-column row, not a free-form frame, and its embedded cards are not
+// link endpoints — it keeps the original one-grid-dot inset so its 540x160 proportions are unchanged.
+const gridPad = (paper) => (paper?.options.gridSize || 4) * (paper?.options.drawGrid?.args?.scaleFactor || 4);
+
 const PARENT_FIT_MIN_HEIGHT = 48;
 // …or below this width — keeps the header label (e.g. "Container") from
 // overflowing when the right edge hugs a very narrow child.
@@ -394,6 +409,11 @@ function fitParentToChildren(parent) {
   const { graph, paper } = cctx;
   if (!isAutoSizingEnabled()) return;
   if (!parent || !parent.isElement || !parent.isElement()) return;
+  // A user-pinned size wins over the content-hug (v1.23.0). Set by a resize-handle drag, cleared by
+  // "Auto size". Unlike the global Auto Sizing toggle — a per-BROWSER pref that never leaves the machine —
+  // this is a cell prop, so it serialises into saves / share URLs / the postMessage import: an author who
+  // wants five lanes at ONE height can express that and have it survive on someone else's canvas.
+  if (parent.get('manualSize')) return;
   // A GanttTimeline sizes ITSELF — its width is period-driven and its view auto-grows
   // the height to fit task rows (see GanttTimelineView._renderColumns). Content-hugging
   // it here fights that and visibly breaks the chart, so never auto-fit a timeline.
@@ -455,8 +475,6 @@ function fitParentToChildren(parent) {
   }
   const parentPos = parent.position();
   const parentSize = parent.size();
-  // Padding = visible grid dot spacing (gridSize × drawGrid.scaleFactor).
-  const PARENT_FIT_PADDING = (paper.options.gridSize || 4) * (paper.options.drawGrid?.args?.scaleFactor || 4);
   // Per-edge behaviour (v1.14.1):
   //   • TOP    — anchored. The header sits here and children are tucked below it,
   //              so the top never moves (a top drop tucks the child down, not up).
@@ -550,7 +568,9 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
   if (parent.get('type') === 'sf.Task') return taskWrapBounds(parent, [childBBox], excludeId);
   const pp = parent.position();
   const ps = parent.size();
-  const pad = (paper?.options.gridSize || 4) * (paper?.options.drawGrid?.args?.scaleFactor || 4);
+  // Pinned frame → the ghost must promise what will actually happen: nothing moves, nothing resizes.
+  if (parent.get('manualSize')) return { x: pp.x, y: pp.y, width: ps.width, height: ps.height };
+  const pad = PARENT_FIT_PADDING;   // the ghost MUST predict fitParentToChildren exactly
   const ptype = parent.get('type');
   const headerPad = ptype === 'sf.Container' ? 32 : (ptype === 'sf.TaskGroup' ? 28 : 0);
   // Mirror fitParentToChildren: TOP clamps the child below the header (can't grow
