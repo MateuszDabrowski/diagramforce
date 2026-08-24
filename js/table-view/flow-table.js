@@ -14,24 +14,24 @@
 // WHY N sibling tables and not one merged table with injected header rows: a single <table> computes
 // ONE column grid, so Decision Elements' 5 columns would be forced to align under Data Writes' 7 -
 // "Outcome" under "Op", same widths. That is the wrong table, not a styling nit.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.23.0';
-import { getActiveTabName } from '../tabs.js?v=1.23.0';
-import { triggerDownload } from '../persistence.js?v=1.23.0';
-import { showToast, showError } from '../feedback.js?v=1.23.0';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.23.1';
+import { getActiveTabName } from '../tabs.js?v=1.23.1';
+import { triggerDownload } from '../persistence.js?v=1.23.1';
+import { showToast, showError } from '../feedback.js?v=1.23.1';
 import {
   buildFlowSections, sortRows, suppressColumns, exportCellText, flowFactsRows, flowResourceRows,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './builders.js?v=1.23.0';
+} from './builders.js?v=1.23.1';
 // The filter's aria-live result count rides the app's sr-only region (a11y.js imports only
 // properties.js + util.js - no cycle). Called ONLY from the debounced input handler, never from
 // renderFlowTable, so graph-change re-renders stay silent.
-import { announce } from '../a11y.js?v=1.23.0';
+import { announce } from '../a11y.js?v=1.23.1';
 // Click-to-focus (post-1.22.2): a row's nav button -> its element on the canvas. selectOnly is the same public
 // call a canvas click lands on (selection.js's own pointer handler uses it), and cctx carries
 // fitToCells, the frame-these-cells helper diagram-check.js uses. Both are acyclic from here:
 // nothing in either chain imports the table-view modules back.
-import { selectOnly } from '../selection.js?v=1.23.0';
-import { cctx } from '../canvas/context.js?v=1.23.0';
+import { selectOnly } from '../selection.js?v=1.23.1';
+import { cctx } from '../canvas/context.js?v=1.23.1';
 
 export const FLOW_TABLE_TITLE = 'Flow Details';
 

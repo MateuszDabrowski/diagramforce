@@ -8,17 +8,18 @@
 // Reads graph/selection + the panel DOM refs (bodyEl/footerEl) via prctx; imports the convert/widgets/clipboard/
 // components/type-meta leaves; never imports the facade. The facade re-exports autoSizeCell + buildCellActions
 // (app.js namespace access) and the staying renderers import finishStandardProps + autoSizeCell back.
-import { prctx } from './context.js?v=1.23.0';
-import { cctx } from '../canvas/context.js?v=1.23.0';   // leaf context object (no imports of its own) — safe here
-import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.23.0';
-import { showToast } from '../feedback.js?v=1.23.0';
-import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.23.0';
-import { resizeDataObjectToFit } from '../components.js?v=1.23.0';
-import { saveCellAsShape } from '../templates.js?v=1.23.0';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.23.0';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.23.0';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.23.0';
-import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.23.0';
+import { prctx } from './context.js?v=1.23.1';
+import { cctx } from '../canvas/context.js?v=1.23.1';   // leaf context object (no imports of its own) — safe here
+import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.23.1';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.23.1';   // the exact set fitParentToChildren wraps
+import { showToast } from '../feedback.js?v=1.23.1';
+import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.23.1';
+import { resizeDataObjectToFit } from '../components.js?v=1.23.1';
+import { saveCellAsShape } from '../templates.js?v=1.23.1';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.23.1';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.23.1';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.23.1';
+import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.23.1';
 
 /** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
  *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and
@@ -56,13 +57,18 @@ export function autoSizeCell(cell) {
     cell.attr({ body: { rx: 32, ry: 32 }, icon: { x: 16, y: 16, width: 32, height: 32 } });
     return;
   }
-  //  · Container → hug its embedded children (fall through to the default when it has none / fitEmbeds throws).
-  if (type === 'sf.Container') {
+  //  · ANY capture frame holding children → hug them. Keyed on HALO_PARENT_TYPES (Container / Zone / TaskGroup /
+  //    BpmnPool / BpmnSubprocess / BpmnLoop / Task) — the exact set the embedding engine wraps — NOT on
+  //    sf.Container alone, which is what this used to test. A Zone with five captured containers fell past the
+  //    branch to DEFAULT_SIZES and snapped to 400x300, discarding the layout: reported on a hand-sized "Parent
+  //    BU" zone whose contents were 1996x868. The bug predates the pin, but the pin made it reachable — Auto
+  //    size is the documented way to release a pinned frame, so users now click it on Zones.
+  //    Runs the SAME content-hug a child drag runs, so the button and the drag can't disagree (they used to:
+  //    60/20/20/20 here vs the embedding fit's padding). The pin was already released above. A frame with NO
+  //    children still falls through to its default size, which is the only sensible answer there.
+  if (HALO_PARENT_TYPES.has(type)) {
     const embeds = cell.getEmbeddedCells().filter((c) => c.isElement());
     if (embeds.length > 0) {
-      // Run the SAME content-hug a child drag runs, so the button and the drag can't disagree (they used to:
-      // 60/20/20/20 here vs the embedding fit's padding). The pin was already released above. Falls through to
-      // the default size only if the shared fit isn't wired (non-canvas context) or throws.
       try { if (cctx.fitParentToChildren) { cctx.fitParentToChildren(cell); return; } } catch { /* fall through */ }
       try { cell.fitEmbeds({ padding: { top: 60, left: 20, right: 20, bottom: 20 } }); return; } catch { /* fall through */ }
     }
