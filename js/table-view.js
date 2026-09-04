@@ -11,36 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.23.1';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.23.1';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.23.2';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.23.2';
 // The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
-import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.1';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.23.1';
-import { SF_FIELD_TYPES } from './properties.js?v=1.23.1';
-import { keyImpliesRequired } from './field-model.js?v=1.23.1';
-import { buildModal, showToast, showError } from './feedback.js?v=1.23.1';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.23.1';
-import { triggerDownload } from './persistence.js?v=1.23.1';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.23.1';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.23.1';
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.2';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.23.2';
+import { SF_FIELD_TYPES } from './properties.js?v=1.23.2';
+import { keyImpliesRequired } from './field-model.js?v=1.23.2';
+import { buildModal, showToast, showError } from './feedback.js?v=1.23.2';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.23.2';
+import { triggerDownload } from './persistence.js?v=1.23.2';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.23.2';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.23.2';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './table-view/builders.js?v=1.23.1';
+} from './table-view/builders.js?v=1.23.2';
 // The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
 // properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
 // debounced input handler - never from render() - so graph-change re-renders stay silent.
-import { announce } from './a11y.js?v=1.23.1';
+import { announce } from './a11y.js?v=1.23.2';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.23.1';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.23.2';
 // 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
 // context shape as gantt-plan.js - it never imports this facade back.
-import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE } from './table-view/flow-table.js?v=1.23.1';
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.23.2';
+import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.23.2';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -50,6 +51,21 @@ let _showUnmapped = true;  // CR: on by default
 let _showAllCols = false;  // C2: read-mode "Show All Columns" toggle - off = all-blank columns auto-hidden
 let _sortKey = null;       // column key currently sorted by (null = graph order)
 let _sortDir = 'asc';      // 'asc' | 'desc'
+// Relationships grid (model mode, 1.23.2): a second READ-ONLY <table> under the schema grid, with its own
+// sort + collapse. Module-scoped and never reset, for flow-table's reason: the grid id is fixed, so the
+// state stays correct by construction across tab/mode switches, and a collapsed band SAYS so on screen.
+// Kept apart from _sortKey/_lastRows/_lastCols so every existing consumer of those (applyFilter's 1:1 tr
+// contract, exportCsv, the edit session) keeps reading the FIRST .df-tbl__table untouched.
+let _relSort = { key: null, dir: 'asc' };
+let _relCollapsed = false;
+let _lastRelRows = [];
+let _lastRelCols = [];
+let _relFilterMatches = null;
+// The PRIMARY grid's band collapses too (owner ask, 1.23.2): a reader after Relationships folds the long
+// schema/mapping grid out of the way. Same module-scoped, never-reset state as the relationships grid. Inert
+// while editing (the draft lives in those rows; sort is frozen mid-edit for the same reason) and never on
+// Gantt (an edit surface with no second grid beneath it to reach).
+let _primaryCollapsed = false;
 // ── Filter + Search (post-1.22.2) ── the topbar text filter for the mapping/model grids (gantt is
 // excluded: it is an EDIT surface, and hiding rows during a session risks edits landing relative to
 // hidden rows; flow keeps its own twin state in flow-table.js - the two never show simultaneously).
@@ -68,6 +84,7 @@ let _rerenderTimer = null;
 // the toolbar to Diagram view first).
 let _mode = 'mapping';
 const isModelMode = () => _mode === 'model';
+const isMappingMode = () => _mode === 'mapping';
 const isGanttMode = () => _mode === 'gantt';   // Phase 5: a Gantt project-plan table (peer of the chart)
 const isFlowMode = () => _mode === 'flow';     // 1.22.2: the stacked-sections Flow Details projection
 // The container's aria-label in index.html is hardcoded to the mapping wording, so every mode was
@@ -362,6 +379,18 @@ export function render() {
   const cols = (_editing || _showAllCols) ? baseCols : sup.cols;
   const typeNote = (_editing || _showAllCols) ? '' : sup.typeNote;
   _lastCols = cols;
+  // Relationships (model mode): built, C2-suppressed and sorted INDEPENDENTLY of the schema grid.
+  // Mapping mode lists the STRUCTURAL ER links (linkKind !== 'mapping') that until now only fed the Cardinality
+  // column - the mapping links themselves stay the primary grid's rows, so the two grids never double-count.
+  const isMapping = !isModel && !isGantt;
+  let relHtml = '', relHidden = 0;
+  if (isModel || isMapping) {
+    const rel = buildModelRelationships(graph);
+    const relSorted = sortRows(rel.rows, { sortKey: _relSort.key, sortDir: _relSort.dir });
+    const relSup = (!_editing && !_showAllCols) ? suppressColumns(REL_COLUMNS, relSorted) : { cols: REL_COLUMNS, hidden: 0 };
+    _lastRelRows = relSorted; _lastRelCols = relSup.cols; relHidden = relSup.hidden || 0;
+    relHtml = relTableHtml(relSorted, relSup.cols, rel);
+  } else { _lastRelRows = []; _lastRelCols = []; _relFilterMatches = null; }
   // Section boundaries (vertical dividers) follow the LIVE column set - C2 can thin a section.
   const starts = new Set(cols.map((c, i) => (i > 0 && c.section !== cols[i - 1].section) ? i : -1).filter(i => i > 0));
   const { mappingCount, objectCount, unmappedCount, fieldCount, taskCount } = built;
@@ -372,12 +401,19 @@ export function render() {
   const actHdr = ganttEdit ? '<th rowspan="2" class="df-tbl__actcol" aria-label="Row actions"></th>' : '';
   // Mapping-mode section colspans count the LIVE columns per section; a section C2 emptied
   // entirely (e.g. an all-unmapped diagram's target side) is skipped rather than left colspan-0.
+  const primaryFolds = !isGantt && !_editing;
+  const primaryCollapsed = primaryFolds && _primaryCollapsed;
+  // Collapse affordance on the primary band: data-sec="primary" makes every band of the grid a toggle; the caret
+  // renders once, on the FIRST band actually rendered (mapping mode's Data Sources can be C2-emptied entirely).
+  let caretPlaced = false;
+  const foldAttrs = () => primaryFolds ? ` data-sec="primary" role="button" tabindex="0" aria-expanded="${!primaryCollapsed}" title="Collapse or expand this section"` : '';
+  const caret = () => { if (!primaryFolds || caretPlaced) return ''; caretPlaced = true; return SEC_CHEVRON; };
   const secTh = (sec, label) => {
     const n = cols.filter(c => c.section === sec).length;
-    return n ? `<th colspan="${n}" class="df-tbl__sec df-tbl__sec--${sec}">${label}</th>` : '';
+    return n ? `<th colspan="${n}" class="df-tbl__sec df-tbl__sec--${sec}"${foldAttrs()}>${caret()}${label}</th>` : '';
   };
   const tier1 = (isModel || isGantt)
-    ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl">${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
+    ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl"${foldAttrs()}>${caret()}${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
     : `<tr class="df-tbl__sections">${revHdr}
         ${secTh('src', 'Data Sources')}
         ${secTh('map', 'Data Mapping')}
@@ -573,10 +609,15 @@ export function render() {
   const editBtn = `<button type="button" id="tbl-edit" class="df-tbl__csv df-tbl__push" title="${escHtml(editTitle)}">${ICON_PENCIL}<span>${isGantt ? 'Edit Plan' : 'Edit Fields'}</span></button>`;
   const csvBtn = `<button type="button" id="tbl-csv" class="df-tbl__csv" title="Export the visible rows as a CSV file">${ICON_DOWNLOAD}<span>${escHtml(csvLabel)}</span></button>`;
   // Copy as Markdown — the visible table as a GFM table on the clipboard (Confluence / Jira / Notion / GitHub).
+  // Relationships CSV (model mode): its OWN file. The schema CSV is a documented per-field contract shared
+  // with Save > Export to CSV (buildObjectSchemaCsv), so relationship rows never ride into it.
+  const relCsvBtn = ((isModel || isMapping) && !_editing && _lastRelRows.length)
+    ? `<button type="button" id="tbl-csv-rel" class="df-tbl__csv" title="Export the visible relationships as a CSV file">${ICON_DOWNLOAD}<span>Export Relationships to CSV</span></button>`
+    : '';
   const mdBtn = `<button type="button" id="tbl-md" class="df-tbl__csv" title="Copy the visible table as a Markdown table - paste into Confluence, Jira, Notion or GitHub">${ICON_COPY}<span>Copy as Markdown</span></button>`;
   // C2: the Show-All-Columns toggle appears only when columns ARE auto-hidden (or the user already
   // toggled them back on and needs the way out) - a table with nothing to hide gains zero chrome.
-  const colsBtn = (!isGantt && !_editing && (sup.hidden > 0 || _showAllCols))
+  const colsBtn = (!isGantt && !_editing && (sup.hidden > 0 || relHidden > 0 || _showAllCols))
     ? `<button type="button" id="tbl-show-cols" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showAllCols ? ' is-checked' : ''}" title="${sup.hidden ? `${sup.hidden} all-blank column${sup.hidden === 1 ? '' : 's'} hidden - toggle the full column set` : 'Showing the full column set'}">${ICON_CHECKBOX}Show All Columns</button>`
     : '';
   const topbarActions = _editing
@@ -585,8 +626,8 @@ export function render() {
     : isGantt
       ? `${editBtn}${mdBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + Copy MD + CSV)
       : isModel
-        ? `${colsBtn}${editBtn}${mdBtn}${csvBtn}`
-        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${colsBtn}${editBtn}${mdBtn}${csvBtn}`;
+        ? `${colsBtn}${editBtn}${mdBtn}${relCsvBtn}${csvBtn}`
+        : `<button type="button" id="tbl-show-unmapped" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showUnmapped ? ' is-checked' : ''}">${ICON_CHECKBOX}${escHtml(toggleLabel)}</button>${colsBtn}${editBtn}${mdBtn}${relCsvBtn}${csvBtn}`;
 
   // The input renders in EVERY read-mode paint - DISABLED when there are no rows, never absent.
   // It was gated on rows.length at first ("chrome only when there is something to filter"), and that
@@ -599,7 +640,7 @@ export function render() {
   // the state block above). Mid-edit the whole read topbar collapses to Cancel/Save, so the input is
   // SUSPENDED, not cleared: the surviving _filterQuery re-applies when the session ends.
   const filterHtml = (!isGantt && !_editing)
-    ? `<input type="search" id="tbl-filter" class="df-tbl__filter" placeholder="Filter rows" aria-label="Filter table rows" title="${escHtml(FILTER_TITLE)}" value="${escHtml(_filterQuery)}"${rows.length ? '' : ' disabled'} /><span class="df-tbl__note" id="tbl-filter-note"></span>`
+    ? `<input type="search" id="tbl-filter" class="df-tbl__filter" placeholder="Filter rows" aria-label="Filter table rows" title="${escHtml(FILTER_TITLE)}" value="${escHtml(_filterQuery)}"${(rows.length || _lastRelRows.length) ? '' : ' disabled'} /><span class="df-tbl__note" id="tbl-filter-note"></span>`
     : '';
 
   container.innerHTML = `<div class="df-tbl${_editing ? ' df-tbl--editing' : ''}">
@@ -610,7 +651,7 @@ export function render() {
         ${topbarActions}
       </div>
       <div class="df-tbl__scroll">
-        <table class="df-tbl__table"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>
+        <table class="df-tbl__table${primaryCollapsed ? ' df-tbl__table--collapsed' : ''}"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>${relHtml}
       </div>
     </div>`;
 
@@ -665,13 +706,34 @@ export function render() {
     container.querySelector('#tbl-show-unmapped')?.addEventListener('click', () => { _showUnmapped = !_showUnmapped; render(); });
     container.querySelector('#tbl-show-cols')?.addEventListener('click', () => { _showAllCols = !_showAllCols; render(); });
     container.querySelector('#tbl-csv')?.addEventListener('click', exportCsv);
+    container.querySelector('#tbl-csv-rel')?.addEventListener('click', exportRelCsv);
     container.querySelector('#tbl-md')?.addEventListener('click', copyTableAsMarkdown);
-    container.querySelectorAll('.df-tbl__th--sortable').forEach(th => {
+    // [data-sort] scopes this to the schema/mapping grid: the relationships grid's sortable ths carry
+    // data-relsort instead, and an unscoped selector here called toggleSort(null) on them - which reset
+    // the schema sort on every relationships-header click.
+    container.querySelectorAll('.df-tbl__th--sortable[data-sort]').forEach(th => {
       const key = th.getAttribute('data-sort');
       const go = () => toggleSort(key);
       th.addEventListener('click', go);
       th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     });
+    container.querySelectorAll('[data-relsort]').forEach(th => {
+      const key = th.getAttribute('data-relsort');
+      const go = () => toggleRelSort(key);
+      th.addEventListener('click', go);
+      th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    container.querySelectorAll('.df-tbl__sec[data-sec="primary"]').forEach(th => {
+      const go = () => togglePrimarySection(th);
+      th.addEventListener('click', go);
+      th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    const relBand = container.querySelector('.df-tbl__sec[data-sec="relationships"]');
+    if (relBand) {
+      const go = () => toggleRelSection(relBand);
+      relBand.addEventListener('click', go);
+      relBand.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    }
     const filterEl = container.querySelector('#tbl-filter');
     filterEl?.addEventListener('input', () => {
       // The query is written IMMEDIATELY (an interleaved graph-change re-render must paint the
@@ -709,7 +771,7 @@ function applyFilter() {
   // arrive - but a stale one can survive in _filterQuery. Bail before the row pass, or the
   // structural empty <tr> (which the trs selector cannot tell from a data row) gets hidden and the
   // view looks broken instead of empty.
-  if (!_lastRows.length) { _filterMatches = null; return inert; }
+  if (!_lastRows.length && !_lastRelRows.length) { _filterMatches = null; _relFilterMatches = null; return inert; }
   const matcher = parseFilter(_filterQuery);
   // The invalid-regex signal: a border tint + aria + a swapped tooltip, never a toast - typing
   // '/[' on the way to '/[abc]/' is the normal path this feature invites, not an error to shout at.
@@ -726,21 +788,25 @@ function applyFilter() {
     nomatch?.remove();
     if (noteEl) noteEl.textContent = '';
     _filterMatches = null;
+    filterRelGrid(matcher);
     return inert;
   }
   const cols = _lastCols || [];
   const matched = [];
-  trs.forEach((tr, i) => {
+  // Guarded: with ZERO schema rows the tbody holds only the structural empty <tr>, which must stay visible
+  // while a query narrows the relationships grid below.
+  if (_lastRows.length) trs.forEach((tr, i) => {
     const row = _lastRows[i];   // render() emits rows in _lastRows order, 1:1 (read mode, non-empty)
     const hit = !!row && rowMatchesFilter(row, cols, matcher);
     tr.hidden = !hit;
     if (hit && row) matched.push(row);
   });
   _filterMatches = matched;
+  filterRelGrid(matcher);
   // The structural #tbl-note is NEVER rewritten - the measured counts stay the structural truth;
   // the filtered tally lives in its own span beside the input.
   if (noteEl) noteEl.textContent = `${matched.length} of ${_lastRows.length} rows`;
-  if (!matched.length) {
+  if (!matched.length && _lastRows.length) {
     // The no-matches line is inserted LAZILY (never emitted by render) so the tbody row count stays
     // the structural truth for everything that counts rows. Its copy QUOTES the live query - which
     // is what distinguishes it from the structural empty state (whose copy never quotes anything).
@@ -1215,6 +1281,110 @@ function toggleSort(key) {
   render();
 }
 
+// ── Relationships grid (model mode, 1.23.2) ─────────────────────────────────
+function toggleRelSort(key) {
+  if (_relSort.key === key) {
+    if (_relSort.dir === 'asc') _relSort.dir = 'desc';
+    else _relSort = { key: null, dir: 'asc' };   // asc → desc → unsorted, like toggleSort
+  } else {
+    _relSort = { key, dir: 'asc' };
+  }
+  render();
+}
+
+// In-place flip, never a re-render (flow-table's rule): a re-render would drop keyboard focus from the band
+// mid-Enter, and the in-place flip composes with the filter for free - collapse hides the tbody wholesale
+// while the per-row `hidden` underneath stays untouched.
+// Same in-place flip for the primary grid; every band of a mapping-mode grid shares the one table, so the
+// class toggles once on the table and aria-expanded is mirrored onto each band.
+function togglePrimarySection(th) {
+  _primaryCollapsed = !_primaryCollapsed;
+  const table = th.closest('table');
+  table.classList.toggle('df-tbl__table--collapsed', _primaryCollapsed);
+  table.querySelectorAll('.df-tbl__sec[data-sec="primary"]').forEach(b => b.setAttribute('aria-expanded', String(!_primaryCollapsed)));
+}
+
+function toggleRelSection(th) {
+  _relCollapsed = !_relCollapsed;
+  th.closest('table').classList.toggle('df-tbl__table--collapsed', _relCollapsed);
+  th.setAttribute('aria-expanded', String(!_relCollapsed));
+}
+
+// The band renders on EVERY model-mode paint, rows or none, and carries its insight on the band (one fact, one
+// home - the flow rule): a collapsed zero section must still say what it holds. The insight is also stashed
+// on the seccount span so filterRelGrid can restore it in place when the query clears.
+function relTableHtml(rows, cols, { relationshipCount, objectLevelCount, fieldLevelCount }) {
+  const insight = `${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'} (${objectLevelCount} object-level, ${fieldLevelCount} field-level)`;
+  const tier1 = `<tr class="df-tbl__sections"><th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--rel" data-sec="relationships" role="button" tabindex="0" aria-expanded="${!_relCollapsed}" title="Collapse or expand this section">${SEC_CHEVRON}Relationships<span class="df-tbl__seccount" data-insight="${escHtml(insight)}"> · ${escHtml(insight)}</span></th></tr>`;
+  const tier2 = `<tr class="df-tbl__cols">${cols.map(c => {
+    const sorted = _relSort.key === c.key;
+    const cls = (((c.sortable && !_editing) ? ' df-tbl__th--sortable' : '') + (sorted ? ' df-tbl__th--sorted' : '')).trim();
+    const arrow = sorted ? `<span class="df-tbl__sort-ind">${_relSort.dir === 'desc' ? '▼' : '▲'}</span>` : '';
+    const attr = (c.sortable && !_editing) ? ` data-relsort="${c.key}" role="button" tabindex="0"` : '';
+    return `<th class="${cls}"${attr}>${escHtml(c.label)}${arrow}</th>`;
+  }).join('')}</tr>`;
+  const body = rows.length
+    ? rows.map(r => `<tr data-link="${escHtml(String(r._linkId))}">${cols.map(c => {
+        const raw = String(r[c.key] ?? '');
+        // A deprecated endpoint field strikes, as the schema grid strikes that field's own row.
+        const strike = ((c.key === 'fromField' && r._fromDeprecated) || (c.key === 'toField' && r._toDeprecated)) ? ' class="df-tbl__strike"' : '';
+        const val = (c.key === 'cardinality' && raw === '—') ? `<span class="df-tbl__placeholder">${escHtml(raw)}</span>` : escHtml(raw);
+        return `<td${strike}>${val}</td>`;
+      }).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cols.length}" class="df-tbl__empty">${isMappingMode()
+        ? 'No object relationships yet - mapping connectors are the rows above. Draw a relationship between two objects (a header-to-header connector, not a mapping) and it lists here.'
+        : 'No relationships yet - draw connectors between objects, or between their fields, on the canvas, then return here.'}</td></tr>`;
+  return `<table class="df-tbl__table df-tbl__table--rel${_relCollapsed ? ' df-tbl__table--collapsed' : ''}" data-grid="relationships"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>`;
+}
+
+// The filter's visibility pass over the relationships grid - the same pure-DOM contract as applyFilter's
+// schema pass (never a re-render), painting " · N of M" on the band while a query is active and the stashed
+// insight otherwise. Called from applyFilter on both the empty-query and the matching branches.
+function filterRelGrid(matcher) {
+  const table = container?.querySelector('.df-tbl__table--rel');
+  if (!table) { _relFilterMatches = null; return; }
+  const tbody = table.querySelector('tbody');
+  const count = table.querySelector('.df-tbl__seccount');
+  const trs = [...tbody.querySelectorAll('tr:not(.df-tbl__nomatch)')];
+  let nomatch = tbody.querySelector('.df-tbl__nomatch');
+  if (!matcher || matcher.empty || matcher.invalid || !_lastRelRows.length) {
+    trs.forEach(tr => { tr.hidden = false; });
+    nomatch?.remove();
+    if (count) count.textContent = ` · ${count.dataset.insight || ''}`;
+    _relFilterMatches = null;
+    return;
+  }
+  const cols = _lastRelCols || REL_COLUMNS;
+  const matched = [];
+  trs.forEach((tr, i) => {
+    const row = _lastRelRows[i];
+    const hit = !!row && rowMatchesFilter(row, cols, matcher);
+    tr.hidden = !hit;
+    if (hit && row) matched.push(row);
+  });
+  _relFilterMatches = matched;
+  if (count) count.textContent = ` · ${matched.length} of ${_lastRelRows.length}`;
+  if (!matched.length) {
+    if (!nomatch) {
+      nomatch = document.createElement('tr');
+      nomatch.className = 'df-tbl__nomatch';
+      nomatch.appendChild(Object.assign(document.createElement('td'), { className: 'df-tbl__empty df-tbl__nomatch-cell' }));
+      tbody.appendChild(nomatch);
+    }
+    const td = nomatch.querySelector('td');
+    td.colSpan = cols.length || 1;
+    td.textContent = `No relationships match "${_filterQuery.trim()}".`;
+  } else {
+    nomatch?.remove();
+  }
+}
+
+// Export-what-you-see for the relationships grid, in its own file (df_<tab>_relationships[_filtered].csv).
+function exportRelCsv() {
+  const filtered = !!_relFilterMatches;
+  exportRowsCsv(_relFilterMatches || _lastRelRows, REL_COLUMNS, filtered ? 'relationships_filtered' : 'relationships');
+}
+
 // CSV export of a row set. A BOM keeps Excel honest about UTF-8; display-only em-dashes
 // are stripped. The export uses the prefixed `csv` label (Source/Target …) since the flat
 // file loses the colour-coded section headers that disambiguate the short on-screen labels.
@@ -1272,7 +1442,14 @@ function copyTableAsMarkdown() {
     : 'Copied as Markdown - paste into Confluence, Jira, Notion or GitHub ✓';
   const rows = src.map((r) => cols.map((c) => r[c.key]));
   const title = isGanttMode() ? 'Project Plan' : isModelMode() ? 'Field Schema' : 'Field Mapping';
-  const md = toMarkdownTable(headers, rows, title);
+  let md = toMarkdownTable(headers, rows, title);
+  // Model mode: the Relationships grid follows as a second table - export-what-you-see applies to it too.
+  if ((isModelMode() || isMappingMode()) && _lastRelRows.length) {
+    const rc = _lastRelCols || REL_COLUMNS;
+    const rsrc = _relFilterMatches || _lastRelRows;
+    const rmd = toMarkdownTable(rc.map(c => c.csv || c.label), rsrc.map(r => rc.map(c => r[c.key])), 'Relationships');
+    if (rmd) md = md ? `${md}\n\n${rmd}` : rmd;
+  }
   if (!md) { showError('There is nothing to copy yet.'); return; }
   if (!navigator.clipboard?.writeText) { showError('Clipboard copy is not available in this browser.'); return; }
   navigator.clipboard.writeText(md)

@@ -4,15 +4,15 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.23.1';
-import { finishStandardProps } from './render-core.js?v=1.23.1';
-import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.23.1';
-import { escHtml } from '../util.js?v=1.23.1';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.23.1';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.23.1';
+import { prctx } from './context.js?v=1.23.2';
+import { finishStandardProps } from './render-core.js?v=1.23.2';
+import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.23.2';
+import { escHtml } from '../util.js?v=1.23.2';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.23.2';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.23.2';
 // Cycle-safe: tabs.js never imports the properties stack (the properties FACADE already imports
 // getActiveTabName from it), and the type gate below needs the live tab type at render time.
-import { getActiveTabType } from '../tabs.js?v=1.23.1';
+import { getActiveTabType } from '../tabs.js?v=1.23.2';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just

@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.23.1';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.23.1';
-import { durationDays } from '../gantt-scale.js?v=1.23.1';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.23.1';
+import { keyImpliesRequired } from '../field-model.js?v=1.23.2';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.23.2';
+import { durationDays } from '../gantt-scale.js?v=1.23.2';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.23.2';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -1006,4 +1006,67 @@ export function sortRows(rows, { sortKey, sortDir } = {}) {
       return a[1] - b[1];           // stable tiebreak on original index
     })
     .map(p => p[0]);
+}
+
+// ── Data MODEL relationships (1.23.2) ──────────────────────────────────────
+// One row per ER link between two DataObjects - the read-only "Relationships" section that sits under
+// the Field Schema grid in model mode. Until now the model table had NO relationship rows at all: the
+// References column (C4) named a field's counterpart object, but an OBJECT-anchored relationship
+// (er-left/er-right header ports, or the port-* ring) was invisible in the table entirely, and even a
+// field-anchored one never showed its cardinality. Two grains, made explicit by `level` so a reader can
+// sort/filter on it:
+//   Field  - at least one end sits on a field port (field-left-<fid> / field-right-<fid>). The other end
+//            is either a field too (field-to-field) or the object itself, whose field cell stays blank.
+//   Object - neither end is a field port.
+// Direction is AS DRAWN (source -> target); cardinality is srcEnd:tgtEnd from the end markers - the same
+// tokens and orientation cardinalityOf reports, so the two can never disagree. Mapping links
+// (linkKind:'mapping') are lineage, not structure, and are excluded exactly as referencesOf excludes
+// them. A link with an endpoint that is not a DataObject on this graph (dangling, or a Note) is not a
+// relationship and is skipped.
+export const REL_COLUMNS = [
+  { key: 'level',       label: 'Level',        csv: 'Level',             section: 'rel', sortable: true },
+  { key: 'fromObject',  label: 'From Object',  csv: 'From Object',       section: 'rel', sortable: true },
+  { key: 'fromField',   label: 'From Field',   csv: 'From Field API Name', section: 'rel', sortable: true },
+  { key: 'cardinality', label: 'Cardinality',  csv: 'Cardinality',       section: 'rel', sortable: true },
+  { key: 'toObject',    label: 'To Object',    csv: 'To Object',         section: 'rel', sortable: true },
+  { key: 'toField',     label: 'To Field',     csv: 'To Field API Name', section: 'rel', sortable: true },
+  { key: 'label',       label: 'Label',        csv: 'Label',             section: 'rel', sortable: true },
+];
+export function buildModelRelationships(graph) {
+  const objects = graph.getElements().filter(e => e.get('type') === 'sf.DataObject');
+  const objById = new Map(objects.map(o => [o.id, o]));
+  const rows = [];
+  let objectLevelCount = 0, fieldLevelCount = 0;
+  for (const l of graph.getLinks()) {
+    if (l.prop('linkKind') === 'mapping') continue;
+    const s = l.get('source'), t = l.get('target');
+    const sObj = objById.get(s?.id), tObj = objById.get(t?.id);
+    if (!sObj || !tObj) continue;
+    const sFid = fidOfPort(s?.port), tFid = fidOfPort(t?.port);
+    const sF = fieldOf(sObj, sFid), tF = fieldOf(tObj, tFid);
+    const level = (sFid || tFid) ? 'Field' : 'Object';
+    if (level === 'Field') fieldLevelCount++; else objectLevelCount++;
+    const sTok = erEndToken(l.attr('line/sourceMarker'));
+    const tTok = erEndToken(l.attr('line/targetMarker'));
+    // API name is the unambiguous identifier (labels repeat across objects - every card has an "Id");
+    // falls back to the label for a field authored without one. Object-model fallbacks, in order:
+    //   - a field port whose field is GONE (deleted after the link was drawn; _syncFieldPorts rebuilds
+    //     ports on load but the link still names the old one) or a field with neither name shows the
+    //     raw fid - visible and searchable, never a blank that reads as "object-anchored";
+    //   - only a genuinely object-anchored end (no field port at all) is blank.
+    const fieldName = (f, fid) => f ? (f.apiName || f.label || fid || '') : (fid || '');
+    rows.push({
+      level,
+      fromObject: objName(sObj),
+      fromField: fieldName(sF, sFid),
+      cardinality: (sTok || tTok) ? `${sTok || '—'}:${tTok || '—'}` : '—',
+      toObject: objName(tObj),
+      toField: fieldName(tF, tFid),
+      label: linkLabelText(l),
+      // A deprecated endpoint field strikes its cell, as the schema grid strikes the field's own row.
+      _fromDeprecated: !!sF?.deprecated, _toDeprecated: !!tF?.deprecated,
+      _linkId: l.id, _srcObjId: sObj.id, _tgtObjId: tObj.id,
+    });
+  }
+  return { rows, relationshipCount: rows.length, objectLevelCount, fieldLevelCount };
 }

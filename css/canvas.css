@@ -470,6 +470,8 @@ foreignObject[data-md] del { text-decoration: line-through; }
 .df-tbl__sec--map { background: var(--brand-red); }     /* Data Mapping — brand red */
 .df-tbl__sec--tgt { background: var(--brand-blue); }    /* Data Targets — brand blue */
 .df-tbl__sec--mdl { background: var(--brand-blue); }    /* Data Model (single section) — brand blue */
+.df-tbl__sec--rel { background: var(--brand-red); }     /* Relationships (model mode, second grid) — brand red, like Data Mapping */
+.df-tbl__table--rel { margin-top: 16px; }               /* stacked under the Field Schema grid */
 /* Tier 2 — column headers (stick just below the section blocks) */
 .df-tbl__cols th {
   position: sticky;

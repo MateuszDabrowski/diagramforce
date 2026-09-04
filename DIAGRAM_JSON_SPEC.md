@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Import"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.23.1** — matches the app's current `appVersion`; set `"appVersion": "1.23.1"` in generated files.
+> **Spec snapshot: v1.23.2** — matches the app's current `appVersion`; set `"appVersion": "1.23.2"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.23.1"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.23.2"` |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.1", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.1" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.2", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.2" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -96,10 +96,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.1", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.23.2", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.1" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.23.2" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -206,7 +206,7 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 
 **`architecture`**
 - ✗ `type: "sf.Link"` to connect two shapes → ✓ `type: "standard.Link"` with `source`/`target` `{id, port}`. `sf.Link` is a standalone clickable-URL pill ELEMENT (a `url`-prop node with no ports), not a connector.
-- ✗ invented endpoint port names (`"right"`, `"out"`, `"port-1"`) → ✓ the four baked-in ids verbatim: `port-top` / `port-right` / `port-bottom` / `port-left` (they exist even if you omit the element's `ports` block; a bad name makes load throw "invalid target").
+- ✗ invented endpoint port names (`"right"`, `"out"`, `"port-1"`) → ✓ the four baked-in ids verbatim: `port-top` / `port-right` / `port-bottom` / `port-left` (they exist even if you omit the element's `ports` block - **except `sf.DataObject`**, whose ring is only `port-top` / `port-bottom`; it relates through the header `er-left` / `er-right` or a field port, and a `port-left` / `port-right` on it does NOT throw - the line just lands on the card body. `validate-diagram.mjs` warns).
 - ✗ a one-sided embed (child in the Container's `embeds[]` but no `parent` on the child, or vice-versa) → ✓ set BOTH: the child id in the parent's `embeds` AND `parent: "<container-id>"` on the child (the loader does not reconcile the missing half). Position the child below the 40px header.
 - ✗ explicit `fill`/`stroke` on an arrow `targetMarker` → ✓ OMIT `targetMarker` (the loader normalises it to `M 0 -6 L -14 0 L 0 6 z`); `fill`/`stroke` are only for ER crow's-foot markers.
 
@@ -226,8 +226,9 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 
 **`datamodel`**
 - ✗ emitting a `ports` block on an `sf.DataObject` → ✓ omit it entirely - the loader rebuilds `port-top`/`port-bottom`, `er-left`/`er-right`, and one `field-{left,right}-<fid>` per keyed field. Only REFERENCE a port from a link endpoint.
-- ✗ referencing a `field-…-<fid>` whose `<fid>` no field carries, or pointing a PK/FK link at a field with no `keyType` (no port is built) → ✓ copy a `fid` verbatim from a field in that object, or connect via the header `er-left`/`er-right` anchors.
-- ✗ a crow's-foot ER marker with a solid `fill` matching the stroke → ✓ open markers (many/one/oneMany) `fill:"none"`; circle markers (zeroOne/zeroMany) `fill:"var(--bg-canvas, #1A1A1A)"`. A wrong fill fails the ER test and the cardinality is replaced with a plain arrow.
+- ✗ referencing a `field-…-<fid>` whose `<fid>` no field carries → ✓ copy the `fid` verbatim from that object's `fields`. A field you anchor a relationship on should carry `keyType: "fk"` (or `"pk"`) - the port is built for any linked field regardless, but the key flag is what the schema table reports. Do NOT "fall back" to the header `er-left` / `er-right` for a field-level relationship: that is a different LEVEL (object-level), and the Table view reports it as such.
+- ✗ a crow's-foot ER marker with a solid `fill` matching the stroke → ✓ open markers (many/one/oneMany) `fill:"none"`; circle markers (zeroOne/zeroMany) `fill:"var(--bg-canvas, #1A1A1A)"`. A solid fill on a canonical crow's-foot path is NOT healed on load: the glyph renders as a filled wedge on the canvas while the Table view, which reads the path only, still reports Many.
+- ✗ a relationship between two DataObjects with NO ER marker on either end (an omitted `targetMarker` becomes a plain arrow) → ✓ set BOTH `sourceMarker` and `targetMarker` to Marker Types ER paths; a marker-less link loads and draws, but carries no cardinality - the Table view reads an em-dash (`validate-diagram.mjs` warns).
 - ✗ tagging a plain object-to-object relationship with `linkKind:"mapping"` → ✓ a pure ER relationship link carries NO `linkKind` - its absence is what marks it.
 
 **`datamapping`** (additive - see the Data Cloud mapping checklist below)
@@ -277,6 +278,8 @@ Every element in the `cells` array follows this structure:
 | `size` | `{ "width": number, "height": number }` |
 | `z` | Z-order layer (see Z-Order section) |
 | `attrs` | Nested attribute object keyed by SVG selector |
+| `parent` | Optional. Id of the frame that OWNS this cell. MUST be paired with the frame listing this id in its `embeds[]` - see [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them). A one-sided declaration is not reconciled on load. |
+| `embeds` | Optional, frames only (Zone / Container / Pool / Subprocess / Loop / TaskGroup). Ids of the cells this frame owns. MUST be paired with `parent` on each child. A frame merely drawn behind cells is decorative. |
 
 ### Z-Order Values
 
@@ -686,7 +689,7 @@ Background grouping area with dashed border. Always renders behind other element
 }
 ```
 
-No ports. Use Zones purely as visual grouping backgrounds.
+No ports. A Zone groups by **embedding**, not by geometry: set `parent: "<zone-id>"` on every child AND list each child id in the Zone's `embeds[]` - both sides, every child. A Zone merely drawn behind cards is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them). The one deliberate exception is a Salesforce Flow's stage bands (see below).
 
 ### sf.TextLabel
 
@@ -1017,6 +1020,19 @@ Two port conventions to **reference** from link endpoints:
 Just reference them from link endpoints: `"source": { "id": "obj-contact", "port": "field-right-<fid>" }` — where `<fid>` is copied verbatim from a field in that object.
 
 Apply ER markers (see Marker Types section) to represent cardinality.
+
+> **Which level the app reports.** The Table view's Relationships grid (1.23.2) classifies every ER link by its
+> PORT ids: **Field-level** when EITHER end names a `field-left-<fid>` / `field-right-<fid>` port, **Object-level**
+> otherwise (`er-left` / `er-right`, `port-top` / `port-bottom`). Pick the level by what you know: a relationship
+> carried by a key field (FK -> PK) is field-level - anchor the child's FK field; a relationship you only know at
+> object grain is object-level - anchor the headers. Never mix the two for the same pair.
+>
+> **Orientation.** Cardinality is read PER END from the markers and reported `source-end:target-end` exactly as
+> drawn, beside the From/To objects - so the same fact reads `1:Many` drawn parent -> child and `Many:1` drawn
+> child -> parent, and both are correct left-to-right. Within one diagram use ONE direction: draw **from the ONE
+> (parent / PK) end to the MANY (child / FK) end** - `sourceMarker` = bar (1) or circle-bar (0..1),
+> `targetMarker` = crow's foot (Many / 0..Many / 1..Many). The bundled ERD generator draws child FK field ->
+> parent header, so its rows read `Many:1`; that is the same convention seen from the child.
 
 ### sf.OrgPerson
 
@@ -1393,7 +1409,7 @@ Horizontal pool/lane container.
 
 **Default size:** `600 x 250`, **z:** `0`
 
-Has a narrow left `header` panel with rotated vertical label. No ports.
+Has a narrow left `header` panel with rotated vertical label. No ports. A Pool groups by **embedding**, not by geometry: set `parent: "<pool-id>"` on every child AND list each child id in the Pool's `embeds[]` - both sides, every child. A Pool drawn behind tasks without that is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
 
 #### sf.BpmnDataObject
 
@@ -2006,7 +2022,7 @@ the validator proves a diagram LOADS, not that it reads right.
 | Lane / zone width | **292** on a **492** pitch | n/a |
 | Card inset in lane | **16** | n/a |
 | First card / card gap | **44** / **36** | |
-| Link ports | `field-right-*` -> `field-left-*` | `er-right` -> `er-left` (OBJECT level) |
+| Link ports | `field-right-*` -> `field-left-*` | child FK field `field-<side>-<fid>` -> parent header `er-<side>` - **FIELD level** in the Table view (what `objects-to-diagramforce.mjs` emits); `er-right` -> `er-left` only for an object-level relationship with no key field |
 | Link router / connector | applied on load from `linkKind` | **you must author** `router:{name:"sfManhattan"}` + `connector:{name:"rounded",args:{radius:8}}` |
 
 > ⚠️ **An ERD relationship with no `router` renders as a DIAGONAL.** A `standard.Link` without one is a
@@ -2080,8 +2096,8 @@ To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER mo
   "router": { "name": "sfManhattan" },
   "connector": { "name": "rounded", "args": { "radius": 8 } },
   "attrs": { "line": { "stroke": "#888888", "strokeWidth": 2,
-    "sourceMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888" },
-    "targetMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888" } } }
+    "sourceMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888" },
+    "targetMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888" } } }
 }
 ```
 
@@ -2098,7 +2114,7 @@ A complete, importable three-layer mapping (Source CRM Contact → Contact DLO �
 
 ```json
 {
-  "version": 1, "appVersion": "1.23.1", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.23.2", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
   "graph": { "cells": [
     { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
       "layerStage": "source", "embeds": ["obj-src"],
@@ -2201,7 +2217,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2233,7 +2249,7 @@ Two related Salesforce objects with ER notation:
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "timestamp": 1712700000000,
   "title": "Account-Contact ERD",
   "diagramType": "datamodel",
@@ -2360,7 +2376,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2390,7 +2406,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2423,7 +2439,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2466,7 +2482,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2512,7 +2528,7 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
@@ -2567,7 +2583,9 @@ relationship itself - **geometry alone does not create it**. A frame whose bound
 
 Set **both** sides on every child - the id in the frame's `embeds[]` **and** `parent: "<frame-id>"` on the
 child. The loader does not reconcile a half-declared embed, and `validate-diagram.mjs` warns on both the
-one-sided case and the zero-sided case above.
+one-sided case and the zero-sided case above. The one deliberate exception: a Salesforce **Flow** diagram's stage
+bands - `sf.Zone`s the flow converter draws behind an orchestration's stages - are backdrops by design (an embedded
+band would drag its members around on Auto Layout), so the validator does not warn on `diagramType: "flow"`.
 
 ```json
 { "id": "env-qa", "type": "sf.Container", "embeds": ["card-1", "card-2"], … }

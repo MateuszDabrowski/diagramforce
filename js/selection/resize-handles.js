@@ -6,10 +6,10 @@
 // initResizeHandles({ graph, paper, selectedIds }) wires the live refs (selectedIds is the SAME Set
 // selection.js mutates - shared by reference, so peer collection sees the live selection). Reads
 // history + the Gantt geometry helpers + the canvas date-chip forwarders.
-import * as history from '../history.js?v=1.23.1';
-import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.23.1';
-import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.23.1';
-import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.23.1';
+import * as history from '../history.js?v=1.23.2';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.23.2';
+import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.23.2';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.23.2';
 
 // Live refs wired by selection.init() via initResizeHandles.
 let graph, paper, selectedIds;

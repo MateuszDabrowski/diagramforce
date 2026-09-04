@@ -14,24 +14,24 @@
 // WHY N sibling tables and not one merged table with injected header rows: a single <table> computes
 // ONE column grid, so Decision Elements' 5 columns would be forced to align under Data Writes' 7 -
 // "Outcome" under "Op", same widths. That is the wrong table, not a styling nit.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.23.1';
-import { getActiveTabName } from '../tabs.js?v=1.23.1';
-import { triggerDownload } from '../persistence.js?v=1.23.1';
-import { showToast, showError } from '../feedback.js?v=1.23.1';
+import { escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.23.2';
+import { getActiveTabName } from '../tabs.js?v=1.23.2';
+import { triggerDownload } from '../persistence.js?v=1.23.2';
+import { showToast, showError } from '../feedback.js?v=1.23.2';
 import {
   buildFlowSections, sortRows, suppressColumns, exportCellText, flowFactsRows, flowResourceRows,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './builders.js?v=1.23.1';
+} from './builders.js?v=1.23.2';
 // The filter's aria-live result count rides the app's sr-only region (a11y.js imports only
 // properties.js + util.js - no cycle). Called ONLY from the debounced input handler, never from
 // renderFlowTable, so graph-change re-renders stay silent.
-import { announce } from '../a11y.js?v=1.23.1';
+import { announce } from '../a11y.js?v=1.23.2';
 // Click-to-focus (post-1.22.2): a row's nav button -> its element on the canvas. selectOnly is the same public
 // call a canvas click lands on (selection.js's own pointer handler uses it), and cctx carries
 // fitToCells, the frame-these-cells helper diagram-check.js uses. Both are acyclic from here:
 // nothing in either chain imports the table-view modules back.
-import { selectOnly } from '../selection.js?v=1.23.1';
-import { cctx } from '../canvas/context.js?v=1.23.1';
+import { selectOnly } from '../selection.js?v=1.23.2';
+import { cctx } from '../canvas/context.js?v=1.23.2';
 
 export const FLOW_TABLE_TITLE = 'Flow Details';
 
@@ -93,7 +93,7 @@ function toggleFlowSort(gridId, key) {
 
 // The stencil's category chevron, the same glyph ("like sections in the stencil" is the spec): points
 // DOWN when expanded, CSS rotates it -90deg to point right when the table carries --collapsed.
-const SEC_CHEVRON = `<svg class="df-tbl__sec-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+export const SEC_CHEVRON = `<svg class="df-tbl__sec-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function tableHtml(g) {
   const cols = g.cols;

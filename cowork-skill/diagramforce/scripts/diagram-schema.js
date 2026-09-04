@@ -180,27 +180,76 @@ export function validateDiagram(diagram) {
   // CLEAN while every container is a decorative rectangle: the frame doesn't group-move, doesn't content-hug, and
   // dragging it leaves its cards behind. Geometry is the only signal available here, so require FULL containment
   // of >= 2 elements before warning - one stray overlap is a layout accident, a whole stack is a missed embed.
-  const CAPTURE_FRAMES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
+  // Salesforce Flow diagrams are the one type where a Zone behind cards is CORRECT: the flow converter draws its
+  // stage bands as plain backdrops on purpose (cowork-skill/.../flow-convert.js "Deliberately NOT embeds/parent" -
+  // an embedded band would drag its members around on an in-app Auto Layout). Warning there was a false positive
+  // on every generated flow (1.23.2 audit), which would have pushed a warnings-clean policy into breaking the
+  // documented behaviour. Capture is a structural claim on every other type.
+  const CAPTURE_FRAMES = new Set(type === 'flow' ? [] : ['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
+  // Whether frame `p` could own a nested frame `ch` - mirrors canEmbed in js/canvas/embedding.js for the frame
+  // pairs (a Zone cannot embed a Zone or a TaskGroup; a Container cannot embed a Container / Zone / TaskGroup /
+  // Task; a TaskGroup owns only Tasks). Kept inline because this module is a zero-dependency leaf.
+  const frameCanEmbed = (p, ch) => (
+    p === 'sf.Zone' ? (ch !== 'sf.Zone' && ch !== 'sf.TaskGroup')
+    : p === 'sf.Container' ? !['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.Task'].includes(ch)
+    : p === 'sf.TaskGroup' ? ch === 'sf.Task'
+    : p === 'sf.BpmnPool' ? ch !== 'sf.BpmnPool'
+    : p === 'sf.BpmnSubprocess' ? (ch !== 'sf.BpmnPool' && ch !== 'sf.BpmnSubprocess')
+    : p === 'sf.BpmnLoop' ? !['sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop'].includes(ch)
+    : false);
   const boxOf = (c) => (c && c.position && c.size
     && Number.isFinite(c.position.x) && Number.isFinite(c.position.y)
     && Number.isFinite(c.size.width) && Number.isFinite(c.size.height))
     ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height } : null;
   for (const c of cells) {
     if (!c || !CAPTURE_FRAMES.has(c.type)) continue;
-    if (Array.isArray(c.embeds) && c.embeds.length) continue;   // already declares children - the checks above cover it
+    // A frame that declares SOME children is still checked for the rest: the old early-continue on a non-empty
+    // `embeds` let a lane with one captured card and four loose ones through silently (1.23.2 audit).
+    const declared = new Set(Array.isArray(c.embeds) ? c.embeds : []);
     const fb = boxOf(c);
     if (!fb) continue;
     const inside = [];
     for (const o of cells) {
       if (!o || o === c || typeof o.id !== 'string') continue;
-      if (o.parent != null) continue;                 // already owned by some frame
-      if (CAPTURE_FRAMES.has(o.type)) continue;       // nested frames are a different (legitimate) pattern
+      if (o.parent != null || declared.has(o.id)) continue;   // already owned by some frame, or declared by this one
+      // An UNOWNED nested frame counts as a loose child when this frame could own it: the spec's own
+      // Department-Zone-over-Team-Containers pattern validated clean with the Containers unowned (1.23.2 audit).
+      // A nesting the app forbids (Zone in Zone, TaskGroup in Zone) can never be captured, so it is not a miss.
+      if (CAPTURE_FRAMES.has(o.type) && !frameCanEmbed(c.type, o.type)) continue;
       const ob = boxOf(o);
       if (!ob) continue;
       if (ob.x >= fb.x && ob.y >= fb.y && ob.x + ob.w <= fb.x + fb.w && ob.y + ob.h <= fb.y + fb.h) inside.push(o.id);
     }
     if (inside.length >= 2) {
-      warnings.push(`Cell "${c.id}" (${c.type}) visually contains ${inside.length} element(s) (${inside.slice(0, 3).join(', ')}${inside.length > 3 ? ', …' : ''}) but its \`embeds\` is empty and none of them set \`parent\` - the frame is DECORATIVE (it won't group-move or auto-size, and dragging it leaves the cells behind). Set BOTH sides: the ids in \`embeds[]\` AND \`parent: "${c.id}"\` on each child.`);
+      const partial = declared.size ? ` (it already declares ${declared.size})` : '';
+      warnings.push(`Cell "${c.id}" (${c.type}) visually contains ${inside.length} undeclared element(s) (${inside.slice(0, 3).join(', ')}${inside.length > 3 ? ', …' : ''})${partial} - none of them set \`parent\` and none is in its \`embeds\`, so the frame is DECORATIVE for them (it won't group-move or auto-size with them, and dragging it leaves them behind). Set BOTH sides: the ids in \`embeds[]\` AND \`parent: "${c.id}"\` on each child.`);
+    }
+  }
+
+  // Data Model relationships (1.23.2 audit). sf.DataObject's port ring is ONLY port-top / port-bottom (plus the
+  // header er-left / er-right and the field-<side>-<fid> ports): a link naming port-left / port-right on one does
+  // not throw - JointJS anchors it to the body and the line lands mid-card - so it is a quiet-degrade trap. And a
+  // non-mapping link between two DataObjects with NO ER marker on either end loads fine but carries no cardinality:
+  // the Table view's Relationships grid and the mapping grid's Cardinality column both read an em-dash for it.
+  if (type === 'datamodel' || type === 'datamapping') {
+    const isDataObject = (id) => byId.get(id)?.type === 'sf.DataObject';
+    const ER_MARKER = /L\s*-12\s+-?8|a [345] [345]|M\s*-?\d+\s+-8\s*L\s*-?\d+\s+8/;   // crow / circle / bar (erEndToken's tests)
+    for (const c of cells) {
+      if (!c || c.type !== 'standard.Link') continue;
+      const s = c.source, t = c.target;
+      for (const end of [s, t]) {
+        if (end && isDataObject(end.id) && (end.port === 'port-left' || end.port === 'port-right')) {
+          warnings.push(`Link "${c.id ?? '?'}" anchors on "${end.port}" of "${end.id}", but an sf.DataObject has no left/right ring ports (only port-top / port-bottom, the header er-left / er-right, and field-<side>-<fid>) - the line lands on the card body. Use er-left / er-right for an object-level relationship, or a field port for a field-level one.`);
+        }
+      }
+      if (c.linkKind === 'mapping' || !s?.id || !t?.id || !isDataObject(s.id) || !isDataObject(t.id)) continue;
+      const line = c.attrs?.line || {};
+      const has = (m) => !!(m && typeof m.d === 'string' && ER_MARKER.test(m.d));
+      if (has(line.sourceMarker) !== has(line.targetMarker)) {
+        warnings.push(`Link "${c.id ?? '?'}" relates "${s.id}" to "${t.id}" with an ER marker on ONE end only - the Table view reads the other end as an em-dash (e.g. "1:—"). Set both \`sourceMarker\` and \`targetMarker\`.`);
+      } else if (!has(line.sourceMarker) && !has(line.targetMarker)) {
+        warnings.push(`Link "${c.id ?? '?'}" relates "${s.id}" to "${t.id}" with no ER marker on either end - it loads, but carries no cardinality (the Table view reads an em-dash). Set \`attrs.line.sourceMarker\` / \`targetMarker\` to the Marker Types ER paths (bar = 1, crow's foot = Many, circle = 0), drawn FROM the one end TO the many end.`);
+      }
     }
   }
 

@@ -102,6 +102,10 @@ approves what, in what order"; leave it off when the question is "what is the sh
 Expect roughly 50-60% more cells (measured: 27 to 43 on a four-stage orchestration), so on a very large
 orchestration check the output loads before handing it over.
 
+The stage bands are `sf.Zone` backdrops drawn BEHIND each stage's cards and deliberately NOT embedded - an
+embedded band would drag its members around on an in-app Auto Layout. That is the one place a frame without
+`embeds` / `parent` is correct, and the validator does not warn on it for `diagramType: "flow"`.
+
 A **Tooling response** carries the `301...` id, so it deep-links with `--org-url` alone. A **`.flow-meta.xml`**
 has no id: with `--org` it is looked up (the LATEST version, which is what `sf project retrieve` gave you), and
 without it the card falls back to the Flows list. The script prints which you got - relay that, and relay the
@@ -180,6 +184,11 @@ shape lists its `type`, mandatory fields, port definitions, and link rules) rath
 file. Shape `type` strings, field keys, and port ids are exact - the app silently drops a cell whose
 `type` is not a real shape and a link pointing at a missing cell, so a guessed name vanishes on load.
 
+Also read **Common authoring mistakes** for your type (spec, right after "Choosing the right diagram type") and,
+whenever the diagram has any `sf.Zone` / `sf.Container` / `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` /
+`sf.TaskGroup`, the **Capture** section under Layout Tips. For a `datamodel` also read the port-level note under
+`sf.DataObject` (field-level vs object-level relationships, and which direction to draw them).
+
 ### 3. Author the JSON
 
 Envelope:
@@ -187,7 +196,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.1",
+  "appVersion": "1.23.2",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -202,6 +211,10 @@ Envelope:
 - Use only shapes that belong to the chosen `diagramType` (the validator flags a type-specific shape
   used in the wrong diagram).
 - Give every cell a unique `id`; a link's `source`/`target` must reference ids that exist.
+- **A frame owns a card only if you say so twice.** Any element inside a `sf.Zone` / `sf.Container` /
+  `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` / `sf.TaskGroup` carries `parent: "<frame-id>"` AND its id
+  is in the frame's `embeds[]`. Geometry creates nothing: a frame merely drawn behind cards does not group-move
+  or auto-size, and the validator warns DECORATIVE. (One exception: a Flow's stage bands - see `--expand-stages`.)
 
 ### 4. Validate - and fix until clean (this is not optional)
 
@@ -211,13 +224,15 @@ Save the JSON to a file and run the bundled validator (Node, zero dependencies):
 node scripts/validate-diagram.mjs your-diagram.json
 ```
 
-It exits non-zero if any **ERROR** was found. Run the loop: **fix every ERROR, re-run until the file
-is clean, then review WARNINGS.** Why it matters:
+It exits non-zero only on **ERRORS**, but the bar is the last line reading `0 error(s), 0 warning(s)`. Run the
+loop: **fix every ERROR and every WARNING, re-run until both counts are 0.** Why it matters:
 
 - **ERRORS** mean cells or links will **silently vanish** on import (unknown shape `type`, a link to a
   missing cell, a duplicate id, a missing/wrong `diagramType`). "It parsed as JSON" is not enough.
 - **WARNINGS** are quiet-degrade traps (a shape that loads but renders wrong - e.g. a name in the
-  wrong field, a type-specific shape in the wrong diagram type).
+  wrong field, a type-specific shape in the wrong diagram type, a frame drawn behind cards it does not own
+  (DECORATIVE), a relationship with no cardinality markers, a `port-left` / `port-right` on a DataObject). A
+  warning is a defect you can fix; fix it.
 
 The validator proves the diagram will **load intact**. It does **not** judge whether the layout
 **reads well** - do a final visual pass in your head (spacing, overlaps, flow direction) before
@@ -299,6 +314,13 @@ exactly the part a script cannot do.
 
 Read the stderr summary: it tells you how many relationships were dropped for pointing outside the selection
 (add those objects) and how many were lost to field pruning (raise `--max-fields`).
+
+To group objects visually, add a `"zones"` array to selection.json before step 3, naming objects EXACTLY as they
+appear in its `objects` list (API names, namespace included) - e.g.
+`"zones": [ { "label": "Contact Points", "objects": ["ssot__ContactPointEmail__dlm", "ssot__ContactPointPhone__dlm"] } ]`.
+The converter draws each zone as a column that OWNS its members (both `embeds[]` and `parent` set). A name that
+does not match an `objects` entry is silently ignored and that object stays loose, so check the stderr summary's
+zone counts. Do not add zones by editing diagram.json afterwards; if you must, set both sides on every child.
 
 #### Access posture: OWD + record-volume badges
 
