@@ -15,12 +15,12 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.6';
-import { pctx } from './context.js?v=1.23.6';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.6';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.6';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.6';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.6';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.7';
+import { pctx } from './context.js?v=1.23.7';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.7';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.7';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.7';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.7';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -2570,10 +2570,14 @@ export async function openGroupFromLink({ name = 'Group', ids = [], color = null
   return true;
 }
 
-/** The open tab holding this Drive file - as its master, or as the shared source it was opened from - or null. */
+/** The OPEN tab holding this Drive file - as its master, or as the shared source it was opened from - or null.
+ *  Checked against the live tab list, not driveByTab alone: a closed tab keeps its Drive record (its archive can
+ *  be reopened), so the record alone named a tab that was no longer there, and activating it did nothing - the
+ *  second "Open with" of a file whose tab had just been closed opened nothing at all. Found in Slot, 1.23.6. */
 function tabHolding(fileId) {
+  const open = new Set((pctx.getAllTabs?.() || []).map((t) => t && t.id));
   for (const [id, s] of driveByTab) {
-    if (!s) continue;
+    if (!s || !open.has(id)) continue;
     if (s.fileId === fileId || (s.sharedSource && s.sharedSource.fileId === fileId)) return id;
   }
   return null;
