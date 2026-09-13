@@ -5,15 +5,15 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.3';
-import { diagramHasImage } from '../image-component.js?v=1.23.3';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.3';
-import { escHtml } from '../util.js?v=1.23.3';
-import { sharePillHtml } from '../storage-ui.js?v=1.23.3';
-import { pctx } from './context.js?v=1.23.3';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.3';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.3';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.3';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.4';
+import { diagramHasImage } from '../image-component.js?v=1.23.4';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.4';
+import { escHtml } from '../util.js?v=1.23.4';
+import { sharePillHtml } from '../storage-ui.js?v=1.23.4';
+import { pctx } from './context.js?v=1.23.4';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.4';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.4';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.4';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -220,14 +220,16 @@ export async function loadFromURL() {
   }
   const hash = window.location.hash;
   // `#new=<type>` — a fresh diagram of that type, the address the manifest's shortcuts and Slot's right-click
-  // use (see newDiagramTypeFromHash). Handled here on boot and, below, on every later hashchange, so an address
-  // loaded into an already-running editor creates the tab without a reload. The hash is stripped either way, so
-  // the same shortcut chosen twice in a row is two changes, not one.
-  if (openNewDiagramFromHash(hash)) return true;
+  // use (see newDiagramTypeFromHash). Handled here on boot and on every later hashchange, so an address loaded
+  // into an already-running editor creates the tab without a reload. The hash is stripped either way, so the
+  // same shortcut chosen twice in a row is two changes, not one. The listener is wired BEFORE the boot case
+  // returns: a first version wired it after, so a page that had itself booted through `#new=` never listened,
+  // and every later shortcut on that page did nothing - found in Slot the day it shipped, 2026-09-13.
   if (!_newDiagramHashWired) {
     _newDiagramHashWired = true;
     window.addEventListener('hashchange', () => { openNewDiagramFromHash(window.location.hash); });
   }
+  if (openNewDiagramFromHash(hash)) return true;
   // Google Drive GROUP link (#dfg=g1.<base64url>) — opens every member file as a grouped tab and rebuilds
   // the group. Checked before #gd= (a single file): the payload is the group codec, not a bare file id.
   const dfgMatch = hash.match(/[#&]dfg=(g\d+\.[A-Za-z0-9_-]+)/);

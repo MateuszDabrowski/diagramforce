@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.23.3';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.23.3';
-import { ER_MARKER_D } from '../er-markers.js?v=1.23.3';
+import { cctx } from './context.js?v=1.23.4';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.23.4';
+import { ER_MARKER_D } from '../er-markers.js?v=1.23.4';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping

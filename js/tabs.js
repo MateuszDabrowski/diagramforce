@@ -1,26 +1,26 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.23.3';
-import { tbctx } from './tabs/context.js?v=1.23.3';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.3';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.23.3';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.23.3';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.23.3';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.23.4';
+import { tbctx } from './tabs/context.js?v=1.23.4';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.4';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.23.4';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.23.4';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.23.4';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.23.3';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.23.3';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.23.3';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.23.3';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.23.3';
-import { wireMenuDismiss } from './menu.js?v=1.23.3';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.23.3';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.23.3';
-import { getPalette } from './brand-palette.js?v=1.23.3';
-import { getAllIcons } from './icons.js?v=1.23.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.23.3';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.23.4';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.23.4';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.23.4';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.23.4';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.23.4';
+import { wireMenuDismiss } from './menu.js?v=1.23.4';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.23.4';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.23.4';
+import { getPalette } from './brand-palette.js?v=1.23.4';
+import { getAllIcons } from './icons.js?v=1.23.4';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.23.4';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -1462,7 +1462,18 @@ function suppressTabHover() {
 
 // ── Render ───────────────────────────────────────────────────────────
 
+/** The browser tab, and a wrapper's window caption, name the diagram being worked on: "Architecture Draft -
+ *  Diagramforce". Slot shows a window's page title with the product name trimmed off, so a Diagramforce window
+ *  there is captioned by the active diagram alone, as a Docs window is by its document. Plain "Diagramforce"
+ *  with nothing open. Hyphen, not a dash - the separator every trimmer splits on. */
+function syncDocumentTitle() {
+  const active = tabs.find(t => t.id === tbctx.activeTabId);
+  const name = active?.name?.trim();
+  document.title = name ? `${name} - Diagramforce` : 'Diagramforce';
+}
+
 function render() {
+  syncDocumentTitle();
   tabListEl.innerHTML = '';
 
   // v1.12.1 safety net — if rendering hits zero tabs AND the new-diagram
