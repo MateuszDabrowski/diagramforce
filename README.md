@@ -34,6 +34,7 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Guided onboarding** - A first-visit welcome splash and a diagram-type-aware walkthrough, relaunchable anytime from the Help button
 - **Contextual empty-canvas hints** - A ghost wireframe suggests what to drop first for each diagram type
 - **Dark / Light Theme** - Full theme support with Salesforce-aligned brand colours
+- **Present** - View › Present (Cmd/Ctrl+Enter): this diagram alone, full screen, still editable - for a screen share where the other open diagrams are nobody else's business. Shapes and Leave pills in the corner; Esc leaves
 
 ### Persistence & sharing
 
@@ -110,7 +111,8 @@ js/
   persistence.js        Facade: APP_VERSION + save/load orchestration; re-exports sub-modules
   persistence/          Persistence sub-modules behind a shared context (pctx): storage
                         (named saves), json-pipeline (load/import/paste), image-export
-                        (PNG/WEBP/GIF), share-orchestration (URL codec), versioning, context
+                        (PNG/WEBP/GIF), share-orchestration (URL codec), versioning, context,
+                        host-env (is this page inside Slot; pure)
   history.js            Undo/redo with drag-aware merge (continuous events → one command)
   clipboard.js          Copy/paste/duplicate with link-aware cloning
   feedback.js           Toasts, confirm/prompt dialogs, shared modal scaffold

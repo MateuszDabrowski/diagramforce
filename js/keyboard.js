@@ -69,6 +69,8 @@ export const SHORTCUT_GROUPS = [
     ['Escape', 'Clear selection'],
   ] },
   { title: 'View', items: [
+    ['Ctrl+Enter', 'Present - this diagram alone, full screen, still editable (Esc leaves)'],
+    ['Ctrl+B', 'Show or hide the shape stencil'],
     ['Ctrl+0', 'Fit to content'],
     ['+', 'Zoom in'],
     ['-', 'Zoom out'],
@@ -129,6 +131,24 @@ function handleKeydown(evt) {
   // While the guided walkthrough is open it owns the keyboard (Tab/Escape via trapFocus,
   // arrows via its own handler) — don't fire canvas shortcuts behind the overlay.
   if (modules.walkthrough?.isActive?.()) return;
+
+  // Ctrl/Cmd+Enter — Present (this diagram alone, full screen). Ctrl+B - the stencil, presenting or not.
+  if (mod && key === 'Enter') {
+    evt.preventDefault();
+    modules.present?.toggle?.();
+    return;
+  }
+  if (mod && key === 'b') {
+    evt.preventDefault();
+    modules.stencil?.toggle?.();
+    return;
+  }
+  // While presenting, nothing that would put ANOTHER diagram on screen: the managers, New, Close tab. Their
+  // buttons are hidden with the toolbar; this is the keyboard half of the same lock. Editing keys stay live.
+  if (modules.present?.isPresenting?.() && mod && ['s', 'o', 'n', 'w'].includes(key)) {
+    evt.preventDefault();
+    return;
+  }
 
   // Ctrl/Cmd+Z — Undo
   if (mod && !shiftKey && key === 'z') {
@@ -276,9 +296,12 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Escape — Clear selection
+  // Escape — Clear selection; and leave a present. The full-screen one usually leaves natively first, on
+  // fullscreenchange, and then this is a no-op; when the key reaches the page while still full screen -
+  // an embedder that hands Escape through, a synthetic key - exit() leaves full screen itself.
   if (key === 'Escape') {
     modules.selection.clearSelection();
+    if (modules.present?.isPresenting?.()) modules.present.exit();
     return;
   }
 

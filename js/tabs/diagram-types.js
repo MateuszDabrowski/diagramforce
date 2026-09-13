@@ -32,3 +32,20 @@ export function diagramTypeIconMarkup(type) {
     default:            return '<rect x="0.5" y="1.5" width="5.5" height="4" rx="1" fill="currentColor"/><rect x="0.5" y="10.5" width="5.5" height="4" rx="1" fill="currentColor"/><rect x="10" y="6" width="5.5" height="4" rx="1" fill="currentColor"/><path d="M6 3.5 H8 V8 H10 M6 12.5 H8 V8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>';
   }
 }
+
+/** The diagram type a `#new=<type>` address asks for, or null.
+ *
+ *  The address is the whole of the "create from outside" surface: the PWA manifest's shortcuts point at it, and
+ *  Slot (the macOS wrapper by the same author) lists those shortcuts on the Diagramforce tab's right-click and
+ *  loads one into the tab. A HASH rather than a query on purpose - on a page already on this origin it is a
+ *  same-document navigation, so the editor gets `hashchange` and creates the tab without reloading; a fresh page
+ *  handles it on boot in loadFromURL. Only a key of DIAGRAM_TYPES, case-insensitively; anything else is null and
+ *  the hash is ignored, so a bad address cannot create a tab of a type nothing can render.
+ */
+export function newDiagramTypeFromHash(hash) {
+  const m = typeof hash === 'string' && hash.match(/[#&]new=([A-Za-z]+)(?:$|&)/);
+  if (!m) return null;
+  const type = m[1].toLowerCase();
+  return Object.prototype.hasOwnProperty.call(DIAGRAM_TYPES, type) ? type : null;
+}
+

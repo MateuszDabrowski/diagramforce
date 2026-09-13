@@ -27,6 +27,7 @@ export const pctx = {
   onImport: null,          // (name, type, graphJSON, viewport) => void
   onReplaceActive: null,   // (name, type, graphJSON, viewport, mappingMode) => void — load INTO the active tab in place (refresh)
   onImportGroup: null,     // (groupMetas, diagrams) => void  (kind:'group' bundle)
+  onNewDiagram: null,      // (type) => void  (a `#new=<type>` address - the manifest shortcuts, Slot's right-click)
   getAllTabs: null,        // () => tab[]              (all open tabs, incl. groupId)
   getGroups: null,         // () => group[]            ([{id,name,icon,color}] — so a full backup carries group data)
   getTabGraph: null,       // (tabId) => graphJSON     (a tab's graph)

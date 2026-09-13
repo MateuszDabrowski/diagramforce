@@ -20,5 +20,47 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Architecture Diagram",
+      "short_name": "Architecture",
+      "url": "./#new=architecture"
+    },
+    {
+      "name": "New Data Model Diagram",
+      "short_name": "Data Model",
+      "url": "./#new=datamodel"
+    },
+    {
+      "name": "New Data Mapping Diagram",
+      "short_name": "Data Mapping",
+      "url": "./#new=datamapping"
+    },
+    {
+      "name": "New Flow Diagram",
+      "short_name": "Flow",
+      "url": "./#new=flow"
+    },
+    {
+      "name": "New Process Diagram",
+      "short_name": "Process",
+      "url": "./#new=process"
+    },
+    {
+      "name": "New Sequence Diagram",
+      "short_name": "Sequence",
+      "url": "./#new=sequence"
+    },
+    {
+      "name": "New Gantt Chart",
+      "short_name": "Gantt",
+      "url": "./#new=gantt"
+    },
+    {
+      "name": "New Org Chart",
+      "short_name": "Org Chart",
+      "url": "./#new=org"
+    }
   ]
 }

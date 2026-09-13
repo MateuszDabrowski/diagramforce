@@ -5,14 +5,15 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.2';
-import { diagramHasImage } from '../image-component.js?v=1.23.2';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.2';
-import { escHtml } from '../util.js?v=1.23.2';
-import { sharePillHtml } from '../storage-ui.js?v=1.23.2';
-import { pctx } from './context.js?v=1.23.2';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.2';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.2';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.3';
+import { diagramHasImage } from '../image-component.js?v=1.23.3';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.3';
+import { escHtml } from '../util.js?v=1.23.3';
+import { sharePillHtml } from '../storage-ui.js?v=1.23.3';
+import { pctx } from './context.js?v=1.23.3';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.3';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.3';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.3';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -177,10 +178,21 @@ export function hasPendingUrlLoad() {
         if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) return true;
       } catch { /* malformed → normal boot */ }
     }
+    // A `#new=<type>` boot makes its own tab - the picker would only sit on top of it.
+    if (newDiagramTypeFromHash(window.location.hash)) return true;
     const hash = window.location.hash || '';
     return /[#&]dfg=g\d+\./.test(hash) || /[#&]gd=[A-Za-z0-9_-]+/.test(hash) || hash.includes('diagram=')
       || /[#&]import=postmessage\b/.test(hash);   // external-import.js live-import mode — suppress New-Diagram modal while we wait (mirror its TRIGGER)
   } catch { return false; }
+}
+
+let _newDiagramHashWired = false;
+function openNewDiagramFromHash(hash) {
+  const type = newDiagramTypeFromHash(hash);
+  if (!type) return false;
+  history.replaceState(null, '', window.location.pathname);
+  pctx.onNewDiagram?.(type);
+  return true;
 }
 
 export async function loadFromURL() {
@@ -207,6 +219,15 @@ export async function loadFromURL() {
     // (Future: a 'create' New-URL could carry a parent folderId to seed the first Drive save — deferred.)
   }
   const hash = window.location.hash;
+  // `#new=<type>` — a fresh diagram of that type, the address the manifest's shortcuts and Slot's right-click
+  // use (see newDiagramTypeFromHash). Handled here on boot and, below, on every later hashchange, so an address
+  // loaded into an already-running editor creates the tab without a reload. The hash is stripped either way, so
+  // the same shortcut chosen twice in a row is two changes, not one.
+  if (openNewDiagramFromHash(hash)) return true;
+  if (!_newDiagramHashWired) {
+    _newDiagramHashWired = true;
+    window.addEventListener('hashchange', () => { openNewDiagramFromHash(window.location.hash); });
+  }
   // Google Drive GROUP link (#dfg=g1.<base64url>) — opens every member file as a grouped tab and rebuilds
   // the group. Checked before #gd= (a single file): the payload is the group codec, not a bare file id.
   const dfgMatch = hash.match(/[#&]dfg=(g\d+\.[A-Za-z0-9_-]+)/);

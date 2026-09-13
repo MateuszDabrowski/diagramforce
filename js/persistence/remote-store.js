@@ -15,11 +15,12 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.2';
-import { pctx } from './context.js?v=1.23.2';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.2';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.2';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.2';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.3';
+import { pctx } from './context.js?v=1.23.3';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.3';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.3';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.3';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.3';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -136,14 +137,16 @@ export function setLoginHint(h) { _loginHint = String(h || '').trim() || null; }
 // proactively (red) instead of waiting for a save to fail and discover the dead token.
 function tokenValid() { return !!_accessToken && Date.now() < _tokenExpiry - 30000; }
 
-function getToken({ prompt = '' } = {}) {
+function getToken({ prompt = '', force = false } = {}) {
   const { clientId } = googleConfig();
   if (!clientId) return Promise.reject(new Error('Google Drive is not configured for this origin.'));
   // Reuse a still-valid token silently instead of re-invoking the GIS client every time (item 5): each
   // `requestAccessToken` can surface Google's account picker when several accounts are signed in, so an action
   // that calls getToken repeatedly (e.g. inviting N people -> N createPermission calls) kept popping the picker
   // even though we were already authenticated. Only a forced prompt (re-consent / account switch) skips the cache.
-  if (prompt === '' && tokenValid()) return Promise.resolve(_accessToken);
+  // `force` bypasses the cache for the one caller that wants a NEW token while the old one is still valid: the
+  // silent refresh inside Slot, which runs 60 s before expiry precisely so there is never a gap.
+  if (!force && (prompt === '' || prompt === 'none') && tokenValid()) return Promise.resolve(_accessToken);
   return loadScript(GIS_SRC).then(() => new Promise((resolve, reject) => {
     if (!_tokenClient) {
       _tokenClient = google.accounts.oauth2.initTokenClient({ client_id: clientId, scope: DRIVE_SCOPE, callback: () => {}, error_callback: () => {} });
@@ -172,6 +175,7 @@ function getToken({ prompt = '' } = {}) {
       // after re-authing via the Save Manager / a share flow).
       driveByTab.forEach((st) => { if (st && st.needsSignin) st.needsSignin = false; });
       notify();
+      armSilentRefresh();   // Slot only (no-op elsewhere): a fresh token 60 s before this one lapses, no click
       // Wire the page-hide flush NOW that we're connected - NOT only on the auto-sync path. Work-boundary saves
       // (switch/open/close already fire auto-independently; this adds leave-the-page) must run in manual mode too,
       // so closing the window flushes the active tab's edits even with Auto-sync Diagrams unchecked. Idempotent.
@@ -191,6 +195,34 @@ function getToken({ prompt = '' } = {}) {
 // Separate token client for the `email` scope — its own consent, requested only on demand (org
 // sharing). Returns an access token that can read userinfo. We never store it; the derived email is
 // cached instead, so this prompts at most once per session.
+// ── Inside Slot: no popup blocker, so the token keeps itself alive ─────────────────────────────────────────
+// Everything below is gated on `isInSlot()` (js/persistence/host-env.js) and is a no-op in a browser. The reason
+// browsers need the hourly click is that GIS's popup is blocked outside a user gesture; Slot lets script open a
+// window, the account's session is already in its store and Google remembers the grant, so `prompt: 'none'`
+// completes and closes on its own. Slot holds that popup back from the screen so nothing flashes. If 'none' is
+// refused (grant revoked, session gone) the token simply lapses and the red icon asks for a click, as today.
+let _refreshTimer = null;
+function armSilentRefresh() {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+  if (!isInSlot()) return;
+  _refreshTimer = setTimeout(() => { _refreshTimer = null; void refreshSilently(); }, silentRefreshDelay(_tokenExpiry));
+}
+async function refreshSilently() {
+  if (!isInSlot() || !isDriveConfigured()) return;
+  try { await getToken({ prompt: 'none', force: true }); notify(); }
+  catch (e) { console.info('Diagramforce: silent Drive token refresh declined (will ask on the next click)', e && e.message); }
+}
+/** Boot inside Slot: restore the Drive connection without a click when the user connected here before. Awaited by
+ *  `loadDriveRef` so a Drive "Open with" launch reads the file with this token instead of showing the sign-in
+ *  modal - the connect is already in flight, the file open just waits for it. Fire-and-forget from app.js. */
+let _autoConnect = null;
+export function autoConnectInSlot() {
+  if (_autoConnect) return _autoConnect;
+  if (!shouldAutoConnect({ inSlot: isInSlot(), configured: isDriveConfigured(), autosyncKey: localStorage.getItem(LS.autosync) })) return null;
+  _autoConnect = signIn({ silent: true }).catch(() => {}).finally(() => { _autoConnect = null; });
+  return _autoConnect;
+}
+
 let _emailTokenClient = null;
 function getEmailToken() {
   const { clientId } = googleConfig();
@@ -1330,6 +1362,7 @@ export function disableAutosync() {
  *  re-establishes the links. */
 export function disconnectDrive() {
   _accessToken = null; _tokenExpiry = 0;
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
   // CLEAR the key (not set '0'): an explicit Disconnect is a full reset, NOT a "manual mode" choice. Leaving '0'
   // would make a later reconnect PRESERVE off (getToken only defaults ON when the key is unset), but a fresh
   // connect from the not-connected state must default auto-sync ON. removeItem returns us to the pristine
@@ -1345,9 +1378,15 @@ export function disconnectDrive() {
 
 /** Re-authorise after the ~1 h token lapses (clicking the red icon). Usually no consent
  *  screen — Google remembers the grant. Resumes auto-sync of all diagrams on success. */
-export async function signIn() {
-  try { await getToken({ prompt: '' }); }
-  catch (e) { if (!/access_denied|popup|closed|cancel/i.test(e.message)) showError(e.message); return; }
+export async function signIn({ silent = false } = {}) {
+  // silent (Slot boot only): 'none' never shows a screen - a refusal is logged, not shown, and the UI stays as it
+  // was, which is the red icon asking for the click a browser would have needed anyway.
+  try { await getToken({ prompt: silent ? 'none' : '' }); }
+  catch (e) {
+    if (silent) { console.info('Diagramforce: silent Drive reconnect declined', e && e.message); return; }
+    if (!/access_denied|popup|closed|cancel/i.test(e.message)) showError(e.message);
+    return;
+  }
   notify();
   // A fresh sign-in always re-checks Drive state and syncs everything not in sync (the user's expectation on
   // login), not only when auto-sync is already on. Reset the once-per-session reconcile guard so the dead-link
@@ -2548,6 +2587,10 @@ export async function loadDriveRef(fileId) {
     // signed in. If we ALREADY hold a live token this session, open it straight away - no overlay, no second
     // sign-in (item 10). Otherwise this runs on PAGE LOAD with no user gesture, so we can't pop the sign-in
     // ourselves; show an actionable modal whose button IS the gesture and opens THIS file directly.
+    // Inside Slot a boot reconnect may be in flight (autoConnectInSlot); an "Open with" launch lands here at the
+    // same moment, so wait for it rather than showing a sign-in the connect is about to make unnecessary. Null
+    // everywhere else - browsers never wait.
+    if (!tokenValid() && _autoConnect) { try { await _autoConnect; } catch { /* declined → modal below */ } }
     if (tokenValid()) { openSharedFileAuthed(fileId); return true; }
     showRestrictedOpenModal(fileId);
     return true;

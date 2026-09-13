@@ -189,3 +189,34 @@ select:focus-visible {
   font-size: var(--font-size-sm);
   font-family: var(--font-family);
 }
+
+/* ── Present mode (js/present.js) ──────────────────────────────────────────────────────────────
+   The diagram alone, still editable. The chrome that names or lists OTHER diagrams goes: the toolbar
+   and the tab bar. The module clears the selection (closing properties) and hides the stencil on entry and
+   restores the stencil on leave; the stencil toggles from the corner pill or Ctrl+B meanwhile, and properties
+   returns on the first click, since editing mid-talk is the point. Two pills sit in the corner, small and out
+   of the diagram's way. */
+body.df-presenting #toolbar,
+body.df-presenting #tab-bar { display: none; }
+.df-present-pills {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  display: none;
+  gap: 6px;
+  z-index: 60;
+}
+body.df-presenting .df-present-pills { display: flex; }
+.df-present-pill {
+  font: 500 12px/1 var(--font-family, system-ui, sans-serif);
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.df-present-pill:hover, .df-present-pill:focus-visible { opacity: 1; }
+
