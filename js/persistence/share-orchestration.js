@@ -5,15 +5,15 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.4';
-import { diagramHasImage } from '../image-component.js?v=1.23.4';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.4';
-import { escHtml } from '../util.js?v=1.23.4';
-import { sharePillHtml } from '../storage-ui.js?v=1.23.4';
-import { pctx } from './context.js?v=1.23.4';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.4';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.4';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.4';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.5';
+import { diagramHasImage } from '../image-component.js?v=1.23.5';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.5';
+import { escHtml } from '../util.js?v=1.23.5';
+import { sharePillHtml } from '../storage-ui.js?v=1.23.5';
+import { pctx } from './context.js?v=1.23.5';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.5';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.5';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.5';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -194,6 +194,21 @@ function openNewDiagramFromHash(hash) {
   pctx.onNewDiagram?.(type);
   return true;
 }
+/** The hashes a RUNNING editor answers, on `hashchange`: `#new=<type>` makes a tab, `#gd=<fileId>` opens a Drive
+ *  file in place (a file already open comes forward - see loadDriveRef). Both are same-document navigations, so
+ *  neither reloads the editor: that is what lets Slot drop Drive's "Open with" into the tab without a boot. The
+ *  hash is stripped either way, so the same address twice is two changes. The content share hashes (`#diagram=`,
+ *  `#dfg=`) stay boot-only: they carry payloads the boot path validates and version-checks. */
+function handleLiveHash(hash) {
+  if (openNewDiagramFromHash(hash)) return true;
+  const gd = typeof hash === 'string' && hash.match(/[#&]gd=([A-Za-z0-9_-]+)/);
+  if (gd) {
+    history.replaceState(null, '', window.location.pathname);
+    void loadDriveRef(gd[1]);
+    return true;
+  }
+  return false;
+}
 
 export async function loadFromURL() {
   const { sanitizeGraphJSON, normalizeDiagramType, checkVersionWarning, onImport: onImportCallback } = pctx;
@@ -227,7 +242,7 @@ export async function loadFromURL() {
   // and every later shortcut on that page did nothing - found in Slot the day it shipped, 2026-09-13.
   if (!_newDiagramHashWired) {
     _newDiagramHashWired = true;
-    window.addEventListener('hashchange', () => { openNewDiagramFromHash(window.location.hash); });
+    window.addEventListener('hashchange', () => { handleLiveHash(window.location.hash); });
   }
   if (openNewDiagramFromHash(hash)) return true;
   // Google Drive GROUP link (#dfg=g1.<base64url>) — opens every member file as a grouped tab and rebuilds

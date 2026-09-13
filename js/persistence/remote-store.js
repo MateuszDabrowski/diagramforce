@@ -15,12 +15,12 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.4';
-import { pctx } from './context.js?v=1.23.4';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.4';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.4';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.4';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.4';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.5';
+import { pctx } from './context.js?v=1.23.5';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.5';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.5';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.5';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.5';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -2570,8 +2570,22 @@ export async function openGroupFromLink({ name = 'Group', ids = [], color = null
   return true;
 }
 
-/** Open a `#gd=<fileId>` share link: zero-sign-in anonymous read first, authed direct-open fallback. */
+/** The open tab holding this Drive file - as its master, or as the shared source it was opened from - or null. */
+function tabHolding(fileId) {
+  for (const [id, s] of driveByTab) {
+    if (!s) continue;
+    if (s.fileId === fileId || (s.sharedSource && s.sharedSource.fileId === fileId)) return id;
+  }
+  return null;
+}
+
+/** Open a `#gd=<fileId>` share link: zero-sign-in anonymous read first, authed direct-open fallback.
+ *  A file already open in a tab is brought forward instead of opened again - the case Drive's "Open with"
+ *  makes common once it lands in a RUNNING editor (Slot routes it in as a hash change, 1.23.5); before, every
+ *  open of the same file was another tab named "<name> 2" on the same master. */
 export async function loadDriveRef(fileId) {
+  const open = tabHolding(fileId);
+  if (open != null) { pctx.activateTab?.(open); return true; }
   try {
     const data = await fetchPublicGraph(fileId);
     if (!(await adoptSharedDiagram(data, fileId))) throw new Error('not a Diagramforce diagram');

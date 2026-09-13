@@ -23,6 +23,7 @@ export const pctx = {
   tabNameCb: null,         // () => string  — active tab / diagram name
   diagramTypeCb: null,     // () => string  — active diagram type
   activeTabIdCb: null,     // () => string  — active tab id (remote-store keys driveFileId by tab)
+  activateTab: null,       // (tabId) => void — bring an open tab forward (a Drive file opened again lands on its tab)
   persistTabDrive: null,   // (tabId, {driveFileId, driveSync, driveLastSavedAt, driveImported, driveFolderId, driveDriveId, driveHeadRevisionId, driveCopies}) => void — mirror Drive state into tab meta
   onImport: null,          // (name, type, graphJSON, viewport) => void
   onReplaceActive: null,   // (name, type, graphJSON, viewport, mappingMode) => void — load INTO the active tab in place (refresh)
