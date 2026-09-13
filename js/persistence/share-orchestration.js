@@ -5,15 +5,15 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.5';
-import { diagramHasImage } from '../image-component.js?v=1.23.5';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.5';
-import { escHtml } from '../util.js?v=1.23.5';
-import { sharePillHtml } from '../storage-ui.js?v=1.23.5';
-import { pctx } from './context.js?v=1.23.5';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.5';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.5';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.5';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.6';
+import { diagramHasImage } from '../image-component.js?v=1.23.6';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.6';
+import { escHtml } from '../util.js?v=1.23.6';
+import { sharePillHtml } from '../storage-ui.js?v=1.23.6';
+import { pctx } from './context.js?v=1.23.6';
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.6';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.6';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.6';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -211,6 +211,14 @@ function handleLiveHash(hash) {
 }
 
 export async function loadFromURL() {
+  // The live-hash listener FIRST, before any boot branch can return. It sat after the Drive `?state=` block,
+  // which returns once it has opened its file - so a page that booted through "Open with" never listened, and
+  // every later hash Slot loaded into it switched the tab and did nothing. Same shape as the `#new=` early-return
+  // bug the day before, one block higher; found in Slot the evening 1.23.5 shipped.
+  if (!_newDiagramHashWired) {
+    _newDiagramHashWired = true;
+    window.addEventListener('hashchange', () => { handleLiveHash(window.location.hash); });
+  }
   const { sanitizeGraphJSON, normalizeDiagramType, checkVersionWarning, onImport: onImportCallback } = pctx;
   // Google Drive "Open with Diagramforce" / "New" — Drive loads the app with a `?state=` QUERY param
   // (URL-encoded JSON {ids,action,...}). `open` opens the file id (via the #gd= read path); `create`/`new`
@@ -235,15 +243,9 @@ export async function loadFromURL() {
   }
   const hash = window.location.hash;
   // `#new=<type>` — a fresh diagram of that type, the address the manifest's shortcuts and Slot's right-click
-  // use (see newDiagramTypeFromHash). Handled here on boot and on every later hashchange, so an address loaded
-  // into an already-running editor creates the tab without a reload. The hash is stripped either way, so the
-  // same shortcut chosen twice in a row is two changes, not one. The listener is wired BEFORE the boot case
-  // returns: a first version wired it after, so a page that had itself booted through `#new=` never listened,
-  // and every later shortcut on that page did nothing - found in Slot the day it shipped, 2026-09-13.
-  if (!_newDiagramHashWired) {
-    _newDiagramHashWired = true;
-    window.addEventListener('hashchange', () => { handleLiveHash(window.location.hash); });
-  }
+  // use (see newDiagramTypeFromHash). Handled here on boot and, by the listener wired at the top of this
+  // function, on every later hashchange, so an address loaded into an already-running editor creates the tab
+  // without a reload. The hash is stripped either way, so the same shortcut chosen twice in a row is two changes.
   if (openNewDiagramFromHash(hash)) return true;
   // Google Drive GROUP link (#dfg=g1.<base64url>) — opens every member file as a grouped tab and rebuilds
   // the group. Checked before #gd= (a single file): the payload is the group codec, not a bare file id.
