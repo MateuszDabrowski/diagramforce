@@ -269,6 +269,17 @@
 .df-tab-group--empty { cursor: default; }   /* an empty group can't be collapsed */
 .df-tab-group:not(.df-tab-group--empty):hover { background: color-mix(in srgb, var(--group-accent) 24%, var(--bg-canvas)); }
 .df-tab-group--dragging { opacity: 0.4; }
+/* A group WITH a colour is a solid chip in that colour; `--group-ink` (set by tabs.js paintGroupChip from
+   util.contrastInk) is white or near-black, whichever passes WCAG contrast against it - name, icon, count and
+   the ⋯ all inherit it. The soft 16% tint above is only for groups without a colour. Hover nudges the fill
+   toward the ink (lighter on a dark chip, darker on a light one); the count badge is the ink at low alpha. */
+.df-tab-group--solid {
+  background: var(--group-accent);
+  color: var(--group-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--group-ink) 18%, transparent);   /* an edge for a white chip on the light bar, a black one on the dark */
+}
+.df-tab-group--solid:not(.df-tab-group--empty):hover { background: color-mix(in srgb, var(--group-accent) 86%, var(--group-ink)); }
+.df-tab-group--solid .df-tab-group__count { background: color-mix(in srgb, var(--group-ink) 22%, transparent); }
 .df-tab-group__icon { flex-shrink: 0; fill: currentColor; }   /* theme-aware (sprites have no fill) */
 .df-tab-group__name {
   overflow: hidden;

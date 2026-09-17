@@ -1,30 +1,30 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramHasImage } from './image-component.js?v=1.23.7';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.23.7';
-import { resizeDataObjectToFit } from './components.js?v=1.23.7';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.23.7';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.23.7';
+import { diagramHasImage } from './image-component.js?v=1.24.0';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.0';
+import { resizeDataObjectToFit } from './components.js?v=1.24.0';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.0';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.0';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.23.7';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.23.7';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.23.7';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.23.7';
-import { renderTemplateThumbnail } from './templates.js?v=1.23.7';
-import { showWhatsNewNow } from './whats-new.js?v=1.23.7';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.23.7';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.23.7';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.23.7';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.23.7';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.23.7';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.23.7';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.23.7';
+import { pctx } from './persistence/context.js?v=1.24.0';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.0';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.0';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.24.0';
+import { renderTemplateThumbnail } from './templates.js?v=1.24.0';
+import { showWhatsNewNow } from './whats-new.js?v=1.24.0';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.0';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.0';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.0';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.0';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.0';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.0';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.0';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.23.7';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.23.7';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.23.7';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.0';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.0';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.0';
 
 let modules = {};
 export function init(_modules) {
@@ -80,13 +80,13 @@ export function init(_modules) {
   // We mirror the state on the dropdown menu item (with explanatory tooltip)
   // and also gate inside `persistence.shareAsURL` for the keyboard shortcut /
   // hamburger entry.
-  const SHARE_DISABLED_MSG = 'URL sharing is unavailable while this diagram contains images. Use Save → Export to JSON to share, or remove every image to re-enable URL sharing.';
+  const SHARE_IMAGE_MSG = 'Share as JSON, or sign in to Google Drive - a Diagramforce link is unavailable while this diagram contains images';
   // Not-connected + images: same as above, but also point at Google Drive (which stores images). Signing in is
   // what unlocks Share here (it flips `connected` → the image-mode Share Manager offers the Drive link), so the
   // copy says "Sign in", not "Save" - the disabled Share button can't itself start a save.
-  const SHARE_DISABLED_MSG_DRIVE = 'URL sharing is unavailable while this diagram contains images. Sign in to Google Drive to share it (images and all), or use Save → Export to JSON - or remove every image to re-enable URL sharing.';
+  const SHARE_IMAGE_NO_DRIVE_MSG = 'Share as JSON - a Diagramforce link is unavailable while this diagram contains images';
   // Connected + images: Share stays enabled — the Share Manager locks the link section and offers Drive sharing.
-  const SHARE_IMAGE_DRIVE_MSG = 'Share via Google Drive (URL link sharing is unavailable while this diagram contains images)';
+  const SHARE_IMAGE_DRIVE_MSG = 'Share via Google Drive or as JSON - a Diagramforce link is unavailable while this diagram contains images';
   const EMPTY_DIAGRAM_MSG = 'Add a shape to enable export.';
   const GIF_ENCODING_MSG = 'Wait until the current GIF export finishes.';
   const refreshShareAvailability = () => {
@@ -101,13 +101,14 @@ export function init(_modules) {
       const hasImg = diagramHasImage(modules.graph);
       const connected = !!modules.persistence.isDriveConnected?.();
       const driveOn = !!modules.persistence.isDriveConfigured?.();
-      // Images block the URL link. A CONNECTED user can still share via Google Drive, so keep Share ENABLED —
-      // the Share Manager (showShareModal image mode) locks the link section + offers the Drive link. Only a
-      // NOT-connected user (URL is the only path) gets the disabled state.
-      shareBtn.disabled = (hasImg && !connected) || isEmpty || gifBusy;
+      // Images block the URL link only. The Share Manager (showShareModal image mode) locks the link section and
+      // offers the Drive link and Copy JSON, so Share stays ENABLED for an image diagram whether or not Drive is
+      // connected (since 1.24.0 - before Copy JSON, a not-connected user had no path and got the disabled state).
+      // The lock is per share type, inside the pane; the button itself locks only for nothing-to-share cases.
+      shareBtn.disabled = isEmpty || gifBusy;
       shareBtn.title = isEmpty ? EMPTY_DIAGRAM_MSG
         : gifBusy ? GIF_ENCODING_MSG
-        : hasImg ? (connected ? SHARE_IMAGE_DRIVE_MSG : (driveOn ? SHARE_DISABLED_MSG_DRIVE : SHARE_DISABLED_MSG))
+        : hasImg ? (connected ? SHARE_IMAGE_DRIVE_MSG : (driveOn ? SHARE_IMAGE_MSG : SHARE_IMAGE_NO_DRIVE_MSG))
         : 'Share - right-click to copy the link';
     }
     // Save button (top-level navbar "Save") — locked when the active diagram is empty (nothing to save) or GIF
@@ -772,7 +773,7 @@ function openAiModal() {
 const SF_META = [
   {
     title: 'Salesforce Flows',
-    blurb: 'Drop a flow anywhere on the window, or into Load & Import - either its .flow-meta.xml source file or the Tooling API response. Diagramforce draws every element, decision outcome, fault path and Go To, positioned the way Flow Builder had it. With the Claude skill and org access, the summary card links back to Flow Builder and marketing sends name their CMS asset, consent subscription and segment.',
+    blurb: 'Drop a flow anywhere on the window, or into Load - either its .flow-meta.xml source file or the Tooling API response. Diagramforce draws every element, decision outcome, fault path and Go To, positioned the way Flow Builder had it. With the Claude skill and org access, the summary card links back to Flow Builder and marketing sends name their CMS asset, consent subscription and segment.',
   },
   {
     title: 'Objects into a Data Model',
@@ -780,7 +781,7 @@ const SF_META = [
   },
   {
     title: 'Data Cloud Mappings',
-    blurb: 'Retrieve your ObjectSourceTargetMap metadata, or save one REST call, and paste it into Load & Import. Diagramforce draws the chain from data stream to data lake object to data model object, one connector per mapped field. Formulas sit on their own Data Stream card, wired to the source fields they read, and with org access every card gets its real category.',
+    blurb: 'Retrieve your ObjectSourceTargetMap metadata, or save one REST call, and paste it into Load. Diagramforce draws the chain from data stream to data lake object to data model object, one connector per mapped field. Formulas sit on their own Data Stream card, wired to the source fields they read, and with org access every card gets its real category.',
   },
   {
     title: 'Data Graphs',

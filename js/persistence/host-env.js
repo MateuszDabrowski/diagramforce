@@ -10,6 +10,11 @@
  * the connection restored on boot without the user clicking the red icon. Every rule in this file is gated on
  * the marker so browser behaviour is byte-for-byte unchanged (adversarial-review scope, 2026-09-13).
  *
+ * What the marker cannot fix: Google's Picker. It is a third-party iframe, and in an app's WKWebView that frame is
+ * reported as having storage access and sent no cookies - WebKit's defect, reported to Apple 2026-09-21 - so the two
+ * Picker doors (Load's whole-Drive search, Add to Shared Drive) decline in Slot with a sentence; see
+ * `pickerUnavailableInSlot` in remote-store.js.
+ *
  * Pure: no DOM, no timers - the tested half. remote-store.js owns the side effects.
  */
 

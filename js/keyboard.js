@@ -47,8 +47,8 @@ export function kbd(combo) {
 // Keep in sync with handleKeydown when adding/changing a binding.
 export const SHORTCUT_GROUPS = [
   { title: 'File', items: [
-    ['Ctrl+S', 'Save & Export'],
-    ['Ctrl+O', 'Load & Import'],
+    ['Ctrl+S', 'Save'],
+    ['Ctrl+O', 'Load'],
     ['Ctrl+N', 'New diagram'],
     ['Ctrl+W', 'Close current tab'],
   ] },

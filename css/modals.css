@@ -621,6 +621,14 @@
   gap: 2px;
   margin: 0 0 var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
+  /* Pinned to the top of the scrolling body (1.24.0). The strip sits INSIDE the body, which scrolls once the
+     dialog hits its max-height - a 20-diagram Drive list on a short viewport (200% browser zoom) scrolled the
+     tabs out of the top and left them half hidden under the toolbar edge (owner report). Opaque, so rows
+     scrolling under it never show through; z-index over the rows' own positioned bits. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-surface);
   /* The strip itself scrolls horizontally when the tabs don't fit (narrow / mobile), instead of
      the whole modal body scrolling sideways. Tabs keep their width (flex-shrink: 0 below). */
   overflow-x: auto;
@@ -1008,15 +1016,17 @@
   color: var(--text-secondary); background: var(--bg-subtle, var(--toolbar-bg));
   border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);
 }
-.df-share__copy { flex-shrink: 0; }
+.df-share__copy, .df-share__copy-json { flex-shrink: 0; }
 /* "✓ Copied!" success flash — green in every state incl. hover (the (0,2,0) class beats the (0,1,0) neutral
    hover above). Covers both the link Copy buttons and the per-row "Copy link" in Shared copies (#1, #2). */
 .df-share__copy.is-copied,
+.df-share__copy-json.is-copied,
 .df-share__copy-copy.is-copied { color: #fff; background: var(--brand-green); border-color: var(--brand-green); }
 /* Item 15: in DARK mode the Share Copy + Create-link primaries are brand AMBER (they stay brand-blue in light).
    Excludes the green "✓ Copied!" success state so that flash still shows. The blue `--primary:hover` opacity rule
    still applies, so hover stays a (slightly faded) amber - consistent with "hover follows the base fill". */
 [data-theme="dark"] .df-share__copy.df-modal__btn--primary:not(.is-copied),
+[data-theme="dark"] .df-share__copy-json.df-modal__btn--primary:not(.is-copied),   /* Copy JSON (1.24.0) - same surface as the link Copy buttons; it keeps its own class because .df-share__copy's handler copies a link field */
 [data-theme="dark"] .df-share__create.df-modal__btn--primary {
   background: var(--brand-amber);
   border-color: var(--brand-amber);

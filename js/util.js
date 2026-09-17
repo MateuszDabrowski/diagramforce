@@ -147,6 +147,23 @@ export function nodeContrastText(bodyFill) {
 }
 
 /**
+ * The ink (text / icon / count) for a SOLID fill of `color`: white or the app's near-black, whichever has the
+ * higher WCAG 2.x contrast ratio against it. Relative luminance per WCAG (sRGB channels linearised, then
+ * 0.2126 R + 0.7152 G + 0.0722 B); ratio = (L1 + 0.05) / (L2 + 0.05). Used by the tab-bar group chip, whose
+ * background IS the group colour once one is set - the presets include #ffffff and #1c1e21, so no single ink
+ * works. Null for a colour `parseSolidColor` cannot read (the caller keeps its theme default).
+ */
+export function contrastInk(color) {
+  const rgb = parseSolidColor(color);
+  if (!rgb) return null;
+  const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+  const vsWhite = 1.05 / (L + 0.05);
+  const vsBlack = (L + 0.05) / 0.05;
+  return vsWhite >= vsBlack ? '#ffffff' : '#1c1e21';
+}
+
+/**
  * Count the SHAPES (nodes, not links) in a JointJS `graph.toJSON()` cells array.
  * JointJS serializes elements and links into one `cells` array; links carry both `source` and `target`,
  * elements don't — so "nodes only" is `!(c.source && c.target)`. Used by the Save Manager to show a shape

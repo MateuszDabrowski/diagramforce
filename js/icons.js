@@ -2,7 +2,7 @@
 // Loads self-hosted SVG sprite files, inlines them into the page,
 // and provides a searchable catalog of all available icons.
 
-import { sanitizeCssColor } from './util.js?v=1.23.7';
+import { sanitizeCssColor } from './util.js?v=1.24.0';
 
 const SPRITE_CATEGORIES = ['standard', 'utility', 'action', 'custom', 'doctype'];
 const iconRegistry = []; // [{ category, name, id }]

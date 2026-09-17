@@ -1,9 +1,9 @@
 // Save & Export manager (CLEANUP S4) — the quick Save modal + the full Save Manager (browser saves, Drive copies, export selection) + uniqueSaveName/wireSelectAll. Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.23.7';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.23.7';
-import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.23.7';
-import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.23.7';
-import { btn, tctx } from './context.js?v=1.23.7';
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.24.0';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.0';
+import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.0';
+import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.24.0';
+import { btn, tctx } from './context.js?v=1.24.0';
 
 function uniqueSaveName(baseName, dateSuffix, existingNames) {
   // Strip trailing date if it already matches today's suffix
@@ -231,7 +231,7 @@ export function showSaveManagerModal() {
       </div>` : '';
 
   const { overlay, footer, close } = buildModal({
-    title: 'Save & Export',
+    title: 'Save',   // the aria-label (anchored: no visible header) - the button's name
     className: 'df-save-manager-modal',
     origin: document.getElementById('btn-save'),   // scale-open from the Save button
     anchor: document.getElementById('btn-save'),   // anchored under the Save button (item 5)

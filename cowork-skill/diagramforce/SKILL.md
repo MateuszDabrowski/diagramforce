@@ -29,7 +29,7 @@ or another diagram to recreate, that is a prime use of this skill: read the sour
 elements and connections, and author the equivalent Diagramforce JSON with the same workflow below
 (the source just seeds step 1's type choice and step 3's content). One shortcut worth offering: if the
 source is **Mermaid**, Diagramforce imports it natively - the user can paste the Mermaid straight into
-**Load & Import -> Paste** and the app auto-detects and converts it (`graph`/`flowchart` -> Process,
+**Load -> Paste** and the app auto-detects and converts it (`graph`/`flowchart` -> Process,
 Architecture or Org Chart - the pane offers the choice; `stateDiagram` -> Process, `erDiagram` -> Data Model,
 `sequenceDiagram` -> Sequence, `gantt` -> Gantt, with sections becoming phases and `after` becoming real
 dependencies). `subgraph` groups import as labelled zones. So you may not need to author
@@ -196,7 +196,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.23.7",
+  "appVersion": "1.24.0",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -257,7 +257,7 @@ The URL carries the whole diagram in its hash; nothing is uploaded and no accoun
 clients start truncating at. Do NOT hand over a truncated link. Fall back to the file:
 
 1. Open **https://diagramforce.com**
-2. Click **Load & Import**, choose the **Paste** tab, paste the JSON, and click **Load**
+2. Click **Load**, choose the **Paste** tab, paste the JSON, and click **Load**
    (or use the **File** tab to open the `.json` / `.dgf` you saved).
 3. The diagram opens as a new tab. No sign-in; nothing leaves the browser.
 
@@ -447,7 +447,7 @@ node scripts/mappings-to-diagramforce.mjs mappings.json > diagram.json
 Prefer the retrieve when you can: the Connect response carries only the object and field pairs, so it produces
 no Formula companion cards and no Expression / Rule values (~5% of field rows in a real org). Reach for the GET
 when the user cannot authenticate the CLI against the org, or already has the response in hand - and tell them
-what it left out. **The user can also paste that same response straight into the app** (Load & Import ->
+what it left out. **The user can also paste that same response straight into the app** (Load ->
 Paste), which is often faster than involving you at all - say so rather than making them round-trip through a
 file.
 
@@ -510,7 +510,7 @@ faked: a **facts card** beside the tree (type, status, data space, primary objec
 and caching flags, Id / Values DMO, dates, version - rows with nothing to say are omitted), and a **join label
 on every edge** (`ssot__Id__c = UnifiedRecordId__c`), read from each related object's `path[]`. Tell the user
 which of the two they are looking at.
-**The user can paste either shape straight into the app** (Load & Import -> Paste, which has its own Data Graph
+**The user can paste either shape straight into the app** (Load -> Paste, which has its own Data Graph
 card) - say so rather than making them round-trip through a file.
 
 ### One retrieve, three diagrams

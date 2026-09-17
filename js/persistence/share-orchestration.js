@@ -5,15 +5,17 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.23.7';
-import { diagramHasImage } from '../image-component.js?v=1.23.7';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.7';
-import { escHtml } from '../util.js?v=1.23.7';
-import { sharePillHtml } from '../storage-ui.js?v=1.23.7';
-import { pctx } from './context.js?v=1.23.7';
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.23.7';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.23.7';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.23.7';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.24.0';
+import { diagramHasImage } from '../image-component.js?v=1.24.0';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.0';
+import { escHtml, formatBytes } from '../util.js?v=1.24.0';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.0';
+import { pctx } from './context.js?v=1.24.0';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.0';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.0';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.0';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.0';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.0';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -367,6 +369,11 @@ const SHARE_INFO = {
     pros: ['Short, and a constant length', 'Always up to date - edit freely, the link stays valid', 'You choose who can open it (below)', "Public doesn't require recipient to have Google Account"],
     cons: ['Shares the file from your Google Drive', 'Breaks if you delete the file or stop sharing', 'Invite requires recipient to have Google Account'],
   },
+  json: {
+    how: 'The whole diagram as plain text, in the same format as a JSON export.',
+    pros: ['No size limit, and images come along', 'Pastes straight into Load > Paste, or into an LLM', 'Nothing is stored anywhere'],
+    cons: ['Not a link - the recipient needs Diagramforce open to paste it', 'A frozen snapshot of this exact version'],
+  },
   // Explains the two share TYPES (Copy vs Collab) the rows below are tagged with - point form, not pros/cons.
   shares: {
     how: 'How each person can use what you shared with them:',
@@ -390,6 +397,20 @@ function infoPanelHtml(key) {
     </div>`;
 }
 const INFO_GLYPH = '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.1 6.6h1.8V12H7.1zM8 3.4a1.05 1.05 0 1 1 0 2.1 1.05 1.05 0 0 1 0-2.1z"/></svg>';
+
+/** The active diagram as the single-diagram JSON envelope the JSON export writes and Load > Paste reads - the
+ *  Share pane's Copy JSON (1.24.0). Compacted like an export (reconstructed DataObject ports dropped); no group
+ *  stamp, so a quick paste never creates a group on the other side. */
+function buildDiagramJSONText() {
+  const { graph, tabNameCb, diagramTypeCb, mappingModeCb, getTabViewport, activeTabIdCb } = pctx;
+  // The viewport is optional, so its read must never sink the envelope: toolbar.init wires the Share button
+  // before tabs.init wires these getters, and for an instant during session restore the active-tab lookup can
+  // throw - which dropped the whole Diagram JSON section once in ~1400 lane runs.
+  let viewport = null;
+  try { viewport = getTabViewport && activeTabIdCb ? (getTabViewport(activeTabIdCb()) || null) : null; } catch { viewport = null; }
+  const data = buildSingleDiagram(tabNameCb(), diagramTypeCb(), compactGraphForSave(graph.toJSON()), viewport, mappingModeCb ? mappingModeCb() : false, null);
+  return JSON.stringify(data, null, 2);
+}
 
 function showShareModal(url, opts = {}) {
   document.querySelector('.df-share-modal')?.remove();
@@ -417,7 +438,7 @@ function showShareModal(url, opts = {}) {
       <div class="df-share__label">Diagramforce link <button type="button" class="df-share__info-btn" data-info="classic" aria-label="About the Diagramforce link" aria-expanded="false">${INFO_GLYPH}</button></div>
       ${infoPanelHtml('classic')}
       ${isWarning
-        ? `<p class="df-share__warn-text" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Diagrams with images are too large for a Diagramforce link.${connected ? ' Use the <strong>Google Drive link</strong> below - it stores the whole diagram, images and all.' : ' Sync to Google Drive (below), or use <strong>Save → Export to JSON</strong>.'}</p>`
+        ? `<p class="df-share__warn-text" style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Diagrams with images are too large for a Diagramforce link.${connected ? ' Use the <strong>Google Drive link</strong> below - it stores the whole diagram, images and all - or <strong>Copy JSON</strong> below.' : ' <strong>Copy JSON</strong> below carries the whole diagram, images included; or sync to Google Drive.'}</p>`
         : `<div class="df-share__row">
              <input type="text" class="df-share-modal__url df-share__field" readonly aria-readonly="true" aria-label="Classic shareable link" spellcheck="false">
              <button type="button" class="df-modal__btn df-modal__btn--primary df-share__copy" data-copy="classic">Copy</button>
@@ -481,6 +502,22 @@ function showShareModal(url, opts = {}) {
         </div>`
       : '';
 
+  // Section 3: the diagram as JSON - the no-limit sibling of the Diagramforce link (no ~8000-char cap, images come
+  // along), for a quick paste into Load & Import > Paste elsewhere, or into an LLM. Rendered in the image-warning
+  // variant too: that is the case only JSON serves. Built now so the size can be shown.
+  let jsonText = '';
+  try { jsonText = buildDiagramJSONText(); } catch (e) { console.warn('Diagramforce: diagram JSON failed', e); }
+  const jsonSection = jsonText
+    ? `<div class="df-share__section df-share__json">
+        <div class="df-share__label">Diagram JSON <button type="button" class="df-share__info-btn" data-info="json" aria-label="About the diagram JSON" aria-expanded="false">${INFO_GLYPH}</button></div>
+        ${infoPanelHtml('json')}
+        <div class="df-share__row">
+          <span class="df-share__shared-drive-hint">The whole diagram as text (${escHtml(formatBytes(new TextEncoder().encode(jsonText).length))}) - paste it into another Diagramforce, an LLM, or a ticket.</span>
+          <button type="button" class="df-modal__btn df-modal__btn--primary df-share__copy-json">Copy JSON</button>
+        </div>
+      </div>`
+    : '';
+
   const { body, close } = buildModal({
     title: 'Share Diagram',
     className: 'df-share-modal',
@@ -488,7 +525,7 @@ function showShareModal(url, opts = {}) {
     anchor: document.getElementById('btn-share-url'),   // anchored under the Share button (item 5)
     zIndex: 3000, width: '480px',
     bodyStyle: 'padding:var(--spacing-md) var(--spacing-lg)',
-    bodyHtml: classicSection + driveSection,
+    bodyHtml: classicSection + driveSection + jsonSection,
     footerHtml: null,
   });
 
@@ -515,6 +552,15 @@ function showShareModal(url, opts = {}) {
   };
   body.querySelectorAll('.df-share__copy').forEach((btn) => {
     btn.addEventListener('click', () => copyFrom(btn, body.querySelector(btn.dataset.copy === 'drive' ? '.df-share__gd-field' : '.df-share-modal__url')));
+  });
+
+  // Copy JSON - the text was built when the pane opened; flash like the link buttons.
+  const jsonBtn = body.querySelector('.df-share__copy-json');
+  jsonBtn?.addEventListener('click', () => {
+    navigator.clipboard.writeText(jsonText).then(() => {
+      const o = jsonBtn.textContent; jsonBtn.textContent = '✓ Copied!'; jsonBtn.classList.add('is-copied');
+      setTimeout(() => { jsonBtn.textContent = o; jsonBtn.classList.remove('is-copied'); }, 2000);
+    }).catch(() => showToast('Could not copy automatically - use Save > Export instead.', 'warning'));
   });
 
   // "Sign in to Google Drive" — sign in, then reopen the overlay (now signed-in → the Drive controls render).

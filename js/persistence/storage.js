@@ -7,10 +7,10 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.23.7';
-import { pctx } from './context.js?v=1.23.7';
-import { compactGraphForSave } from './json-pipeline.js?v=1.23.7';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.23.7';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.0';
+import { pctx } from './context.js?v=1.24.0';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.0';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.0';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -325,7 +325,9 @@ export function deleteNamedSave(key) {
 /** Build the canonical single-diagram file object (drop-in export shape).
  *  `group` (#7): {name,icon,color} when the source tab was in a tab group, so re-importing this single file
  *  recreate-or-rejoins that group (additive + back-compat - older readers ignore it). */
-function buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false, group = null) {
+/** The single-diagram JSON envelope - what the JSON export writes and Load > Paste reads. Exported since 1.24.0
+ *  for the Share pane's Copy JSON, so the two never drift. */
+export function buildSingleDiagram(name, diagramType, graphJSON, viewport, mappingMode = false, group = null) {
   const { appVersion: APP_VERSION } = pctx;
   return {
     version: 1,

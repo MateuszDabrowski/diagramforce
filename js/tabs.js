@@ -1,26 +1,26 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.23.7';
-import { tbctx } from './tabs/context.js?v=1.23.7';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.23.7';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.23.7';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.23.7';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.23.7';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.0';
+import { tbctx } from './tabs/context.js?v=1.24.0';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.0';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.0';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.0';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.0';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.23.7';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart } from './util.js?v=1.23.7';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.23.7';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.23.7';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.23.7';
-import { wireMenuDismiss } from './menu.js?v=1.23.7';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.23.7';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.23.7';
-import { getPalette } from './brand-palette.js?v=1.23.7';
-import { getAllIcons } from './icons.js?v=1.23.7';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.23.7';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.0';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.0';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.0';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.0';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.0';
+import { wireMenuDismiss } from './menu.js?v=1.24.0';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.0';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.0';
+import { getPalette } from './brand-palette.js?v=1.24.0';
+import { getAllIcons } from './icons.js?v=1.24.0';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.0';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -1473,6 +1473,18 @@ function syncDocumentTitle() {
   document.title = name ? `${name} - Diagramforce` : 'Diagramforce';
 }
 
+/** A group chip's colour. With a colour SET the chip is SOLID in it and its ink - name, icon, count, the ⋯ - is
+ *  white or near-black by WCAG contrast (util.contrastInk), so a navy or a white group reads on both themes;
+ *  the old accent-as-text on a 16% tint was unreadable exactly when the accent was dark on the dark theme or
+ *  light on the light one (owner report, 1.24.0). No colour keeps the soft brand tint. Shared by the in-row chip
+ *  and its pinned-rail proxy so the two never drift. */
+function paintGroupChip(chip, group) {
+  if (!group.color) return;
+  chip.style.setProperty('--group-accent', group.color);
+  const ink = contrastInk(group.color);
+  if (ink) { chip.style.setProperty('--group-ink', ink); chip.classList.add('df-tab-group--solid'); }
+}
+
 function render() {
   syncDocumentTitle();
   tabListEl.innerHTML = '';
@@ -1629,7 +1641,7 @@ function render() {
     const chip = document.createElement('div');
     chip.className = 'df-tab-group' + (collapsed ? ' df-tab-group--collapsed' : '') + (count === 0 ? ' df-tab-group--empty' : '') + (isUngrouped ? ' df-tab-group--ungrouped' : '');
     chip.dataset.groupId = group.id;
-    if (group.color) chip.style.setProperty('--group-accent', group.color);
+    paintGroupChip(chip, group);
 
     // Icon — always present; defaults to 'tabset' so a group never renders icon-less.
     const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1880,7 +1892,7 @@ function buildGroupPin(g, revealTo) {
   const chip = document.createElement('div');
   chip.className = 'df-tab-group df-tab-group--pinned';
   chip.dataset.groupId = group.id;
-  if (group.color) chip.style.setProperty('--group-accent', group.color);
+  paintGroupChip(chip, group);
   const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   ic.setAttribute('class', 'df-tab-group__icon');
   ic.setAttribute('width', '12'); ic.setAttribute('height', '12');

@@ -41,10 +41,11 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 - **Offline-capable** - Service worker caches the app shell + every runtime library; after first load, refresh in airplane mode and the app boots from cache
 - **No Backend, local-first** - Everything runs client-side; your diagrams stay in your browser unless you opt in to Google Drive sync. Every open diagram is auto-kept in this browser's session, and closing a tab archives a copy you can reopen (90-day local storage)
 - **Google Drive sync (opt-in)** - Connect your own Google Drive (`drive.file` scope, no Diagramforce backend) and every diagram auto-saves to a `.dgf` file in a "Diagramforce" folder you own. **Auto-save is on by default** (toggle in the Drive menu) on a **2-minute cadence** plus **work-boundary saves** (opening, switching, closing a tab). If a synced file changed elsewhere, a **Refresh** appears to pull the latest. Open your diagrams on any device from the **"Your Google Drive Diagrams"** library, browse **version history** (Open / Restore / Pin past versions, with a diff-highlighted preview), and keep working offline - it re-syncs when you reconnect. Disconnect any time; your files stay in your Drive
-- **Storage managers** - Unified **Save & Export** / **Load & Import** / **Share** managers (each opens anchored under its navbar button). **Load & Import** has one tabbed surface: **Browser** (reopen open + closed diagrams, with a storage-usage gauge and a **Close & Delete** hub to tidy browser storage) / **Google Drive** / **File** (open a `.dgf` or `.json`) / **Paste**
-- **Sharing** - Copy a self-contained **Diagramforce link** (the whole diagram in the URL), or - when connected to Drive - a short, always-up-to-date **Google Drive link**: keep it **public** (anyone, no sign-in), **invite** specific people as **Copy** (view-only; their edits fork to their own copy) or **Collaborate** (they edit the shared file directly, and you keep a private backup in your Drive), limit it to your **organisation**, or **Add to a team Shared Drive**. A file shared *to* you shows a **Shared File** chip; if your edits and a Drive change clash, a **Conflict Review** (Keep mine / Keep both / Keep Google Drive) resolves them with a side-by-side diff-highlighted preview. **Share a whole tab group** as a single public link that reopens every diagram in the group
+- **Open with Diagramforce, from Google Drive** - Diagramforce is a [Google Workspace Marketplace add-on](https://workspace.google.com/marketplace/app/diagramforce/873718407054): install it and right-click any `.dgf` diagram in Drive to open it here. A file already open comes forward instead of opening twice
+- **Storage managers** - Unified **Save** / **Load** / **Share** managers (each opens anchored under its navbar button). **Load** has one tabbed surface: **Browser** (reopen open + closed diagrams, with a storage-usage gauge and a **Close & Delete** hub to tidy browser storage) / **Google Drive** / **File** (open a `.dgf` or `.json`) / **Paste**
+- **Sharing** - Copy a self-contained **Diagramforce link** (the whole diagram in the URL), or - when connected to Drive - a short, always-up-to-date **Google Drive link**: keep it **public** (anyone, no sign-in), **invite** specific people as **Copy** (view-only; their edits fork to their own copy) or **Collaborate** (they edit the shared file directly, and you keep a private backup in your Drive), limit it to your **organisation**, or **Add to a team Shared Drive**. A file shared *to* you shows a **Shared File** chip; if your edits and a Drive change clash, a **Conflict Review** (Keep mine / Keep both / Keep Google Drive) resolves them with a side-by-side diff-highlighted preview. **Share a whole tab group** as a single public link that reopens every diagram in the group. Or **Copy JSON** from the same pane - the whole diagram as text, no size limit, images included - to paste into Load ▸ Paste anywhere, or into an LLM
 - **Custom Templates** - Capture any multi-selection as a reusable template; stored locally and (when connected) synced across your devices via Google Drive, with deletes that propagate
-- **Export & backup** - Export as JSON / PNG / WEBP / SVG / animated GIF; bundle selected or all diagrams (plus your templates) into a single JSON file from **Save & Export**
+- **Export & backup** - Export as JSON / PNG / WEBP / SVG / animated GIF; bundle selected or all diagrams (plus your templates) into a single JSON file from **Save**
 - **Mermaid Import (beta)** - Paste mermaid.js source (`graph` / `flowchart` → Process, Architecture or Org Chart, your pick; `stateDiagram` → Process, `erDiagram` → Data Model, `sequenceDiagram` → Sequence, `gantt` → Gantt) and convert into a native diagramforce diagram with auto-layout. `subgraph` groups become labelled zones
 - **Fit to Content** - Automatically fits viewport when loading shared or saved diagrams
 
@@ -62,8 +63,8 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 | Nudge selection | Arrow keys (Shift = 16 px step) |
 | Multi-select | Cmd/Ctrl + Click *or* Shift + Click |
 | Rubber-band select | Shift + Drag (on blank canvas) |
-| Save & Export | Cmd/Ctrl + S |
-| Load & Import | Cmd/Ctrl + O |
+| Save | Cmd/Ctrl + S |
+| Load | Cmd/Ctrl + O |
 | New diagram | Cmd/Ctrl + N |
 | Close tab | Cmd/Ctrl + W |
 | Zoom in / out | + / − (or scroll / pinch) |
@@ -136,7 +137,7 @@ how-to-use/             Using Diagramforce elsewhere: LLM spec, Cowork skill, we
 
 ## LLM diagram generation
 
-[`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) documents the complete JSON structure for all diagram types - including a dedicated guide for generating Salesforce Data Cloud (Data 360) mappings with valid field types, categories, and DLO/DMO layers. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, Data Cloud field mapping, process flow, etc. The output can be imported directly via *Load & Import → Paste* (or *Load & Import → File* for a `.json` or `.dgf`).
+[`DIAGRAM_JSON_SPEC.md`](DIAGRAM_JSON_SPEC.md) documents the complete JSON structure for all diagram types - including a dedicated guide for generating Salesforce Data Cloud (Data 360) mappings with valid field types, categories, and DLO/DMO layers. Feed it to any LLM (e.g. Claude) and ask it to generate a diagram JSON for a specific architecture, data model, Data Cloud field mapping, process flow, etc. The output can be imported directly via *Load → Paste* (or *Load → File* for a `.json` or `.dgf`).
 
 ## Open a diagram from your own app
 

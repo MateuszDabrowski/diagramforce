@@ -15,12 +15,12 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.23.7';
-import { pctx } from './context.js?v=1.23.7';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.23.7';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.23.7';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.23.7';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.23.7';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.0';
+import { pctx } from './context.js?v=1.24.0';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.0';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.0';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.0';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.0';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -212,6 +212,19 @@ async function refreshSilently() {
   try { await getToken({ prompt: 'none', force: true }); notify(); }
   catch (e) { console.info('Diagramforce: silent Drive token refresh declined (will ask on the next click)', e && e.message); }
 }
+/** Google's Picker cannot sign in inside Slot. The Picker is an iframe on docs.google.com inside diagramforce.com, and in
+ *  an app's WKWebView that frame reports storage access before any grant and is sent no cookies - while Safari, same
+ *  WebKit, sends it the whole session. Measured 2026-09-21 with Safari's inspector on Slot's tab; WebKit's defect in the
+ *  embedded case, reported to Apple, and nothing on either side reaches it (Slot's limits/webkit-storage-access.md has
+ *  the chain and everything tried). The two Picker doors say so up front instead of showing Google's dead end. Only in
+ *  Slot; a browser runs the Picker as it always has, and everything on the Drive API works in Slot as before. */
+function pickerUnavailableInSlot() {
+  showToast('Google\'s file picker can\'t sign in inside Slot currently. Saving, loading and sharing work here. '
+    + 'Just the picker needed for selecting a Google Drive folder needs a browser. To use it, open Diagramforce in a browser, '
+    + 'and Share to drive there. To access this Diagram, open it via Load or paste from Share > Copy JSON.',
+    'info', { duration: 10000 });
+}
+
 /** Boot inside Slot: restore the Drive connection without a click when the user connected here before. Awaited by
  *  `loadDriveRef` so a Drive "Open with" launch reads the file with this token instead of showing the sign-in
  *  modal - the connect is already in flight, the file open just waits for it. Fire-and-forget from app.js. */
@@ -1518,6 +1531,7 @@ export async function syncNow() {
 /** Pick a Diagramforce file from the user's Drive (Google Picker) and load it. */
 export async function openFromDrive({ title, sharedFirst } = {}) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return; }
+  if (isInSlot()) { pickerUnavailableInSlot(); return; }
   try {
     let token = tokenValid() ? _accessToken : null;   // reuse a still-valid token → no re-prompt within the hour
     if (!token) token = await getToken({ prompt: '' });
@@ -2023,6 +2037,7 @@ function clearTabDriveState(tabId) {
  *  once; skips empty tabs. Resolves with the count published (0 on cancel). */
 export function publishTabsToSharedDrive(ids) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return Promise.resolve(0); }
+  if (isInSlot()) { pickerUnavailableInSlot(); return Promise.resolve(0); }
   const list = Array.isArray(ids) ? ids : [];
   if (!list.length) return Promise.resolve(0);
   return new Promise((resolve) => {

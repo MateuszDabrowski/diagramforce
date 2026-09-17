@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.23.7';
-import { showToast, showError } from '../feedback.js?v=1.23.7';
-import { sanitizeFilenamePart } from '../util.js?v=1.23.7';
-import { pctx } from './context.js?v=1.23.7';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.0';
+import { showToast, showError } from '../feedback.js?v=1.24.0';
+import { sanitizeFilenamePart } from '../util.js?v=1.24.0';
+import { pctx } from './context.js?v=1.24.0';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -96,6 +96,27 @@ export function copyCellsAsPng(cells, { silent = false, transparent = false, def
     .catch((err) => { if (!silent) { console.error('Copy as PNG failed:', err); showError('Could not copy the image to the clipboard.'); } });
 }
 
+/** Model-space bbox of everything in JointJS's LABELS layer, or null when it holds nothing. canvas.js sets
+ *  `labelsLayer: true`, so link labels render in `.joint-labels-layer` BESIDE the cells layer - which is why
+ *  `paper.getContentArea()` (the cells layer's bbox) and a link view's own bbox both miss them, and a pill
+ *  placed past the outermost shape came out cut (user report, 1.24.0). The layer carries no transform of its
+ *  own (the pan/zoom matrix is on `.joint-layers`), so its SVG bbox is already the viewBox's space. */
+function labelsLayerBBox(paper, linkId = null) {
+  try {
+    let node = paper.getLayerNode('labels');
+    if (linkId != null) node = node && node.querySelector(`[model-id="${CSS.escape(String(linkId))}"]`);   // one link's g.labels
+    const b = node && node.getBBox();
+    return b && (b.width > 0 || b.height > 0) ? { x: b.x, y: b.y, width: b.width, height: b.height } : null;
+  } catch { return null; }   // no labels layer, or a node not measurable (detached / display:none)
+}
+
+/** The full-export crop: the cells layer's content area unioned with the labels layer. */
+function contentAreaWithLabels(paper) {
+  let area = paper.getContentArea();
+  const lb = area && labelsLayerBBox(paper);
+  return lb ? area.union(lb) : area;
+}
+
 /** Render `renderCells` (cropped to their bbox) to a PNG Blob via the standalone-SVG pipeline. Returns a Promise so
  *  it can be handed to ClipboardItem. Mirrors exportRaster's clone/inline/rasterize but keeps ONLY the cells in
  *  `idSet` and resolves the blob instead of downloading. */
@@ -105,9 +126,10 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
       const { graph, paper } = pctx;
       let bbox = graph.getCellsBBox(renderCells);
       if (!bbox || bbox.width === 0) { reject(new Error('Selection has no area.')); return; }
-      // The model bbox misses a link's ROUTED geometry: sfManhattan elbows + self-loop stubs run up to ~40px
-      // OUTSIDE the endpoint boxes, so edge connectors were cut from the copied PNG (CR). Union in each
-      // selected link view's rendered connection path - already in LOCAL coords, the viewBox's space.
+      // The model bbox misses everything a link DRAWS. Its ROUTED geometry: sfManhattan elbows + self-loop stubs
+      // run up to ~40px OUTSIDE the endpoint boxes (CR) - union the rendered connection path, already in LOCAL
+      // coords. And its LABELS: they render in the separate labels layer (see labelsLayerBBox), so a pill past
+      // the outermost shape was cut from the copied PNG (user report, 1.24.0) - union this link's label group.
       for (const cell of renderCells) {
         if (!cell.isLink || !cell.isLink()) continue;
         try {
@@ -115,6 +137,8 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
           const cb = conn && conn.bbox();
           if (cb) bbox = bbox.union(cb);
         } catch { /* unrendered view - the model bbox stands */ }
+        const lb = labelsLayerBBox(paper, cell.id);
+        if (lb) bbox = bbox.union(lb);
       }
 
       const padding = 24;
@@ -181,7 +205,7 @@ export function exportSVG(transparent = true) {
     // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
     // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
     // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
-    const contentBBox = paper.getContentArea();
+    const contentBBox = contentAreaWithLabels(paper);
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -244,7 +268,7 @@ function exportRaster(transparent, format) {
     // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
     // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
     // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
-    const contentBBox = paper.getContentArea();
+    const contentBBox = contentAreaWithLabels(paper);
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;
@@ -367,7 +391,7 @@ export async function exportGIF(transparent = false) {
     // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
     // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
     // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
-    const contentBBox = paper.getContentArea();
+    const contentBBox = contentAreaWithLabels(paper);
     if (!contentBBox || contentBBox.width === 0) {
       showError('Diagram is empty - nothing to export.');
       return;

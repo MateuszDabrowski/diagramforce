@@ -1,10 +1,10 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.23.7';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.23.7';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.23.7';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.23.7';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.23.7';
-import { showSaveManagerModal } from './save-manager.js?v=1.23.7';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.0';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.0';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.0';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.0';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.0';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.0';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -41,7 +41,7 @@ export function showLoadManagerModal(initialTab = null, importStats = null) {
   const tabBtn = (t) => `<button class="df-load-mgr__tab${t.key === active ? ' is-active' : ''}" role="tab" data-tab="${t.key}" aria-selected="${t.key === active}"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#${t.icon}"></use></svg><span>${escHtml(t.label)}</span></button>`;
 
   const { body, footer, close } = buildModal({
-    title: 'Load & Import',
+    title: 'Load',   // the aria-label: anchored managers render no header, so this is what a screen reader hears - the button's name
     className: 'df-load-manager-modal',
     origin: document.getElementById('btn-load'),   // scale-open from the Load button
     anchor: document.getElementById('btn-load'),   // anchored under the Load button (item 5) so the tab row never jumps

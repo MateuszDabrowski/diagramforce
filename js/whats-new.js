@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.23.7';
-import { buildModal } from './feedback.js?v=1.23.7';
+import { compareSemver } from './util.js?v=1.24.0';
+import { buildModal } from './feedback.js?v=1.24.0';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,29 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.24.0 — covers EVERYTHING since 1.23.0: the 1.23.1 / 1.23.2 patches (never announced - the overlay fires on
+  // major/minor only) plus the 1.23.3-1.23.7 dev builds that were bumped but never tagged, so every user-facing
+  // "since" reference says 1.24.0 (never tagged, but 1.23.7 DID reach prod on 2026-09-13, deployed straight from the
+  // working tree outside the tag/CI flow - users have had the features for days; a patch key never fires this
+  // overlay, so it is still their first announcement). The theme, by owner brief: Diagramforce used FROM other tools - Slot, Google
+  // Drive, Claude - so those three lead, in that order, each under its own mark (icon-slot / icon-gdrive /
+  // icon-claude are inlined in index.html; the SLDS sprite has none of them), then the spec for everyone not on
+  // Claude (owner wording, 2026-09-15). Deliberately OMITTED (owner call at
+  // cut): the #new= address + PWA shortcuts (plumbing Slot uses, not a headline), 1.23.1's Auto-size-hugs-Zones
+  // fix, and the tab title on its own (it is the visible half of the Slot item).
+  {
+    version: '1.24.0',
+    title: "What's new in Diagramforce",
+    intro: 'Diagramforce now works from where you already are: a tab in Slot on the Mac, a right-click in Google Drive, and a Claude skill that checks its own work harder. Plus Present for calls, and a Relationships table for data models.',
+    highlights: [
+      { icon: 'icon-slot', text: '<strong>Diagramforce in Slot.</strong> <a href="https://mateuszdabrowski.pl/slot/" target="_blank" rel="noopener">Slot</a> keeps every Google and Microsoft account in one native Mac app, each with its own isolated data - and Diagramforce can be a tab in it. Each account gets its own diagrams and Drive connection, and that connection stays signed in: restored when the tab opens, renewed before the token lapses. No more red icon.' },
+      { icon: 'icon-gdrive', text: '<strong>Open with Diagramforce, from Google Drive.</strong> Diagramforce is a Google Workspace add-on: right-click a .dgf file in Drive and Open with Diagramforce. <a href="https://workspace.google.com/marketplace/app/diagramforce/873718407054" target="_blank" rel="noopener">Get it on the Google Marketplace</a>.' },
+      { icon: 'icon-claude', text: '<strong>The Claude skill checks its work harder.</strong> Its validator now warns on what loads but reads wrong - a relationship with no crow\'s-foot, a connector on a card side with no port, a lane that owns only some of its shapes - and the bar is zero warnings. <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Get the skill</a>.' },
+      { icon: 'einstein', text: '<strong>Don\'t use the Claude skill?</strong> The universal LLM spec was updated too and has you covered - any model that writes JSON can draw from it. <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener">Get the spec</a>.' },
+      { icon: 'screen', text: '<strong>Present.</strong> You created a great diagram and now it is time to show it to the world? Click View &rsaquo; Present, or Cmd/Ctrl+Enter, and enter a full-screen mode focused on that diagram alone. You can still edit and extend it, but now it is the star of the show, with no other tabs or menus visible.' },
+      { icon: 'relate', text: '<strong>Relationships, as a table.</strong> The Data Model table view has a second grid: one row per relationship, with both objects, the fields on each end, and the cardinality as drawn. Sort it, filter it, copy it as Markdown, or export it to its own CSV.' },
+    ],
+  },
   // 1.23.0 — covers EVERYTHING since 1.22.0, i.e. the 1.22.1 / .2 / .3 patches plus the unreleased 1.22.4 work,
   // (1.22.4 was bumped but never tagged, so no user ever saw it — every user-facing "since" reference says 1.23.0),
   // because `isNewerRelease` only fires on major/minor: a user last seen on 1.22.0 never got an overlay for any
