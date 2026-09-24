@@ -1,11 +1,11 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.24.0';
-import { ER_MARKER_D } from './er-markers.js?v=1.24.0';
-import { cycleKeyType, keyImpliesRequired, keyTypeLabel, applyKeyType, newField } from './field-model.js?v=1.24.0';
-import { COLOR_SCHEMA, recolorCellIcon } from './properties/color-schema.js?v=1.24.0';
-import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.24.0';
+import { wrapSelectionWithMarker } from './markdown.js?v=1.24.1';
+import { ER_MARKER_D } from './er-markers.js?v=1.24.1';
+import { cycleKeyType, keyImpliesRequired, keyTypeLabel, applyKeyType, newField } from './field-model.js?v=1.24.1';
+import { COLOR_SCHEMA, recolorCellIcon } from './properties/color-schema.js?v=1.24.1';
+import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.24.1';
 // Property-panel widget builders (CLEANUP S2 slice 3) — form fields, action buttons, pickers.
 import {
   CLONE_ICON_SVG, addActionBtn, addApplySizeBtn, addAutoSizeBtn, addChipInput, addCloneBtn,
@@ -14,44 +14,44 @@ import {
   addRotationField, addSegmented, addSelect, addText, addTextarea, addToggle,
   bringToFront, cloneCellPlain, copyCellStyle, field, getActiveCell, hasStyleClip,
   pasteCellStyle, rotationField, section, sendToBack, toHex, wireMarkdownShortcuts,
-} from './properties/widgets.js?v=1.24.0';
+} from './properties/widgets.js?v=1.24.1';
 // Re-export the style-clipboard trio for app.js (selection.setStyleApi) — they live in widgets.js now.
-export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.24.0';
+export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.24.1';
 // DataObject field editor (CLEANUP S2 slice 4) — renderDataObjectProps + the dblclick handler call these back.
-import { renderFieldEditor, openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.24.0';
+import { renderFieldEditor, openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.24.1';
 // SF_FIELD_TYPES lives in field-editor.js now; table-view.js still imports it from properties.js (this re-export).
-export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.24.0';
+export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.24.1';
 // Link / connector panel (CLEANUP S2 slice 5) — the facade dispatch (showProperties) + the multi-select
 // Connectors section use these; setLinkEndpoints is reached via properties.setLinkEndpoints (app.js), so re-export.
 import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle,
-  applyLinkFontColor, applyLinkFontSize, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.24.0';
-export { setLinkEndpoints } from './properties/link-props.js?v=1.24.0';
+  applyLinkFontColor, applyLinkFontSize, setUserLinkLabel, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.24.1';
+export { setLinkEndpoints } from './properties/link-props.js?v=1.24.1';
 // Shape type metadata (CLEANUP S2 slice 6) — pure data maps shared by the facade + renderers + convert + autoSizeCell.
-import { TYPE_LABELS, DEFAULT_SIZES } from './properties/type-meta.js?v=1.24.0';
+import { TYPE_LABELS, DEFAULT_SIZES } from './properties/type-meta.js?v=1.24.1';
 // Shape-type conversion (CLEANUP S2 slice 6) — the renderers' Convert buttons + the right-click convert menu (via
 // buildCellActions) call these; each rewires a cell in place preserving links + embedding.
-import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.24.0';
+import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.24.1';
 // Shared render tail (CLEANUP S2 slice 7) — every render*Props ends with finishStandardProps; autoSizeCell +
 // buildCellActions are wired into selection via app.js (properties.autoSizeCell / .buildCellActions), so re-export.
-import { finishStandardProps, autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.24.0';
-export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.24.0';
+import { finishStandardProps, autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.24.1';
+export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.24.1';
 // Match Container Height (1.23.0) — the canvas menus reach it through the facade, same as autoSizeCell:
 // selection.setLaneMatcher(...) in app.js injects these so js/selection/ never imports js/properties/.
-export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.24.0';
+export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.24.1';
 // Per-family property renderers (CLEANUP S2 slice 8+) — the showProperties() dispatch calls these back.
-import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps } from './properties/renderers-sequence.js?v=1.24.0';
-import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.24.0';
-import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.24.0';
-import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.24.0';
-import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.24.0';
-import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.24.0';
-import { triggerDownload } from './persistence.js?v=1.24.0';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.24.0';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.24.0';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.24.0';
-import * as stencilModule from './stencil.js?v=1.24.0';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.24.0';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.24.0';
+import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps } from './properties/renderers-sequence.js?v=1.24.1';
+import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.24.1';
+import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.24.1';
+import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.24.1';
+import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.24.1';
+import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.24.1';
+import { triggerDownload } from './persistence.js?v=1.24.1';
+import { confirmModal, showToast, buildModal } from './feedback.js?v=1.24.1';
+import { getAllIcons, getIconDataUri } from './icons.js?v=1.24.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.24.1';
+import * as stencilModule from './stencil.js?v=1.24.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.24.1';
+import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.24.1';
 import {
   duplicate as clipboardDuplicate,
   copy as clipboardCopy,
@@ -61,14 +61,14 @@ import {
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.24.0';
-import * as history from './history.js?v=1.24.0';
-import { startImageAddFlow } from './image-component.js?v=1.24.0';
-import { escHtml, sanitizeFilenamePart, sanitizeCssColor } from './util.js?v=1.24.0';
-import { getActiveTabName } from './tabs.js?v=1.24.0';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.24.0';
-import { newFid } from './shapes.js?v=1.24.0';
-import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './gantt-layout.js?v=1.24.0';
+} from './clipboard.js?v=1.24.1';
+import * as history from './history.js?v=1.24.1';
+import { startImageAddFlow } from './image-component.js?v=1.24.1';
+import { escHtml, sanitizeFilenamePart, sanitizeCssColor } from './util.js?v=1.24.1';
+import { getActiveTabName } from './tabs.js?v=1.24.1';
+import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.24.1';
+import { newFid } from './shapes.js?v=1.24.1';
+import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './gantt-layout.js?v=1.24.1';
 
 
 
@@ -238,6 +238,13 @@ function getInlineEditTarget(cell) {
   if (type === 'sf.Container' || type === 'sf.DataObject') return { kind: 'attr', path: 'headerLabel/text', selector: 'headerLabel' };
   // A Note's main field is its multi-line description (subtitle), not the heading - edit that on double-click (R5).
   if (type === 'sf.Note') return { kind: 'attr', path: 'subtitle/text', selector: 'subtitle' };
+  // Shapes whose visible label is DERIVED from a model prop: editing label/text alone changed the pixels but not the
+  // prop, so the panel, the Table view, exports and Go To labels kept the old text and the edit vanished on reload
+  // (audit 2026-09-23). Write the prop; the shape re-derives its label from it.
+  if (type.startsWith('df.Flow')) return { kind: 'model', prop: 'name', selector: 'label' };
+  if (type === 'df.Pill') return { kind: 'model', prop: 'pillText', selector: 'label' };
+  // A Gantt bar shows label/text but the panel, timeline and table read taskLabel - keep both, in one undo step.
+  if (type === 'sf.GanttTask') return { kind: 'attr', path: 'label/text', selector: 'label', alsoProp: 'taskLabel' };
   return { kind: 'attr', path: 'label/text', selector: 'label' };
 }
 
@@ -266,22 +273,8 @@ function startInlineEdit(cellView, evt) {
     textEl = cellView.el.querySelector('.labels text[joint-selector="text"]')
           || cellView.el.querySelector('text[joint-selector="text"]');
     commit = (newText) => {
-      const labels = cell.labels();
-      const fontSize = labels?.[0]?.attrs?.text?.fontSize ?? 13;
-      const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';   // Label color override (v1.16.1)
-      // Single labels() call so the change emits exactly one `change:labels`
-      // event — keeps undo/redo at one entry per edit.
-      cell.labels(newText ? [{
-        markup: [
-          { tagName: 'rect', selector: 'body' },
-          { tagName: 'text', selector: 'text' },
-        ],
-        attrs: {
-          text: { text: newText, fill: fillColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
-          body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
-        },
-        position: { distance: 0.5, offset: 0 },
-      }] : []);
+      // The panel's setter: keeps the mapping badge, the frequency overlay, a Flow pill and a dragged position.
+      setUserLinkLabel(cell, newText);
       titleEl.textContent = newText || 'Unnamed';
     };
   } else if (target.kind === 'model') {
@@ -293,7 +286,9 @@ function startInlineEdit(cellView, evt) {
     currentText = cell.attr(target.path) || '';
     textEl = cellView.el.querySelector(`text[joint-selector="${target.selector}"]`);
     if (!textEl) return;
-    commit = (newText) => cell.attr(target.path, newText);
+    commit = target.alsoProp
+      ? (newText) => { history.startBatch(); try { cell.attr(target.path, newText); cell.set(target.alsoProp, newText); } finally { history.endBatch(); } }
+      : (newText) => cell.attr(target.path, newText);
   }
 
   const canvasContainer = document.getElementById('canvas-container');
@@ -450,7 +445,8 @@ function startInlineEdit(cellView, evt) {
 
   textarea.addEventListener('blur', finish);
   textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+    // While an IME composes, Escape cancels the COMPOSITION, not the edit (audit 2026-09-23).
+    if (e.key === 'Escape' && !e.isComposing) {
       textarea.value = currentText;
       textarea.blur();
     }
@@ -524,6 +520,11 @@ const shapeStateSel = (cell) => cell.isLink?.() ? 'line' : (SHAPE_STATE_TARGET[c
 
 // Exported so Change Review's "Apply as Highlight states" can bake a diff into real borderStyle props.
 export function applyShapeState(cell, style) {
+  // One undo step for the state, its stash and the stroke it paints.
+  history.startBatch();
+  try { applyShapeStateInner(cell, style); } finally { history.endBatch(); }
+}
+function applyShapeStateInner(cell, style) {
   if (cell.isLink?.()) { applyLinkState(cell, style); return; }
   const sel = shapeStateSel(cell);
   const prev = cell.get('borderStyle') || 'standard';
@@ -1009,8 +1010,9 @@ function showMultiProperties(count) {
     const radii = elements.map(c => c.attr('body/rx') ?? 8);
     const allSameR = radii.every(r => r === radii[0]);
     addNumber(appearanceSec, 'Corner radius', allSameR ? radii[0] : 8, v => {
-      elements.forEach(c => { c.attr('body/rx', v); c.attr('body/ry', v); });
-    });
+      history.startBatch();   // one undo step for the whole selection, not 2 per shape
+      try { elements.forEach(c => { c.attr('body/rx', v); c.attr('body/ry', v); }); } finally { history.endBatch(); }
+    }, { min: 0 });
   }
 
   // ── Sequence lifeline — port count — only when every selected element is
@@ -1251,7 +1253,10 @@ function showMultiProperties(count) {
   const delBtn = document.createElement('button');
   delBtn.className = 'df-properties__btn df-properties__btn--delete';
   delBtn.textContent = 'Delete all';
-  delBtn.addEventListener('click', () => { graph.removeCells(cells); selection.clearSelection(); });
+  delBtn.addEventListener('click', () => {   // one undo step, links included (audit 2026-09-23, P0-13)
+    history.startBatch();
+    try { graph.removeCells(cells); selection.clearSelection(); } finally { history.endBatch(); }
+  });
   delWrap.appendChild(delBtn);
   footerEl.appendChild(delWrap);
 }

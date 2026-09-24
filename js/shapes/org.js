@@ -1,7 +1,7 @@
 // Organisation-diagram shapes (OrgPerson) (CLEANUP S3). registerOrg() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { portGroups, portItems } from './ports.js?v=1.24.0';
+import { portGroups, portItems } from './ports.js?v=1.24.1';
 
 export function registerOrg() {
   // --- OrgPerson ---
@@ -243,6 +243,9 @@ export function registerOrg() {
 
       // Image handling
       m.attr('avatarImage/opacity', hasPhoto ? 1 : 0, { silent: true });
+      // Removing the photo must remove the BYTES: hiding it at opacity 0 left the whole data URI in every save, export,
+      // Drive file and share link (audit 2026-09-23).
+      if (!hasPhoto && m.attr('avatarImage/href')) m.attr('avatarImage/href', '', { silent: true });
       if (hasPhoto) {
         const imgSize = avatarR * 2;
         m.attr('avatarImage/x', avatarCx - avatarR, { silent: true });

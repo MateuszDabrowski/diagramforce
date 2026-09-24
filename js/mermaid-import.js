@@ -11,13 +11,14 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.24.0';
-import { ER_MARKER_D } from './er-markers.js?v=1.24.0';
-import { showError, showToast } from './feedback.js?v=1.24.0';
+import { createElementFromComponent } from './components.js?v=1.24.1';
+import { ER_MARKER_D } from './er-markers.js?v=1.24.1';
+import { showError, showToast } from './feedback.js?v=1.24.1';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.1';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.24.0';
+  from './gantt-layout.js?v=1.24.1';
 
 let modules = {};
 
@@ -81,6 +82,13 @@ export function importMermaidText(text, opts = {}) {
 
   if (!parsed || !parsed.elements || parsed.elements.length === 0) {
     showError('Mermaid import failed: no nodes found.');
+    return false;
+  }
+  // The same ceiling every other import enforces. Mermaid had none, so it could build a diagram that the share link,
+  // the Drive reopen and a bundle restore then all refused to load (audit 2026-09-23).
+  const cellEstimate = parsed.elements.length + (parsed.links || []).length + (parsed.groups || []).length;
+  if (cellEstimate > MAX_CELL_COUNT) {
+    showError(`Mermaid import failed: ${cellEstimate} shapes and connectors is more than a diagram can hold (${MAX_CELL_COUNT}). Split the source into smaller diagrams.`);
     return false;
   }
 
@@ -621,7 +629,7 @@ function buildGantt(parsed, modules) {
   requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
   const n = parsed.tasks.length;
   const w = parsed.warnings || [];
-  if (w.length) showToast(`Imported ${n} task${n === 1 ? '' : 's'} — ${w[0]}`, 'warning', { duration: 9000 });
+  if (w.length) showToast(`Imported ${n} task${n === 1 ? '' : 's'} - ${w[0]}`, 'warning', { duration: 9000 });
   else showToast(`Imported ${n} task${n === 1 ? '' : 's'} from Mermaid`, 'success');
   return true;
 }
@@ -679,6 +687,13 @@ export function detectDiagramType(text) {
 // or a dangling reference degrades to the chart start plus a warning instead of hanging.
 const GANTT_TAGS = new Set(['done', 'active', 'crit', 'milestone', 'vert']);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar day, not just the YYYY-MM-DD shape. */
+function isCalendarDate(iso) {
+  if (!ISO_DATE.test(iso)) return false;
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
 const DURATION = /^(\d+(?:\.\d+)?)\s*(ms|[dwhms])$/i;
 
 const gDate = (iso) => new Date(`${iso}T00:00:00`);
@@ -705,6 +720,7 @@ export function parseGantt(text) {
   const warnings = [];
   const groups = [];            // { id, label, order }
   const tasks = [];             // { id, label, tags, startSpec, afterIds, durDays, endDate, groupId, order }
+  const badDates = [];          // "Task (2026-13-45)" - date-shaped tokens that are not calendar days
   let openGroup = null;
   const unsupported = new Set();
 
@@ -742,14 +758,20 @@ export function parseGantt(text) {
       id = parts.shift();
     }
     let startSpec = 'prev', afterIds = [], startDate = null;
-    if (parts.length && ISO_DATE.test(parts[0])) { startSpec = 'date'; startDate = parts.shift(); }
+    // A date-SHAPED token that is not a calendar date (2026-13-45, 2026-02-30) is dropped: it used to flow on as
+    // "NaN-NaN-NaN" end dates and a NaN span, or roll silently into the next month (audit 2026-09-23). The task then
+    // follows its predecessor like one with no start, and is reported with them.
+    if (parts.length && ISO_DATE.test(parts[0])) {
+      const d = parts.shift();
+      if (isCalendarDate(d)) { startSpec = 'date'; startDate = d; } else badDates.push(`${label} (${d})`);
+    }
     else if (parts.length && /^after\s/i.test(parts[0])) {
       startSpec = 'after';
       afterIds = parts.shift().replace(/^after\s+/i, '').split(/\s+/).filter(Boolean);
     }
     let durDays = null, endDate = null;
     if (parts.length) {
-      if (ISO_DATE.test(parts[0])) endDate = parts.shift();
+      if (ISO_DATE.test(parts[0])) { const d = parts.shift(); if (isCalendarDate(d)) endDate = d; else badDates.push(`${label} (${d})`); }
       else { const d = durationDays(parts[0]); if (d !== null) { durDays = d; parts.shift(); } }
     }
     tasks.push({ id: id || `t${tasks.length + 1}`, label, tags, startSpec, afterIds, startDate, endDate,
@@ -792,7 +814,7 @@ export function parseGantt(text) {
   const stranded = tasks.filter((t) => !t.startDate);
   if (stranded.length) {
     warnings.push(`${stranded.length} task(s) had no resolvable start (an unknown or circular \`after\`): `
-      + `${stranded.map((t) => t.label).join(', ')} — anchored at ${anchor}.`);
+      + `${stranded.map((t) => t.label).join(', ')} - anchored at ${anchor}.`);
     for (const t of stranded) {
       t.startDate = anchor;
       t.endDate = gAdd(anchor, t.milestone ? 0 : Math.max(t.durDays ?? 1, 1));
@@ -800,6 +822,14 @@ export function parseGantt(text) {
   }
   if (unsupported.size) {
     warnings.push(`Not imported (no equivalent on a Diagramforce Gantt): ${[...unsupported].join(', ')}.`);
+  }
+  if (badDates.length) {
+    warnings.unshift(`Ignored ${badDates.length} date${badDates.length === 1 ? '' : 's'} that ${badDates.length === 1 ? 'is' : 'are'} not on the calendar: ${badDates.join(', ')}.`);
+  }
+
+  // An end date BEFORE its start (`2026-02-01, 2026-01-01`) is a one-day task, not a negative bar.
+  for (const t of tasks) {
+    if (t.startDate && t.endDate && t.endDate < t.startDate) t.endDate = gAdd(t.startDate, t.milestone ? 0 : 1);
   }
 
   // ── Timeline window + view mode. Derived, never authored. ──
@@ -810,7 +840,11 @@ export function parseGantt(text) {
   const span = Math.max(1, gDiff(from, to));
   const viewMode = span <= 31 ? 'day' : span <= 182 ? 'week' : 'month';
   const perPeriod = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : 30;
-  const numPeriods = Math.max(4, Math.ceil(span / perPeriod) + 1);
+  // Capped at the Periods control's own maximum (104): a `100000d` task built a 3,335-column timeline (audit
+  // 2026-09-23). Tasks past the edge still carry their real dates.
+  const wanted = Math.max(4, Math.ceil(span / perPeriod) + 1);
+  const numPeriods = Math.min(104, wanted);
+  if (wanted > numPeriods) warnings.push(`The schedule spans ${Math.round(span / 365)} years; the timeline shows the first ${numPeriods} months.`);
 
   // Dependencies: `after` IS a finish-to-start link, which is exactly linkKind 'ganttDep' + depType 'FS'.
   const links = [];
@@ -868,8 +902,27 @@ const FLOW_SHAPES = [
   { open: '{',   close: '}',   shape: 'rhombus' },
 ];
 
+/** Split flowchart source into statements: one per line AND one per `;` outside quotes and shape brackets - Mermaid
+ *  allows `graph TD; A-->B; B-->C` on one line, which imported as nothing (audit 2026-09-23). */
+function flowStatements(text) {
+  const out = [];
+  for (const raw of text.split('\n')) {
+    let depth = 0, quote = null, start = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (quote) { if (ch === quote) quote = null; continue; }
+      if (ch === '"') quote = ch;
+      else if ('[({'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+      else if (ch === ';' && depth === 0) { out.push(raw.slice(start, i)); start = i + 1; }
+    }
+    out.push(raw.slice(start));
+  }
+  return out.map((l) => l.trim()).filter(Boolean);
+}
+
 export function parseFlowchart(text, targetType) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = flowStatements(text);
 
   const elementsById = new Map();
   const links = [];
@@ -990,11 +1043,11 @@ function parseFlowLineEdges(line, ensureNode, links) {
   let pos = 0;
   const len = line.length;
 
-  // Parse first node ref
-  let prev = scanNodeRef(line, pos);
-  if (!prev) return; // not a node line
-  pos = prev.next;
-  let prevNode = ensureNode(prev.id, prev.label, prev.shape);
+  // Parse the first node group (`A` or `A & B`)
+  const first = scanNodeGroup(line, pos);
+  if (!first) return; // not a node line
+  pos = first.next;
+  let prevNodes = first.refs.map((r) => ensureNode(r.id, r.label, r.shape));
 
   while (pos < len) {
     // Skip whitespace
@@ -1006,46 +1059,88 @@ function parseFlowLineEdges(line, ensureNode, links) {
     if (!edge) break;
     pos = edge.next;
 
-    // Skip whitespace, then parse next node
+    // Skip whitespace, then parse the next node group. `A --> B & C` links A to BOTH (C used to be dropped).
     while (pos < len && /\s/.test(line[pos])) pos++;
-    const nxt = scanNodeRef(line, pos);
+    const nxt = scanNodeGroup(line, pos);
     if (!nxt) break;
     pos = nxt.next;
 
-    const nxtNode = ensureNode(nxt.id, nxt.label, nxt.shape);
-    links.push({
-      source: prevNode.id,
-      target: nxtNode.id,
-      label: edge.label || '',
-      style: edge.style, // 'solid' | 'dotted' | 'thick'
-      arrow: edge.arrow, // true/false
-    });
-    prevNode = nxtNode;
+    const nxtNodes = nxt.refs.map((r) => ensureNode(r.id, r.label, r.shape));
+    for (const from of prevNodes) {
+      for (const to of nxtNodes) {
+        links.push({
+          source: from.id,
+          target: to.id,
+          label: edge.label || '',
+          style: edge.style, // 'solid' | 'dotted' | 'thick'
+          arrow: edge.arrow, // true/false
+        });
+      }
+    }
+    prevNodes = nxtNodes;
   }
 }
 
-/** Scan a node reference starting at pos. Returns { id, label, shape, next } or null. */
+/** Scan a node reference starting at pos. Returns { id, label, shape, next } or null.
+ *  Mermaid lets an arrow sit right against an id (`A-->B`, `C-.->D`, `B---C`) and ids contain single hyphens
+ *  (`node-1`). The old `[A-Za-z0-9_\-.:]+` swallowed the arrow, so `A-->B` imported as ONE node "A--" and no edge
+ *  (audit 2026-09-23). An id now ends where an edge operator (`--`, `-.`, `==`, `~~~`) or a `:::class` suffix begins;
+ *  it may use any letter (`Zażółć`), and a quoted label may contain the bracket that closes the shape. */
 function scanNodeRef(line, pos) {
-  // Node id = alnum + _ - . :
-  const idRe = /[A-Za-z0-9_\-.:]+/y;
-  idRe.lastIndex = pos;
-  const m = idRe.exec(line);
-  if (!m) return null;
-  const id = m[0];
-  let next = idRe.lastIndex;
+  let i = pos;
+  while (i < line.length && /[\p{L}\p{N}_.:\-]/u.test(line[i])) {
+    const rest = line.slice(i);
+    if (/^(--|-\.|==|~~~|:::)/.test(rest)) break;
+    i++;
+  }
+  if (i === pos) return null;
+  const id = line.slice(pos, i);
+  let next = skipClassSuffix(line, i);
 
   // Check for a shape block immediately after the id
   for (const sh of FLOW_SHAPES) {
     if (line.startsWith(sh.open, next)) {
       const bodyStart = next + sh.open.length;
-      const closeIdx = line.indexOf(sh.close, bodyStart);
+      // A quoted label ends at its closing quote - the close token is searched AFTER it, so `A["Array[0] v"]` keeps
+      // its whole label instead of stopping at the first `]`.
+      let searchFrom = bodyStart;
+      const q = /^\s*(["'])/.exec(line.slice(bodyStart));
+      if (q) {
+        const endQuote = line.indexOf(q[1], bodyStart + q[0].length);
+        if (endQuote !== -1) searchFrom = endQuote + 1;
+      }
+      const closeIdx = line.indexOf(sh.close, searchFrom);
       if (closeIdx === -1) continue;
       let label = line.slice(bodyStart, closeIdx).trim();
       label = unquoteLabel(label);
-      return { id, label, shape: sh.shape, next: closeIdx + sh.close.length };
+      return { id, label, shape: sh.shape, next: skipClassSuffix(line, closeIdx + sh.close.length) };
     }
   }
   return { id, label: null, shape: 'rect', next };
+}
+
+/** Skip a `:::className` style suffix (`A:::red`, `A[x]:::red`) - styling the importer does not carry, and which used
+ *  to become part of the node id. */
+function skipClassSuffix(line, pos) {
+  const m = /^:::[\w-]+/.exec(line.slice(pos));
+  return m ? pos + m[0].length : pos;
+}
+
+/** Scan `A & B & C` - one or more node refs joined by `&`. Returns { refs, next } or null. */
+function scanNodeGroup(line, pos) {
+  const first = scanNodeRef(line, pos);
+  if (!first) return null;
+  const refs = [first];
+  let next = first.next;
+  for (;;) {
+    const m = /^\s*&\s*/.exec(line.slice(next));
+    if (!m) break;
+    const more = scanNodeRef(line, next + m[0].length);
+    if (!more) break;
+    refs.push(more);
+    next = more.next;
+  }
+  return { refs, next };
 }
 
 /** Strip surrounding quotes and decode mermaid HTML entities. */
@@ -1068,19 +1163,38 @@ function scanEdge(line, pos) {
   //   -->   ---   -.->   ==>   ----
   const remaining = line.slice(pos);
 
+  // Labelled edges, found with indexOf instead of lazy regexes: `^--\s*([^-][^|]*?)\s*-->` backtracked
+  // quadratically on a long line that did not match (a 20K-character line took 375 ms+; audit 2026-09-23). Same
+  // rules: the label starts with neither the opener's character nor whitespace-only, holds no `|`, and ends at the
+  // FIRST closer.
+  const labelled = (open, close, badFirst, badChars) => {
+    if (!remaining.startsWith(open)) return null;
+    // `-->`, `---`, `==>`, `-.->` are PLAIN arrows, not the opener of a labelled one. The old regexes accepted
+    // `--> B -->` as the labelled edge "> B", so the most basic chain, `A --> B --> C`, imported as ONE edge A->C
+    // labelled "> B" (found while fixing the audit's Mermaid items, 2026-09-23).
+    const after = remaining[open.length];
+    if (after === '>' || after === open[open.length - 1] || (open === '-.' && after === '-')) return null;
+    const end = remaining.indexOf(close, open.length);
+    if (end < 0) return null;
+    const label = remaining.slice(open.length, end).trim();
+    if (!label || label[0] === badFirst || badChars.test(label)) return null;
+    return { label, next: pos + end + close.length };
+  };
   // Pattern: `-- label -->` or `-- label ---`
-  let m = /^--\s*([^-][^|]*?)\s*-->/.exec(remaining);
-  if (m) return { style: 'solid', arrow: true, label: m[1].trim(), next: pos + m[0].length };
-  m = /^--\s*([^-][^|]*?)\s*---/.exec(remaining);
-  if (m) return { style: 'solid', arrow: false, label: m[1].trim(), next: pos + m[0].length };
+  let hit = labelled('--', '-->', '-', /\|/);
+  if (hit) return { style: 'solid', arrow: true, label: hit.label, next: hit.next };
+  hit = labelled('--', '---', '-', /\|/);
+  if (hit) return { style: 'solid', arrow: false, label: hit.label, next: hit.next };
 
   // Pattern: `== label ==>`
-  m = /^==\s*([^=][^|]*?)\s*==>/.exec(remaining);
-  if (m) return { style: 'thick', arrow: true, label: m[1].trim(), next: pos + m[0].length };
+  hit = labelled('==', '==>', '=', /\|/);
+  if (hit) return { style: 'thick', arrow: true, label: hit.label, next: hit.next };
 
   // Pattern: `-. label .->`
-  m = /^-\.\s*([^.]+?)\s*\.->/.exec(remaining);
-  if (m) return { style: 'dotted', arrow: true, label: m[1].trim(), next: pos + m[0].length };
+  hit = labelled('-.', '.->', '.', /\./);
+  if (hit) return { style: 'dotted', arrow: true, label: hit.label, next: hit.next };
+
+  let m;
 
   // Plain arrows
   m = /^(-\.->|--+>|==+>|--+-|==+=|-\.\.->)/.exec(remaining);
@@ -1096,7 +1210,7 @@ function scanEdge(line, pos) {
     let label = '';
     const rest = line.slice(next);
     const lm = /^\s*\|([^|]*)\|/.exec(rest);
-    if (lm) { label = lm[1].trim(); next += lm[0].length; }
+    if (lm) { label = unquoteLabel(lm[1].trim()); next += lm[0].length; }   // |"yes"| -> yes
 
     return { style, arrow, label, next };
   }
@@ -1182,7 +1296,9 @@ export function parseStateDiagram(text) {
     if (/^(state|note|direction|\[\*\]\s*:)/i.test(line) && !/-->/.test(line)) continue;
 
     // Transition: A --> B : label
-    const m = /^(\S+)\s*-->\s*(\S+)\s*(?::\s*(.*))?$/.exec(line);
+    // State ids stop at `:` (and `-->`): `Idle-->Running:start` is Idle -> Running labelled "start" - `\S+` made the
+    // target a state called "Running:start" (audit 2026-09-23). `[*]` is the start / end pseudo-state.
+    const m = /^(\[\*\]|[^\s:>-]+(?:-[^\s:>-]+)*)\s*-->\s*(\[\*\]|[^\s:>-]+(?:-[^\s:>-]+)*)\s*(?::\s*(.*))?$/u.exec(line);
     if (!m) continue;
     const [, lhs, rhs, label] = m;
     const srcId = lhs === '[*]' ? getStart() : ensureState(lhs)?.id;
@@ -1218,15 +1334,17 @@ export function parseErDiagram(text) {
 
     if (currentBlock) {
       if (line === '}') { currentBlock = null; continue; }
-      // Field syntax:  type name [PK|FK|UK] "comment"
-      const fm = /^(\S+)\s+(\S+)(?:\s+(PK|FK|UK))?(?:\s+"([^"]*)")?$/.exec(line);
+      // Field syntax:  type name [PK|FK|UK][, PK|FK|UK]... "comment". Mermaid documents the comma list (`PK, FK`);
+      // the single-key pattern dropped such a field entirely (audit 2026-09-23). PK wins over FK for the key marker.
+      const fm = /^(\S+)\s+(\S+)(?:\s+((?:PK|FK|UK)(?:\s*,\s*(?:PK|FK|UK))*))?(?:\s+"([^"]*)")?$/.exec(line);
       if (fm) {
-        const [, fType, fName, key] = fm;
+        const [, fType, fName, keyList] = fm;
+        const keys = (keyList || '').split(/\s*,\s*/);
         currentBlock.fields.push({
           label: fName,
           apiName: fName,
           type: fType,
-          keyType: key === 'PK' ? 'pk' : key === 'FK' ? 'fk' : null,
+          keyType: keys.includes('PK') ? 'pk' : keys.includes('FK') ? 'fk' : null,
         });
       }
       continue;
@@ -1248,7 +1366,7 @@ export function parseErDiagram(text) {
       rels.push({
         source: leftName,
         target: rightName,
-        label: (label || '').trim(),
+        label: unquoteLabel((label || '').trim()),   // `: "places order"` -> places order
         sourceMarker: erMarkerFromLeft(leftCard),
         targetMarker: erMarkerFromRight(rightCard),
       });

@@ -1,20 +1,20 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as history from './history.js?v=1.24.0';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.24.0';
-import { fieldFocus } from './canvas/focus-state.js?v=1.24.0';
+import * as history from './history.js?v=1.24.1';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.24.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.24.1';
 // S9: the corner-drag resize interaction (handles + tracking guides + per-type snap/date logic)
 // extracted to ./selection/resize-handles.js; initResizeHandles wires graph/paper/selectedIds in init().
-import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.24.0';
+import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.24.1';
 // S9: the canvas context menu (right-click + touch long-press) + its action helpers extracted to
 // ./selection/context-menu.js; initContextMenu wires the live graph/selection in init(). The 6 app.js
 // action-API setters + copySelectionAsPng live there now and are re-exported below so wiring is unchanged.
-import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.24.0';
+import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.24.1';
 export {
   setAutoSizer, setCopyAsPng, setEndpointSetter, setActionProvider, setStyleApi, setCaptureApi, setLaneMatcher,
   copySelectionAsPng,
-} from './selection/context-menu.js?v=1.24.0';
+} from './selection/context-menu.js?v=1.24.1';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -22,6 +22,21 @@ const onChangeCallbacks = [];
 
 // Resize handles (RESIZE_CORNERS + addResizeHandles/removeResizeHandles) moved to
 // ./selection/resize-handles.js (S9); imported above, wired via initResizeHandles in init().
+
+/** True when any ANCESTOR of `cell` (not the cell itself) is in `ids`. Cycle-safe: a crafted parent loop must not
+ *  hang a drag (the sanitiser rejects loops at load, this is the second layer). */
+export function hasSelectedAncestor(cell, ids) {
+  const graph = cell.graph;
+  if (!graph) return false;
+  const seen = new Set([cell.id]);
+  let pid = cell.get('parent');
+  while (pid != null && !seen.has(pid)) {
+    if (ids.has(pid)) return true;
+    seen.add(pid);
+    pid = graph.getCell(pid)?.get('parent');
+  }
+  return false;
+}
 
 export function init(_graph, _paper) {
   graph = _graph;
@@ -844,12 +859,15 @@ function setupMultiDrag() {
       if (movedByEngine.has(id)) return;
       const cell = graph.getCell(id);
       if (!cell?.isElement()) return;
-      // Check if this element is a child of another selected element (already moved)
-      const parentId = cell.get('parent');
-      if (parentId && selectedIds.has(parentId)) return;
-      const p = cell.position();
-      cell.position(p.x + dx, p.y + dy);
-      // JointJS will move embedded children automatically via the parent's position change
+      // A descendant of ANY other selected element moves with that ancestor's translate below - moving it here too
+      // would double its offset. (Checked up the whole chain, not just the direct parent: a grandchild whose parent
+      // is unselected but whose grandparent is selected is carried by the grandparent.)
+      if (hasSelectedAncestor(cell, selectedIds)) return;
+      // translate(), NOT position(): in JointJS 4 position(x, y) moves ONLY the element - its embedded children
+      // stayed behind, so dragging a selection that held a Zone left the Zone's contents in place (audit
+      // 2026-09-23, P0-5). translate() cascades to the embeds and tags them `translateBy`, which the embedding
+      // auto-fit already reads as "carried by an ancestor".
+      cell.translate(dx, dy);
     });
 
     // Keep the drop-ghost sized to the whole (now-moved) selection.

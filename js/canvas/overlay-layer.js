@@ -16,7 +16,7 @@
 //   deactivate() → unsubscribe, clear + remove the <g>, run onTeardown (reset the overlay's own state / fire a
 //                  caller banner). Idempotent: a no-op when not active.
 //   isActive()   → activation state (review exposes this as isReviewing()).
-import { cctx } from './context.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -57,7 +57,14 @@ export function createOverlay({ className, events, onTeardown } = {}) {
       if (active) { drawFn(); return true; }   // re-entry: refresh only — never stack a second listener set
       active = true;
       drawFn();
-      redraw = () => { if (active) drawFn(); };
+      // ONE redraw per frame. Dragging a captor fires change:position for it AND each child (JointJS's translate
+      // cascade), and a synchronous redraw per event made every frame O(children x elements) (audit 2026-09-23).
+      let raf = null;
+      redraw = () => {
+        if (!active || raf != null) return;
+        raf = requestAnimationFrame(() => { raf = null; if (active) drawFn(); });
+      };
+      redraw.cancel = () => { if (raf != null) { cancelAnimationFrame(raf); raf = null; } };
       graph.on(events, redraw);
       paper.on('render:done', redraw);
       graph.once('reset', api.deactivate);   // tab switch / new diagram / JSON load
@@ -67,6 +74,7 @@ export function createOverlay({ className, events, onTeardown } = {}) {
       if (!active) return;
       const { graph, paper } = cctx;
       active = false;
+      redraw?.cancel?.();
       if (graph && redraw) graph.off(events, redraw);
       if (paper && redraw) paper.off('render:done', redraw);
       graph?.off?.('reset', api.deactivate);

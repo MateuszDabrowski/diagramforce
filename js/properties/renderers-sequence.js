@@ -3,9 +3,45 @@
 // (finishStandardProps from render-core), reading graph/paper/selection + the panel DOM refs + the showProperties
 // dispatch via prctx at CALL time; never imports the facade back. The facade's showProperties() dispatch imports
 // these four back.
-import { prctx } from './context.js?v=1.24.0';
-import { finishStandardProps } from './render-core.js?v=1.24.0';
-import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { prctx } from './context.js?v=1.24.1';
+
+// Port rebuilds and the Actor lifeline toggle rewrite `ports` (and attrs / size), which history does not record - so
+// an undo reverted the COUNT but left the ports, and undoing "Hide lifeline" showed a lifeline with no ports
+// (audit 2026-09-23). Run the op with recording suppressed and push ONE command that restores the whole snapshot.
+function snapLifeline(cell) {
+  const ratios = cell.get('lifelinePortRatios');
+  return {
+    ports: JSON.parse(JSON.stringify(cell.get('ports') || {})),
+    count: cell.get('lifelinePortCount'),
+    ratios: Array.isArray(ratios) ? ratios.slice() : null,
+    show: cell.get('showLifeline'),
+    attrs: JSON.parse(JSON.stringify(cell.get('attrs') || {})),
+    size: { ...cell.size() },
+  };
+}
+function applyLifeline(cell, st) {
+  history.setSuppressed(true);
+  try {
+    cell.prop('ports', JSON.parse(JSON.stringify(st.ports)), { rewrite: true });
+    cell.set({ lifelinePortCount: st.count, showLifeline: st.show });
+    if (st.ratios) cell.set('lifelinePortRatios', st.ratios.slice()); else cell.unset('lifelinePortRatios');
+    cell.set('attrs', JSON.parse(JSON.stringify(st.attrs)));
+    cell.resize(st.size.width, st.size.height);
+  } finally { history.setSuppressed(false); }
+}
+function undoableLifelineOp(cell, op) {
+  const before = snapLifeline(cell);
+  history.flushPendingDragCommit();
+  history.setSuppressed(true);
+  let after;
+  try { op(); history.flushPendingDragCommit(); after = snapLifeline(cell); } finally { history.setSuppressed(false); }
+  if (JSON.stringify(after) !== JSON.stringify(before)) {
+    history.recordCommand(() => applyLifeline(cell, before), () => applyLifeline(cell, after));
+  }
+}
+import { finishStandardProps } from './render-core.js?v=1.24.1';
+import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.1';
 
 export function renderSequenceParticipantProps(cell) {
   // Content
@@ -26,7 +62,7 @@ export function renderSequenceParticipantProps(cell) {
   // Lifeline — port count (ports auto-distribute evenly along the lifeline)
   const lifeline = section(prctx.bodyEl, 'Lifeline');
   addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 5, v => {
-    joint.shapes.sf.rebuildSeqParticipantPorts(cell, v);
+    undoableLifelineOp(cell, () => joint.shapes.sf.rebuildSeqParticipantPorts(cell, v));
   });
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });
@@ -58,13 +94,13 @@ export function renderSequenceActorProps(cell) {
     { value: true,  label: 'Show' },
     { value: false, label: 'Hide' },
   ], v => {
-    joint.shapes.sf.setActorLifelineVisible(cell, v);
+    undoableLifelineOp(cell, () => joint.shapes.sf.setActorLifelineVisible(cell, v));
     // Re-render the panel so the Ports field appears/disappears
     prctx.showProperties(cell);
   });
   if (showLifeline) {
     addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 5, v => {
-      joint.shapes.sf.rebuildSeqActorPorts(cell, v);
+      undoableLifelineOp(cell, () => joint.shapes.sf.rebuildSeqActorPorts(cell, v));
     });
   }
 
@@ -84,7 +120,7 @@ export function renderSequenceActivationProps(cell) {
   // Lifeline — port count (auto-distributed evenly)
   const lifeline = section(prctx.bodyEl, 'Lifeline');
   addNumber(lifeline, 'Ports', cell.get('lifelinePortCount') ?? 2, v => {
-    joint.shapes.sf.rebuildSeqActivationPorts(cell, v);
+    undoableLifelineOp(cell, () => joint.shapes.sf.rebuildSeqActivationPorts(cell, v));
   });
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });

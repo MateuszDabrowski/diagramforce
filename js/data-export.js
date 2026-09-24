@@ -3,14 +3,14 @@
 // source→target mapping lineage instead, reusing table-view.js — see the dispatch in toolbar.js.)
 // Columns mirror the per-object field CSV in properties.js (fieldsToCsv), prefixed with an
 // Object column so a flat, multi-object export stays unambiguous.
-import { sanitizeFilenamePart } from './util.js?v=1.24.0';
-import { getActiveTabName } from './tabs.js?v=1.24.0';
-import { triggerDownload } from './persistence.js?v=1.24.0';
+import { sanitizeFilenamePart, csvCell } from './util.js?v=1.24.1';
+import { getActiveTabName } from './tabs.js?v=1.24.1';
+import { triggerDownload } from './persistence.js?v=1.24.1';
 
 const COLUMNS = ['Object', 'API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
 
-// RFC-4180-ish escaper: quote any cell holding a comma / quote / newline, doubling inner quotes.
-const esc = v => { const s = String(v ?? '').trim(); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+// RFC-4180 quoting + the spreadsheet formula guard (util.csvCell).
+const esc = csvCell;
 const keyToCsv = k => k === 'pk' ? 'PK' : k === 'fk' ? 'FK' : k === 'fqk' ? 'FQK' : '';
 const objNameOf = o => (o && o.attr && o.attr('headerLabel/text')) || (o && o.get('objectName')) || (o && o.get('name')) || 'Object';
 

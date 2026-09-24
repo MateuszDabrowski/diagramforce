@@ -148,10 +148,27 @@ export function sortRevisions(revisions) {
  * else, and ANY failure on an IMPORTED share (which heals via the fork / shared-source path, not here), is
  * just 'report'. Pure so the branch is unit-tested without a live Drive.
  */
-export function healDecision(status, { imported = false } = {}) {
+export function healDecision(status, { imported = false, sharedInEdit = false, reason = null } = {}) {
   if (imported) return 'report';
-  return (status === 404 || status === 403) ? 'recreate' : 'report';
+  // A direct-edit SHARED file (Mode B) is a colleague's: losing access to it must never fork the tab onto a new private
+  // file that the UI keeps presenting as the shared one (audit 2026-09-23, P0-7). Report, so the tab shows the error.
+  if (sharedInEdit) return 'report';
+  if (status === 404) return 'recreate';
+  // Drive answers 403 for "slow down" and "your Drive is full" as well as for "no access". Only the access reasons mean
+  // the link is dead; recreating on a rate limit or a full Drive forked a duplicate master, and the old one kept the
+  // #gd= links, the share stamps and the pinned revisions. No reason at all (a proxy page, an unparsable body) fails
+  // closed: report, never recreate on a guess.
+  if (status === 403) return (reason && !TRANSIENT_403_REASONS.has(reason)) ? 'recreate' : 'report';
+  return 'report';
 }
+
+/** Drive v3 `errors[].reason` values that come with a 403 but do NOT mean the file is gone or out of reach - retry
+ *  later instead. https://developers.google.com/drive/api/guides/handle-errors */
+export const TRANSIENT_403_REASONS = new Set([
+  'rateLimitExceeded', 'userRateLimitExceeded', 'dailyLimitExceeded', 'sharingRateLimitExceeded',
+  'storageQuotaExceeded', 'quotaExceeded', 'teamDriveFileLimitExceeded', 'numChildrenInNonRootLimitExceeded',
+  'activeItemCreationLimitExceeded', 'teamDriveHierarchyTooDeep',
+]);
 
 /**
  * Of the tabs currently flagged `imported` (opened from a `#gd=` link), which actually point at a file the
@@ -422,6 +439,7 @@ export const DRIVE_TAB_FIELDS = [
   ['driveSharedSource', null],
   ['driveSharedInEdit', null],
   ['driveOutgoingGrants', 0],
+  ['driveLocalOnly', false],   // 1.24.1: a copy the user opened to LOOK at (an older Drive version) - never auto-synced
 ];
 
 /** A plain object of `o`'s Drive linkage fields with each default applied — the `o.x || default` semantics every

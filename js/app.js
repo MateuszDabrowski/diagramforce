@@ -1,31 +1,33 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.24.0';
-import * as icons       from './icons.js?v=1.24.0';
-import { getAllStencilSvgs } from './components.js?v=1.24.0';
-import * as shapes      from './shapes.js?v=1.24.0';
-import * as canvas      from './canvas.js?v=1.24.0';
-import * as stencil     from './stencil.js?v=1.24.0';
-import * as selection   from './selection.js?v=1.24.0';
-import * as history     from './history.js?v=1.24.0';
-import * as clipboard   from './clipboard.js?v=1.24.0';
-import * as templates    from './templates.js?v=1.24.0';
-import * as keyboard    from './keyboard.js?v=1.24.0';
-import * as toolbar     from './toolbar.js?v=1.24.0';
-import * as properties  from './properties.js?v=1.24.0';
-import * as persistence from './persistence.js?v=1.24.0';
-import * as tabs        from './tabs.js?v=1.24.0';
-import * as mermaidImport from './mermaid-import.js?v=1.24.0';
-import * as tableView    from './table-view.js?v=1.24.0';
-import * as walkthrough  from './walkthrough.js?v=1.24.0';
-import * as present      from './present.js?v=1.24.0';
-import * as whatsNew     from './whats-new.js?v=1.24.0';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.0';
-import * as externalImport from './persistence/external-import.js?v=1.24.0';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.24.0';
-import { seedDefaultPalette } from './brand-palette.js?v=1.24.0';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.0';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.24.1';
+import * as icons       from './icons.js?v=1.24.1';
+import { getAllStencilSvgs } from './components.js?v=1.24.1';
+import * as shapes      from './shapes.js?v=1.24.1';
+import * as canvas      from './canvas.js?v=1.24.1';
+import * as stencil     from './stencil.js?v=1.24.1';
+import * as selection   from './selection.js?v=1.24.1';
+import * as history     from './history.js?v=1.24.1';
+import * as clipboard   from './clipboard.js?v=1.24.1';
+import * as templates    from './templates.js?v=1.24.1';
+import * as keyboard    from './keyboard.js?v=1.24.1';
+import * as toolbar     from './toolbar.js?v=1.24.1';
+import * as properties  from './properties.js?v=1.24.1';
+import * as persistence from './persistence.js?v=1.24.1';
+import * as tabs        from './tabs.js?v=1.24.1';
+import * as mermaidImport from './mermaid-import.js?v=1.24.1';
+import * as tableView    from './table-view.js?v=1.24.1';
+import * as walkthrough  from './walkthrough.js?v=1.24.1';
+import * as present      from './present.js?v=1.24.1';
+import * as whatsNew     from './whats-new.js?v=1.24.1';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.1';
+import * as singleWindow from './tabs/single-window.js?v=1.24.1';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.1';
+import * as externalImport from './persistence/external-import.js?v=1.24.1';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.24.1';
+import { seedDefaultPalette } from './brand-palette.js?v=1.24.1';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.1';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
@@ -183,6 +185,8 @@ async function main() {
   shapes.setAutoFitGetter(() => canvas.isAutoSizingEnabled());
   canvas.setMappingModeGetter(() => tabs.getActiveMappingMode());
 
+  // One active window: claim the shared session BEFORE restoring it, so an older window stops writing first.
+  singleWindow.claimSession();
   tabs.init(graph, paper, canvas, selection, history, persistence, stencil);
   tabs.setupAutoSave();
   // Flush that debounced save when the page is backgrounded or going away - see setupSessionFlush.
@@ -198,8 +202,13 @@ async function main() {
   // the session intact) after undoing the stray diagram change — see table-view.revertDiagramEdit (#5).
   tableView.setRequestTableView(() => document.getElementById('btn-view-table')?.click());
 
-  // Re-render the property panel whenever the tab or mapping mode changes.
+  // The storage managers' "This browser" chip reads the REAL session-write health, not a constant.
+  setBrowserBackupHealthGetter(() => tabs.isSessionBackupHealthy());
+
+  // Re-render the property panel whenever the tab or mapping mode changes - and after every undo / redo, so no panel
+  // row keeps an index or a state copy from before the replay (audit 2026-09-23).
   tabs.onChange(() => properties.refresh());
+  history.onReplay(() => properties.refresh());
 
   // Tag captured templates with the active diagram type (metadata only — the
   // library is global, shown across every diagram type).
@@ -241,7 +250,12 @@ async function main() {
   // import. See js/persistence/external-import.js + DIAGRAM_JSON_SPEC.md. ---
   if (externalImport.isExternalImportBoot()) {
     externalImport.startExternalImport({
-      onImportJSON: (json) => persistence.loadJSONText(json),
+      // ONE diagram per push: a bundle or a templates file would write browser saves and templates (and push them to
+      // Drive) behind the user's back - more than "the site showed you a diagram" (audit 2026-09-23).
+      onImportJSON: (json) => {
+        if (present.isPresenting()) present.exit();   // show the tab it opens (Present hides the tab bar)
+        return persistence.loadJSONText(json, undefined, { singleDiagramOnly: true });
+      },
       onTimeout: () => {   // nothing arrived (opened directly / opener never posted) — re-offer the
         // normal flow, but don't stack over a modal or a tab the user opened meanwhile.
         if (tabs.getAllTabs().length === 0 && !document.querySelector('.df-new-modal')) showNewDiagramModal();

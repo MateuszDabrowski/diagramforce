@@ -167,6 +167,10 @@ export function trapFocus(rootEl, opts = {}) {
     if (_trapStack[_trapStack.length - 1] !== token) return;   // not the top modal → let the top one handle it
     if (evt.key === 'Escape' && onEscape) {
       evt.preventDefault();
+      // The modal owns this Escape. Without stopPropagation (this listener is capture-phase, so it runs first) the same
+      // key also reached keyboard.js - clearing the canvas selection, leaving Present - and review.js, leaving Change
+      // Review, all behind a dialog the user was only closing (audit 2026-09-23).
+      evt.stopPropagation();
       onEscape();
       return;
     }
@@ -236,6 +240,7 @@ export function buildModal(opts = {}) {
     title = '', bodyHtml = '', footerHtml = null, width, zIndex = 3000,
     className = '', dialogClass = '', bodyClass = '', bodyStyle = '', footerClass = '',
     showClose = true, closeClass = '', closeHtml = '', onClose, onEscape, origin = null, anchor = null,
+    backdropClose = true,   // false = a click on the scrim does NOT close (a notice the user must act on)
   } = opts;
 
   const prevFocus = document.activeElement;
@@ -369,7 +374,7 @@ export function buildModal(opts = {}) {
   };
   overlay.__dfClose = close;   // so a newly-opened anchored manager can close this one (single-panel rule)
   releaseTrap = trapFocus(overlay, { onEscape: onEscape || close });
-  overlay.querySelector('.df-modal__overlay').addEventListener('click', close);
+  if (backdropClose) overlay.querySelector('.df-modal__overlay').addEventListener('click', close);
   overlay.querySelector('.df-modal__close')?.addEventListener('click', close);
 
   return {
@@ -445,9 +450,16 @@ export function confirmModal(opts) {
     // Separate handler for Enter — the focus trap handles Tab + Escape, but
     // Enter as "confirm" is a convention this modal owns.
     function onEnter(evt) {
-      if (evt.key !== 'Enter') return;
+      if (evt.key !== 'Enter' || evt.isComposing) return;
       const tag = (evt.target && evt.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // A FOCUSED BUTTON answers Enter itself (native activation), so Enter on Cancel cancels. This handler used to
+      // confirm whatever had focus - and preventDefault() swallowed the focused button's own click - so on a danger
+      // prompt, where Cancel is focused as the safety default, Enter ran the destructive action (audit 2026-09-23,
+      // P0-6: "Close anyway" on full storage, Delete, Move to trash, Revoke access, Delete column).
+      if (tag === 'BUTTON' || tag === 'A' || tag === 'SELECT') return;
+      // With focus on neither button, Enter confirms only a NON-destructive prompt.
+      if (tone === 'danger') return;
       evt.preventDefault();
       result = true;
       close();
@@ -565,7 +577,7 @@ export function promptModal(opts) {
     okBtn.addEventListener('click', submit);
     cancelBtn.addEventListener('click', () => close());
     input.addEventListener('keydown', (evt) => {
-      if (evt.key === 'Enter') { evt.preventDefault(); submit(); }
+      if (evt.key === 'Enter' && !evt.isComposing) { evt.preventDefault(); submit(); }   // not mid-IME-composition
     });
 
     // requireValue — keep the primary button disabled until the field is

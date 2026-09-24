@@ -3,7 +3,7 @@
 // table / LLM-authored JSON) and the bar moves to the right column. Shared by the shapes views (live edits +
 // timeline re-layout) and the load migration (migrateNodes). Back-compat: a task with no dates, or no resolvable
 // timeline, keeps its manual pixel position untouched.
-import { dateToX, spanWidth, xToDate } from './gantt-scale.js?v=1.24.0';
+import { dateToX, spanWidth, xToDate, durationDays, addDaysISO } from './gantt-scale.js?v=1.24.1';
 
 /** The timeline a task belongs to: its embed parent if that's a timeline, else the SINGLE timeline in the graph (so
  *  an LLM/table needn't set embedding when there's only one). Null when ambiguous (multiple, none) and not embedded. */
@@ -181,8 +181,12 @@ export function growTimelineToFitDates(tl) {
   const start = tl.get('startDate');
   if (!start) return false;
   const base = new Date(start + 'T00:00:00');
+  if (isNaN(base)) return false;
   let maxEnd = null;
-  const consider = (iso) => { if (iso && (!maxEnd || iso > maxEnd)) maxEnd = iso; };
+  // Real YYYY-MM-DD dates only. One "TBD" or "2026-6-30" won the STRING comparison against real dates and then set
+  // numPeriods - and the timeline width, and every bar's geometry - to NaN (audit 2026-09-23).
+  const isDate = (iso) => typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso) && !isNaN(new Date(iso + 'T00:00:00'));
+  const consider = (iso) => { if (isDate(iso) && (!maxEnd || iso > maxEnd)) maxEnd = iso; };
   const graph = tl.graph;
   if (!graph) return false;
   for (const e of graph.getElements()) {
@@ -201,7 +205,7 @@ export function growTimelineToFitDates(tl) {
   else needed = Math.ceil((end - base) / (7 * dayMs));
   needed += 1;   // one column of breathing room past the last element
   const cur = tl.get('numPeriods') || 12;
-  if (needed <= cur) return false;
+  if (!Number.isFinite(needed) || needed <= cur) return false;
   const taskListWidth = tl.get('taskListWidth') || 200;
   const colW = (tl.size().width - taskListWidth) / cur;
   tl.set('numPeriods', needed);
@@ -376,6 +380,16 @@ export function deriveGanttDates(task, tl = ganttTimelineFor(task)) {
   return (start && end) ? { start, end } : null;
 }
 
+/** Dates for a bar that was MOVED (not resized): the new start from its x, and the SAME duration as before. Reading
+ *  the end back from the pixel width changed short tasks: a bar is drawn at least 8 px wide, so a 0-day task in week
+ *  view (or a 2-day one in month view) came back from a one-column drag with a longer span (audit 2026-09-23). */
+export function deriveGanttMove(task, tl = ganttTimelineFor(task)) {
+  const d = deriveGanttDates(task, tl);
+  if (!d) return null;
+  const dur = durationDays(task.get('startDate'), task.get('endDate'));
+  return dur == null ? d : { start: d.start, end: addDaysISO(d.start, dur) };
+}
+
 /** Load-migration back-fill (Phase 2): a DATELESS bar bound to a timeline gains start/end dates DERIVED from its
  *  current pixels — so an old (pre-dates) Gantt diagram becomes real schedule DATA (for the Table view / LLM)
  *  WITHOUT moving the bar on screen. No-op if it's already dated or has no resolvable timeline. Returns true when it
@@ -532,4 +546,22 @@ export function migrateGanttTimeline(tl) {
     created.push(bar);
   });
   return created;
+}
+
+/** Pasted / duplicated / template-dropped Gantt bars arrive with their source's `order`, and nothing re-laid the
+ *  timeline: two bars claimed one row, every label below it sat a row off its bar, and the copy floated off its row
+ *  and dates until a drag or a reload (audit 2026-09-23). Bind each new bar to its timeline and re-sequence by
+ *  position. `cellJsons` are the inserted cells' JSON (only their `type`/`id` are read). Call inside the insert's
+ *  history batch. */
+export function reslotInsertedGanttBars(graph, cellJsons) {
+  const timelines = new Set();
+  for (const json of cellJsons || []) {
+    if (!json || json.type !== 'sf.GanttTask') continue;
+    const cell = graph.getCell(json.id);
+    const tl = cell && ganttTimelineFor(cell);
+    if (!tl) continue;
+    if (!cell.get('parent')) tl.embed(cell);
+    timelines.add(tl);
+  }
+  for (const tl of timelines) resequenceGanttOrders(tl);
 }

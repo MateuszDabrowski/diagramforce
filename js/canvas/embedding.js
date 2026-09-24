@@ -12,9 +12,9 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.24.0';
-import { isUndoRedoActive, startBatch, endBatch } from '../history.js?v=1.24.0';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { isUndoRedoActive, startBatch, endBatch, amendLast } from '../history.js?v=1.24.1';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.24.1';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -822,10 +822,19 @@ export function registerEmbedding(cctx) {
     // deletes/hides/changes whole object (notice collapse arrow way below visible object)". Not DataObject
     // specific: an sf.SimpleNode at 400x260 reset to its own 180x64.
     if (!cell.isElement || !cell.isElement()) return;
+    // Orphans: a child whose `parent` names THIS cell but that the cell's `embeds` never listed (a one-sided embed from
+    // hand-written JSON) survives the removal with a dangling `parent`. Every later drag then threw inside the
+    // spacing-guides listener - which runs before selection/embedding/history's - and a drop could freeze the canvas
+    // (the documented 2.7b state, reached at runtime instead of at load). Clear it now, inside the same deletion.
+    for (const el of graph.getElements()) {
+      if (el.get('parent') === cell.id) el.unset('parent');
+    }
     const parentId = cell.get('parent') || cell.previous('parent');
     if (!parentId) return;
     const parent = graph.getCell(parentId);
     if (!parent) return;
-    setTimeout(() => fitParentToChildren(parent), 0);
+    // amendLast: the re-fit joins the deletion's undo entry. Run a tick later (JointJS may still be cleaning up the
+    // embeds array), it used to land as its OWN entry, so the first Cmd+Z only undid the re-fit.
+    setTimeout(() => { if (graph.getCell(parent.id)) amendLast(() => fitParentToChildren(parent)); }, 0);
   });
 }

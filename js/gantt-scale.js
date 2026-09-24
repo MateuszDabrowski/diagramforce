@@ -42,13 +42,19 @@ export function originDate(t) {
 }
 
 /** Periods (fractional columns) from origin to date, in the timeline's view unit. */
+// Whole CALENDAR days between two local-midnight dates. Elapsed milliseconds are not days across a DST change (a 23 h
+// or 25 h day), which put every bar, milestone and the today-line 1/24 of a column off the grid after the clocks
+// changed (audit 2026-09-23). Plain dates: counted on their calendar fields, in UTC, where every day is 24 h.
+const calendarDays = (a, b) =>
+  (Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / DAY_MS;
+
 function periodsFromOrigin(origin, date, viewMode) {
-  if (viewMode === 'day') return (date - origin) / DAY_MS;
+  if (viewMode === 'day') return calendarDays(origin, date);
   if (viewMode === 'month') {
     const months = (date.getFullYear() - origin.getFullYear()) * 12 + (date.getMonth() - origin.getMonth());
     return months + (date.getDate() - 1) / daysInMonth(date.getFullYear(), date.getMonth());   // month-aware fraction
   }
-  return (date - origin) / DAY_MS / 7;   // week
+  return calendarDays(origin, date) / 7;   // week
 }
 
 /** Absolute canvas X for an ISO date (YYYY-MM-DD) on the timeline, or null when not derivable. */
@@ -105,3 +111,8 @@ export function addDaysISO(startISO, days) {
   d.setDate(d.getDate() + Math.round(Number(days) || 0));
   return toISO(d);
 }
+
+/** A Date as its LOCAL calendar day, 'YYYY-MM-DD'. `toISOString().slice(0, 10)` is the UTC day: for a date built at
+ *  local midnight it is the PREVIOUS day in every UTC+ zone, so a timeline's End Date came out a day early in Warsaw,
+ *  Tokyo or Sydney and the saved value depended on where its author sat (audit 2026-09-23). */
+export function localISODate(d) { return toISO(d); }

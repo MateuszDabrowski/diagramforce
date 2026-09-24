@@ -4,11 +4,11 @@
 // convertFromIcon. Each mints the replacement shape, re-attaches links + embedding, and swaps in ONE undo batch.
 // Reads the live graph/selection via prctx; never imports the facade back. The facade renderers + buildCellActions
 // import the 5 convertTo* back (they wire the panel's Convert buttons + the right-click convert menu).
-import * as history from '../history.js?v=1.24.0';
-import { prctx } from './context.js?v=1.24.0';
-import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.0';
-import { contrastTextColor } from '../components.js?v=1.24.0';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { prctx } from './context.js?v=1.24.1';
+import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.1';
+import { contrastTextColor } from '../components.js?v=1.24.1';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.24.1';
 
 export function collectConnections(cell) {
   return prctx.graph.getConnectedLinks(cell).map(link => ({
@@ -25,6 +25,12 @@ export function reconnectLinks(connections, newId) {
     if (isSource) link.set('source', { id: newId, port: sourcePort });
     if (isTarget) link.set('target', { id: newId, port: targetPort });
   });
+  // Commit the re-points into the open batch NOW. history routes change:source/target through its idle-merge
+  // buffer, which only flushes at endBatch - so the batch recorded the old cell's removal BEFORE the re-points.
+  // Redo replays forward: it removed the old cell while the links still pointed at it (JointJS removes a cell's
+  // links with it), and the re-point redo then found no link. Every connector was gone for good, undo included
+  // (audit 2026-09-23, P0-4). Every caller runs this before `cell.remove()`.
+  history.flushPendingDragCommit();
 }
 
 /**
@@ -79,7 +85,6 @@ export function convertToNode(cell) {
   const pos = cell.position();
   const def = DEFAULT_SIZES['sf.SimpleNode'];
   const connections = collectConnections(cell);
-  cell.getEmbeddedCells().forEach(child => cell.unembed(child));
   const fillColor = cell.attr('accent/fill') || '#2A2D32';
   const tc = contrastTextColor(fillColor);
   const node = new joint.shapes.sf.SimpleNode({
@@ -92,8 +97,10 @@ export function convertToNode(cell) {
       body:     { fill: fillColor },
     },
   });
-  history.startBatch();   // add + layout + reconnect + remove = ONE undo step
+  history.startBatch();   // unembed + add + layout + reconnect + remove = ONE undo step
   try {
+    // Inside the batch: unembedding first was one extra undo entry per child (audit 2026-09-23).
+    cell.getEmbeddedCells().forEach(child => cell.unembed(child));
     prctx.graph.addCell(node);
     updateSimpleNodeLayout(node);
     preserveParentEmbedding(cell, node);
@@ -204,7 +211,6 @@ export function convertContainerToIcon(cell) {
   const connections = collectConnections(cell);
   const fillColor = cell.attr('accent/fill') || 'var(--color-primary)';
   const iconHref = cell.attr('headerIcon/href') || '';
-  cell.getEmbeddedCells().forEach(child => cell.unembed(child));
   const node = new joint.shapes.sf.SimpleNode({
     position: pos,
     size: { width: 64, height: 64 },
@@ -218,8 +224,9 @@ export function convertContainerToIcon(cell) {
       subtitle: { text: '', visibility: 'hidden' },
     },
   });
-  history.startBatch();   // add + reconnect + remove = ONE undo step (depth-safe if a convert-all batch is already open)
+  history.startBatch();   // unembed + add + reconnect + remove = ONE undo step (depth-safe if a convert-all batch is open)
   try {
+    cell.getEmbeddedCells().forEach(child => cell.unembed(child));   // inside the batch - see convertToNode
     prctx.graph.addCell(node);
     preserveParentEmbedding(cell, node);
     reconnectLinks(connections, node.id);

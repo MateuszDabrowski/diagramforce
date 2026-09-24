@@ -1,19 +1,19 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.0';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.0';
-import { getAllIcons, getCategories } from './icons.js?v=1.24.0';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.0';
-import { startImageAddFlow } from './image-component.js?v=1.24.0';
-import * as history from './history.js?v=1.24.0';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.0';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.0';
-import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.0';
-import { SVG } from './components/stencil-kit.js?v=1.24.0';
-import { confirmModal } from './feedback.js?v=1.24.0';
-import { escHtml } from './util.js?v=1.24.0';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.24.0'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.1';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.24.1';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.1';
+import { startImageAddFlow } from './image-component.js?v=1.24.1';
+import * as history from './history.js?v=1.24.1';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.1';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.1';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.1';
+import { SVG } from './components/stencil-kit.js?v=1.24.1';
+import { confirmModal } from './feedback.js?v=1.24.1';
+import { escHtml } from './util.js?v=1.24.1';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.24.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -100,7 +100,13 @@ export function setDiagramType(type) {
   searchEl.value = '';
 }
 
+// Lazy-section observers still waiting for their first reveal. A re-render (every diagram-type switch) throws the old
+// sections away; their observers were never disconnected (audit 2026-09-23), so drop them here.
+const _pendingSectionObservers = new Set();
+
 function renderCategories() {
+  for (const io of _pendingSectionObservers) io.disconnect();
+  _pendingSectionObservers.clear();
   bodyEl.innerHTML = '';
 
   // The stencil is grouped into THREE bands (v1.17.0; first band renamed 1.19.5): "{Type} Templates"
@@ -552,9 +558,10 @@ function buildOfficialTemplatesSection(metas, label, categoryId) {
 
   // Search auto-expand bypasses the header click — observing the items container catches ANY first reveal.
   const io = new IntersectionObserver((entries) => {
-    if (entries.some((e) => e.isIntersecting)) { ensureThumbs(); io.disconnect(); }
+    if (entries.some((e) => e.isIntersecting)) { ensureThumbs(); io.disconnect(); _pendingSectionObservers.delete(io); }
   });
   io.observe(items);
+  _pendingSectionObservers.add(io);
 
   section.appendChild(header);
   section.appendChild(items);
@@ -642,9 +649,10 @@ function buildShapePackSection(pack, label, categoryId) {
 
   // Search auto-expand bypasses the header click — observing the items container catches ANY first reveal.
   const io = new IntersectionObserver((entries) => {
-    if (entries.some((e) => e.isIntersecting)) { ensureLoaded(); io.disconnect(); }
+    if (entries.some((e) => e.isIntersecting)) { ensureLoaded(); io.disconnect(); _pendingSectionObservers.delete(io); }
   });
   io.observe(items);
+  _pendingSectionObservers.add(io);
 
   section.appendChild(header);
   section.appendChild(items);
@@ -677,12 +685,20 @@ function buildIconSection(cat, icons, displayLabel) {
 
   const header = buildCategoryHeader(displayLabel || `SLDS: ${cat}`, icons.length);
   header.addEventListener('click', () => {
+    ensureBuilt();
     section.classList.toggle('df-stencil__category--collapsed');
   });
 
   const grid = document.createElement('div');
   grid.className = 'df-stencil__items df-stencil__items--grid';
 
+  // Tiles are built on the FIRST expand (or the first search that has to look inside): every section starts
+  // collapsed, and building all of them eagerly put ~1,727 tiles, each with its listeners, into the DOM on every
+  // diagram-type switch (audit 2026-09-23).
+  let built = false;
+  const ensureBuilt = () => {
+    if (built) return;
+    built = true;
   for (const icon of icons) {
     const item = document.createElement('div');
     item.className = 'df-stencil__item df-stencil__item--icon';
@@ -710,6 +726,8 @@ function buildIconSection(cat, icons, displayLabel) {
 
     grid.appendChild(item);
   }
+  };
+  section._dfEnsureBuilt = ensureBuilt;
 
   section.appendChild(header);
   section.appendChild(grid);
@@ -1267,6 +1285,8 @@ function applyDisplayFlags(element) {
 
 function filterStencil(query) {
   const sections = bodyEl.querySelectorAll('.df-stencil__category');
+  // A search looks inside the lazily-built icon sections too.
+  if (query) sections.forEach(section => section._dfEnsureBuilt?.());
 
   sections.forEach(section => {
     const items = section.querySelectorAll('.df-stencil__item');

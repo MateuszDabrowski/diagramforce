@@ -5,14 +5,14 @@
 // selection ref); never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
 // handler import renderFieldEditor / openFieldEditorModal back; table-view.js keeps importing SF_FIELD_TYPES
 // from properties.js (facade re-export).
-import * as history from '../history.js?v=1.24.0';
-import { resizeDataObjectToFit } from '../components.js?v=1.24.0';
-import { buildModal, confirmModal } from '../feedback.js?v=1.24.0';
-import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.24.0';
-import { triggerDownload } from '../persistence.js?v=1.24.0';
-import { newFid } from '../shapes.js?v=1.24.0';
-import { getActiveTabName } from '../tabs.js?v=1.24.0';
-import { sanitizeFilenamePart } from '../util.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { resizeDataObjectToFit } from '../components.js?v=1.24.1';
+import { buildModal, confirmModal } from '../feedback.js?v=1.24.1';
+import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.24.1';
+import { triggerDownload } from '../persistence.js?v=1.24.1';
+import { newFid } from '../shapes.js?v=1.24.1';
+import { getActiveTabName } from '../tabs.js?v=1.24.1';
+import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.24.1';
 
 export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',
@@ -165,6 +165,32 @@ export function openFieldEditorModal(cell, onClose) {
   // close. The bespoke borderless ✕ (closeClass + closeHtml) and footer scoping
   // (footerClass) come from the extended factory API; onClose fires the caller's
   // callback after teardown (matches the old close()).
+  // ONE undo step for the whole session, and a Cancel that puts everything back - what data-model-and-mapping.md
+  // always said and the modal never did (audit 2026-09-23). Recording is SUPPRESSED while it is open (the live edits
+  // never reach the stack) and playback LOCKED (a stray Cmd+Z can't change fields under the rows' indexes); the same
+  // pattern as the df.Table editor. Done, ✕, Escape and the backdrop keep the edits; Cancel reverts them.
+  const snapFields = () => ({ fields: JSON.parse(JSON.stringify(cell.get('fields') || [])), size: { ...cell.size() } });
+  const applyFields = (st) => { cell.set('fields', JSON.parse(JSON.stringify(st.fields))); cell.resize(st.size.width, st.size.height); };
+  const before = snapFields();
+  history.flushPendingDragCommit();
+  history.setSuppressed(true);
+  history.setLocked(true);
+  let cancelled = false, ended = false;
+  const endSession = () => {
+    if (ended) return; ended = true;
+    let after = null;
+    try {
+      if (cancelled) applyFields(before); else after = snapFields();
+      history.flushPendingDragCommit();   // while suppressed: drops the pending merge instead of recording it
+    } finally {
+      history.setSuppressed(false);
+      history.setLocked(false);
+    }
+    if (after && JSON.stringify(after) !== JSON.stringify(before)) {
+      history.recordCommand(() => applyFields(before), () => applyFields(after));
+    }
+  };
+
   const { overlay, body: bodyEl, close } = buildModal({
     title: `Edit Fields - ${cell.get('objectName') || 'Object'}`, // textContent - buildModal escapes
     dialogClass: 'df-field-modal__dialog',
@@ -174,8 +200,9 @@ export function openFieldEditorModal(cell, onClose) {
     closeHtml: '✕',
     footerHtml: `
       <button class="df-properties__btn df-properties__btn--add-field df-field-modal__add">+ Add Field</button>
+      <button class="df-modal__btn df-field-modal__cancel">Cancel</button>
       <button class="df-modal__btn df-modal__btn--primary df-field-modal__done">Done</button>`,
-    onClose,
+    onClose: () => { endSession(); onClose?.(); },
   });
   overlay.id = 'field-editor-modal';
 
@@ -396,8 +423,9 @@ export function openFieldEditorModal(cell, onClose) {
     }
   });
 
-  // Done closes; backdrop / ✕ / Escape are wired by buildModal.
+  // Done closes (keeping the edits); backdrop / ✕ / Escape are wired by buildModal and keep them too. Cancel reverts.
   overlay.querySelector('.df-field-modal__done').addEventListener('click', close);
+  overlay.querySelector('.df-field-modal__cancel').addEventListener('click', () => { cancelled = true; close(); });
 
   // Import / Export Fields (CSV) — a persistent panel between the (rebuilt) field list
   // and the footer. Three exports/imports + a paste box; importing OVERWRITES every
@@ -435,12 +463,17 @@ export function openFieldEditorModal(cell, onClose) {
     // undo entry — flushPendingDragCommit folds the debounce-merged change:fields/size
     // into the open batch before it closes.
     const doImport = async (text) => {
-      const parsed = parseBulkFields(text);
+      const prevFields = cell.get('fields') || [];
+      const parsed = parseBulkFields(text, prevFields);
       if (!parsed.length) { setStatus('No valid rows found - check the format (see Sample CSV).', true); return; }
-      const prevCount = (cell.get('fields') || []).length;
+      const prevCount = prevFields.length;
+      const kept = new Set(parsed.map(f => f.fid));
+      const dropped = prevFields.filter(f => f && f.fid && !kept.has(f.fid)).length;
+      const dupNote = parsed.duplicates ? ` ${parsed.duplicates} repeated API name${parsed.duplicates === 1 ? ' was' : 's were'} skipped.` : '';
+      const dropNote = dropped ? ` ${dropped} field${dropped === 1 ? ' is' : 's are'} not in the file and will be removed, with any connector attached to ${dropped === 1 ? 'it' : 'them'} left on the object.` : '';
       const ok = await confirmModal({
         title: 'Overwrite fields?',
-        message: `This replaces all ${prevCount} field${prevCount === 1 ? '' : 's'} on “${objLabel}” with ${parsed.length} imported field${parsed.length === 1 ? '' : 's'}. You can undo it afterwards.`,
+        message: `This replaces all ${prevCount} field${prevCount === 1 ? '' : 's'} on “${objLabel}” with ${parsed.length} imported field${parsed.length === 1 ? '' : 's'}. Fields with the same API name keep their connectors.${dropNote}${dupNote} You can undo it afterwards.`,
         okLabel: 'Overwrite',
         cancelLabel: 'Cancel',
         tone: 'danger',
@@ -484,7 +517,7 @@ export function openFieldEditorModal(cell, onClose) {
 // Field ↔ CSV columns (the full set the editor exposes), in a fixed order shared by
 // the Sample, Export, and Import paths.
 export const FIELD_CSV_COLUMNS = ['API Name', 'Label', 'Type', 'Length', 'Required', 'Deprecated', 'Key', 'Sample Values'];
-export const csvCell = v => { const s = String(v ?? '').trim(); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+export const csvCell = utilCsvCell;   // RFC-4180 quoting + formula guard; parseBulkFields reads it back
 export const keyToCsv = k => k === 'pk' ? 'PK' : k === 'fk' ? 'FK' : k === 'fqk' ? 'FQK' : '';
 
 export function fieldsToCsv(fields) {
@@ -524,13 +557,23 @@ export function downloadCsv(filename, text) {
 // line has one, else comma. A header row (first cell is a known header token) maps
 // columns by name; otherwise positional API Name, Label, Type, Length, Required,
 // Deprecated, Key. Type falls back to the first cell that reads as a known SF
-// type (then Text); Required/Deprecated accept Yes/true/1/x. Fresh fids per row.
-export function parseBulkFields(text) {
+// type (then Text); Required/Deprecated accept Yes/true/1/x.
+//
+// Quote-aware (RFC 4180, audit 2026-09-23): the export quotes any value holding a comma, a quote or a newline, and the
+// old line.split(',') re-imported "Name, Full" as two columns - every later column shifted (Deprecated became true).
+// A row whose API Name matches a field in `existing` (case-insensitive) KEEPS that field's fid and any property the
+// file has no column for: every mapping / ER link is attached to a field port keyed by fid, so a fresh fid per row
+// detached all of them on a plain re-import of the same fields. A repeated API Name keeps its first row only; the
+// count comes back on `out.duplicates`.
+export function parseBulkFields(text, existing = []) {
   const out = [];
-  const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
+  out.duplicates = 0;
+  const delim = sniffDelimiter(text);
+  const lines = parseDelimited(text, delim);
   if (!lines.length) return out;
-  const delim = lines.some(l => l.includes('\t')) ? '\t' : ',';
-  const split = l => l.split(delim).map(s => s.trim());
+  const split = row => row.map(s => unguardCsvCell(String(s).trim()));
+  const byApi = new Map((existing || []).filter(f => f && f.apiName).map(f => [String(f.apiName).toLowerCase(), f]));
+  const takenApi = new Set();
   const typeOf = v => SF_FIELD_TYPES.find(t => t.toLowerCase() === String(v).toLowerCase());
   const keyOf = v => {
     const k = String(v).toLowerCase().trim();
@@ -565,6 +608,8 @@ export function parseBulkFields(text) {
     const cols = split(lines[i]);
     const api = sanitizeFieldValue((map.api >= 0 ? cols[map.api] : cols[0]) || '');
     if (!api) continue;
+    if (takenApi.has(api.toLowerCase())) { out.duplicates++; continue; }
+    takenApi.add(api.toLowerCase());
     let type = (map.type >= 0 ? typeOf(cols[map.type]) : null) || '';
     if (!type) { for (let j = 0; j < cols.length; j++) { if (j === map.api) continue; const m = typeOf(cols[j]); if (m) { type = m; break; } } }
     if (!type) type = 'Text';
@@ -576,8 +621,10 @@ export function parseBulkFields(text) {
     // A PK / FQK is inherently mandatory; otherwise honour the Required column.
     const required = keyImpliesRequired(keyType) ? true : (map.required >= 0 ? truthy(cols[map.required]) : false);
     const sampleValues = sanitizeFieldValue((map.sample >= 0 && cols[map.sample]) ? cols[map.sample] : '');
-    const fid = newFid(seen); seen.add(fid);   // stable synthetic identity per imported row
-    out.push({ label, apiName: api, type, keyType, length, required, deprecated, sampleValues, fid });
+    const prev = byApi.get(api.toLowerCase());
+    const fid = (prev && prev.fid && !seen.has(prev.fid)) ? prev.fid : newFid(seen);   // same field → same port → links stay
+    seen.add(fid);
+    out.push({ ...(prev || {}), label, apiName: api, type, keyType, length, required, deprecated, sampleValues, fid });
   }
   return out;
 }

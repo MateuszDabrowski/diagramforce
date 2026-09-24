@@ -4,11 +4,11 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.24.0';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.0';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.0';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.0';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.0';
+import { tbctx } from './context.js?v=1.24.1';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.1';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.1';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.1';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.1';
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;
@@ -96,9 +96,9 @@ export function showCloseConfirmModal(tabId, tabName) {
 
   footer.querySelector('[data-action="save"]').addEventListener('click', () => {
     close();
-    const t = tabs.find(x => x.id === tabId);
-    if (t) t.dirty = false;   // user chose to keep it → not a discard
-    // Save = keep the work: doCloseTab auto-archives it to Browser Storage (the item-8 model), then closes.
+    // Save = keep the work: doCloseTab auto-archives it to Browser Storage (the item-8 model), then closes. `dirty` is
+    // left AS IS: clearing it first disarmed the one guard that stops a close when the archive fails on full storage
+    // (failArchive's lostBrowserOnly reads it), so the tab closed and its unsaved edits were gone (audit 2026-09-23).
     doCloseTab(tabId);
   });
 }
@@ -384,10 +384,12 @@ export function showCloseTabsModal() {
 function performMultiClose(ids, { noArchiveIds = null } = {}) {
   const { tabs } = tbctx;
   const { doCloseTab } = tbctx;
-  // Mark all selected tabs as non-dirty so doCloseTab proceeds without prompting.
+  // Only the DELETE-closed tabs are marked clean (their copies are being removed on purpose). The archived ones keep
+  // `dirty`: doCloseTab never prompts on it, but failArchive reads it to stop a close whose archive failed on full
+  // storage - clearing it here disarmed that guard for every tab in the batch (audit 2026-09-23).
   for (const id of ids) {
     const tab = tabs.find(t => t.id === id);
-    if (tab) tab.dirty = false;
+    if (tab && noArchiveIds && noArchiveIds.has(id)) tab.dirty = false;
   }
   // Close in reverse so splice indices stay stable and we don't churn the active tab.
   // If the active tab is in the set, doCloseTab will switch to the nearest remaining

@@ -7,11 +7,11 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.24.0';
-import { prctx } from './context.js?v=1.24.0';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.24.0';
-import { ER_MARKER_D } from '../er-markers.js?v=1.24.0';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { prctx } from './context.js?v=1.24.1';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.24.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.24.1';
+import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.1';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -274,6 +274,43 @@ export function applyLinkFontSize(cell, v) {
   if ((cell.labels() || []).length > 0) cell.label(0, { attrs: { text: { fontSize: size } } });
 }
 
+/** Set a connector's USER label text, the one way both the panel and the double-click editor do it. Keeps the
+ *  non-user labels (the mapping F/ST/BT/CI badge, the frequency overlay), keeps a label the user dragged where they
+ *  dragged it, and gives a Flow connector its bordered pill. The double-click editor used to replace the WHOLE labels
+ *  array (the badge vanished until reload, a flow pill turned into a plain label) and both paths snapped a dragged
+ *  label back to the midpoint on every edit (audit 2026-09-23). One `labels` write = one undo entry. */
+export function setUserLinkLabel(cell, text) {
+  const isBadge = l => !!(l?.attrs?.badgeBox);
+  const isFreq = l => !!(l?.attrs?.freqText);
+  const labels = cell.labels() || [];
+  const prev = labels.find(l => !isBadge(l) && !isFreq(l));
+  const others = labels.filter(l => isBadge(l) || isFreq(l));
+  const fontSize = prev?.attrs?.text?.fontSize ?? 13;
+  // Font colour (v1.16.1) overrides the line-stroke default for the label text.
+  const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';
+  const isFlowDiagram = document.getElementById('canvas-container')?.dataset.diagramType === 'flow';
+  const arr = [];
+  if (text) {
+    // Flow connectors use the bordered PILL label (Flow Builder look); every other diagram keeps the plain white-rect
+    // label. `flowLabelAttrs` forces fontSize 13, so a per-label font-size override is flow-exempt.
+    const label = isFlowDiagram ? flowLabelAttrs(text, fillColor) : {
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'text', selector: 'text' },
+      ],
+      attrs: {
+        text: { text, fill: fillColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+        body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
+      },
+      position: { distance: 0.5, offset: 0 },
+    };
+    if (prev?.position) label.position = JSON.parse(JSON.stringify(prev.position));
+    arr.push(label);
+  }
+  arr.push(...others);
+  cell.labels(arr);
+}
+
 export function renderLinkProps(cell) {
   // Content — primary text only (Font size moved to Appearance for
   // consistency with every other shape's typography placement).
@@ -287,29 +324,7 @@ export function renderLinkProps(cell) {
   const currentLabel = userLabel?.attrs?.text?.text ?? '';
   const currentLabelSize = userLabel?.attrs?.text?.fontSize ?? 13;
   addText(labelSec, 'Label', currentLabel, v => {
-    const fontSize = (cell.labels() || []).find(l => !isBadge(l) && !isFreq(l))?.attrs?.text?.fontSize ?? 13;
-    // Font colour (v1.16.1) overrides the line-stroke default for the label text.
-    const fillColor = cell.prop('fontColor') || cell.attr('line/stroke') || '#888888';
-    // Keep the non-user labels (mapping badge + frequency overlay) when the label changes.
-    const others = (cell.labels() || []).filter(l => isBadge(l) || isFreq(l));
-    const isFlowDiagram = document.getElementById('canvas-container')?.dataset.diagramType === 'flow';
-    const arr = [];
-    // Flow connectors use the bordered PILL label (Flow Builder look); every other diagram keeps the plain
-    // white-rect label. `flowLabelAttrs` forces fontSize 13, so a per-label font-size override is flow-exempt.
-    if (v && isFlowDiagram) arr.push(flowLabelAttrs(v, fillColor));
-    else if (v) arr.push({
-      markup: [
-        { tagName: 'rect', selector: 'body' },
-        { tagName: 'text', selector: 'text' },
-      ],
-      attrs: {
-        text: { text: v, fill: fillColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
-        body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
-      },
-      position: { distance: 0.5, offset: 0 },
-    });
-    arr.push(...others);   // keep the F/ST/BT/CI badge and/or the frequency overlay
-    cell.labels(arr);
+    setUserLinkLabel(cell, v);
     prctx.titleEl.textContent = v || '';
   });
 
@@ -343,7 +358,8 @@ export function renderLinkProps(cell) {
   if (cell.prop('linkKind') === 'ganttDep') {
     const depSec = section(prctx.bodyEl, 'Dependency');
     addSelect(depSec, 'Type', cell.prop('depType') || 'FS', GANTT_DEP_TYPE_OPTS, v => cell.prop('depType', v));
-    addNumber(depSec, 'Lag (days)', cell.prop('lag') ?? 0, v => cell.prop('lag', Math.round(v || 0)));
+    // min: a NEGATIVE lag is a lead, and 0 is the default - addNumber's default floor of 1 turned both into 1.
+    addNumber(depSec, 'Lag (days)', cell.prop('lag') ?? 0, v => cell.prop('lag', Math.round(v || 0)), { min: -3650 });
   }
 
   // Flow connector: Standard | Fault | Go To (Salesforce's terms). A pure shortcut over the standard connector props

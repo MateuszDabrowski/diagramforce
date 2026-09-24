@@ -95,7 +95,11 @@ export function layoutGraphSubset(units, edges = [], opts = {}) {
   if (!units.length) return pos;
 
   const sizes = new Map();
-  units.forEach((u) => { sizes.set(u.id, { w: u.w, h: u.h }); });
+  // A size that is not a finite number ("200px" kept by JointJS from hand-written JSON, undefined, NaN) poisoned EVERY
+  // position through the shared gap arithmetic - one bad node, a NaN layout for all (audit 2026-09-23). Read numeric
+  // strings as numbers; anything else counts as 0.
+  const dim = (v) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  units.forEach((u) => { sizes.set(u.id, { w: dim(u.w), h: dim(u.h) }); });
 
   // Build directed + undirected adjacency (undirected → connected components; directed → layering).
   const adj = new Map();       // undirected — for connected components
@@ -453,21 +457,32 @@ export function layoutGraphSubset(units, edges = [], opts = {}) {
         if (li < sortedLevels.length - 1) adjLayers.push(layers.get(sortedLevels[li + 1]));
         if (adjLayers.length === 0) continue;
 
+        // Swapping the neighbours u = layer[i], v = layer[i+1] changes ONLY the crossings between u's edges and v's
+        // edges: every other pair keeps its left/right order, and two edges of one node never cross. So "does the
+        // swap reduce total crossings" is exactly "do u and v cross less the other way round" - an O(deg u x deg v)
+        // count instead of two full countCrossings (O(e^2) each) per candidate swap. Same decisions, same layout;
+        // a 1999-leaf star went from 50.6 s to milliseconds (audit 2026-09-23). The adjacent layers do not move
+        // while this layer is refined, so their positions are indexed once.
+        const adjPos = adjLayers.map((al) => { const m = new Map(); al.forEach((id, i) => m.set(id, i)); return m; });
+        const nbrPos = (id, m) => {
+          const out = [];
+          for (const n of (adjOut.get(id) || [])) if (m.has(n)) out.push(m.get(n));
+          for (const n of (adjIn.get(id) || [])) if (m.has(n)) out.push(m.get(n));
+          return out;
+        };
         let improved = true;
         while (improved) {
           improved = false;
           for (let i = 0; i < layer.length - 1; i++) {
-            let before = 0;
-            for (const al of adjLayers) before += countCrossings(layer, al);
-            // Swap
-            [layer[i], layer[i + 1]] = [layer[i + 1], layer[i]];
-            let after = 0;
-            for (const al of adjLayers) after += countCrossings(layer, al);
+            const u = layer[i], v = layer[i + 1];
+            let before = 0, after = 0;   // crossings between u's and v's edges with u left (now) / u right (swapped)
+            for (const m of adjPos) {
+              const pu = nbrPos(u, m), pv = nbrPos(v, m);
+              for (const p of pu) for (const q of pv) { if (p > q) before++; else if (p < q) after++; }
+            }
             if (after < before) {
+              [layer[i], layer[i + 1]] = [v, u];
               improved = true; // keep swap
-            } else {
-              // Undo swap
-              [layer[i], layer[i + 1]] = [layer[i + 1], layer[i]];
             }
           }
         }

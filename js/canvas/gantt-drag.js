@@ -11,7 +11,7 @@
 // and embedding's auto-fit reacts to the resulting change events — so the drop must settle first.
 // Reads cctx.graph/paper; imports the pure Gantt geometry helpers from gantt-layout.js.
 
-import { deriveGanttDates, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.24.0';
+import { deriveGanttDates, deriveGanttMove, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.24.1';
 
 export function registerGanttDrag(cctx) {
   const { graph, paper } = cctx;
@@ -107,7 +107,7 @@ export function registerGanttDrag(cctx) {
       const tgt = ganttDropTarget(tl, y, m);                     // drop slot from the pointer
       _ganttDrop = tgt;
       if (tgt) drawGanttDropLine(tl, tgt.lineLocalY);
-      const d = deriveGanttDates(m, tl);                         // live start - end dates above the bar (issue 8)
+      const d = deriveGanttMove(m, tl);                          // live start - end dates above the bar (issue 8); a move keeps the duration
       if (d) drawGanttDragDates(m, d.start, d.end);
     } else {
       // Milestone / day marker: snap the CENTRE to a column (X) AND to the nearest row centre (Y) — so it lines up
@@ -141,7 +141,8 @@ export function registerGanttDrag(cctx) {
       if (type === 'sf.GanttMilestone') { if (movedX) { const d = deriveGanttMilestoneDate(e); if (d) e.set('milestoneDate', d); } continue; }
       if (type === 'sf.GanttMarker') { if (movedX) { const d = deriveGanttMarkerDate(e); if (d) e.set('markerDate', d); } continue; }
       // Task. Re-date from the (snapped) X when it moved horizontally.
-      if (movedX) { const d = deriveGanttDates(e); if (d) e.set({ startDate: d.start, endDate: d.end }); }
+      // A drag MOVES a bar (its width never changes here), so it keeps its duration - see deriveGanttMove.
+      if (movedX) { const d = e.size().width === from.w ? deriveGanttMove(e) : deriveGanttDates(e); if (d) e.set({ startDate: d.start, endDate: d.end }); }
       // The grabbed task reorders into its DROP slot (group-aware): reassign its group + park it at the drop Y so
       // resequenceGanttOrders sorts it there. Other bars (multi-select) keep the Y-based reorder.
       if (grabbed && drop && drop.moved && e.get('order') != null) {

@@ -18,10 +18,11 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.24.0';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.24.0';
-import { importTemplatesArray } from '../templates.js?v=1.24.0';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.24.0';
+import { showToast } from '../feedback.js?v=1.24.1';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.24.1';
+import { importTemplatesArray } from '../templates.js?v=1.24.1';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.24.1';
+import { haltSessionWrites } from '../tabs/single-window.js?v=1.24.1';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
@@ -80,7 +81,7 @@ export function dismissMigrationPrompt() {
   return true;
 }
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
-function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode / quota */ } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; /* private mode / quota */ } }
 
 /**
  * New-host boot hook: force-show the "we've moved - bring your diagrams over" card
@@ -141,12 +142,14 @@ export function startDomainMigration() {
 
 function finishMigration(store) {
   const summary = applyMigration(store);
-  if (summary.saves + summary.templates + (summary.session ? 1 : 0) === 0) {
+  if (summary.saves + summary.templates + (summary.session ? 1 : 0) + summary.failed === 0) {
     lsSet(MIGRATED_KEY, '1');   // nothing to carry - don't nag again
     showToast('No browser-saved diagrams were found on the old address.', 'info', { duration: 5000 });
     return;
   }
-  lsSet(MIGRATED_KEY, '1');     // set LAST, after every data key is written
+  // Set LAST, after every data key is written - and NOT when a write failed, so the transfer stays on offer once the
+  // user has freed some space (it merges collision-safe, so a second run only adds what is missing).
+  if (!summary.failed) lsSet(MIGRATED_KEY, '1');
   // Count the RESTORED SESSION too. It used to be tracked as a bare boolean and never mentioned, so a
   // migration that carried 5 named saves plus an 11-tab working session announced "Brought over 5 saved
   // diagrams" and then reloaded into 11 tabs - the tally contradicted what the user was looking at.
@@ -157,7 +160,12 @@ function finishMigration(store) {
   if (summary.templates) parts.push(`${summary.templates} template${summary.templates === 1 ? '' : 's'}`);
   // "a", "a and b", "a, b and c" - `join(' and ')` produced "a and b and c" once there were three parts.
   const listed = parts.length > 2 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts.join(' and ');
-  showToast(`Brought over ${listed || 'your work'} - reloading...`, 'success', { duration: 2500 });
+  // Storage ran out part-way: say so, since the rest is still on the old address and can be fetched from there.
+  if (summary.failed) {
+    showToast(`Brought over ${listed || 'part of your work'}, but this browser ran out of storage for ${summary.failed} more. Those are still safe at the old address.`, 'warning', { duration: 8000 });
+  } else {
+    showToast(`Brought over ${listed || 'your work'} - reloading...`, 'success', { duration: 2500 });
+  }
   setTimeout(() => location.reload(), 900);   // reboot so the restored session/saves take effect
 }
 
@@ -165,7 +173,7 @@ function finishMigration(store) {
  *  collision-safe for named saves + templates; the session blob is overwritten only
  *  when this origin is still a fresh empty Draft (never clobbers real new-origin work). */
 function applyMigration(store) {
-  let saves = 0, templates = 0, session = false, sessionTabs = 0;
+  let saves = 0, templates = 0, session = false, sessionTabs = 0, failed = 0;
   // 1. Preferences - adopt the old origin's choices verbatim.
   for (const k of SETTINGS_KEYS) if (store[k] != null) lsSet(k, store[k]);
   // 2. Custom templates - union-merge (dedup by content, rename on name clash). Carry the delete tombstones.
@@ -180,26 +188,32 @@ function applyMigration(store) {
   for (const k of Object.keys(store)) {
     if (!k.startsWith(NAMED_SAVE_PREFIX)) continue;
     const existing = lsGet(k);
+    let ok;
     if (existing == null || existing === store[k]) {
-      lsSet(k, store[k]);
+      ok = lsSet(k, store[k]);
     } else {
       const renamed = renameSave(k, store[k]);
-      lsSet(renamed.key, renamed.value);
+      ok = lsSet(renamed.key, renamed.value);
     }
-    saves++;
+    // Count only what LANDED: lsSet swallows a quota error, and the toast used to count the attempt as a save.
+    if (ok) saves++; else failed++;
   }
   // 4. Working session - overwrite ONLY if this origin is still an empty Draft. Count its tabs so the
   //    completion toast can name the thing the user is about to be looking at; `session` stays a boolean
   //    because the "nothing came across" check reads it and a restored-but-empty session still counts.
   if (store[SESSION_KEY] && sessionIsFresh()) {
-    lsSet(SESSION_KEY, store[SESSION_KEY]);
+    // Stop this window's own session writes FIRST. The reload below fires pagehide, and the session flush used to
+    // write the blank in-memory Draft straight over the session written here - the toast promised "11 open tabs"
+    // and the reload showed a Draft (audit 2026-09-23, P0-2). Any autosave in the 900ms before it did the same.
+    haltSessionWrites();
+    if (!lsSet(SESSION_KEY, store[SESSION_KEY])) return { saves, templates, session, sessionTabs, failed: failed + 1 };
     session = true;
     try {
       const s = JSON.parse(store[SESSION_KEY]);
       sessionTabs = Array.isArray(s?.tabs) ? s.tabs.length : 0;
     } catch { /* malformed - the blob is still carried across, just not counted */ }
   }
-  return { saves, templates, session, sessionTabs };
+  return { saves, templates, session, sessionTabs, failed };
 }
 
 /** Find a free "<name> (N)" key for a same-name-different-content save clash, and

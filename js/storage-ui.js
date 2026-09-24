@@ -2,8 +2,8 @@
 // split-table + tri-state helpers, mutate) DOM for the Save / Load / Close managers' rows, chips, collapsible
 // split tables, and select-alls (including the V4/V5 helpers). Depends only on the genuinely-pure helpers that
 // stay in util.js + the zero-dep drive-sync-logic leaf (hasVerifiedMyDriveBackup — the chip's honesty rule).
-import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.24.0';
-import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.0';
+import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.24.1';
+import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.1';
 
 export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', active = false, checkbox = '',
   diagramType = '', typeTitle = '', icon: iconOverride = '', leadingIcon = false, name = '', nameSuffix = '', groupBadge = '', count = null,
@@ -88,8 +88,19 @@ function driveChip(label, on, title, cls = '', icon = null) {
   return `<span class="df-save-mgr__chip${on ? ' is-on' : ''}${cls ? ' ' + cls : ''}"${title ? ` title="${escHtml(title)}"` : ''}>${glyph}${escHtml(label)}</span>`;
 }
 
-export function driveChipsHtml(t, { driveOn = false, browserOn = true, browserTitle, sharedFile = false, sharedFileTitle, onSharedDrive = false, hasMyDriveBackup = false, hideSharedCopies = false } = {}) {
-  const out = [driveChip('This browser', browserOn, browserTitle || 'Auto-kept in this browser - reopens on reload. Closing it archives a copy you can reload from Browser Storage.')];
+// Whether the browser session is actually being written (session-store's isSessionBackupHealthy, wired by app.js).
+// The "This browser" chip was ALWAYS on: after a quota failure every row still read "Auto-kept in this browser" while
+// no session write was landing (audit 2026-09-23).
+let _browserBackupHealthy = () => true;
+export function setBrowserBackupHealthGetter(fn) { if (typeof fn === 'function') _browserBackupHealthy = fn; }
+
+export function driveChipsHtml(t, { driveOn = false, browserOn, browserTitle, sharedFile = false, sharedFileTitle, onSharedDrive = false, hasMyDriveBackup = false, hideSharedCopies = false } = {}) {
+  const healthy = _browserBackupHealthy();
+  const on = browserOn ?? healthy;
+  const title = browserTitle || (browserOn === undefined && !healthy
+    ? 'NOT kept in this browser right now - browser storage is full. Export to JSON or free space in Close & Delete.'
+    : 'Auto-kept in this browser - reopens on reload. Closing it archives a copy you can reload from Browser Storage.');
+  const out = [driveChip('This browser', on, title)];
   if (driveOn) {
     // A Phase-B directly-edited shared file (Collab/received-editable) is FOREIGN like a Shared-Drive file: the master
     // lives on the owner's Drive, not yours - only the backup mirror sits in your My Drive.

@@ -1,7 +1,7 @@
 // Task / Sequence-diagram shapes + the standard.Link label patch tail (CLEANUP S3). registerTaskSequence() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.24.0';
+import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.24.1';
 
 export function registerTaskSequence() {
   // --- Task ---
@@ -760,6 +760,10 @@ export function registerTaskSequence() {
     };
   }
 
+  // A lifeline port every few pixels is already unusable; 1,000,000 (typed into the panel, or carried by a JSON file's
+  // lifelinePortCount) built two million port nodes and froze the tab (audit 2026-09-23).
+  const MAX_LIFELINE_PORTS = 50;
+
   // ---- Public helpers: rebuild sequence shape ports at runtime ----
   // Called by properties.js when the user changes the "Ports" count input or
   // edits individual port positions. Preserves existing link endpoints when
@@ -768,7 +772,7 @@ export function registerTaskSequence() {
   // Each helper accepts an optional `ratios` array (length must match count)
   // of 0–1 numbers that override the evenly-spaced defaults.
   joint.shapes.sf.rebuildSeqParticipantPorts = (cell, count, ratios) => {
-    const n = Math.max(1, count | 0);
+    const n = Math.min(MAX_LIFELINE_PORTS, Math.max(1, count | 0));   // bounded: 1e6 ports froze the tab
     const items = buildSeqParticipantPorts(n, ratios);
     cell.set('lifelinePortCount', n);
     if (Array.isArray(ratios) && ratios.length === n) cell.set('lifelinePortRatios', ratios.slice());
@@ -776,7 +780,7 @@ export function registerTaskSequence() {
     cell.prop('ports/items', items, { rewrite: true });
   };
   joint.shapes.sf.rebuildSeqActorPorts = (cell, count, ratios) => {
-    const n = Math.max(1, count | 0);
+    const n = Math.min(MAX_LIFELINE_PORTS, Math.max(1, count | 0));   // bounded: 1e6 ports froze the tab
     const items = buildSeqActorPorts(n, ratios);
     cell.set('lifelinePortCount', n);
     if (Array.isArray(ratios) && ratios.length === n) cell.set('lifelinePortRatios', ratios.slice());
@@ -784,7 +788,7 @@ export function registerTaskSequence() {
     cell.prop('ports/items', items, { rewrite: true });
   };
   joint.shapes.sf.rebuildSeqActivationPorts = (cell, count, ratios) => {
-    const n = Math.max(1, count | 0);
+    const n = Math.min(MAX_LIFELINE_PORTS, Math.max(1, count | 0));   // bounded: 1e6 ports froze the tab
     const items = buildSeqActivationPorts(n, ratios);
     cell.set('lifelinePortCount', n);
     if (Array.isArray(ratios) && ratios.length === n) cell.set('lifelinePortRatios', ratios.slice());

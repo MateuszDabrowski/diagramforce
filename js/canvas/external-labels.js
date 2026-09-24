@@ -18,7 +18,7 @@
 // Reads the live graph/paper + the load guard via the canvas context (cctx);
 // canvas.js calls initExternalLabelAutoplace() once in init() after the cctx
 // hydration block, and keeps cctx.isLoadingJSON synced in setLoadingJSON().
-import { cctx } from './context.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
 
 const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnEvent',
@@ -121,9 +121,18 @@ export function initExternalLabelAutoplace() {
   // diagrams where add events fired before this listener was wired up.
   // Deferred so it runs after the first paint and any post-load
   // bookkeeping.
-  setTimeout(() => {
+  const fullPass = () => {
     for (const cell of graph.getElements()) {
       refreshExternalLabelPosition(cell);
     }
-  }, 150);
+  };
+  setTimeout(fullPass, 150);
+  // ...and after EVERY later load too (a tab switch, an import, a Mermaid build, a Drive open): each listener above
+  // skips while cctx.isLoadingJSON, and the boot pass was the only full one, so a diagram loaded after boot kept a
+  // label on a side its links use until the next topology change (audit 2026-09-23). One deferred pass per load.
+  let pending = null;
+  graph.on('reset add', () => {
+    if (!cctx.isLoadingJSON || pending) return;
+    pending = setTimeout(() => { pending = null; fullPass(); }, 0);
+  });
 }

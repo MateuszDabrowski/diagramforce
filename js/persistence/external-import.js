@@ -54,6 +54,9 @@ export function startExternalImport({ onImportJSON, onTimeout, timeoutMs = DEFAU
     // postMessage into pages — react ONLY to our exact envelope. No origin check by design
     // (community-open — see file header); the payload is sanitised downstream regardless.
     if (!d || d.source !== 'diagramforce' || d.type !== 'import' || typeof d.json !== 'string') return;
+    // Only the window that OPENED this tab - what the header above says, now enforced. Any other frame or window that
+    // holds a handle to this tab (a frame the app itself embeds, a later-opened popup) is ignored.
+    if (!window.opener || ev.source !== window.opener) return;
     if (d.json.length > MAX_JSON_BYTES) return;   // oversized → ignore (loadJSONText also caps cells)
     clearTimeout(timer);
     settled = true;                 // cancels the fallback; the listener stays live so a follow-up push

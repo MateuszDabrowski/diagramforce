@@ -6,10 +6,10 @@
 // initResizeHandles({ graph, paper, selectedIds }) wires the live refs (selectedIds is the SAME Set
 // selection.js mutates - shared by reference, so peer collection sees the live selection). Reads
 // history + the Gantt geometry helpers + the canvas date-chip forwarders.
-import * as history from '../history.js?v=1.24.0';
-import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.24.0';
-import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.24.0';
-import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { deriveGanttDates, ganttTimelineFor, snapGanttX, growTimelineToFitDates } from '../gantt-layout.js?v=1.24.1';
+import { showGanttDateChip, clearGanttDateChip } from '../canvas.js?v=1.24.1';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.24.1';
 
 // Live refs wired by selection.init() via initResizeHandles.
 let graph, paper, selectedIds;
@@ -229,6 +229,7 @@ export function addResizeHandles(view) {
       const onUp = () => {
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
         guideH.remove();
         guideV.remove();
         // Gantt task resize → re-DATE from the new pixels. The canvas drag write-back can't see a handle resize
@@ -248,6 +249,10 @@ export function addResizeHandles(view) {
       };
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
+      // A cancelled pointer (the OS took the touch, a palm, a system gesture) never sends pointerup: the history batch
+      // stayed open and the move listener stayed live, so the next touch anywhere resized the shape to it (audit
+      // 2026-09-23). End the resize where it stands, as a pointerup would.
+      document.addEventListener('pointercancel', onUp);
     };
 
     g.addEventListener('pointerdown', onDown);

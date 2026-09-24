@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.24.0';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.1';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -46,6 +46,13 @@ const OBSTACLE_SKIP_TYPES = new Set([
   'sf.Zone', 'sf.TextLabel', 'sf.Note', 'sf.BpmnPool', 'sf.BpmnDataObject', 'sf.GanttTimeline', 'sf.GanttGroup',
   'sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation', 'sf.SequenceFragment',
 ]);
+// Frames whose children route FROM INSIDE them (see the exclusion in sfManhattan). Mirrors embedding.js's
+// HALO_PARENT_TYPES (the captors) plus the sequence lifelines that host activations; restated because router.js stays
+// importable without the canvas graph modules (unit tests).
+const FRAME_TYPES = new Set([
+  'sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop', 'sf.Task',
+  'sf.SequenceParticipant', 'sf.SequenceActor',
+]);
 let _routePass = null;   // { graph, boxes: [{id, box}], portEnds: Map<"cellId::portId", [{link,end}]> } | null
 
 /** Open a reroute pass: snapshot the obstacle bboxes + the portId→ends index for `gr` once, so every link
@@ -70,7 +77,10 @@ export function beginRoutePass(gr) {
     add(s?.id, s?.port, l, 'source');
     add(t?.id, t?.port, l, 'target');
   }
-  _routePass = { graph: gr, boxes, portEnds };
+  // trunk / channels: per-port results of trunkAnchorOffset / linkChannelIndex. Both depend only on the PORT's link
+  // ends (not on which link asks), so inside a pass they are computed once per port instead of once per link end -
+  // the O(k^2) per hub port the P1 fix left behind (200 links on one port: 212 ms per pass; audit 2026-09-23).
+  _routePass = { graph: gr, boxes, portEnds, trunk: new Map(), channels: new Map() };
 }
 
 /** Close the current reroute pass. MUST run in a `finally` around the batch (a leaked pass poisons later reroutes). */
@@ -178,7 +188,13 @@ export function orthoRoute(a, b, obstacles) {
   // i.e. trade tunneling for collinear overlap (the banned trade the gate caught). Short L/Z stay near the
   // direct path, so the least-overlap pick reduces over-node without spawning parallel corridors.
   const pool = [];
-  const consider = (mid) => { pool.push(mid); return pathClear([a, ...mid, b], obstacles) ? mid : null; };
+  // TRAPPED: a stub strictly inside an obstacle's padded box. Every candidate's first (or last) segment is
+  // axis-aligned and starts (ends) inside that box, so segHitsBox fails ALL of them - the detour and S-route searches
+  // below could only burn O(|y|·|x|·E) tests to reach the same fallback. Skipping them returns the identical route:
+  // measured 1.3 s per link at 500 elements, on every drag frame, for one vertex 10 px off a node (audit 2026-09-23).
+  const inside = (p) => obstacles.some((box) => p.x > box.x - PAD && p.x < right(box) + PAD && p.y > box.y - PAD && p.y < bottom(box) + PAD);
+  const trapped = inside(a) || inside(b);
+  const consider = (mid) => { pool.push(mid); return !trapped && pathClear([a, ...mid, b], obstacles) ? mid : null; };
 
   // --- L-shapes (one turn) — skip when degenerate ---
   if (!sameY && !sameX) {
@@ -201,6 +217,7 @@ export function orthoRoute(a, b, obstacles) {
 
   // --- U-shapes / detours using obstacle-edge coordinates ---
   // Collect candidate y/x values from obstacle padded edges, plus fixed offsets.
+  if (!trapped) {
   const yBelow = new Set(), yAbove = new Set(), xRight = new Set(), xLeft = new Set();
   for (const box of obstacles) {
     yBelow.add(bottom(box) + PAD + 4);
@@ -243,6 +260,7 @@ export function orthoRoute(a, b, obstacles) {
       if (r) return r;
     }
   }
+  }   // !trapped
 
   // Last resort: nothing is clear. Return the LEAST-overlap short candidate (L/Z) rather than a blind
   // through-node L (D1). The blind L is included as the floor, so this is never worse than the old behaviour;
@@ -408,6 +426,9 @@ export function registerSfRouter() {
     // largely parallel and prevents the auto-layout-creates-crossings issue
     // that pure alphabetical signature-sort produced.
     const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
+    const passKey = (_routePass && _routePass.graph === gr) ? `${cell.id}::${portId}::${side}` : null;
+    let order = passKey ? _routePass.trunk.get(passKey) : null;
+    if (!order) {
     const buckets = new Map(); // signature → { coords: [], linkKey }
     for (const e of ends) {
       const sig = endSignature(e.link, e.end);
@@ -445,8 +466,11 @@ export function registerSfRouter() {
       a.mean - b.mean
       || (a.linkKey < b.linkKey ? -1 : a.linkKey > b.linkKey ? 1 : 0)
       || a.sig.localeCompare(b.sig));
-    const N = sigEntries.length;
-    const G = sigEntries.findIndex(e => e.sig === endSignature(link, end));
+    order = sigEntries.map(e => e.sig);
+    if (passKey) _routePass.trunk.set(passKey, order);
+    }
+    const N = order.length;
+    const G = order.indexOf(endSignature(link, end));
     if (G < 0) return null;
 
     const bb = cell.getBBox();
@@ -503,6 +527,14 @@ export function registerSfRouter() {
     // the two routes head to different targets anyway. The trunk
     // separation alone gives all the disambiguation needed.
     if (ends.length === 2 && ends[0].end !== ends[1].end) return null;
+    // Inside a pass: every end of this port is ranked in ONE scan, then each link end is a map lookup.
+    const passKey = (_routePass && _routePass.graph === gr) ? `${cell.id}::${portId}::${side}` : null;
+    if (passKey) {
+      let ranks = _routePass.channels.get(passKey);
+      if (!ranks) { ranks = rankPortChannels(gr, cell, side, ends); _routePass.channels.set(passKey, ranks); }
+      if (!ranks) return null;
+      return ranks.get(`${link.id}|${end}`) || null;
+    }
     const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
     const bb = cell.getBBox();
     if (!bb) return null;
@@ -533,6 +565,36 @@ export function registerSfRouter() {
     const idx = sameDir.findIndex(r => r.linkEnd.link === link && r.linkEnd.end === end);
     if (idx < 0) return null;
     return { index: idx, count: sameDir.length };
+  }
+
+  // linkChannelIndex for EVERY end of one port at once: `${linkId}|${end}` -> { index, count } (absent = null). Same
+  // records, same same-direction filter, same stable sort as the per-link path above, so the answers are identical.
+  function rankPortChannels(gr, cell, side, ends) {
+    const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
+    const bb = cell.getBBox();
+    if (!bb) return null;
+    const cellCenter = tangentAxis === 'x' ? centerX(bb) : centerY(bb);
+    const records = ends.map(e => {
+      const farRef = e.link.get(e.end === 'source' ? 'target' : 'source');
+      const farCell = farRef?.id ? gr.getCell(farRef.id) : null;
+      const farBB = farCell?.getBBox?.();
+      if (!farBB) return null;
+      const coord = tangentAxis === 'x' ? centerX(farBB) : centerY(farBB);
+      return { linkEnd: e, coord, dir: coord <= cellCenter ? 'low' : 'high' };
+    }).filter(Boolean);
+    const out = new Map();
+    for (const dir of ['low', 'high']) {
+      const sameDir = records.filter(r => r.dir === dir);
+      if (sameDir.length < 2) continue;
+      sameDir.sort((a, b) => a.coord - b.coord);
+      sameDir.forEach((r, index) => {
+        const self = r.linkEnd.link;
+        // Self-loops bypass channel allocation (see linkChannelIndex).
+        if (self.get('source')?.id && self.get('source').id === self.get('target')?.id) return;
+        out.set(`${self.id}|${r.linkEnd.end}`, { index, count: sameDir.length });
+      });
+    }
+    return out;
   }
 
   // Shift a port's stub point along the edge tangent by `offset` so the
@@ -579,9 +641,6 @@ export function registerSfRouter() {
 
     const srcParent = getParent(srcCell);
     const tgtParent = getParent(tgtCell);
-    const EMBED_PARENT_TYPES = new Set(['sf.Container', 'sf.SequenceParticipant', 'sf.SequenceActor']);
-    const srcEmbedded = EMBED_PARENT_TYPES.has(srcParent?.get('type'));
-    const tgtEmbedded = EMBED_PARENT_TYPES.has(tgtParent?.get('type'));
 
     const srcBBox = srcCell.getBBox();
     const tgtBBox = tgtCell.getBBox();
@@ -671,8 +730,19 @@ export function registerSfRouter() {
     // route to go AROUND the node instead of cutting through it.
     const obstacles = [];
     const excludeIds = new Set();
-    if (srcEmbedded) excludeIds.add(srcParent.id);
-    if (tgtEmbedded) excludeIds.add(tgtParent.id);
+    // Every FRAME an endpoint sits inside is pass-through for its own links - the whole ancestor chain, not only a
+    // Container parent. A Task inside a Subprocess / Loop / TaskGroup (or a Task inside a TaskGroup) had its stub INSIDE
+    // a padded obstacle: every such link routed through its siblings AND hit orthoRoute's worst case (60 elements:
+    // 0.6 -> 22 ms per reroute pass). connector-routing-detail.md always said "their embedding container".
+    for (const cell of [srcCell, tgtCell]) {
+      const seen = new Set([cell.id]);
+      let p = getParent(cell);
+      while (p && !seen.has(p.id)) {
+        seen.add(p.id);
+        if (FRAME_TYPES.has(p.get('type'))) excludeIds.add(p.id);
+        p = getParent(p);
+      }
+    }
     if (srcCell === tgtCell) {
       const t = srcCell.get('type');
       if (t === 'sf.SequenceParticipant' || t === 'sf.SequenceActor' || t === 'sf.SequenceActivation') {

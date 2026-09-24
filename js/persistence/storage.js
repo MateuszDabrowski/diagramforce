@@ -7,14 +7,18 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.0';
-import { pctx } from './context.js?v=1.24.0';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.0';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.0';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.1';
+import { pctx } from './context.js?v=1.24.1';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.1';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.1';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
-const SAVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+// Browser saves do NOT expire (owner decision 2026-09-24). A 90-day TTL used to delete every save on its first read
+// past that age - browser-only diagrams included, i.e. the ONLY copy, and measured from the last write to browser
+// storage, so a diagram opened daily but never re-closed still aged out. Space is reclaimed by storage pressure alone:
+// evictRedundantArchives drops the oldest archives that are ALSO in Drive, and a browser-only one is never deleted
+// for space (the pressure toast and the storage-full close prompt ask the user instead).
 const BACKUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const LAST_BACKUP_KEY    = 'sfdiag::lastBackupAt';     // ms of last export-to-disk
 const LAST_REMINDER_KEY  = 'sfdiag::lastBackupReminderAt'; // ms the overlay was last shown
@@ -255,22 +259,15 @@ export async function requestPersistentStorage() {
 
 export function getNamedSaves() {
   const saves = [];
-  const now = Date.now();
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
     if (!key?.startsWith(NAMED_SAVE_PREFIX)) continue;
     try {
       const data = JSON.parse(localStorage.getItem(key));
-      const age = now - (data.timestamp || 0);
-      if (age > SAVE_TTL_MS) {
-        localStorage.removeItem(key);
-        continue;
-      }
       saves.push({
         key,
         name: data.name || key.replace(NAMED_SAVE_PREFIX, ''),
         timestamp: data.timestamp,
-        expiresIn: SAVE_TTL_MS - age,
         diagramType: data.diagramType || 'architecture',
         appVersion: data.appVersion || null,
         shapes: countDiagramShapes(data.graph?.cells),   // nodes-only count for the storage-row "N elements"

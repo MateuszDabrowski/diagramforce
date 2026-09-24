@@ -90,7 +90,10 @@ export function validateDiagram(diagram) {
 
   // diagramType (the loader falls back to `architecture` when missing/unknown, silently disabling type-gated UI).
   const rawType = diagram.diagramType;
-  const type = DIAGRAM_TYPE_ALIASES[rawType] || rawType;
+  // Case-insensitive, like the app (persistence.normalizeDiagramType lowercases): "Flow" opens as a flow, so warning
+  // that it "opens as architecture" was false (audit 2026-09-23).
+  const lower = typeof rawType === 'string' ? rawType.trim().toLowerCase() : rawType;
+  const type = DIAGRAM_TYPE_ALIASES[lower] || lower;
   if (rawType == null) warnings.push('Missing `diagramType` - the diagram opens as "architecture", hiding the type-specific stencil + controls.');
   else if (!VALID_DIAGRAM_TYPES.has(type)) warnings.push(`Unknown diagramType "${rawType}" - opens as "architecture". Use one of: ${[...VALID_DIAGRAM_TYPES].join(', ')}.`);
   if (diagram.appVersion == null) warnings.push('Missing `appVersion` - set it to the current app version so the version-warning logic behaves.');

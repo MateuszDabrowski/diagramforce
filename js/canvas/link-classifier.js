@@ -12,9 +12,9 @@
 //
 // Reads cctx.graph/paper + cctx.getMappingMode; imports the apply* stylers from link-styles.js.
 
-import { cctx } from './context.js?v=1.24.0';
-import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType } from './link-styles.js?v=1.24.0';
-import { ER_MARKER_D } from '../er-markers.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType } from './link-styles.js?v=1.24.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.24.1';
 
 export function registerLinkClassifier(cctx) {
   const { graph, paper } = cctx;
@@ -157,7 +157,7 @@ export function registerLinkClassifier(cctx) {
   // (the X/Y header pill) and which fields are visible under "Show Only Mapped" — but a
   // link add/remove/re-endpoint doesn't fire any change event on the element, so refresh
   // the touched DataObject views explicitly.
-  const refreshDataObjectById = (id) => {
+  const renderDataObject = (id) => {
     const cell = id && graph.getCell(id);
     if (cell && cell.get('type') === 'sf.DataObject') {
       const view = paper.findViewByModel(cell);
@@ -165,6 +165,17 @@ export function registerLinkClassifier(cctx) {
       view?._syncFieldPorts?.();
       view?._renderBadges?.();
     }
+  };
+  // During a LOAD the migration re-sets every mapping link's connectionPoint (saves strip it), and each set fired these
+  // listeners: 500 mapping links meant 2000 full DataObject re-renders on every tab switch (audit 2026-09-23). While
+  // loading, collect the ids and render each object ONCE when the synchronous load has finished; interactive edits
+  // still re-render at once.
+  const pendingLoad = new Set();
+  const refreshDataObjectById = (id) => {
+    if (!id) return;
+    if (!cctx.isLoadingJSON) { renderDataObject(id); return; }
+    if (!pendingLoad.size) queueMicrotask(() => { const ids = [...pendingLoad]; pendingLoad.clear(); ids.forEach(renderDataObject); });
+    pendingLoad.add(id);
   };
   const refreshLinkedDataObjects = (link) => {
     refreshDataObjectById(link.get('source')?.id);

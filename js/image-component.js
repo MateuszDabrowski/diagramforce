@@ -1,4 +1,4 @@
-import { showError } from './feedback.js?v=1.24.0';
+import { showError } from './feedback.js?v=1.24.1';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //
@@ -31,6 +31,25 @@ const ALLOWED_MIME = /^image\/(png|jpe?g|webp|gif)$/i;
 export function diagramHasImage(graph) {
   if (!graph) return false;
   return graph.getElements().some(el => el.get('type') === 'sf.Image');
+}
+
+/** True when the diagram embeds image BYTES anywhere: an sf.Image cell or an OrgPerson photo. Share-as-URL is gated on
+ *  this - a photo is as much an image as an Image cell (size, and bytes nobody meant to put in a pasted link), and it
+ *  used to slip through (audit 2026-09-23). */
+export function diagramEmbedsImages(graph) {
+  if (!graph) return false;
+  return graph.getElements().some(el => el.get('type') === 'sf.Image' || (el.get('type') === 'sf.OrgPerson' && el.get('imageUrl')));
+}
+
+/** Validate + downscale a picked file for a small embedded picture (the OrgPerson avatar): the same MIME allowlist and
+ *  input cap as an Image cell, re-encoded at `maxDimension`. Resolves `{ dataURI }`, or null after telling the user
+ *  why. The avatar used to store the RAW file - any size, SVG included - twice over (audit 2026-09-23). */
+export async function prepareImageFile(file, { maxDimension = MAX_DIMENSION } = {}) {
+  if (!file) return null;
+  if (!ALLOWED_MIME.test(file.type)) { showError('Unsupported file type. Use PNG, JPG, WEBP, or GIF.'); return null; }
+  if (file.size > MAX_INPUT_BYTES) { showError('Image is too large (max 10 MB). Use a smaller file.'); return null; }
+  try { return await resizeToDataURI(file, maxDimension); }
+  catch (err) { console.error('Diagramforce: image processing failed:', err); showError(`Could not process image: ${err.message}`); return null; }
 }
 
 /**
@@ -110,14 +129,14 @@ async function processImageFile(file, onResult) {
  * Decode the file, scale it down so neither dimension exceeds MAX_DIMENSION,
  * and re-encode as WEBP at quality 0.85. Preserves alpha.
  */
-async function resizeToDataURI(file) {
+async function resizeToDataURI(file, maxDimension = MAX_DIMENSION) {
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
     let { naturalWidth: width, naturalHeight: height } = img;
     if (!width || !height) throw new Error('Image has zero dimensions.');
-    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-      const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+    if (width > maxDimension || height > maxDimension) {
+      const ratio = Math.min(maxDimension / width, maxDimension / height);
       width = Math.round(width * ratio);
       height = Math.round(height * ratio);
     }
@@ -125,6 +144,7 @@ async function resizeToDataURI(file) {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('This browser could not prepare the image (no canvas available).');
     ctx.drawImage(img, 0, 0, width, height);
     let dataURI = canvas.toDataURL('image/webp', WEBP_QUALITY);
     // Older browsers may silently fall back to PNG when WEBP isn't supported.

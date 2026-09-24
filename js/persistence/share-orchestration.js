@@ -5,17 +5,18 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare } from '../share-codec.js?v=1.24.0';
-import { diagramHasImage } from '../image-component.js?v=1.24.0';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.0';
-import { escHtml, formatBytes } from '../util.js?v=1.24.0';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.0';
-import { pctx } from './context.js?v=1.24.0';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.0';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.0';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.0';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.0';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.0';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.1';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.1';
+import { escHtml, formatBytes } from '../util.js?v=1.24.1';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.1';
+import { pctx } from './context.js?v=1.24.1';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.1';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.1';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.1';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.1';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.1';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.1';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -45,7 +46,7 @@ export function shareAsURL() {
   // Belt-and-braces: the dropdown button is already disabled when images are
   // present, but keyboard shortcut / hamburger entry / `share` action route
   // straight into this function and need the same gate.
-  if (diagramHasImage(graph)) { showShareModal(null, { reason: 'image' }); return; }
+  if (diagramEmbedsImages(graph)) { showShareModal(null, { reason: 'image' }); return; }
   try {
     showShareModal(buildShareURL());
   } catch (err) {
@@ -60,7 +61,7 @@ export function shareAsURL() {
 export function copyShareURL() {
   const { graph, tabNameCb, diagramTypeCb } = pctx;
   if (!tabNameCb || !diagramTypeCb) return;
-  if (diagramHasImage(graph)) { showShareModal(null, { reason: 'image' }); return; }
+  if (diagramEmbedsImages(graph)) { showShareModal(null, { reason: 'image' }); return; }
   let url;
   try { url = buildShareURL(); }
   catch (err) {
@@ -219,7 +220,9 @@ export async function loadFromURL() {
   // bug the day before, one block higher; found in Slot the evening 1.23.5 shipped.
   if (!_newDiagramHashWired) {
     _newDiagramHashWired = true;
-    window.addEventListener('hashchange', () => { handleLiveHash(window.location.hash); });
+    // A diagram arriving mid-Present leaves the presentation first: Present hides the tab bar, so the new tab used to
+    // open unseen behind the full-screen view (audit 2026-09-23).
+    window.addEventListener('hashchange', () => { if (isPresenting()) exitPresent(); handleLiveHash(window.location.hash); });
   }
   const { sanitizeGraphJSON, normalizeDiagramType, checkVersionWarning, onImport: onImportCallback } = pctx;
   // Google Drive "Open with Diagramforce" / "New" — Drive loads the app with a `?state=` QUERY param
@@ -302,9 +305,7 @@ export async function loadFromURL() {
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const json = pako.inflateRaw(bytes, { to: 'string' });
-      // Decompression-bomb guard: a legitimate share is far under this ceiling.
-      if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
+      const json = inflateCapped(bytes);   // decompression-bomb guard, enforced WHILE inflating (share-codec.js)
       data = JSON.parse(json);
     }
 

@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -176,6 +176,9 @@ function recomputeCrossingBumps() {
   for (const link of graph.getLinks()) {
     const view = paper.findViewByModel(link);
     if (!view) continue;
+    // A link hidden by the Object Relationships filter (display:none) must not leave its arcs and erasers behind
+    // where it crossed others (audit 2026-09-23).
+    if (view.el && view.el.style.display === 'none') continue;
     const linkSegs = getLinkOrthogonalSegments(view);
     if (linkSegs.length === 0) continue;
     const stroke = link.attr('line/stroke') || '#888888';

@@ -331,7 +331,11 @@ export function buildDiagram(maps, opts = {}) {
   //
   // NOT done when a field catalogue was supplied: that mode exists to answer "which fields still need
   // mapping?", and there the fields that go nowhere are exactly the point.
-  if (!opts.catalogue?.size) {
+  // NOR when nothing in the input reaches a DMO at all - a lone ingest map (source -> DLO) or a formulas-only map is
+  // the whole story, not upstream noise. Pruning it left ZERO cells and an "Imported 0 field mappings" toast, where
+  // data-model-and-mapping.md promises the single-zone layout (audit 2026-09-23).
+  const reachesDmo = rels.some((r) => stageOf(r.to[0]) === 'dmo');
+  if (!opts.catalogue?.size && reachesDmo) {
     const key = (o, f) => `${o}\u0000${f}`;
     const useful = new Set();
     for (const r of rels) if (stageOf(r.to[0]) === 'dmo') useful.add(key(...r.to));

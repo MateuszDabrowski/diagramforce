@@ -11,37 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.24.0';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.24.0';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.24.1';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.24.1';
 // The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
-import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.0';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.24.0';
-import { SF_FIELD_TYPES } from './properties.js?v=1.24.0';
-import { keyImpliesRequired } from './field-model.js?v=1.24.0';
-import { buildModal, showToast, showError } from './feedback.js?v=1.24.0';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.24.0';
-import { triggerDownload } from './persistence.js?v=1.24.0';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.24.0';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.24.0';
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.1';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.24.1';
+import { SF_FIELD_TYPES } from './properties.js?v=1.24.1';
+import { keyImpliesRequired } from './field-model.js?v=1.24.1';
+import { buildModal, showToast, showError } from './feedback.js?v=1.24.1';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.24.1';
+import { triggerDownload } from './persistence.js?v=1.24.1';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.24.1';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.24.1';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './table-view/builders.js?v=1.24.0';
+} from './table-view/builders.js?v=1.24.1';
 // The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
 // properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
 // debounced input handler - never from render() - so graph-change re-renders stay silent.
-import { announce } from './a11y.js?v=1.24.0';
+import { announce } from './a11y.js?v=1.24.1';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.24.0';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.24.1';
 // 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
 // context shape as gantt-plan.js - it never imports this facade back.
-import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.24.0';
-import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.24.0';
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.24.1';
+import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.24.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -305,6 +305,10 @@ export function init(modules) {
     // labels/position noise; reset is a tab swap, handled separately) so panning, recolouring, or
     // selecting in the diagram doesn't trip it.
     graph.on('add remove change:fields change:source change:target change:linkKind change:mappingType change:expressionRule change:category change:parent change:embeds', onDiagramSchemaEdit);
+    // ...and the Gantt plan's fields: an "Edit Plan" session changed a bar's Start, the user dragged that bar in the
+    // Diagram view, and Save then wrote the table's start with the drag's end - a span nobody entered, possibly with
+    // end before start, and no warning (audit 2026-09-23). Same guard for the plan table.
+    graph.on('change:startDate change:endDate change:taskLabel change:order change:groupId change:progress change:assignee', onDiagramSchemaEdit);
     // A graph swap (tab close/switch, session restore, import-replace) invalidates the draft —
     // abort the session silently so it can't zombie a lock or write into the wrong graph.
     graph.on('reset', abortSessionOnReset);
@@ -1390,9 +1394,8 @@ function exportRelCsv() {
 // file loses the colour-coded section headers that disambiguate the short on-screen labels.
 function exportRowsCsv(rows, cols = COLUMNS, suffix = 'mapping') {
   const esc = v => {
-    let s = String(v ?? '').trim();
-    if (s === '—') s = '';
-    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    const s = String(v ?? '').trim();
+    return csvCell(s === '—' ? '' : s);   // RFC-4180 quoting + the spreadsheet formula guard
   };
   const header = cols.map(c => esc(c.csv || c.label)).join(',');
   const lines = (rows || []).map(r => cols.map(c => esc(r[c.key])).join(','));

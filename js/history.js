@@ -93,6 +93,13 @@ const CONTENT_PROPS = [
   'rows', 'headerRow', 'tableLabel', 'highlightFirstRow', 'highlightFirstCol', 'fontSize', 'tableFill', 'tableBorder', 'tableTextColor',
   // df.Legend: a user-pinned width (set by the Width control / a resize, cleared by Auto size) — undoable.
   'manualWidth',
+  // Highlight State (properties.js applyShapeState): the state and the stroke it stashed. Only the attrs were
+  // recorded, so an undo repainted the border while the panel kept the state "on" - and clicking it again did nothing
+  // (audit 2026-09-23). Names are frozen: saves and share links carry them.
+  'borderStyle', '_origBorder',
+  // df.Pill: its text (the shape re-fits its width from it). Missing, so a Pill text edit was not undoable, and
+  // undoing the width alone left "Phase 1" inside a 32px circle (audit 2026-09-23).
+  'pillText',
   // Container/Zone/BPMN grouper: a user-pinned SIZE — set by a resize-handle drag, cleared by Auto size.
   // Opts the frame out of the embedding content-hug so a deliberately tall lane survives a child drag.
   'manualSize',
@@ -336,13 +343,31 @@ export function init(_graph) {
     if (isUndoRedoing || loadingGuard?.()) return;
     const oldAttrs = cell.previous('attrs');
     if (!oldAttrs) return;
-    const newAttrs = JSON.parse(JSON.stringify(cell.get('attrs')));
-    const oldAttrsCopy = JSON.parse(JSON.stringify(oldAttrs));
+    // Record only the SELECTORS that changed. Copying the whole attrs twice per change kept an Image cell's data URI
+    // (several MB) in every entry - 100 entries per tab, per open tab - for an edit to its caption (audit 2026-09-23).
+    const curAttrs = cell.get('attrs') || {};
+    const before = {}, after = {};
+    for (const sel of new Set([...Object.keys(oldAttrs), ...Object.keys(curAttrs)])) {
+      const a = oldAttrs[sel], b = curAttrs[sel];
+      if (a === b) continue;
+      const ja = a === undefined ? undefined : JSON.stringify(a);
+      const jb = b === undefined ? undefined : JSON.stringify(b);
+      if (ja === jb) continue;
+      before[sel] = ja;   // JSON text (undefined = the selector did not exist) - parsed back on replay
+      after[sel] = jb;
+    }
+    if (!Object.keys(before).length) return;
     const id = cell.id;
-    pushCommand({
-      undo: () => { const c = graph.getCell(id); if (c) c.set('attrs', oldAttrsCopy); },
-      redo: () => { const c = graph.getCell(id); if (c) c.set('attrs', newAttrs); },
-    });
+    const apply = (patch) => {
+      const c = graph.getCell(id);
+      if (!c) return;
+      const next = { ...(c.get('attrs') || {}) };
+      for (const [sel, json] of Object.entries(patch)) {
+        if (json === undefined) delete next[sel]; else next[sel] = JSON.parse(json);
+      }
+      c.set('attrs', next);
+    };
+    pushCommand({ undo: () => apply(before), redo: () => apply(after) });
   });
 
   // linkKind (Data Mapping: 'mapping' vs relationship) is a top-level prop, not attrs,
@@ -561,7 +586,10 @@ export function init(_graph) {
   // where the `add` command already round-trips the embed via its captured JSON — see
   // suppressEmbedTracking; recording there would split the drop into two undo steps.
   graph.on('change:parent', (cell) => {
-    if (isUndoRedoing || _suppressParentTracking) return;
+    // loadingGuard like every other recorder: embeds made DURING a load (fromJSON, the Gantt seed, the legacy-timeline
+    // migration, the dangling-parent cleanup) are not user actions. Recording them gave a brand-new Gantt 11 undo
+    // entries that un-embedded its bars one by one, and each wiped the redo stack (audit 2026-09-23).
+    if (isUndoRedoing || _suppressParentTracking || loadingGuard?.()) return;
     const oldParentId = cell.previous('parent') ?? null;
     const newParentId = cell.get('parent') ?? null;
     if (oldParentId === newParentId) return;
@@ -631,11 +659,17 @@ export function undo() {
     } else {
       cmd.undo();
     }
-    redoStack.push(cmd);
+  } catch (err) {
+    console.error('Diagramforce: undo step failed part-way:', err);
   } finally {
+    // Always lands on the redo stack, even when a step threw: popping it and pushing only on success dropped the
+    // command from BOTH stacks, so the history lost a step for good (audit 2026-09-23). The commands' redo halves
+    // look cells up by id, so replaying a partly-undone step is safe.
+    redoStack.push(cmd);
     isUndoRedoing = false;
   }
   notifyChange();
+  notifyReplay();
 }
 
 export function redo() {
@@ -650,11 +684,14 @@ export function redo() {
     } else {
       cmd.redo();
     }
-    undoStack.push(cmd);
+  } catch (err) {
+    console.error('Diagramforce: redo step failed part-way:', err);
   } finally {
+    undoStack.push(cmd);   // see undo(): never drop a command from both stacks
     isUndoRedoing = false;
   }
   notifyChange();
+  notifyReplay();
 }
 
 /**
@@ -890,6 +927,28 @@ export function endBatch() {
   currentBatch = null;
 }
 
+/** Run `fn` and fold whatever it records INTO the most recent undo entry, instead of pushing a new one. For a follow-up
+ *  the app makes on its own right after a user action - the parent re-fit a child deletion triggers - so one Cmd+Z
+ *  undoes the action and its consequence together (it took two: the first only reverted the re-fit). With no entry to
+ *  amend, or while a batch is open, it records normally. */
+export function amendLast(fn) {
+  if (batchDepth > 0 || !undoStack.length || suppressed) { fn(); return; }
+  commitPendingDrag();
+  startBatch();
+  let added = null;
+  try { fn(); } finally {
+    commitPendingDrag();
+    added = currentBatch;
+    // Close the batch WITHOUT pushing it: its commands join the last entry.
+    batchDepth = 0; isBatching = false; currentBatch = null;
+  }
+  if (added && added.length) {
+    const last = undoStack.pop();
+    undoStack.push([...(Array.isArray(last) ? last : [last]), ...added]);
+    notifyChange();
+  }
+}
+
 export function clear() {
   // Drop any in-flight drag merge along with the rest of the history.
   if (pendingCommitTimer) { clearTimeout(pendingCommitTimer); pendingCommitTimer = null; }
@@ -901,6 +960,9 @@ export function clear() {
 
 /** Snapshot current stacks (for per-tab persistence). */
 export function save() {
+  // Land the 80ms merge window FIRST, into THIS tab's stack. Snapshotting without it let a drag or property change
+  // still in the window commit into the NEXT tab's stack after a switch - and wipe that tab's redo (audit 2026-09-23).
+  commitPendingDrag();
   return { undo: [...undoStack], redo: [...redoStack] };
 }
 
@@ -924,4 +986,11 @@ export function setLocked(v) { locked = !!v; notifyChange(); }
 export function setSuppressed(v) { suppressed = !!v; }
 
 export function onChange(cb) { onChangeCallbacks.push(cb); }
+
+// Fired after an undo or redo REPLAYS a command (not on every stack change). The inspector re-renders on it: its rows
+// capture array indexes and state copies at render time, so after an undo put a deleted field back, the next click on
+// the row labelled "C" deleted B (audit 2026-09-23, P0-12).
+const replayCallbacks = [];
+export function onReplay(cb) { replayCallbacks.push(cb); }
+function notifyReplay() { replayCallbacks.forEach(cb => { try { cb(); } catch (err) { console.error(err); } }); }
 function notifyChange() { onChangeCallbacks.forEach(cb => cb()); }

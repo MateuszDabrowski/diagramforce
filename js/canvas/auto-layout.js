@@ -3,14 +3,14 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.0';
-import { startBatch, endBatch } from '../history.js?v=1.24.0';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.1';
+import { startBatch, endBatch } from '../history.js?v=1.24.1';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.24.0';
-import { flowConnectorType } from './link-styles.js?v=1.24.0';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.0';
+import { computeFlowLayout } from './flow-layout.js?v=1.24.1';
+import { flowConnectorType } from './link-styles.js?v=1.24.1';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.1';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -100,9 +100,11 @@ export function autoLayout(direction, opts = {}) {
     const cell = graph.getCell(cellId);
     const parentId = cell?.get('parent');
     if (parentId && unitIds.has(parentId)) return parentId;
-    // Nested deeper — walk up
+    // Nested deeper — walk up (visited-guarded: a parent loop must end the walk, not hang Auto Layout)
     let cur = cell;
-    while (cur) {
+    const seen = new Set();
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
       const pid = cur.get('parent');
       if (!pid) break;
       if (unitIds.has(pid)) return pid;

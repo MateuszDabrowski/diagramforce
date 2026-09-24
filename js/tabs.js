@@ -1,26 +1,26 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.0';
-import { tbctx } from './tabs/context.js?v=1.24.0';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.0';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.0';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.0';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.0';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.1';
+import { tbctx } from './tabs/context.js?v=1.24.1';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.1';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.1';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.1';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.1';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.0';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.0';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.0';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.0';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.0';
-import { wireMenuDismiss } from './menu.js?v=1.24.0';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.0';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.0';
-import { getPalette } from './brand-palette.js?v=1.24.0';
-import { getAllIcons } from './icons.js?v=1.24.0';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.0';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.1';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.1';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.1';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.1';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.1';
+import { wireMenuDismiss } from './menu.js?v=1.24.1';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.1';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.1';
+import { getPalette } from './brand-palette.js?v=1.24.1';
+import { getAllIcons } from './icons.js?v=1.24.1';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -193,7 +193,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   // Mirror Drive sync state into the tab + persist now, so a synced tab survives a reload.
   persistenceModule.setPersistTabDrive((id, meta) => {
     const t = tabs.find(x => x.id === id);
-    if (!t) return;
+    if (!t) { updateClosingArchive(id, meta); return; }   // closed mid-save: its browser archive takes the new linkage
     const prevShareSig = tabShareSignature(t);   // R7 — to know if the tab's collaboration glyph must change
     t.driveFileId = meta.driveFileId;
     t.driveSync = meta.driveSync;
@@ -207,7 +207,8 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     t.driveSharedSource = meta.driveSharedSource;   // upstream shared file (Shared File model)
     t.driveSharedInEdit = meta.driveSharedInEdit || null;   // Phase B: fileId IS a directly-edited shared file (drives the glyph + chip)
     t.driveOutgoingGrants = meta.driveOutgoingGrants || 0;   // direct view/edit invites on the master → "shared out" glyph
-    saveTabs();
+    t.driveLocalOnly = !!meta.driveLocalOnly;   // a look-only copy (an older version) - never auto-synced
+    scheduleSaveTabs();   // debounced: a sign-in sweep sets this for every tab in quick succession
     // Only re-render the tab bar when the share state actually flipped (a new copy shared, a source
     // gained edit rights), NOT on every routine Drive save — so the glyph appears live without flicker.
     if (tabShareSignature(t) !== prevShareSig) render();
@@ -235,6 +236,11 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     if (!tab) return;
     canvasModule.setLoadingJSON(true);
     try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+    tab.loadFailed = false;
+    // The undo stack described the content that was just REPLACED. Replaying it by cell id onto the pulled version
+    // mixed the two, marked the tab dirty, and autosave pushed the mix - onto a collaborator's file in Mode B
+    // (audit 2026-09-23). A pull is a fresh start, like opening a file.
+    historyModule.clear();
     tab.dirty = false; tab.lastModifiedAt = Date.now();   // freshly pulled = back in sync with the source
     render();
     requestAnimationFrame(() => canvasModule.fitContent());
@@ -257,15 +263,16 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     }
     // Single-group bundles tag nothing per-diagram — fall back to the lone group.
     const soleGroup = groupMetas.length === 1 ? nameToId.get(groupMetas[0].name) : null;
-    let lastId = null;
     for (const d of diagrams) {
       const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false });
       const t = tabs.find(x => x.id === id);
       if (t) t.groupId = (d.group && nameToId.get(d.group)) || soleGroup || null;
-      lastId = id;
     }
     reorderTabsByGroup();
-    if (lastId) activateTab(lastId, true);   // land on the last imported diagram
+    // The last imported diagram is ALREADY the active, loaded tab (importDiagramAsTab -> newTab activates it, then
+    // loads its graph). Do NOT re-activate it: activateTab(id, true) is the FRESH-tab path, which fromJSONs an
+    // empty graph - it wiped the last diagram of every group import and #dfg= link, and saveTabs() below then
+    // persisted it empty (audit 2026-09-23, P0-1).
     render();
     requestAnimationFrame(() => canvasModule.fitContent());
     saveTabs();
@@ -485,7 +492,7 @@ function doCloseTab(id, { archive = true } = {}) {
   // forget: saveTabNow captures the tab's data synchronously (before the splice below) and writes in the background;
   // skipped for delete-closes (archive:false → the diagram is being removed, not saved) and for un-forked view shares
   // (Mode C, handled inside saveTabNow).
-  if (archive) persistenceModule.saveTabNow?.(id);
+  const drivePending = archive ? persistenceModule.saveTabNow?.(id) : null;
 
   // Auto-archive a non-empty closing tab to a browser save so it can be reopened from Browser Storage later.
   // Skipped for delete-closes (archive:false). Best-effort — never blocks the close, EXCEPT when the archive
@@ -494,6 +501,14 @@ function doCloseTab(id, { archive = true } = {}) {
   if (archive) {
     const res = archiveTabToBrowser(id);
     if (res && res.lostBrowserOnly) { promptStorageFullOnClose(id); return; }
+    // The archive above carries the Drive linkage as it was BEFORE the close's save. When that save lands (a first
+    // CREATE, or a new head revision) the archive must follow, or reopening it minted a duplicate master / raised a
+    // false conflict against the user's own save (audit 2026-09-23). persistTabDrive routes to it while pending.
+    const closed = tabs.find(t => t.id === id);
+    if (drivePending && closed && closed.browserSaveName) {
+      closingArchives.set(id, closed.browserSaveName);
+      Promise.resolve(drivePending).finally(() => closingArchives.delete(id));
+    }
   }
 
   // Last tab — remove it and show unclosable new-diagram modal
@@ -520,6 +535,26 @@ function doCloseTab(id, { archive = true } = {}) {
 
   render();
   saveTabs();
+}
+
+// Tabs closed while their Drive save was still in flight: tab id -> the browser archive written at close.
+const closingArchives = new Map();
+
+/** Mirror Drive linkage that arrives AFTER a tab closed into the archive written at close (see doCloseTab). */
+function updateClosingArchive(id, meta) {
+  const name = closingArchives.get(id);
+  if (!name) return;
+  try {
+    const key = 'sfdiag::save::' + name;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    for (const k of ['driveFileId', 'driveLastSavedAt', 'driveImported', 'driveFolderId', 'driveDriveId', 'driveHeadRevisionId',
+      'driveLastHash', 'driveCopies', 'driveSharedSource', 'driveSharedInEdit', 'driveOutgoingGrants']) {
+      if (k in meta) d[k] = meta[k] ?? null;
+    }
+    localStorage.setItem(key, JSON.stringify(d));
+  } catch { /* best-effort: the archive still holds the diagram itself */ }
 }
 
 // A collision-safe browser-archive name: "Name YYYY-MM-DD", then "Name 2 YYYY-MM-DD" … so two different
@@ -864,7 +899,7 @@ function forgetBrowserSaveName(name) {
 export function getTabGraphJSON(tabId) {
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return null;
-  if (tab.id === tbctx.activeTabId) return graph.toJSON();
+  if (tab.id === tbctx.activeTabId && !tab.loadFailed) return graph.toJSON();   // a failed load shows an empty canvas - its stored graph is the real one
   return tab.graphJSON;
 }
 
@@ -1050,25 +1085,19 @@ function deleteGroupKeepTabs(id) {
 }
 
 /** Delete a group AND close its diagrams (the explicit destructive choice). confirmDeleteGroup is
- *  the confirmation, so we don't re-prompt per dirty tab here. */
+ *  the confirmation, so we don't re-prompt per dirty tab here. Each diagram closes the NORMAL way (doCloseTab):
+ *  flushed to Drive when connected and auto-archived to Browser Storage, exactly what "closes them" means everywhere
+ *  else. It used to splice the tabs out directly - no archive, no Drive flush - so a browser-only diagram in the
+ *  group was gone for good (audit 2026-09-23). */
 function deleteGroupWithTabs(id) {
-  const doomed = new Set(tabs.filter(t => t.groupId === id).map(t => t.id));
-  for (let i = tabs.length - 1; i >= 0; i--) if (doomed.has(tabs[i].id)) tabs.splice(i, 1);
+  const active = tbctx.activeTabId;
+  // Close the active tab LAST, so each earlier close doesn't bounce the canvas onto another doomed tab.
+  const doomed = tabs.filter(t => t.groupId === id).map(t => t.id).sort((a, b) => (a === active) - (b === active));
+  for (const tid of doomed) doCloseTab(tid);
   const gi = groups.findIndex(g => g.id === id);
   if (gi !== -1) groups.splice(gi, 1);
-  if (doomed.has(tbctx.activeTabId)) {
-    if (tabs.length === 0) {
-      tbctx.activeTabId = null;
-      selectionModule.clearSelection();
-      canvasModule.setLoadingJSON(true);
-      try { graph.fromJSON({ cells: [] }); } finally { canvasModule.setLoadingJSON(false); }
-      canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
-      render(); saveTabs(); notifyChange();
-      showNewDiagramModal();
-      return;
-    }
-    activateTab(tabs[0].id, false);   // activateTab persists + notifies
-  }
+  // A tab the storage-full prompt kept open survives the delete - ungrouped, since its group is gone.
+  for (const t of tabs) if (t.groupId === id) t.groupId = null;
   reorderTabsByGroup();
   render(); saveTabs(); notifyChange();
 }

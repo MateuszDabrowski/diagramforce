@@ -8,8 +8,8 @@
 // them onto cctx in init(), then calls registerViewportControls(cctx) to attach
 // the listeners and expose `getZoom` + `fitContent` back onto cctx for the
 // sub-modules that need them (e.g. auto-layout.js calls cctx.fitContent()).
-import { cctx } from './context.js?v=1.24.0';
-import { centerX, centerY, clamp } from '../util/geometry.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { centerX, centerY, clamp } from '../util/geometry.js?v=1.24.1';
 
 // ── Zoom + grid state ───────────────────────────────────────────────
 let currentZoom = 1;
@@ -54,7 +54,11 @@ export function fitContent() {
   paper.scale(1, 1);
 
   const contentBBox = paper.getContentBBox({ useModelGeometry: true });
-  if (!contentBBox || contentBBox.width === 0 || contentBBox.height === 0) return;
+  if (!contentBBox || contentBBox.width === 0 || contentBBox.height === 0) {
+    currentZoom = 1;   // the paper was just reset to scale 1 above - keep the readout and the zoom buttons in step
+    updateZoomDisplay();
+    return;
+  }
 
   // Get paper visible area
   const paperRect = paper.el.getBoundingClientRect();
@@ -63,7 +67,11 @@ export function fitContent() {
   // Compute scale to fit content with padding
   const scaleX = (paperRect.width - padding * 2) / contentBBox.width;
   const scaleY = (paperRect.height - padding * 2) / contentBBox.height;
-  const newZoom = Math.min(scaleX, scaleY, 2); // maxScale: 2
+  // Clamped into the same range every other zoom path uses: a tall flow fitted to 0.087, so "zoom out" (clamped at
+  // ZOOM_MIN 0.1) zoomed IN; a paper under 2 x padding gave a scale <= 0 - a mirrored canvas, and later an Infinity
+  // zoom persisted into the session (audit 2026-09-23).
+  const raw = Math.min(scaleX, scaleY, 2); // maxScale: 2
+  const newZoom = Number.isFinite(raw) && raw > 0 ? clamp(raw, ZOOM_MIN, ZOOM_MAX) : 1;
 
   paper.scale(newZoom, newZoom);
 

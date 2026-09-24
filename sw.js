@@ -9,7 +9,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.24.0';
+const CACHE_VERSION = '1.24.1';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -155,6 +155,7 @@ const PRECACHE_URLS = [
   `./js/tabs/new-diagram-modal.js?v=${CACHE_VERSION}`,
   `./js/tabs/close-manager.js?v=${CACHE_VERSION}`,
   `./js/tabs/session-store.js?v=${CACHE_VERSION}`,
+  `./js/tabs/single-window.js?v=${CACHE_VERSION}`,
   `./js/templates.js?v=${CACHE_VERSION}`,
   `./js/theme.js?v=${CACHE_VERSION}`,
   `./js/toolbar.js?v=${CACHE_VERSION}`,
@@ -196,7 +197,11 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    // cache:'reload' - fetch from the NETWORK, not the HTTP / CDN cache. The unversioned entries (./, index.html, the
+    // templates and shape packs) could otherwise be answered by a stale HTTP-cached copy, pinned cache-first until the
+    // next release: an old index.html requesting the previous ?v= modules, after activate deleted their cache
+    // (audit 2026-09-23).
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS.map((u) => new Request(u, { cache: 'reload' }))))
       // Activate immediately on first install — no need to wait for tabs to close.
       .then(() => self.skipWaiting()),
   );

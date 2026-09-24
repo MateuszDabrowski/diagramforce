@@ -5,16 +5,16 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.24.0';
-import { prctx } from './context.js?v=1.24.0';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.0';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.24.0';
-import { startImageAddFlow } from '../image-component.js?v=1.24.0';
-import { recolorCellIcon } from './color-schema.js?v=1.24.0';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.24.0';
-import { renderFieldEditor } from './field-editor.js?v=1.24.0';
-import { finishStandardProps } from './render-core.js?v=1.24.0';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { prctx } from './context.js?v=1.24.1';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.1';
+import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.24.1';
+import { startImageAddFlow } from '../image-component.js?v=1.24.1';
+import { recolorCellIcon } from './color-schema.js?v=1.24.1';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.24.1';
+import { renderFieldEditor } from './field-editor.js?v=1.24.1';
+import { finishStandardProps } from './render-core.js?v=1.24.1';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.24.1';
 
 /** df.Placeholder — Label + Description, and deliberately nothing else.
  *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
@@ -88,7 +88,7 @@ export function renderSimpleNodeProps(cell) {
   });
   if (!isIcon) {
     addNumber(appearance, 'Corner radius', cell.attr('body/rx') ?? 8,
-      v => { cell.attr('body/rx', v); cell.attr('body/ry', v); });
+      v => { history.startBatch(); try { cell.attr('body/rx', v); cell.attr('body/ry', v); } finally { history.endBatch(); } }, { min: 0 });   // 0 = square corners; one undo step
   }
 
   // An icon node keeps its bespoke square Size (with the rx/icon attrs) + its 64×64 Auto Size; converts differ by mode.
@@ -382,7 +382,7 @@ export function renderImageProps(cell) {
   addColor(appearance, 'Border', cell.attr('body/stroke') ?? 'var(--node-border)',
     v => cell.attr('body/stroke', v));
   addNumber(appearance, 'Border width', cell.attr('body/strokeWidth') ?? 1,
-    v => cell.attr('body/strokeWidth', Math.max(0, v)));
+    v => cell.attr('body/strokeWidth', Math.max(0, v)), { min: 0 });   // 0 = no border (the setter already allowed it)
   // Corner radius — drives both the body's rounded border AND the image's
   // CSS clip-path so the photo itself is clipped to match the rounded edges
   // (an SVG <image> doesn't accept rx/ry directly, so clip-path is required).
@@ -396,7 +396,7 @@ export function renderImageProps(cell) {
     } finally {
       history.endBatch();
     }
-  });
+  }, { min: 0 });
 
   // Replace image — runs the same pick+resize pipeline used for the initial
   // drop, then swaps the data URI in place.

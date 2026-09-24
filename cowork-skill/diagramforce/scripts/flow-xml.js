@@ -40,19 +40,30 @@ export const XML_ARRAY_KEYS = new Set([
   // mapItems / sortOptions / transformValues had no occurrences in that corpus but are the same shape, and a
   // name in a Set costs nothing.
   'choiceReferences', 'queriedFields', 'mapItems', 'sortOptions', 'transformValues',
+  // Orchestration stage / step conditions: a single one arrived as an object and summarizeConditions called .map on
+  // it, crashing the skill CLI's --expand-stages (audit 2026-09-23).
+  'entryConditions', 'exitConditions',
 ]);
+
+// Keys whose value is TEXT in the Metadata schema even when it looks like a number: a label "2024", a string value
+// "00501". parseScalar made them numbers - "00501" displayed as 501, a 21-digit id lost its digits, and a numeric
+// flow label became a numeric tab name the tab bar could not .trim() (audit 2026-09-23).
+const STRING_KEYS = new Set(['stringValue', 'label', 'name', 'description', 'apiName', 'fieldText', 'text',
+  'elementReference', 'interviewLabel', 'masterLabel', 'errorMessage', 'helpText', 'choiceText', 'formulaExpression']);
 
 /** Leaf text that should not stay a string. */
 export const parseScalar = (s) => {
   const t = String(s ?? '').trim();
   if (t === 'true') return true;
   if (t === 'false') return false;
-  if (t !== '' && !Number.isNaN(Number(t)) && /^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  // Only when the number reads back as the SAME text: "00501", "1.50" and a 21-digit id stay strings.
+  if (t !== '' && /^-?\d+(\.\d+)?$/.test(t) && String(Number(t)) === t) return Number(t);
   return t;
 };
 
 /** Fold one parsed child into its parent object - the array/scalar rule, shared by both tokenisers. */
 export function foldChild(out, key, val) {
+  if (STRING_KEYS.has(key) && (typeof val === 'number' || typeof val === 'boolean')) val = String(val);
   if (XML_ARRAY_KEYS.has(key)) (out[key] ||= []).push(val);
   else if (key in out) out[key] = [].concat(out[key], val);   // repeated but unlisted - still an array
   else out[key] = val;

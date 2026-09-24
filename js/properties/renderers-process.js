@@ -2,11 +2,12 @@
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
 // Build via widgets + finishStandardProps (render-core) + TYPE_LABELS (type-meta), reading graph + the panel DOM
 // refs via prctx; never imports the facade. The showProperties() dispatch imports the eight back.
-import { prctx } from './context.js?v=1.24.0';
-import { contrastTextColor } from '../components.js?v=1.24.0';
-import { finishStandardProps } from './render-core.js?v=1.24.0';
-import { TYPE_LABELS } from './type-meta.js?v=1.24.0';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { prctx } from './context.js?v=1.24.1';
+import { contrastTextColor } from '../components.js?v=1.24.1';
+import { finishStandardProps } from './render-core.js?v=1.24.1';
+import { TYPE_LABELS } from './type-meta.js?v=1.24.1';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.1';
 
 export function renderBpmnEventProps(cell) {
   // Content
@@ -80,7 +81,7 @@ export function renderBpmnTaskProps(cell) {
   addColor(appearance, 'Border',      cell.attr('body/stroke'), v => cell.attr('body/stroke', v));
   addColor(appearance, 'Label color', cell.attr('label/fill'),  v => cell.attr('label/fill', v));
   addNumber(appearance, 'Corner radius', cell.attr('body/rx') ?? 8,
-    v => { cell.attr('body/rx', v); cell.attr('body/ry', v); });
+    v => { history.startBatch(); try { cell.attr('body/rx', v); cell.attr('body/ry', v); } finally { history.endBatch(); } }, { min: 0 });
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });
 }

@@ -21,10 +21,11 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.0';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.0';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.24.0';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.0';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.1';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.1';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.24.1';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.1';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.1';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -144,7 +145,10 @@ export async function syncTemplatesWithDrive() {
     if (!remove) {
       // KEEP/resurrect: drop those tombstones + put the templates back, then push so the resurrection propagates.
       const keepIds = new Set(res.incomingDeletions.map((t) => t.id));
-      res.templates = [...res.templates, ...res.incomingDeletions];
+      // `revivedAt` outranks the older tombstone on EVERY device (mergeTemplatesWithTombstones), so the keep
+      // propagates instead of ping-ponging with the device that deleted it.
+      const revivedAt = Date.now();
+      res.templates = [...res.templates, ...res.incomingDeletions.map((t) => ({ ...t, revivedAt }))];
       res.deleted = res.deleted.filter((d) => !keepIds.has(d.id));
     }
   }
@@ -395,6 +399,7 @@ export function insertTemplateCells(template, dropPoint) {
   if (history?.startBatch) history.startBatch();
   try {
     graph.addCells(clones);
+    reslotInsertedGanttBars(graph, clones);   // a dropped Gantt bar gets its own row (see gantt-layout.js)
     // Official template files are COMPACTED saves (compactGraphForSave): slimForShare strips every mapping
     // link's router/connector/connectionPoints, DataObject ports, and icon artwork, and only the load pass
     // (fromJSON + migrateLinks + migrateNodes in tabs.js) rebuilds them. A stencil drop adds cells to a LIVE

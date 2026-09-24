@@ -3,11 +3,12 @@
 // bar CRUD). Build via widgets + finishStandardProps (render-core) + the gantt-layout helpers, reading graph +
 // the panel DOM refs + the showProperties dispatch via prctx (add/delete/reorder re-render the panel); never
 // imports the facade. The showProperties() dispatch imports the five render*Props back.
-import * as history from '../history.js?v=1.24.0';
-import { asUndoBatch, prctx } from './context.js?v=1.24.0';
-import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTimelineFor, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.24.0';
-import { finishStandardProps } from './render-core.js?v=1.24.0';
-import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, section, toHex } from './widgets.js?v=1.24.0';
+import * as history from '../history.js?v=1.24.1';
+import { asUndoBatch, prctx } from './context.js?v=1.24.1';
+import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTimelineFor, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.24.1';
+import { localISODate } from '../gantt-scale.js?v=1.24.1';
+import { finishStandardProps } from './render-core.js?v=1.24.1';
+import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, section, toHex } from './widgets.js?v=1.24.1';
 
 export function renderGanttTaskProps(cell) {
   // Content
@@ -189,7 +190,7 @@ export function renderGanttTimelineProps(cell) {
     } else {
       d.setMonth(d.getMonth() + periods);
     }
-    return d.toISOString().slice(0, 10);
+    return localISODate(d);   // LOCAL day - toISOString() is the UTC day, one early in UTC+ zones
   }
 
   // Helper: calculate periods from start to end
@@ -211,15 +212,22 @@ export function renderGanttTimelineProps(cell) {
   const content = section(prctx.bodyEl, 'Timeline');
 
   // Start Date — changing it recalculates end date from periods
+  // Each timeline edit below is ONE undo step, End Date included: it was set silently, so an undo reverted the start
+  // (or the periods) and left the End Date that went with the change (audit 2026-09-23).
   addDate(content, 'Start Date', cell.get('startDate') || '', v => {
-    cell.set('startDate', v);
-    const end = calcEndDate(v, cell.get('numPeriods') || 12, cell.get('viewMode') || 'week');
-    if (end) cell.set('endDate', end, { silent: true });
+    history.startBatch();
+    try {
+      cell.set('startDate', v);
+      const end = calcEndDate(v, cell.get('numPeriods') || 12, cell.get('viewMode') || 'week');
+      if (end) cell.set('endDate', end);
+    } finally { history.endBatch(); }
     prctx.showProperties(cell);
   });
 
   // End Date — changing it recalculates periods and resizes to keep column width constant
   addDate(content, 'End Date', cell.get('endDate') || calcEndDate(cell.get('startDate'), cell.get('numPeriods') || 12, viewMode), v => {
+    history.startBatch();
+    try {
     cell.set('endDate', v);
     const oldPeriods = cell.get('numPeriods') || 12;
     const taskListW = (cell.get('tasks') || []).length ? (cell.get('taskListWidth') || 200) : 0;
@@ -233,6 +241,7 @@ export function renderGanttTimelineProps(cell) {
       const newWidth = Math.round(taskListW + colW * clamped);
       cell.resize(newWidth, cell.size().height);
     }
+    } finally { history.endBatch(); }
     prctx.showProperties(cell);
   });
 
@@ -249,10 +258,13 @@ export function renderGanttTimelineProps(cell) {
     const colW = timelineW / oldPeriods;
     // Resize timeline to keep period width constant
     const newWidth = Math.round(taskListW + colW * clamped);
-    cell.set('numPeriods', clamped);
-    cell.resize(newWidth, cell.size().height);
-    const end = calcEndDate(cell.get('startDate'), clamped, cell.get('viewMode') || 'week');
-    if (end) cell.set('endDate', end, { silent: true });
+    history.startBatch();
+    try {
+      cell.set('numPeriods', clamped);
+      cell.resize(newWidth, cell.size().height);
+      const end = calcEndDate(cell.get('startDate'), clamped, cell.get('viewMode') || 'week');
+      if (end) cell.set('endDate', end);
+    } finally { history.endBatch(); }
     prctx.showProperties(cell);
   });
 

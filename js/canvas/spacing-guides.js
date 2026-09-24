@@ -13,8 +13,24 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.24.0';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.1';
+
+/** `cell` sits somewhere inside `ancestor`. Replaces JointJS's isEmbeddedIn here, which walks ancestors with no
+ *  visited set (a parent loop hangs the tab) and dereferences a missing parent (a dangling `parent` throws) - and this
+ *  runs for every element on every pointermove, before the selection / embedding / history listeners (audit 2026-09-23). */
+function isDescendantOf(cell, ancestor) {
+  const g = cell.graph;
+  if (!g || !ancestor) return false;
+  const seen = new Set([cell.id]);
+  let pid = cell.get('parent');
+  while (pid != null && !seen.has(pid)) {
+    if (pid === ancestor.id) return true;
+    seen.add(pid);
+    pid = g.getCell(pid)?.get('parent');
+  }
+  return false;
+}
 
 // ── Tolerances ──────────────────────────────────────────────────────
 const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)
@@ -56,8 +72,8 @@ function buildSpacingDragContext(moved, originParent) {
     .filter(el => {
       if (el.id === moved.id) return false;
       if (el.id === homeParent) return false;          // never the container itself
-      if (el.isEmbeddedIn(moved)) return false;
-      if (moved.isEmbeddedIn(el)) return false;
+      if (isDescendantOf(el, moved)) return false;
+      if (isDescendantOf(moved, el)) return false;
       if (movedIsGroup) {
         // Dragging a Zone/Pool/Note/etc → rhythm against the SAME type only, so e.g.
         // Layer zones can be spaced evenly against each other.
@@ -325,7 +341,7 @@ export function registerSpacingGuides(cctx) {
     const movedType = movedEl.get('type');
     const allElements = graph.getElements().filter(el => {
       if (el.id === movedEl.id || el.id === homeParent) return false;
-      if (el.isEmbeddedIn(movedEl) || movedEl.isEmbeddedIn(el)) return false;
+      if (isDescendantOf(el, movedEl) || isDescendantOf(movedEl, el)) return false;
       // When dragging a Zone/Pool/group, align only against the SAME type — otherwise the
       // children sitting inside OTHER zones pollute edge-alignment, and a stray child-edge
       // match suppresses the equal-distance (spacing) dimension between the zones.
@@ -371,7 +387,7 @@ export function registerSpacingGuides(cctx) {
     // in X), a vertical link pins centre-X — so it never tugs the off-axis.
     let connBestX = null, connBestY = null;
     for (const ce of graph.getNeighbors(movedEl)) {
-      if (ce.id === movedEl.id || ce.isEmbeddedIn(movedEl) || movedEl.isEmbeddedIn(ce)) continue;
+      if (ce.id === movedEl.id || isDescendantOf(ce, movedEl) || isDescendantOf(movedEl, ce)) continue;
       const cb = ce.getBBox();
       const ceCx = centerX(cb), ceCy = centerY(cb);
       const ddx = ceCx - movedCx;

@@ -4,12 +4,13 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.24.0';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.0';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, triggerDownload } from '../persistence.js?v=1.24.0';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.0';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.0';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.0';
+import { tbctx } from './context.js?v=1.24.1';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.1';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.1';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.1';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.1';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.1';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.1';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -18,7 +19,9 @@ export function saveCurrentTabState() {
   const { graph, canvas: canvasModule, history: historyModule } = tbctx.modules;
   const tab = tabs.find(t => t.id === tbctx.activeTabId);
   if (!tab) return;
-  tab.graphJSON = graph.toJSON();
+  // A tab whose diagram failed to load shows an EMPTY canvas; its stored graph is the real one. Never snapshot the
+  // empty canvas over it (see loadTabGraph).
+  if (!tab.loadFailed) tab.graphJSON = graph.toJSON();
   tab.viewport = canvasModule.getViewport();
   // Preserve undo/redo stacks for this tab
   tab.historyState = historyModule.save();
@@ -36,6 +39,31 @@ export function commitActiveTab() {
   // Returns the Drive-flush promise (resolved immediately when there's nothing to flush) so a caller can update
   // its UI once the active tab's Drive file is actually written/created.
   return persistenceModule.flushDriveSave?.() || Promise.resolve();
+}
+
+/** Load a tab's stored graph into the live canvas. If the load THROWS (a cell type this build does not know - a
+ *  session written by a newer release, then a rollback - or a corrupt blob), JointJS has already emptied the graph.
+ *  Every save path used to write that empty canvas back as the tab's content, so one unloadable cell cost the whole
+ *  diagram (audit 2026-09-23). Now the tab is marked `loadFailed`: its stored graph is kept verbatim, saves use it
+ *  instead of the empty canvas, and the user is told. Returns true when the graph loaded. */
+export function loadTabGraph(tab) {
+  const { graph, canvas: canvasModule } = tbctx.modules;
+  canvasModule.setLoadingJSON(true);
+  try {
+    graph.fromJSON(tab.graphJSON);
+    canvasModule.migrateLinks();
+    canvasModule.migrateNodes();
+    tab.loadFailed = false;
+    return true;
+  } catch (err) {
+    console.error(`Diagramforce: could not load "${tab.name}":`, err);
+    tab.loadFailed = true;
+    try { graph.fromJSON({ cells: [] }); } catch { /* already empty */ }
+    showError(`"${tab.name}" could not be opened by this version of Diagramforce, so it is kept exactly as it was. Nothing you add to it here will be saved. Export it from Save & Export to keep a copy.`);
+    return false;
+  } finally {
+    canvasModule.setLoadingJSON(false);
+  }
 }
 
 export function activateTab(id, isFresh) {
@@ -62,8 +90,7 @@ export function activateTab(id, isFresh) {
     canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
   } else {
     // Restore saved state
-    canvasModule.setLoadingJSON(true);
-    try { graph.fromJSON(tab.graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+    loadTabGraph(tab);
     if (tab.viewport) canvasModule.setViewport(tab.viewport);
   }
 
@@ -96,9 +123,17 @@ function compactTabGraph(graphJSON) {
   return _compactCache.get(graphJSON);
 }
 
-export function saveTabs() {
+/** Persist the whole session. `force` skips the one-active-window guard - only the handoff flush uses it, because
+ *  by then the ownership token already names the window taking over (single-window.js). */
+export function saveTabs({ force = false } = {}) {
   const { tabs, groups } = tbctx;
   const { graph, canvas: canvasModule } = tbctx.modules;
+  // One active window: a superseded window must not write its stale tab list over the owner's (audit P0-3).
+  if (!force && !canWriteSession()) return;
+  // While the MAJOR-version prompt is open, the stored session is the user's only copy of their old tabs. A share link
+  // loading in parallel (loadFromURL runs regardless) used to save straight over it - and the prompt's own "Export JSON"
+  // backup then exported the share tab instead (audit 2026-09-23). Writes resume once the user decides.
+  if (_holdForVersionPrompt) return;
   try {
     // Save lightweight tab metadata (not graph data — that's per-tab autosave)
     const data = tabs.map(t => ({ id: t.id, name: t.name, dirty: t.dirty }));
@@ -124,7 +159,7 @@ export function saveTabs() {
       // session blob — the heaviest, most-frequently-written localStorage entry — stays small.
       // compactGraphForSave deep-clones, so the live `t.graphJSON` is untouched; session restore
       // rebuilds everything via the common fromJSON + migrate path.
-      graphJSON: t.id === tbctx.activeTabId ? compactGraphForSave(graph.toJSON()) : compactTabGraph(t.graphJSON),
+      graphJSON: (t.id === tbctx.activeTabId && !t.loadFailed) ? compactGraphForSave(graph.toJSON()) : compactTabGraph(t.graphJSON),
       viewport: t.id === tbctx.activeTabId ? canvasModule.getViewport() : t.viewport,
     }));
     const payload = JSON.stringify({ ...meta, tabs: full });
@@ -216,12 +251,15 @@ export function checkStoragePressure() {
 }
 
 /** Populate tabs array and load the active tab from parsed session data. */
-function doRestoreTabData(data) {
+function doRestoreTabData(sessionData) {
+  let data = sessionData;
   const { tabs, groups } = tbctx;
   const { persistence: persistenceModule, graph, canvas: canvasModule, stencil: stencilModule } = tbctx.modules;
   const { generateId, reorderTabsByGroup } = tbctx;
-  if (data.nextId) tbctx.nextId = data.nextId;
-  if (data.nextGroupId) tbctx.nextGroupId = data.nextGroupId;
+  // Never LOWER the counters: a tab opened before this restore (a share link during the major-version prompt) holds
+  // ids minted from them.
+  if (data.nextId) tbctx.nextId = Math.max(tbctx.nextId || 1, data.nextId);
+  if (data.nextGroupId) tbctx.nextGroupId = Math.max(tbctx.nextGroupId || 1, data.nextGroupId);
   tbctx.ungroupedCollapsed = !!data.ungroupedCollapsed;   // synthetic Ungrouped group's fold state
 
   // Restore tab groups (v1.16.0). Absent in pre-1.16 sessions → no groups, everything ungrouped.
@@ -237,15 +275,26 @@ function doRestoreTabData(data) {
   }
   const groupIds = new Set(groups.map(g => g.id));
 
+  // Tabs a share link opened while the major-version prompt was up are already here: a restored tab must not reuse
+  // their ids (both were minted from nextId 1).
+  const takenIds = new Set(tabs.map(t => t.id));
   if (data.tabs?.length > 0) {
-    for (const t of data.tabs) {
+    for (const t0 of data.tabs) {
+      const t = takenIds.has(t0.id) ? { ...t0, id: generateId() } : t0;
+      if (t !== t0 && data.activeTabId === t0.id) data = { ...data, activeTabId: t.id };
+      takenIds.add(t.id);
       // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON becomes
       // a first-class "Data Mapping" diagram (mapping is now its own type).
       let dt = normalizeDiagramType(t.diagramType);
       if (t.mappingMode && dt === 'datamodel') dt = 'datamapping';
+      // Re-sanitise what localStorage hands back (security.md §2 always said so; it never ran). The session is written
+      // by this app, but a diagram imported by an OLDER build was stored before today's sanitiser existed - an unsafe
+      // `markup` from 1.24.0 would otherwise render on every restore. Unknown types are KEPT (keepUnknownTypes): a
+      // newer release's shapes must reach loadTabGraph's guard, not be thinned out silently here.
+      if (t.graphJSON) { try { sanitizeGraphJSON(t.graphJSON, { keepUnknownTypes: true }); } catch { /* loadTabGraph reports it */ } }
       tabs.push({
         id: t.id,
-        name: t.name || 'Draft',
+        name: String(t.name || 'Draft'),
         diagramType: dt,
         groupId: groupIds.has(t.groupId) ? t.groupId : null,   // drop references to a deleted group
         graphJSON: t.graphJSON || null,
@@ -265,7 +314,7 @@ function doRestoreTabData(data) {
       });
       // Re-seed remote-store's runtime sync state so a synced tab keeps syncing. A shared tab may have a
       // sharedSource but no own master yet, so hydrate when EITHER is present.
-      if (t.driveFileId || t.driveSharedSource) persistenceModule.hydrateTabDrive?.(t.id, serializeDriveFields(t));
+      if (t.driveFileId || t.driveSharedSource || t.driveLocalOnly) persistenceModule.hydrateTabDrive?.(t.id, serializeDriveFields(t));
     }
     tbctx.activeTabId = data.activeTabId || tabs[0].id;
   } else {
@@ -278,8 +327,7 @@ function doRestoreTabData(data) {
   // Load the active tab's state
   const active = tabs.find(t => t.id === tbctx.activeTabId);
   if (active?.graphJSON) {
-    canvasModule.setLoadingJSON(true);
-    try { graph.fromJSON(active.graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+    loadTabGraph(active);
     if (active.viewport) canvasModule.setViewport(active.viewport);
   }
   // Set stencil for active tab's diagram type
@@ -317,14 +365,21 @@ export function restoreTabs() {
     // potential-incompatibility decision) and What's New is skipped there (app.js) to avoid stacking two dialogs.
     if (diff === 'minor' || diff === 'major') _sessionUpdate = { fromVersion: savedVersion, diff };
     if (diff === 'major') {
-      // Major version mismatch — ask user whether to reset or try loading
+      // Major version mismatch — ask user whether to reset or try loading. Session writes are HELD until the answer
+      // (see saveTabs), so a share link opening meanwhile cannot overwrite the old session first.
+      _holdForVersionPrompt = true;
       showSessionVersionWarning(savedVersion, 'major').then(tryLoad => {
+        _holdForVersionPrompt = false;
         if (tryLoad) {
+          const opened = tbctx.activeTabId;   // a tab loadFromURL opened while the prompt was up, if any
+          if (opened) saveCurrentTabState();
           doRestoreTabData(data);
+          if (opened && tbctx.activeTabId !== opened) activateTab(opened, false);   // keep the shared diagram on screen
           saveTabs(); // stamp current version so warning doesn't repeat
         } else {
           localStorage.removeItem(STORAGE_KEY);
-          if (!persistenceModule.hasPendingUrlLoad?.()) showNewDiagramModal();   // don't stack over an Open-with / share load (A2)
+          if (tabs.length) saveTabs();   // the share-link tab (if any) was held back until now
+          else if (!persistenceModule.hasPendingUrlLoad?.()) showNewDiagramModal();   // don't stack over an Open-with / share load (A2)
         }
         render();
       });
@@ -352,6 +407,8 @@ export function restoreTabs() {
 // seen-key, so the session version is the only reliable "last release I ran" signal). Captured BEFORE saveTabs()
 // re-stamps the session to the current version.
 let _sessionUpdate = null;
+// True while the major-version prompt waits for an answer - session writes are held (see saveTabs).
+let _holdForVersionPrompt = false;
 /** The version update detected on this session restore ({ fromVersion, diff:'minor'|'major' }) or null. */
 export function getSessionUpdate() { return _sessionUpdate; }
 
@@ -467,6 +524,14 @@ function showSessionVersionWarning(savedVersion, diff) {
 let tabSaveTimer = null;
 
 /** Write the session NOW, cancelling any pending debounce. */
+/** Persist the session soon (the same 1000 ms debounce as the edit autosave, sharing its timer so the hide flush
+ *  covers it). For callers that fire in bursts - every Drive state change used to re-serialise the whole session at
+ *  once, N times over for an N-tab sign-in sweep (audit 2026-09-23). */
+export function scheduleSaveTabs() {
+  clearTimeout(tabSaveTimer);
+  tabSaveTimer = setTimeout(() => saveTabs(), 1000);
+}
+
 function flushSessionSave() {
   clearTimeout(tabSaveTimer);
   tabSaveTimer = null;
@@ -484,6 +549,8 @@ function flushSessionSave() {
  *    `beforeunload` dependably around bfcache and on iOS.
  *  Both are idempotent - a second flush with nothing pending just rewrites the same blob. */
 export function setupSessionFlush() {
+  // A handoff to another window ("Use this window" there) flushes this window's pending edits BEFORE it yields.
+  setBeforeYield(() => { clearTimeout(tabSaveTimer); tabSaveTimer = null; saveTabs({ force: true }); });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushSessionSave();
   });
@@ -498,6 +565,9 @@ export function setupAutoSave() {
     // Capture "this is the FIRST real content edit on the active tab" BEFORE markDirty flips the flag. markDirty's
     // own isLoadingJSON guard means a load/restore/migration never counts; viewport + selection never reach here.
     const tab = tabs.find(t => t.id === tbctx.activeTabId);
+    // A tab whose diagram failed to load: edits on its empty canvas are not the diagram, and must never reach Drive,
+    // where they would overwrite the real file with them (see loadTabGraph).
+    if (tab && tab.loadFailed) return;
     const firstRealEdit = !!tab && !tab.dirty && !canvasModule.isLoadingJSON?.();
     markDirty();
     // Mode C: a VIEW (Copy) share diverges into the user's own copy on its first edit → rename to "(changed)".

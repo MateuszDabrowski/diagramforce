@@ -2,17 +2,36 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.24.0';
-import * as history from '../history.js?v=1.24.0';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.0';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.24.0';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.24.0';
-import { confirmModal, showToast } from '../feedback.js?v=1.24.0';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.24.0';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.24.0';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.24.0';
-import { escHtml } from '../util.js?v=1.24.0';
-import { saveCellAsShape } from '../templates.js?v=1.24.0';
+import { prctx, asUndoBatch } from './context.js?v=1.24.1';
+import * as history from '../history.js?v=1.24.1';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.1';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.24.1';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.24.1';
+import { confirmModal, showToast } from '../feedback.js?v=1.24.1';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.24.1';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.24.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.24.1';
+import { escHtml } from '../util.js?v=1.24.1';
+import { saveCellAsShape } from '../templates.js?v=1.24.1';
+
+/** One undo batch per TYPING RUN: opened by the first keystroke, closed on blur or after a pause. It used to open on
+ *  FOCUS and close only on blur - but clicking a shape does not blur the panel input (JointJS prevents the default on
+ *  mousedown) and the panel is then rebuilt with the input still focused. Where no blur follows, the batch never
+ *  closed and undo stayed dead for the session; where it did, the text edit and the next drag merged into one entry
+ *  (audit 2026-09-23). The idle close bounds the batch whatever happens to the element. */
+function typingBatch(idleMs = 1500) {
+  let open = false, timer = 0;
+  const close = () => {
+    if (timer) { clearTimeout(timer); timer = 0; }
+    if (open) { open = false; history.endBatch(); }
+  };
+  const touch = () => {
+    if (!open) { history.startBatch(); open = true; }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(close, idleMs);
+  };
+  return { touch, close };
+}
 
 export function section(parent, title, open = true) {
   const wrap = document.createElement('div');
@@ -366,7 +385,13 @@ export function addDeleteBtn(parent, onClick) {
   btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 4h10M6 4V2.5A.5.5 0 016.5 2h3a.5.5 0 01.5.5V4M4.5 4l.5 9.5h6l.5-9.5M7 7v4M9 7v4"/>
   </svg> Delete`;
-  btn.addEventListener('click', onClick);
+  // ONE undo step for the whole delete. JointJS removes a cell's connected links with it, and each removal was its own
+  // history command, so one Cmd+Z restored the node WITHOUT its connectors (audit 2026-09-23, P0-13). The keyboard
+  // and context-menu deletes already batch (selection.deleteSelected); this is the inspector's route.
+  btn.addEventListener('click', (evt) => {
+    history.startBatch();
+    try { onClick(evt); } finally { history.endBatch(); }
+  });
   wrap.appendChild(btn);
   parent.appendChild(wrap);
 }
@@ -445,17 +470,11 @@ export function addText(parent, label, value, onChange, cell, opts) {
     input.rows = Math.max(1, lines);
   };
   autoSize();
-  input.addEventListener('input', () => { onChange(input.value); autoSize(); });
-  // Coalesce all per-keystroke graph events from a single focus session into
-  // one undo entry — Cmd+Z restores the whole prior text in one click instead
-  // of letter-by-letter.
-  let editing = false;
-  input.addEventListener('focus', () => {
-    if (!editing) { history.startBatch(); editing = true; }
-  });
-  input.addEventListener('blur', () => {
-    if (editing) { history.endBatch(); editing = false; }
-  });
+  // Coalesce all per-keystroke graph events from a single typing run into one undo entry — Cmd+Z restores the whole
+  // prior text in one click instead of letter-by-letter.
+  const typing = typingBatch();
+  input.addEventListener('input', () => { typing.touch(); onChange(input.value); autoSize(); });
+  input.addEventListener('blur', typing.close);
   // Highlight label on canvas when editing (auto-detect cell from selection if not passed)
   const targetCell = cell || getActiveCell();
   if (targetCell) wireCanvasLabelHighlight(input, targetCell);
@@ -639,15 +658,10 @@ export function addTextarea(parent, label, value, onChange, opts) {
   ta.rows = 2;                                      // pre-layout floor; autoSize takes over once measurable
   // scrollHeight is 0 while detached, so size after the node is in the document.
   requestAnimationFrame(autoSize);
-  ta.addEventListener('input', () => { onChange(ta.value); autoSize(); });
-  // Coalesce per-keystroke events into one undo entry per focus session.
-  let editing = false;
-  ta.addEventListener('focus', () => {
-    if (!editing) { history.startBatch(); editing = true; }
-  });
-  ta.addEventListener('blur', () => {
-    if (editing) { history.endBatch(); editing = false; }
-  });
+  // Coalesce per-keystroke events into one undo entry per typing run.
+  const typing = typingBatch();
+  ta.addEventListener('input', () => { typing.touch(); onChange(ta.value); autoSize(); });
+  ta.addEventListener('blur', typing.close);
   f.appendChild(ta);
   return ta;
 }
@@ -704,6 +718,7 @@ export function addChipInput(parent, label, values, onChange) {
   };
 
   input.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;   // an IME (Japanese, Chinese, Korean) confirms its candidate with Enter
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       commitInput();
@@ -989,9 +1004,11 @@ export function addColor(parent, label, value, onChange, opts = {}) {
       detachObserver.disconnect();
     }
   });
-  // The properties panel always lives under #properties; observing its
-  // subtree catches every selection-driven rebuild.
-  const propsRoot = document.getElementById('properties');
+  // The properties panel is #properties-panel; observing its subtree catches every selection-driven rebuild. This
+  // looked up `#properties`, which does not exist, so the observer never ran and every colour field ever rendered
+  // leaked a palette listener - each pinning a detached panel section and its cell (audit 2026-09-23). A picker in a
+  // modal (outside the panel) falls back to the document body.
+  const propsRoot = document.getElementById('properties-panel') || document.body;
   if (propsRoot) detachObserver.observe(propsRoot, { childList: true, subtree: true });
 }
 
@@ -1037,8 +1054,19 @@ export function addColorMulti(parent, label, value, onChange) {
     clearMixed();
     textInput.value = swatch.value;
   });
+  textInput.addEventListener('focus', () => { textInput.dataset.prev = textInput.value; });
   textInput.addEventListener('change', () => {
-    const h = toHex(textInput.value);
+    // A blank field or a typo ("reed") is not a colour: toHex answers #000000 for it, and this painted EVERY
+    // selected shape black (audit 2026-09-23). Refuse it and put the last good value back.
+    const raw = textInput.value.trim();
+    const ok = raw && (typeof CSS === 'undefined' || !CSS.supports || CSS.supports('color', raw) || /^#?[0-9a-f]{3,8}$/i.test(raw));
+    if (!ok) {
+      textInput.value = textInput.dataset.prev ?? '';   // what it showed before this edit (blank for a Mixed field)
+      textInput.classList.add('df-properties__input--invalid');
+      setTimeout(() => textInput.classList.remove('df-properties__input--invalid'), 900);
+      return;
+    }
+    const h = toHex(raw);
     clearMixed();
     swatch.value = h;
     textInput.value = h;
@@ -1499,6 +1527,7 @@ export function addTextWithSuggestions(parent, label, value, suggestions, onChan
   box.addEventListener('focus', renderMenu);
   box.addEventListener('blur', () => { commit(); setTimeout(() => { menu.hidden = true; setOpen(false); }, 120); });
   box.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;   // Enter / Escape / arrows belong to the IME while it composes (audit 2026-09-23)
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (menu.hidden) { renderMenu(); setActive(0); }        // open + land on the first option
@@ -1772,6 +1801,13 @@ export function toHex(color) {
   if (/^#[0-9a-f]{6}$/i.test(color)) return color;
   if (/^#[0-9a-f]{3}$/i.test(color)) {
     const [, r, g, b] = color.match(/^#(.)(.)(.)/);
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  // 8- and 4-digit hex (#rrggbbaa / #rgba, with or without `#`) - the colour validator accepts them, and they fell
+  // through to #000000, painting the shape black (audit 2026-09-23). Keep the RGB, drop the alpha.
+  if (/^#?[0-9a-f]{8}$/i.test(color)) return `#${color.replace('#', '').slice(0, 6)}`;
+  if (/^#?[0-9a-f]{4}$/i.test(color)) {
+    const [r, g, b] = color.replace('#', '');
     return `#${r}${r}${g}${g}${b}${b}`;
   }
   // Accept hex without leading `#` (common when copy-pasting from design tools)

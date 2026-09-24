@@ -2,9 +2,10 @@
 // tags / RACI / vacancy) + renderTaskProps. Build via the widget builders + finishStandardProps (render-core),
 // reading graph/paper/selection + the panel DOM refs via prctx; never imports the facade. The showProperties()
 // dispatch imports both back.
-import { prctx } from './context.js?v=1.24.0';
-import { finishStandardProps } from './render-core.js?v=1.24.0';
-import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section } from './widgets.js?v=1.24.0';
+import { prctx } from './context.js?v=1.24.1';
+import { finishStandardProps } from './render-core.js?v=1.24.1';
+import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section } from './widgets.js?v=1.24.1';
+import { prepareImageFile } from '../image-component.js?v=1.24.1';
 
 export function renderOrgPersonProps(cell) {
   // Content (uniform section name across all shapes; stored fields keep their
@@ -80,18 +81,18 @@ export function renderOrgPersonProps(cell) {
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
-  fileInput.accept = 'image/*';
+  fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
   fileInput.style.display = 'none';
-  fileInput.addEventListener('change', () => {
+  fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
+    fileInput.value = '';   // picking the same file again must fire `change`
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      cell.set('imageUrl', reader.result);
-      uploadBtn.innerHTML = `${ICON_CHANGE} Change`;
-      updatePhotoLayout(true);
-    };
-    reader.readAsDataURL(file);
+    // The Image-cell pipeline: MIME allowlist (no SVG), 10 MB input cap, downscaled for an avatar-sized circle.
+    const res = await prepareImageFile(file, { maxDimension: 256 });
+    if (!res) return;
+    cell.set('imageUrl', res.dataURI);
+    uploadBtn.innerHTML = `${ICON_CHANGE} Change`;
+    updatePhotoLayout(true);
   });
 
   uploadBtn.addEventListener('click', () => fileInput.click());

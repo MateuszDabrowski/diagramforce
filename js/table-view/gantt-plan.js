@@ -6,11 +6,11 @@
 // draft-session state machine (_barDraft/_barOrig), which this module never touches. Reads the live
 // graph + facade callbacks via initGanttPlan; never imports table-view.js back (acyclic).
 
-import { escHtml } from '../util.js?v=1.24.0';
-import { startBatch, endBatch } from '../history.js?v=1.24.0';
-import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.24.0';
-import { applyGanttDepLinkStyle } from '../canvas.js?v=1.24.0';
-import { buildModal } from '../feedback.js?v=1.24.0';
+import { escHtml } from '../util.js?v=1.24.1';
+import { startBatch, endBatch } from '../history.js?v=1.24.1';
+import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.24.1';
+import { applyGanttDepLinkStyle } from '../canvas.js?v=1.24.1';
+import { buildModal } from '../feedback.js?v=1.24.1';
 
 // ── Injected context (wired by table-view.init → initGanttPlan). Read at CALL time. `graph` is the
 // live JointJS graph; syncGanttDraft/render/isEditSession are facade functions the structural ops
@@ -30,7 +30,9 @@ export function addGanttTask(tlId) {
   if (!tl) return;
   const pad = (n) => String(n).padStart(2, '0');
   const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const startStr = tl.get('startDate') || isoOf(new Date());
+  // A malformed timeline start ("TBD") gave the new bar endDate "NaN-NaN-NaN" (audit 2026-09-23): fall back to today.
+  const tlStart = tl.get('startDate');
+  const startStr = (tlStart && !isNaN(new Date(tlStart + 'T00:00:00'))) ? tlStart : isoOf(new Date());
   const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
   const order = timelineBars(tl).length;
   startBatch();

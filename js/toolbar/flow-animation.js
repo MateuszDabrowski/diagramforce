@@ -13,8 +13,7 @@ export function startFlowAnimation() {
   _flowActive = true;
   syncFlowOverlays();
 
-  const target = document.querySelector('#paper svg .joint-viewport')
-              || document.querySelector('#paper svg');
+  const target = flowObserverTarget();
   if (target) {
     _flowObserver = new MutationObserver((mutations) => {
       if (!_flowActive) return;
@@ -25,12 +24,27 @@ export function startFlowAnimation() {
       if (!flowMutationsAffectRealLinks(mutations)) return;
       scheduleFlowSync();
     });
-    _flowObserver.observe(target, { childList: true, subtree: true });
+    _flowObserver.observe(target, FLOW_OBSERVE);
   }
+}
+
+// The cells layer (`.joint-viewport` does not exist in JointJS 4, so this watched the whole paper SVG), and the `d`
+// attribute of link paths too: JointJS reroutes a link during a drag by rewriting `d` IN PLACE, which a
+// childList-only observer never sees, so the animated copy stayed on the link's old route (audit 2026-09-23; the
+// same gap line-style.js closed for its own overlay).
+const FLOW_OBSERVE = { childList: true, subtree: true, attributes: true, attributeFilter: ['d'] };
+function flowObserverTarget() {
+  const svg = document.querySelector('#paper svg');
+  return svg?.querySelector('.joint-cells-layer') || svg || null;
 }
 
 function flowMutationsAffectRealLinks(mutations) {
   for (const m of mutations) {
+    if (m.type === 'attributes') {
+      const cls = m.target.getAttribute?.('class') || '';
+      if (cls !== 'df-flow-overlay' && cls !== 'df-line-style-overlay' && m.target.closest?.('.joint-link')) return true;
+      continue;
+    }
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
@@ -82,10 +96,7 @@ function syncFlowOverlays() {
 
   // Reconnect observer
   if (_flowActive && _flowObserver) {
-    const target = document.querySelector('#paper svg .joint-viewport')
-                || document.querySelector('#paper svg');
-    if (target) {
-      _flowObserver.observe(target, { childList: true, subtree: true });
-    }
+    const target = flowObserverTarget();
+    if (target) _flowObserver.observe(target, FLOW_OBSERVE);
   }
 }

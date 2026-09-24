@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.24.0';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.24.0';
-import { ER_MARKER_D } from '../er-markers.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.24.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.24.1';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -580,6 +580,7 @@ export function isObjectRelationshipsVisible() { return objectRelsVisible; }
 export function setObjectRelationshipsVisible(v) {
   objectRelsVisible = v !== false;
   applyObjectRelsVisibility();
+  cctx.scheduleCrossingBumpRecompute?.();   // the bumps depend on which links are visible
 }
 function applyObjectRelsVisibility() {
   const { graph, paper } = cctx;

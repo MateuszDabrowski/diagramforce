@@ -1,7 +1,10 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.24.0';
-import { cloneCellsForInsert } from './clone-cells.js?v=1.24.0';
+import * as history from './history.js?v=1.24.1';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.24.1';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.1';
+
+const reslotGanttClones = (clones) => reslotInsertedGanttBars(graph, clones);   // see gantt-layout.js
 
 // Length (in px) of the "stub" used when a cloned connector dangles —
 // keeps the free endpoint a comfortable, predictable distance from the
@@ -73,6 +76,7 @@ export function paste() {
   history.startBatch();
   try {
     graph.addCells(clones);
+    reslotGanttClones(clones);
     // Select the pasted ELEMENTS only (the idMap now covers link ids too); links carry source/target in their JSON.
     clones.forEach(c => { if (!(c.source || c.target)) selection.addToSelection(c.id); });
   } finally {
@@ -89,45 +93,32 @@ export function duplicate() {
 
   selection.clearSelection();
 
-  // Map old IDs to new cloned elements
-  const idMap = new Map();
+  // Duplicate = paste in place, +24px. The same expansion copy() does (a grouper brings its whole subtree) and the same
+  // clone helper paste() uses with keepContainment, so a duplicated Zone keeps its children EMBEDDED in the copy. It
+  // used to strip parent/embeds from every clone and never included a grouper's children: Cmd+D on a lone Zone gave
+  // an empty shell, and a marquee duplicate looked grouped but left the children behind on the first drag (audit
+  // 2026-09-23). Links whose both ends are duplicated come along, rewired.
+  const expanded = new Set(elementIds);
+  const addDescendants = (id) => {
+    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
+      const child = graph.getCell(childId);
+      if (child?.isElement?.() && !expanded.has(childId)) { expanded.add(childId); addDescendants(childId); }
+    }
+  };
+  elementIds.forEach(addDescendants);
+  const elementJSON = [...expanded].map(id => graph.getCell(id)).filter(c => c?.isElement?.()).map(c => c.toJSON());
+  const innerLinks = graph.getLinks().filter(l => expanded.has(l.get('source')?.id) && expanded.has(l.get('target')?.id));
+  const interSelectionLinkIds = new Set(innerLinks.map(l => l.id));
+  const { clones, idMap } = cloneCellsForInsert([...elementJSON, ...innerLinks.map(l => l.toJSON())],
+    { dx: 24, dy: 24, keepContainment: true });
 
   // One undo step for the whole duplicate (all cloned elements + links).
   history.startBatch();
   try {
-  elements.forEach(el => {
-    const clone = el.clone();
-    const pos = el.position();
-    clone.position(pos.x + 24, pos.y + 24);
-    // Don't carry over parent/embed relationships
-    clone.unset('parent');
-    clone.unset('embeds');
-    graph.addCell(clone);
-    idMap.set(el.id, clone.id);
-    selection.addToSelection(clone.id);
-  });
-
-  // Track which links are cloned via the inter-selection pass so we don't
-  // double-clone them when they're also explicitly selected.
-  const interSelectionLinkIds = new Set();
-
-  // Duplicate links between selected elements (rewire to cloned endpoints)
-  graph.getLinks().forEach(link => {
-    const srcId = link.get('source')?.id;
-    const tgtId = link.get('target')?.id;
-    if (srcId && tgtId && elementIds.has(srcId) && elementIds.has(tgtId)) {
-      interSelectionLinkIds.add(link.id);
-      const clone = link.clone();
-      clone.set('source', { ...link.get('source'), id: idMap.get(srcId) });
-      clone.set('target', { ...link.get('target'), id: idMap.get(tgtId) });
-      // Offset vertices
-      const verts = clone.get('vertices');
-      if (verts) {
-        clone.set('vertices', verts.map(v => ({ x: v.x + 24, y: v.y + 24 })));
-      }
-      graph.addCell(clone);
-    }
-  });
+  graph.addCells(clones);
+  reslotGanttClones(clones);
+  // Select the duplicated ELEMENTS the user selected (their duplicated children ride along inside them).
+  for (const id of elementIds) selection.addToSelection(idMap.get(id));
 
   // Duplicate explicitly selected links (Cmd+D on a link).
   // If a link's endpoint was also cloned, rewire to the new clone; otherwise
@@ -195,7 +186,14 @@ export function duplicate() {
  *
  * Returns the cloned element so callers can reposition / select it.
  */
+/** One undo step for the clone AND every connector it brings (audit 2026-09-23): each addCell was its own entry, so
+ *  the first Cmd+Z after "Clone with Connectors" removed a single cloned connector. */
 export function cloneElementWithConnectors(cell, mode = 'none') {
+  history.startBatch();
+  try { return cloneElementWithConnectorsInner(cell, mode); } finally { history.endBatch(); }
+}
+
+function cloneElementWithConnectorsInner(cell, mode = 'none') {
   if (!cell || !cell.isElement || !cell.isElement()) return null;
 
   const size = cell.size();
@@ -363,7 +361,14 @@ export function countExternalConnectedConnectors(cells) {
  *    - 'connected' → outside end keeps its original peer reference, so the
  *                    cloned connector also wires to that same outside cell
  */
+/** One undo step for the clone AND every connector it brings (audit 2026-09-23): each addCell was its own entry, so
+ *  the first Cmd+Z after "Clone with Connectors" removed a single cloned connector. */
 export function cloneSelectionWithMode(mode = 'dangling') {
+  history.startBatch();
+  try { return cloneSelectionWithModeInner(mode); } finally { history.endBatch(); }
+}
+
+function cloneSelectionWithModeInner(mode = 'dangling') {
   const allCells = selection.getSelectedElements();
   const elements = allCells.filter(c => c.isElement());
   if (elements.length === 0) return;

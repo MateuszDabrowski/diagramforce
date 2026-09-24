@@ -7,28 +7,124 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.24.0';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.24.0';
-import { normalizeDateSuffix } from '../util.js?v=1.24.0';
-import { escHtml } from '../util.js?v=1.24.0';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.24.0';
-import { pctx } from './context.js?v=1.24.0';
-import { slimForShare } from '../share-codec.js?v=1.24.0';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.24.1';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.24.1';
+import { normalizeDateSuffix } from '../util.js?v=1.24.1';
+import { escHtml } from '../util.js?v=1.24.1';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.24.1';
+import { pctx } from './context.js?v=1.24.1';
+import { slimForShare } from '../share-codec.js?v=1.24.1';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.24.0';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.24.1';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
 
-export function sanitizeGraphJSON(graphData) {
+// SVG elements a cell's `markup` may build. Serialised markup is legitimately there - link labels (rect + text), port
+// groups (rect / circle), the shipped templates (rect, text, title, circle) - so it cannot simply be deleted. But JointJS
+// builds every node with createElementNS, so an unchecked `markup` let a share link, paste, postMessage or Drive file
+// put <script>, <foreignObject> + <iframe> (frame-src allows docs/drive.google.com) or a full-canvas <a> on the canvas
+// (audit 2026-09-23, P1-14). Anything outside this set is dropped with its subtree.
+const SAFE_MARKUP_TAGS = new Set([
+  'g', 'rect', 'circle', 'ellipse', 'line', 'path', 'polygon', 'polyline', 'text', 'tspan', 'title', 'desc',
+  'image', 'use', 'defs', 'clipPath', 'linearGradient', 'radialGradient', 'stop',
+]);
+const SVG_NS = 'http://www.w3.org/2000/svg';
+// Deeper than any real diagram nests; a crafted file past it is rejected with a message instead of a RangeError.
+const MAX_JSON_DEPTH = 64;
+// Keys whose STRING value is free text the user typed - rendered as SVG text, never dereferenced as a URL - so text
+// that merely STARTS with "JavaScript:" ("JavaScript: upgrade LWC libraries") survives instead of being blanked on
+// every reload. Exempt only when the value IS a string: an object under one of these keys (attrs.text is the
+// link-label selector) is still scanned like any other.
+const FREE_TEXT_KEYS = new Set([
+  'text', 'rows', 'tableLabel', 'taskName', 'taskLabel', 'taskDescription', 'description', 'name', 'label', 'value',
+  'subtitle', 'title', 'notes', 'note', 'comment', 'apiName', 'helpText', 'assignee', 'pillText', 'sampleValues',
+]);
+
+/** Script-bearing URI after the characters a URL parser ignores (tabs, newlines, NULs, spaces, C1 controls) are gone:
+ *  `java\tscript:` and `\x01javascript:` are both `javascript:` to the browser. */
+function isScriptUri(val) {
+  const squashed = String(val).replace(/[\u0000-\u0020\u007f-\u009f]/g, '').toLowerCase();
+  return squashed.startsWith('javascript:') || squashed.startsWith('vbscript:') || squashed.startsWith('data:text/html');
+}
+
+/** Keep only safe SVG nodes in a JointJS markup array (recursively), and strip their risky attributes. Returns the
+ *  cleaned array, or undefined when nothing safe is left. A STRING markup is refused outright: JointJS parses it as
+ *  raw SVG/HTML, and the app never writes one. */
+function sanitizeMarkup(markup, depth) {
+  if (depth > MAX_JSON_DEPTH) throw new Error('Diagram JSON is nested too deeply.');
+  if (!Array.isArray(markup)) {
+    if (markup && typeof markup === 'object') return sanitizeMarkup([markup], depth);
+    return undefined;
+  }
+  const out = [];
+  for (const node of markup) {
+    if (!node || typeof node !== 'object' || typeof node.tagName !== 'string') continue;
+    if (!SAFE_MARKUP_TAGS.has(node.tagName)) continue;
+    if (node.namespaceURI != null && node.namespaceURI !== SVG_NS) continue;
+    const clean = { ...node };
+    if (clean.attributes && typeof clean.attributes === 'object') {
+      const attrs = {};
+      for (const [k, v] of Object.entries(clean.attributes)) {
+        if (/^on/i.test(k)) continue;
+        if (typeof v === 'string' && isScriptUri(v)) continue;
+        // <use> may only point inside the document; anything else could pull in outside markup.
+        if (node.tagName === 'use' && /href$/i.test(k) && !String(v).startsWith('#')) continue;
+        attrs[k] = v;
+      }
+      clean.attributes = attrs;
+    }
+    if (clean.children !== undefined) {
+      const kids = sanitizeMarkup(clean.children, depth + 1);
+      if (kids) clean.children = kids; else delete clean.children;
+    }
+    out.push(clean);
+  }
+  return out.length ? out : undefined;
+}
+
+/** Break `parent` loops. A self-parent or an A<->B loop loads, is saved, and then hangs the tab on the first drag
+ *  (JointJS walks ancestors with no visited set) - on every reload (audit 2026-09-23, P1-16). Each loop is cut at the
+ *  cell where the walk closes it; returns how many were cut. */
+function breakParentCycles(cells) {
+  const byId = new Map();
+  for (const c of cells) if (c && c.id != null) byId.set(c.id, c);
+  const settled = new Set();
+  let cut = 0;
+  for (const start of cells) {
+    if (!start || start.id == null || settled.has(start.id)) continue;
+    const path = new Set();
+    let cur = start;
+    while (cur && cur.parent != null && !settled.has(cur.id)) {
+      path.add(cur.id);
+      if (cur.parent === cur.id || path.has(cur.parent)) {
+        const p = byId.get(cur.parent);
+        if (p && Array.isArray(p.embeds)) p.embeds = p.embeds.filter((id) => id !== cur.id);
+        delete cur.parent;
+        cut++;
+        break;
+      }
+      cur = byId.get(cur.parent);
+    }
+    for (const id of path) settled.add(id);
+  }
+  return cut;
+}
+
+/** Sanitise graph JSON from untrusted sources (share URLs, imports, Drive files, templates, session restore).
+ *  Drops unsafe markup, event handlers and script URIs, dangling references and parent loops. `keepUnknownTypes`
+ *  (session restore only) leaves cells of an unregistered type in place, so a diagram written by a NEWER release is
+ *  kept for the load guard to protect instead of being silently thinned on the next save. */
+export function sanitizeGraphJSON(graphData, { keepUnknownTypes = false } = {}) {
   if (!graphData || !Array.isArray(graphData.cells)) return graphData;
   if (graphData.cells.length > MAX_CELL_COUNT) {
     throw new Error(`Diagram exceeds maximum element count (${MAX_CELL_COUNT}).`);
   }
-  const stripAttrs = (obj) => {
+  const stripAttrs = (obj, depth = 0) => {
     if (!obj || typeof obj !== 'object') return;
+    if (depth > MAX_JSON_DEPTH) throw new Error('Diagram JSON is nested too deeply.');
     for (const key of Object.keys(obj)) {
       // Drop prototype-pollution vectors from untrusted JSON.
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
@@ -37,20 +133,31 @@ export function sanitizeGraphJSON(graphData) {
       }
       // Remove event handler attributes (onclick, onload, etc.)
       if (/^on[a-z]/i.test(key)) { delete obj[key]; continue; }
-      // EXEMPT free-text content from URI-neutralisation: a df.Table `rows` grid and a label's `text` are
-      // rendered as SVG textContent (and via a link-less markdown parser) — NEVER dereferenced as a URL — so a
-      // cell/label that merely STARTS with "javascript:" must survive verbatim instead of being silently blanked
-      // on reload. We exempt by KEY (not by narrowing to href/src), so the conservative posture is unchanged for
-      // every real sink — url / href / xlink:href / src and any unknown attribute still get neutralised below.
-      if (key === 'rows' || key === 'text' || key === 'tableLabel') continue;
       const val = obj[key];
-      // Neutralise script-bearing URIs (javascript:/vbscript:/data:text/html).
-      // data:image/* is intentionally left intact — image cells rely on it.
-      if (typeof val === 'string'
-          && /^\s*(javascript|vbscript)\s*:|^\s*data\s*:\s*text\/html/i.test(val)) {
-        obj[key] = '';
+      // A df.Table `rows` grid is free text cell by cell (rendered as SVG text): keep it whole while it IS a grid of
+      // plain values; anything else under `rows` is scanned like any other object.
+      if (key === 'rows' && Array.isArray(val)
+          && val.every((r) => Array.isArray(r) && r.every((x) => x == null || typeof x !== 'object'))) continue;
+      // JointJS special attribute `html` writes raw HTML into the node. The app never sets it.
+      if (key === 'html') { delete obj[key]; continue; }
+      if (key === 'markup') {
+        const clean = sanitizeMarkup(val, depth + 1);
+        if (clean) obj[key] = clean; else delete obj[key];
+        continue;
+      }
+      // A marker or gradient definition names the element JointJS creates by its `type`.
+      if (val && typeof val === 'object' && !Array.isArray(val) && typeof val.type === 'string'
+          && (/Marker$/.test(key) || key === 'fill' || key === 'stroke')
+          && !SAFE_MARKUP_TAGS.has(val.type) && !['path', 'circle', 'rect', 'ellipse', 'polygon', 'polyline', 'image'].includes(val.type)) {
+        delete obj[key];
+        continue;
+      }
+      if (typeof val === 'string') {
+        // Free text keeps its words; every other string (url / href / xlink:href / src / style / any unknown
+        // attribute) has a script URI neutralised. data:image/* is intentionally left intact - image cells rely on it.
+        if (!FREE_TEXT_KEYS.has(key) && isScriptUri(val)) obj[key] = '';
       } else if (typeof val === 'object' && val !== null) {
-        stripAttrs(val);
+        stripAttrs(val, depth + 1);
       }
     }
   };
@@ -61,7 +168,7 @@ export function sanitizeGraphJSON(graphData) {
   // expected to handle). Drop silently — a noisy error would help an
   // attacker probe the allowlist boundaries.
   graphData.cells = graphData.cells.filter(c =>
-    c && typeof c === 'object' && typeof c.type === 'string' && ALLOWED_CELL_TYPES.has(c.type)
+    c && typeof c === 'object' && typeof c.type === 'string' && (keepUnknownTypes || ALLOWED_CELL_TYPES.has(c.type))
   );
   // S5 (v1.15.5) — drop links whose source/target references a cell that isn't
   // present. An LLM-authored diagram frequently names an object in a link that
@@ -111,6 +218,8 @@ export function sanitizeGraphJSON(graphData) {
   if (strippedParents) {
     console.warn(`Diagramforce: stripped ${strippedParents} dangling parent reference(s) (parent cell not found).`);
   }
+  const cycles = breakParentCycles(graphData.cells);
+  if (cycles) console.warn(`Diagramforce: cut ${cycles} parent loop(s) (a cell nested inside itself).`);
   for (const cell of graphData.cells) { stripAttrs(cell); }
   return graphData;
 }
@@ -171,7 +280,7 @@ export function importJSON() {
 function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion, mappingMode) {
   const { normalizeDiagramType, namedSavePrefix: NAMED_SAVE_PREFIX, appVersion: APP_VERSION } = pctx;
   if (!graphJSON) return false;
-  sanitizeGraphJSON(graphJSON);
+  try { sanitizeGraphJSON(graphJSON); } catch { return false; }
   const base = normalizeDateSuffix(String(name || 'Imported')).slice(0, 80) || 'Imported';
   let finalName = base;
   for (let n = 2; localStorage.getItem(NAMED_SAVE_PREFIX + finalName) !== null; n++) {
@@ -190,7 +299,10 @@ function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion
       appVersion: appVersion || APP_VERSION,
     }));
     return true;
-  } catch { return false; }
+  } catch (err) {
+    // 'quota' is not "skipped - already saved": the caller reports full storage instead (audit 2026-09-23).
+    return /quota/i.test(`${err?.name} ${err?.message}`) ? 'quota' : false;   // QuotaExceededError / NS_ERROR_DOM_QUOTA_REACHED
+  }
 }
 
 /** Content-signature + name sets of every existing diagram (open tabs + named
@@ -212,6 +324,12 @@ function collectExistingDiagrams() {
   return { sigs, names };
 }
 
+/** Tell the user which diagrams of a multi-diagram file were skipped, and why. */
+function reportRejected(rejected) {
+  const names = rejected.slice(0, 3).map((r) => `"${r.name}"`).join(', ') + (rejected.length > 3 ? ` and ${rejected.length - 3} more` : '');
+  showError(`Skipped ${rejected.length} diagram${rejected.length === 1 ? '' : 's'} that could not be loaded (${names}): ${rejected[0].reason}`);
+}
+
 /** Dedup + rename a bundle's diagrams against what already exists:
  *   - exact content match (same `graph.cells`) → **skipped** (no duplicate)
  *   - name match but different content → name gets **" (Restored)"**
@@ -222,13 +340,17 @@ function prepareImportedDiagrams(rawDiagrams) {
   const { sigs, names } = collectExistingDiagrams();
   const seen = new Set();
   const out = [];
+  out.rejected = [];   // { name, reason } - one bad diagram must not abort the whole bundle
   for (const d of rawDiagrams) {
     const cells = d?.graph?.cells;
     if (!Array.isArray(cells)) continue;
     const sig = contentSignature(cells);
     if (sigs.has(sig) || seen.has(sig)) continue;   // exact duplicate → skip
     seen.add(sig);
-    sanitizeGraphJSON(d.graph);
+    // A throw here (over MAX_CELL_COUNT, nested too deeply) used to escape loadJSONText and abort EVERY diagram and
+    // template in the backup with no message (audit 2026-09-23). Skip that one diagram and say so.
+    try { sanitizeGraphJSON(d.graph); }
+    catch (err) { out.rejected.push({ name: String(d.name || 'Imported'), reason: err.message }); continue; }
     let name = String(d.name || 'Imported').slice(0, 80) || 'Imported';
     if (names.has(name)) name = `${name} (Restored)`;
     names.add(name);
@@ -247,13 +369,13 @@ function prepareImportedDiagrams(rawDiagrams) {
  * Used by `importJSON` (file picker) and the unified Load-from-Paste modal. Returns
  * true on success.
  */
-export async function loadJSONText(jsonText, fallbackName) {
+export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly = false } = {}) {
   const { templatesBackupApi, showLoadModal: showLoadModalCallback, onImport: onImportCallback, normalizeDiagramType, graph, canvas: canvasModule } = pctx;
   let data;
   try { data = JSON.parse(jsonText); }
   catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
 
-  const okVer = await checkVersionWarning(data.appVersion || null, data.title || fallbackName || 'Imported', data);
+  const okVer = await checkVersionWarning(data.appVersion || null, String(data.title || fallbackName || 'Imported'), data);
   if (!okVer) return false;
 
   const isBundle = data.schema === 'diagramforce-export' || data.schema === 'diagramforce-diagrams'
@@ -265,14 +387,22 @@ export async function loadJSONText(jsonText, fallbackName) {
     && Array.isArray(data.groups) && data.groups.length > 0 && pctx.onImportGroup;
   const isTemplatesOnly = !isBundle && (data.schema === 'diagramforce-templates'
     || (Array.isArray(data.templates) && !data.graph && !Array.isArray(data.diagrams)));
+  // The postMessage import (external-import.js) opens exactly one diagram, never writes saves or templates.
+  if (singleDiagramOnly && (isBundle || isTemplatesOnly)) {
+    showError('The site that opened Diagramforce sent a bundle or a templates file. Only a single diagram can be opened this way - import the file from Load & Import instead.');
+    return false;
+  }
 
   // ── Group bundle: recreate the group + open its diagrams as grouped tabs ──
   if (isGroupBundle) {
     const { normalizeDiagramType, onImportGroup } = pctx;
     const diagrams = [];
+    const rejected = [];
     for (const d of (Array.isArray(data.diagrams) ? data.diagrams : [])) {
       if (!Array.isArray(d?.graph?.cells)) continue;
-      sanitizeGraphJSON(d.graph);   // drop endpoint-less links etc. (same as every import path)
+      // drop endpoint-less links etc. (same as every import path); one unloadable diagram is skipped, not fatal
+      try { sanitizeGraphJSON(d.graph); }
+      catch (err) { rejected.push({ name: String(d.name || 'Imported'), reason: err.message }); continue; }
       diagrams.push({
         name: String(d.name || 'Imported').slice(0, 80) || 'Imported',
         diagramType: normalizeDiagramType(d.diagramType),
@@ -283,7 +413,8 @@ export async function loadJSONText(jsonText, fallbackName) {
         appVersion: d.appVersion || data.appVersion || null,
       });
     }
-    if (diagrams.length === 0) { showToast('No diagrams found in that group file.', 'warning'); return true; }
+    if (rejected.length) reportRejected(rejected);
+    if (diagrams.length === 0) { if (!rejected.length) showToast('No diagrams found in that group file.', 'warning'); return true; }
     const groupMetas = data.groups.map(g => ({ name: String(g.name || 'Group').slice(0, 60), icon: g.icon || null, color: g.color || null }));
     onImportGroup(groupMetas, diagrams);
     // A full backup can be a kind:'group' bundle that ALSO carries templates - import them too so a restore
@@ -309,7 +440,8 @@ export async function loadJSONText(jsonText, fallbackName) {
     if (rawDiagrams.length === 1 && rawTemplates.length === 0 && onImportCallback) {
       const d = rawDiagrams[0];
       if (Array.isArray(d?.graph?.cells)) {
-        sanitizeGraphJSON(d.graph);
+        try { sanitizeGraphJSON(d.graph); }
+        catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
         const nm = String(d.name || d.title || fallbackName || 'Imported').slice(0, 80) || 'Imported';
         // #7: a 1-diagram bundle's per-diagram `group` is a bare NAME tag (bundle meta lives in data.groups, handled
         // by the onImportGroup path above) - wrap it so recreate-or-rejoin works by name.
@@ -320,12 +452,18 @@ export async function loadJSONText(jsonText, fallbackName) {
       }
     }
     const diagrams = prepareImportedDiagrams(rawDiagrams);   // dedup + rename + sanitise
+    if (diagrams.rejected.length) reportRejected(diagrams.rejected);
 
     let saved = 0;
+    let storageFull = 0;
     for (const d of diagrams) {
       // Preserve each diagram's own version, else the bundle's, else current.
-      if (restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || data.appVersion, d.mappingMode)) saved++;
+      const r = restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || data.appVersion, d.mappingMode);
+      if (r === true) saved++;
+      else if (r === 'quota') storageFull++;
     }
+    // A save that failed on FULL STORAGE is not an "already saved" skip - the summary below would say it was.
+    if (storageFull) showError(`Browser storage is full: ${storageFull} diagram${storageFull === 1 ? '' : 's'} from this file could not be saved. Free some space (Close & Delete) and import it again.`);
     const tc = (rawTemplates.length && templatesBackupApi?.importMerge)
       ? (templatesBackupApi.importMerge(rawTemplates) || 0) : 0;
 
@@ -333,7 +471,7 @@ export async function loadJSONText(jsonText, fallbackName) {
     // because an exact content-copy is already open (as a tab) or saved here.
     const stats = {
       imported: saved,
-      skipped: Math.max(0, rawDiagrams.length - saved),
+      skipped: Math.max(0, rawDiagrams.length - saved - storageFull - diagrams.rejected.length),
       templates: tc,
       templatesSkipped: Math.max(0, rawTemplates.length - tc),
     };
@@ -378,7 +516,9 @@ export async function loadJSONText(jsonText, fallbackName) {
     // what an authored/exported file carries. Preferring both over the filename matters for the
     // domain-move rescue path, where the old host hands over raw named saves as .dgf files - without
     // this the tab was labelled "Marketing Journey.dgf", extension and all, instead of its real name.
-    const name = data.title || data.name || fallbackName || 'Imported';
+    // String(): a numeric <label> in a Flow XML, or a numeric title in any JSON, became a numeric tab name, and the
+    // tab bar's `.trim()` threw on it (audit 2026-09-23).
+    const name = String(data.title || data.name || fallbackName || 'Imported');
     // Count endpoint-links before/after sanitise so we can tell the user how many
     // pointed at a missing shape and were skipped (the common LLM-output error) —
     // the diagram still loads instead of failing wholesale.
@@ -386,7 +526,7 @@ export async function loadJSONText(jsonText, fallbackName) {
     let droppedLinks = 0;
     if (data?.graph) {
       const before = countLinks(data.graph);
-      sanitizeGraphJSON(data.graph);
+      sanitizeGraphJSON(data.graph);   // a throw lands in the catch below, which reports it
       droppedLinks = Math.max(0, before - countLinks(data.graph));
     }
     if (onImportCallback && data?.graph) {

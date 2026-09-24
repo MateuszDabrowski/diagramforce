@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.0';
-import { showToast, showError } from '../feedback.js?v=1.24.0';
-import { sanitizeFilenamePart } from '../util.js?v=1.24.0';
-import { pctx } from './context.js?v=1.24.0';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.1';
+import { showToast, showError } from '../feedback.js?v=1.24.1';
+import { sanitizeFilenamePart } from '../util.js?v=1.24.1';
+import { pctx } from './context.js?v=1.24.1';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -17,7 +17,11 @@ import { pctx } from './context.js?v=1.24.0';
 // scale <= desired that fits; callers warn when it drops below 1 (the raster is then lower-res than the diagram,
 // and SVG export is the full-fidelity alternative).
 const EXPORT_MAX_SIDE = 8192;        // widest dimension any mainstream canvas reliably rasterizes
-const EXPORT_MAX_AREA = 33554432;    // 32 Mpx total - guards engines whose area cap is below side*side
+// 32 Mpx total - guards engines whose area cap is below side*side. iOS / iPadOS Safari caps a canvas at 16.7 Mpx
+// (4096 x 4096): past it getContext returns null and the export failed silently (audit 2026-09-23).
+const IS_IOS = typeof navigator !== 'undefined'
+  && (/iP(hone|ad|od)/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const EXPORT_MAX_AREA = IS_IOS ? 16777216 : 33554432;
 function clampExportScale(w, h, desired = 2) {
   if (!(w > 0) || !(h > 0)) return desired;
   const sideCap = Math.min(EXPORT_MAX_SIDE / w, EXPORT_MAX_SIDE / h);
@@ -170,22 +174,25 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
       const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
       const img = new Image();
       img.onload = () => {
-        const scale = clampExportScale(exportW, exportH, 2);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(exportW * scale);
-        canvas.height = Math.round(exportH * scale);
-        const ctx = canvas.getContext('2d');
-        if (!transparent) {
-          const theme = document.documentElement.getAttribute('data-theme');
-          ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0, exportW, exportH);
-        canvas.toBlob(blob => {
-          URL.revokeObjectURL(svgUrl);
-          blob ? resolve(blob) : reject(new Error('Could not encode PNG.'));
-        }, 'image/png');
+        try {   // a throw inside onload never reached the outer catch - the promise just never settled
+          const scale = clampExportScale(exportW, exportH, 2);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(exportW * scale);
+          canvas.height = Math.round(exportH * scale);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('This browser could not allocate a canvas that large.');
+          if (!transparent) {
+            const theme = document.documentElement.getAttribute('data-theme');
+            ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, exportW, exportH);
+          canvas.toBlob(blob => {
+            URL.revokeObjectURL(svgUrl);
+            blob ? resolve(blob) : reject(new Error('Could not encode PNG.'));
+          }, 'image/png');
+        } catch (err) { URL.revokeObjectURL(svgUrl); reject(err); }
       };
       img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(new Error('Image render failed.')); };
       img.src = svgUrl;
@@ -330,21 +337,27 @@ function exportRaster(transparent, format) {
       canvas.width = Math.round(exportW * scale);
       canvas.height = Math.round(exportH * scale);
       const ctx = canvas.getContext('2d');
+      // No context (the canvas is past this browser's size limit) and no blob both used to end in silence.
+      if (!ctx) { URL.revokeObjectURL(svgUrl); showError(`${fmtLabel} export failed: the diagram is too large for this browser. Use SVG export instead.`); return; }
 
-      if (!transparent) {
-        const theme = document.documentElement.getAttribute('data-theme');
-        ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+      try {
+        if (!transparent) {
+          const theme = document.documentElement.getAttribute('data-theme');
+          ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
 
-      ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0, exportW, exportH);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, exportW, exportH);
+      } catch (err) { URL.revokeObjectURL(svgUrl); showError(`${fmtLabel} export failed: ${err.message}`); return; }
 
       canvas.toBlob(blob => {
         const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
         if (blob) {
           triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
           showToast(`${fmtLabel} downloaded ✓`, 'success');
+        } else {
+          showError(`${fmtLabel} export failed: the browser could not encode the image. Try SVG export instead.`);
         }
         URL.revokeObjectURL(svgUrl);
       }, mimeType);
@@ -480,22 +493,29 @@ export async function exportGIF(transparent = false) {
 
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = canvasW;
-          canvas.height = canvasH;
-          const ctx = canvas.getContext('2d');
+          // Every failure REJECTS: a throw here used to leave the frame promise pending forever, so exportGIF never
+          // reached its `finally` and the in-progress flag kept Save and Share disabled until a reload (audit 2026-09-23).
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasW;
+            canvas.height = canvasH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('This browser could not allocate a canvas that large.');
 
-          if (bgColor) {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvasW, canvasH);
-          }
+            if (bgColor) {
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, canvasW, canvasH);
+            }
 
-          ctx.scale(scale, scale);
-          ctx.drawImage(img, 0, 0, exportW, exportH);
+            ctx.scale(scale, scale);
+            ctx.drawImage(img, 0, 0, exportW, exportH);
 
-          const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
-          URL.revokeObjectURL(svgUrl);
-          resolve(imageData.data);
+            const imageData = ctx.getImageData(0, 0, canvasW, canvasH);
+            // Release the backing store now - 12 frames of a large canvas otherwise wait for GC (iOS has a hard cap).
+            canvas.width = 0; canvas.height = 0;
+            URL.revokeObjectURL(svgUrl);
+            resolve(imageData.data);
+          } catch (err) { URL.revokeObjectURL(svgUrl); reject(err); }
         };
         img.onerror = () => {
           URL.revokeObjectURL(svgUrl);
@@ -772,12 +792,31 @@ function resolveCssVars(svgRoot) {
   const cache = new Map();
   function resolve(varExpr) {
     if (cache.has(varExpr)) return cache.get(varExpr);
-    // Extract var name and optional fallback: var(--foo, #FFF)
-    const m = varExpr.match(/var\(\s*(--[^,)]+)\s*(?:,\s*([^)]+))?\s*\)/);
-    if (!m) { cache.set(varExpr, varExpr); return varExpr; }
-    const val = cs.getPropertyValue(m[1]).trim() || (m[2] ? m[2].trim() : '');
+    const val = resolveVars(varExpr, 0);
     cache.set(varExpr, val);
     return val;
+  }
+  // Every var(--name, fallback) in a value, with BALANCED parentheses: the fallback may itself contain parentheses
+  // (rgba(0,0,0,0.06)) or another var(). The old `([^)]+)` capture stopped at the first `)`, so a light-theme export
+  // of a BPMN pool wrote fill="rgba(0,0,0,0.06" - invalid, so the header painted in the default colour (audit
+  // 2026-09-23).
+  function resolveVars(str, depth) {
+    if (depth > 8 || !str.includes('var(')) return str;
+    let out = '', i = 0;
+    while (i < str.length) {
+      const j = str.indexOf('var(', i);
+      if (j < 0) { out += str.slice(i); break; }
+      out += str.slice(i, j);
+      let k = j + 4, open = 1;
+      while (k < str.length && open > 0) { if (str[k] === '(') open++; else if (str[k] === ')') open--; k++; }
+      const inner = str.slice(j + 4, open === 0 ? k - 1 : k);
+      const comma = inner.indexOf(',');
+      const name = (comma < 0 ? inner : inner.slice(0, comma)).trim();
+      const fallback = comma < 0 ? '' : inner.slice(comma + 1).trim();
+      out += cs.getPropertyValue(name).trim() || resolveVars(fallback, depth + 1);
+      i = k;
+    }
+    return out.trim();
   }
 
   // Attributes that may contain colour var() references

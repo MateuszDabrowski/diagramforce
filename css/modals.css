@@ -2335,3 +2335,9 @@
   .df-paste-modal__formats { grid-template-columns: 1fr; }
   .df-paste-modal__url { font-size: 10px; }
 }
+
+/* One-active-window notice (js/tabs/single-window.js): a superseded window's only action is to take the session back. */
+.df-single-window__text {
+  margin: 0;
+  line-height: 1.5;
+}

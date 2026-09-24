@@ -51,7 +51,9 @@ const unitH = (n) => stackOf(n).reduce((h, s) => h + ROW_GAP + (s.h || n.h), n.h
  *   member (a stacked member is not a node: it carries no edges and is never ranked on its own).
  */
 export function computeFlowLayout(topology) {
-  const nodes = topology?.nodes || [];
+  // Non-finite sizes read as 0 (numeric strings as numbers): one NaN width used to make every position NaN.
+  const dim = (v) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const nodes = (topology?.nodes || []).map((n) => (n && (!Number.isFinite(n.w) || !Number.isFinite(n.h)) ? { ...n, w: dim(n.w), h: dim(n.h) } : n));
   const edges = (topology?.edges || []).filter((e) => e && e.source !== e.target);
   const out = new Map();
   if (!nodes.length) return out;

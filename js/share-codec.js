@@ -65,7 +65,10 @@ function remapKeys(value, table) {
   if (value && typeof value === 'object') {
     const out = {};
     for (const k of Object.keys(value)) {
-      out[table[k] ?? k] = remapKeys(value[k], table);
+      if (k === '__proto__') continue;   // assigning it would swap `out`'s prototype
+      // OWN keys only: `table[k] ?? k` read the prototype chain, so a key named `toString` or `valueOf` came back as
+      // "function toString() { [native code] }" (audit 2026-09-23). No valid link carries such a key, so no codec bump.
+      out[Object.prototype.hasOwnProperty.call(table, k) ? table[k] : k] = remapKeys(value[k], table);
     }
     return out;
   }
@@ -172,6 +175,32 @@ function urlSafeToBytes(str) {
   return bytes;
 }
 
+/** Decompression-bomb ceiling for every share decoder (v1, v2 and the legacy path in share-orchestration.js). A
+ *  legitimate share is far below it. */
+export const SHARE_INFLATE_CAP = 8 * 1024 * 1024;
+
+/** Raw-inflate `bytes` to a string, aborting as soon as the output passes SHARE_INFLATE_CAP. The cap used to be checked
+ *  on the finished string, i.e. after the whole bomb was already in memory: a 407 KB link grew the process by ~700 MB
+ *  before the check fired, and a link near the URL limit meant gigabytes (audit 2026-09-23, P1-17). */
+export function inflateCapped(bytes, dictionary) {
+  const opts = { raw: true };
+  if (dictionary) opts.dictionary = dictionary;
+  const inflator = new pako.Inflate(opts);
+  const chunks = [];
+  let total = 0;
+  inflator.onData = (chunk) => {
+    total += chunk.length;
+    if (total > SHARE_INFLATE_CAP) throw new Error('Share payload too large');
+    chunks.push(chunk);
+  };
+  inflator.push(bytes, true);
+  if (inflator.err) throw new Error(inflator.msg || 'Share payload is corrupt');
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return new TextDecoder('utf-8').decode(out);
+}
+
 /** Encode a share-data object to `v1.<base64url>`. */
 export function encodeShareV1(data) {
   const minified = remapKeys(data, MIN);
@@ -184,9 +213,7 @@ export function encodeShareV1(data) {
 export function decodeShareV1(payload) {
   if (!payload.startsWith('v1.')) throw new Error('Not a v1 share payload');
   const bytes = urlSafeToBytes(payload.slice(3));
-  const json = pako.inflateRaw(bytes, { dictionary: DICT_V1, to: 'string' });
-  // Decompression-bomb guard: a legitimate share is far under this ceiling.
-  if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
+  const json = inflateCapped(bytes, DICT_V1);   // decompression-bomb guard, enforced WHILE inflating
   return remapKeys(JSON.parse(json), EXPAND);
 }
 
@@ -247,8 +274,7 @@ export function encodeShareV2(data) {
 export function decodeShareV2(payload) {
   if (!payload.startsWith('v2.')) throw new Error('Not a v2 share payload');
   const bytes = urlSafeToBytes(payload.slice(3));
-  const json = pako.inflateRaw(bytes, { dictionary: DICT_V2, to: 'string' });
-  if (json.length > 8 * 1024 * 1024) throw new Error('Share payload too large');
+  const json = inflateCapped(bytes, DICT_V2);   // decompression-bomb guard, enforced WHILE inflating
   return remapKeys(JSON.parse(json), EXPAND_V2);
 }
 

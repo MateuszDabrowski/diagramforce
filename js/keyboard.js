@@ -3,6 +3,10 @@
 
 let modules = {};
 
+// Arrow-nudge skips these: they are positioned FROM their dates and row (gantt-layout.js), so a pixel nudge would
+// strand them off both. Same set gantt-drag.js re-dates on drop.
+const NUDGE_LOCKED_TYPES = new Set(['sf.GanttTask', 'sf.GanttMilestone', 'sf.GanttMarker']);
+
 // ── Platform-aware key-combo formatting (Gap #6, v1.12.0) ────────────
 // Detect macOS once at module load. `navigator.platform` is technically
 // deprecated but still the most reliable cross-browser signal and works in
@@ -131,6 +135,19 @@ function handleKeydown(evt) {
   // While the guided walkthrough is open it owns the keyboard (Tab/Escape via trapFocus,
   // arrows via its own handler) — don't fire canvas shortcuts behind the overlay.
   if (modules.walkthrough?.isActive?.()) return;
+  // Same for any open modal: Delete with a shape still selected deleted it BEHIND the dialog (audit 2026-09-23). The
+  // modal's own trapFocus handles Tab and Escape.
+  if (document.querySelector('.df-modal:not(.df-modal--hidden)')) return;   // (the About dialog is static, hidden markup)
+  // In the Table view the canvas is hidden and its selection cleared, but these keys still acted on it: Cmd+A then
+  // Delete emptied the diagram, Cmd+C copied a PNG of the hidden canvas instead of the table text, Cmd+V pasted cells
+  // nobody could see, and the arrows nudged hidden shapes instead of scrolling. Leave them to the browser there;
+  // undo / redo and the file shortcuts still work.
+  if (modules.tableView?.isActive?.()) {
+    const canvasOnly = (mod && ['a', 'c', 'x', 'v', 'd'].includes(key))
+      || key === 'Delete' || key === 'Backspace' || key.startsWith('Arrow')
+      || (!mod && ['+', '=', '-', '0'].includes(key));
+    if (canvasOnly) return;
+  }
 
   // Ctrl/Cmd+Enter — Present (this diagram alone, full screen). Ctrl+B - the stencil, presenting or not.
   if (mod && key === 'Enter') {
@@ -282,9 +299,15 @@ function handleKeydown(evt) {
     const step = shiftKey ? 16 : 4;
     const dx = key === 'ArrowRight' ? step : key === 'ArrowLeft' ? -step : 0;
     const dy = key === 'ArrowDown' ? step : key === 'ArrowUp' ? -step : 0;
+    const ids = new Set(elements.map(e => e.id));
     elements.forEach(el => {
-      const pos = el.position();
-      el.position(pos.x + dx, pos.y + dy);
+      // A Gantt bar/milestone/marker is bound to its DATES and its row: a free pixel nudge moved it off both and
+      // left startDate/endDate/order stale. Move the timeline to move the plan; re-date a bar by dragging it.
+      if (NUDGE_LOCKED_TYPES.has(el.get('type'))) return;
+      // Carried by a selected ancestor's translate below - moving it too would double the offset.
+      if (modules.selection.hasSelectedAncestor(el, ids)) return;
+      // translate(), not position(): position() leaves embedded children behind (audit 2026-09-23, P0-5).
+      el.translate(dx, dy);
     });
     return;
   }

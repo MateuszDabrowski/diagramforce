@@ -17,7 +17,7 @@
 // Reads the live graph/paper via the canvas context (cctx); the observer +
 // sync-id are private module state (nothing else reads them). canvas.js calls
 // startLineStyleOverlays() once in init() AFTER cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.24.0';
+import { cctx } from './context.js?v=1.24.1';
 
 let _lineStyleObserver = null;
 let _lineStyleSyncId = 0;
@@ -58,13 +58,16 @@ function syncLineStyleOverlays() {
   if (_lineStyleObserver) _lineStyleObserver.disconnect();
   try {
     // Remove stale overlays
-    document.querySelectorAll('.df-line-style-overlay').forEach(el => el.remove());
+    paper.el.querySelectorAll('.df-line-style-overlay').forEach(el => el.remove());
 
     for (const link of graph.getLinks()) {
       const style = link.prop('lineStyle');
       if (!style || style === 'none') continue;
 
-      const linkEl = document.querySelector(`.joint-link[model-id="${link.id}"]`);
+      // The view, not a document-wide selector: O(1) per link instead of a DOM scan per link on every drag frame, and
+      // no selector built from an id - an imported id containing `"` threw here AFTER the overlays above were removed,
+      // leaving every dashed link solid (audit 2026-09-23).
+      const linkEl = paper.findViewByModel(link)?.el;
       if (!linkEl) continue;
       const lineEl = linkEl.querySelector('[joint-selector="line"]');
       if (!lineEl) continue;
@@ -86,18 +89,23 @@ function syncLineStyleOverlays() {
   } finally {
     // Reconnect the observer
     if (_lineStyleObserver) {
-      const target = document.querySelector('#paper svg .joint-viewport')
-                  || document.querySelector('#paper svg');
+      const target = lineStyleObserverTarget();
       if (target) _lineStyleObserver.observe(target, { childList: true, subtree: true });
     }
   }
 }
 
+/** What the overlay observer watches: the CELLS layer. `.joint-viewport` (the old target) does not exist in JointJS 4,
+ *  so it fell back to the whole paper SVG, and every bump, guide or drop ghost scheduled a full resync. */
+function lineStyleObserverTarget() {
+  const svg = cctx.paper?.svg || document.querySelector('#paper svg');
+  return svg?.querySelector('.joint-cells-layer') || svg || null;
+}
+
 export function startLineStyleOverlays() {
   const { graph } = cctx;
   if (_lineStyleObserver) return;
-  const target = document.querySelector('#paper svg .joint-viewport')
-              || document.querySelector('#paper svg');
+  const target = lineStyleObserverTarget();
   if (!target) return;
   _lineStyleObserver = new MutationObserver((mutations) => {
     // Ignore mutations caused by either overlay system adding/removing its

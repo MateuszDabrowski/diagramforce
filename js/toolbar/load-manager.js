@@ -1,10 +1,11 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.0';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.0';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.0';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.0';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.0';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.0';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.1';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.1';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.1';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.1';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.1';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.1';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.1';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -569,6 +570,7 @@ export function initWindowFileDrop() {
     if (!isFileDrag(e) || inOwnZone(e)) { hide(); return; }
     e.preventDefault();
     hide();
+    if (isPresenting()) exitPresent();   // the new tab must be visible - Present hides the tab bar (audit 2026-09-23)
     const files = e.dataTransfer?.files;
     // One diagram per drop. Multiple files would each want a tab and a version prompt, and a half-applied batch
     // is worse than a clear refusal - the Load modal is the place to open several.
@@ -855,14 +857,14 @@ function buildLoadItem(save) {
   // the Copy/Collaborate access stored in driveSharedSource.canEdit at open time - item 1). Force the Drive chips
   // on whenever this archive HAS Drive provenance, even if Drive is currently disconnected.
   const driveOn = !!tctx.modules.persistence.isDriveConfigured?.() || !!(save.driveFileId || save.driveSharedSource?.fileId);
-  // 6.2: Expires before the (Last Modified) edited time, grouped on the right; storage chips stay on the left.
+  // 6.2: the (Last Modified) edited time on the right; storage chips stay on the left.
   const ssrc = save.driveSharedSource;
   const savePill = (ssrc && ssrc.fileId && !isViewForkTab(save)) ? sharePillHtml(ssrc.canEdit, { sm: true }) : '';   // bug #4: the Copy/Collab pill was missing on Load -> Browser archive rows
   tmp.innerHTML = storageRowHtml({
     checkbox: `<input type="checkbox" class="df-modal__row-check" data-save-key="${escHtml(save.key)}" data-save-name="${escHtml(save.name)}">`,
     diagramType: save.diagramType, typeTitle: typeLabelFor(save.diagramType), name: save.name, count: save.shapes,
     metaLeft: `<span class="df-save-mgr__chips">${driveChipsHtml(save, { driveOn, sharedFile: !!(save.driveSharedSource && save.driveSharedSource.fileId), onSharedDrive: !!save.driveDriveId })}${savePill}</span>`,
-    metaRight: `${escHtml(expiryLabel(save))} · Last Modified ${escHtml(rel)}`,
+    metaRight: `Last Modified ${escHtml(rel)}`,   // no "expires in N days": browser saves no longer expire (2026-09-24)
     trailing: `<button class="df-modal__btn df-modal__btn--accent df-load__row-load">Load</button>`,
   }).trim();
   const item = tmp.content.firstElementChild;
@@ -876,10 +878,5 @@ function buildLoadItem(save) {
   return item;
 }
 
-/** The "expires in N days" chip text for a browser save (kept on the unified Load row, item #2). */
-function expiryLabel(save) {
-  const daysLeft = Math.ceil(save.expiresIn / (24 * 60 * 60 * 1000));
-  return `expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
-}
 /** Short diagram-type label for a row icon's tooltip (shared by the Load rows). */
 function typeLabelFor(type) { return (tctx.modules.tabs.DIAGRAM_TYPES?.[type]?.short) || 'Architecture'; }

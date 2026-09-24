@@ -1,10 +1,10 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.24.0';
-import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.24.0';
-import { portGroups } from './ports.js?v=1.24.0';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.24.0';
+import { sctx } from './context.js?v=1.24.1';
+import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.24.1';
+import { portGroups } from './ports.js?v=1.24.1';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.24.1';
 
 export function registerDataObject() {
   // --- DataObject ---
@@ -290,6 +290,20 @@ export function registerDataObject() {
           desired.push({ id: rightId, group: 'fieldRight', args: { x: width, y }, markup: FIELD_MARKUP, attrs: { rect: rectAttrs } });
         }
       });
+      // A LINKED field the view hides ("Key Fields Only" hides every non-key row) keeps its ports, converged on the
+      // header like a collapsed object's. Dropping them detached the link from its field - against the documented
+      // rule that "the port is built for any linked field regardless" (DIAGRAM_JSON_SPEC.md; audit 2026-09-23).
+      if (linkedPorts.size) {
+        const shown = new Set(getVisibleDataObjectFields(model).map(f => f.fid));
+        for (const field of (model.get('fields') || [])) {
+          if (!field || !field.fid || shown.has(field.fid)) continue;
+          const leftId = `field-left-${field.fid}`, rightId = `field-right-${field.fid}`;
+          if (!linkedPorts.has(leftId) && !linkedPorts.has(rightId)) continue;
+          const rectAttrs = { width: 8, height: 8, x: -4, y: -4, rx: fieldCornerR, ry: fieldCornerR, magnet: true, fill: '#9AA0A6', stroke: '#FFFFFF', strokeWidth: 1.5 };
+          desired.push({ id: leftId, group: 'fieldLeft', args: { x: 0, y: HEADER_H / 2 }, markup: FIELD_MARKUP, attrs: { rect: rectAttrs } });
+          desired.push({ id: rightId, group: 'fieldRight', args: { x: width, y: HEADER_H / 2 }, markup: FIELD_MARKUP, attrs: { rect: rectAttrs } });
+        }
+      }
 
       // Header-level ER relationship ports — round relationship anchors on the header's
       // side edges, present in BOTH Data Model and Data Mapping (object↔object
