@@ -15,12 +15,13 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.2';
-import { pctx } from './context.js?v=1.24.2';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.2';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.2';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.2';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.2';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.3';
+import { pctx } from './context.js?v=1.24.3';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.3';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.3';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.3';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -653,7 +654,7 @@ async function reconcileDriveLinks() {
 
     await reconcileCopyLinks(entries, token);
     notify();
-  } catch { /* a list / probe failure just leaves the links as-is — synced interactively or on a later session */ }
+  } catch (e) { noteError('drive:reconcile', e); /* a list / probe failure just leaves the links as-is — synced interactively or on a later session */ }
 }
 
 /**
@@ -785,7 +786,7 @@ export async function reconcileTabDriveLinks() {
       s.fileId = d.fileId; s.headRevisionId = d.headRevisionId || null; s.modifiedTime = null;
       s.lastHash = dataHash(local); s.imported = false;     // lastHash set → the next sweep dedupe-SKIPS (no write, no revision)
       persistState(d.tabId, s); changed = true;
-    } catch { /* one bad decision must never abort the sweep — skip it, keep going */ }
+    } catch (e) { noteError('drive:reconcile-decision', e); /* one bad decision must never abort the sweep — skip it, keep going */ }
   }
   // Shared-Drive capture pass (item 5): for EVERY own-master tab now linked to a real owned file, sync the tab's
   // driveDriveId to that file's driveId. Runs for adopted AND already-linked tabs, so a tab that was opened before
@@ -881,7 +882,7 @@ async function pollUpstreamAll() {
         await checkSharedSourceUpstream(tab.id, token);
         await checkCopiesUpstream(tab.id, token);
         await checkDirectEditUpstream(tab.id, token);
-      } catch { /* per-tab best-effort; one unreadable tab never aborts the sweep */ }
+      } catch (e) { noteError('drive:sweep-tab', e); /* per-tab best-effort; one unreadable tab never aborts the sweep */ }
     }
   } finally { _pollInFlight = false; }
 }
@@ -1465,7 +1466,7 @@ async function fanOutToCopies(id, data, token, interactive) {
     try {
       const meta = await writeFile(copy.fileId, data, null, token);
       copy.lastRevisionId = meta.headRevisionId || null; copy.lastPushedAt = Date.now(); copy.verifiedAt = Date.now(); copy.conflict = false; changed = true;
-    } catch { /* leave for the next fan-out */ }
+    } catch (e) { noteError('drive:fan-out', e); /* leave for the next fan-out */ }
   }
   if (changed) { persistState(id, s); notify(); }
   if (interactive && s.copies.some((c) => c.conflict)) showToast('A shared copy was edited - open Share to review.', 'info');
@@ -1519,7 +1520,7 @@ async function pushToSharedSource(id, data, token, interactive) {
     const meta = await writeFile(src.fileId, data, null, token);
     src.lastRevisionId = meta.headRevisionId || null; src.lastPushedAt = Date.now(); src.conflict = false;
     persistState(id, s); notify();
-  } catch { /* leave for the next push */ }
+  } catch (e) { noteError('drive:push-copy', e); /* leave for the next push */ }
 }
 
 /** Menu "Save to Google Drive" / navbar click — interactive (may prompt) + toasts. */
@@ -1550,7 +1551,7 @@ export async function enableAutosync() {
     console.error('Diagramforce: initial sync-all failed:', err);
     showError('Auto-sync is on, but the initial sync hit an error - see console.');
   }
-  try { await pctx.templatesBackupApi?.syncWithDrive?.(); } catch { /* templates sync is best-effort */ }
+  try { await pctx.templatesBackupApi?.syncWithDrive?.(); } catch (e) { noteError('drive:templates-sync', e); /* templates sync is best-effort */ }
 }
 export function disableAutosync() {
   localStorage.setItem(LS.autosync, '0');
@@ -1597,7 +1598,7 @@ export async function signIn({ silent = false } = {}) {
   // probe re-runs — this is what recreates masters whose files were deleted/trashed in Drive while we were away.
   _driveReconcileDone = false;
   try { await syncAllDiagrams(); } catch (err) { console.error('Diagramforce: resume sync failed:', err); }
-  try { await pctx.templatesBackupApi?.syncWithDrive?.(); } catch { /* templates sync is best-effort */ }
+  try { await pctx.templatesBackupApi?.syncWithDrive?.(); } catch (e) { noteError('drive:templates-sync', e); /* templates sync is best-effort */ }
 }
 
 // ── Autosave (Phase 2 + redesign) ────────────────────────────────────────────
@@ -1860,7 +1861,7 @@ async function ensureSharedWorkingCopy(id) {
       // (if the user already switched tabs, the next edit / sweep mints it instead).
       await doSave(id, { interactive: false });
     }
-  } catch { /* best-effort: leave it for the next edit / sweep */ }
+  } catch (e) { noteError('drive:working-copy', e); /* best-effort: leave it for the next edit / sweep */ }
 }
 
 /** Mode C: mint a VIEW (Copy) share's working copy the moment it's first EDITED - INDEPENDENT of the auto-sync
@@ -2263,7 +2264,7 @@ export function publishTabsToSharedDrive(ids) {
             try {
               const r = await fetch(`${API}/${encodeURIComponent(f.id)}?supportsAllDrives=true&fields=driveId,capabilities(canAddChildren)`, { headers: { Authorization: 'Bearer ' + token } });
               if (r.ok) { const m = await r.json(); if (m.driveId) driveId = m.driveId; if (m.capabilities && m.capabilities.canAddChildren === false) { showError(`You need Contributor access or higher on "${f.name}" to publish there.`); resolve(0); return; } }
-            } catch { /* soft: let the writes surface any real error */ }
+            } catch (e) { noteError('drive:shared-drive-probe', e); /* soft: let the writes surface any real error */ }
             const byId = new Map((pctx.getAllTabs ? pctx.getAllTabs() : []).map((t) => [t.id, t]));
             let n = 0;
             for (const id of list) {
@@ -2281,7 +2282,7 @@ export function publishTabsToSharedDrive(ids) {
                 const meta = await writeFile(null, data, { folderId: f.id, appProperties: { dfCopyOf: s.fileId } }, token);
                 s.copies = upsertCopy(s.copies, { fileId: meta.id, driveId, folderId: f.id, label: f.name || 'Shared Drive', kind: 'shared-drive', lastRevisionId: meta.headRevisionId || null, lastPushedAt: Date.now(), verifiedAt: Date.now(), conflict: false });
                 persistState(id, s); n++;
-              } catch { /* skip this one, keep going */ }
+              } catch (e) { noteError('drive:publish-copy', e); /* skip this one, keep going */ }
             }
             notify();
             if (n) showToast(`Published ${n} cop${n === 1 ? 'y' : 'ies'} to "${f.name}" ✓`, 'success');
@@ -2701,7 +2702,7 @@ export async function saveTabsToDrive(tabIds, { share = false } = {}) {
   // for dead links (file deleted/trashed in Drive) and clear them — otherwise the content-hash dedupe in doSave
   // would report "up to date" and silently no-op the write. reconcileDriveLinks clears dead own-master links so
   // the doSave below CREATEs a fresh file instead of skipping.
-  try { await reconcileDriveLinks(); } catch { /* non-fatal — doSave's own self-heal is the backstop */ }
+  try { await reconcileDriveLinks(); } catch (e) { noteError('drive:reconcile', e); /* non-fatal — doSave's own self-heal is the backstop */ }
   const byId = new Map((pctx.getAllTabs ? pctx.getAllTabs() : []).map((t) => [t.id, t]));
   const results = [];
   for (const id of ids) {

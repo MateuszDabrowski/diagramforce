@@ -18,7 +18,8 @@
 // Also the switch the domain-move bridge needs: it writes the migrated session itself and then reloads, and the
 // reload's pagehide flush used to write the blank new-origin session straight over it (audit P0-2).
 
-import { buildModal } from '../feedback.js?v=1.24.2';
+import { buildModal } from '../feedback.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 export const OWNER_KEY = 'df.sessionOwner';
 const HANDOFF_PREFIX = 'handoff:';
@@ -53,7 +54,7 @@ export function claimSession() {
       if (ev.newValue == null) { writeOwner(myId); return; }   // storage cleared elsewhere - keep owning it
       // Another window asked for the session back: write our pending edits FIRST (it has not read yet), then yield.
       if (ev.newValue.startsWith(HANDOFF_PREFIX) && beforeYield) {
-        try { beforeYield(); } catch { /* the yield still has to happen */ }
+        try { beforeYield(); } catch (e) { noteError('session:handoff-flush', e); /* the yield still has to happen */ }
       }
       yieldSession();
     });

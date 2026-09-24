@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.24.2';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.2';
+import { cctx } from './context.js?v=1.24.3';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.24.3';
 
 /** `cell` sits somewhere inside `ancestor`. Replaces JointJS's isEmbeddedIn here, which walks ancestors with no
  *  visited set (a parent loop hangs the tab) and dereferences a missing parent (a dangling `parent` throws) - and this

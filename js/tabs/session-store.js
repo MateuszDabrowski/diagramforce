@@ -4,13 +4,14 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.24.2';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.2';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.2';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.2';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.2';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.2';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.2';
+import { tbctx } from './context.js?v=1.24.3';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.3';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.3';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.3';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.3';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.3';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -238,7 +239,7 @@ export function checkStoragePressure() {
   // Offload first: shed the OLDEST redundant (Drive-backed) browser archives — they're reloadable from Drive.
   // Only warn if we're STILL over after that, i.e. the remaining archives are browser-only / irreplaceable.
   let evicted = 0;
-  try { evicted = evictRedundantArchives() || 0; bytes = getStorageFootprint(); } catch { /* keep last bytes */ }
+  try { evicted = evictRedundantArchives() || 0; bytes = getStorageFootprint(); } catch (e) { noteError('session:evict-archives', e); /* keep last bytes */ }
   if (bytes < STORAGE_WARNING_BYTES) {
     if (evicted) console.info(`Diagramforce: freed browser storage by offloading ${evicted} Drive-backed archive${evicted === 1 ? '' : 's'} (still safe in Google Drive).`);
     return;

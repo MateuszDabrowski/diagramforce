@@ -2349,3 +2349,22 @@
   margin: 0;
   line-height: 1.5;
 }
+
+/* Help > Copy diagnostics (2026-09-24): the report the user reads before copying. */
+.df-diagnostics__lead { margin: 0 0 var(--spacing-sm); color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.5; }
+.df-diagnostics__text {
+  width: 100%;
+  box-sizing: border-box;
+  height: 300px;
+  resize: vertical;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}

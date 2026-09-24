@@ -11,14 +11,15 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.24.2';
-import { ER_MARKER_D } from './er-markers.js?v=1.24.2';
-import { showError, showToast } from './feedback.js?v=1.24.2';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.2';
+import { createElementFromComponent } from './components.js?v=1.24.3';
+import { ER_MARKER_D } from './er-markers.js?v=1.24.3';
+import { showError, showToast } from './feedback.js?v=1.24.3';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.3';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.24.2';
+  from './gantt-layout.js?v=1.24.3';
+import { noteError } from './diagnostics.js?v=1.24.3';
 
 let modules = {};
 
@@ -176,7 +177,7 @@ export function importMermaidText(text, opts = {}) {
     hierarchicalLayout(modules.graph, parsed, direction, groupOf.size ? groupOf : null);
   } catch (err) {
     console.warn('hierarchicalLayout failed, falling back to canvas.autoLayout:', err);
-    try { modules.canvas.autoLayout(direction); } catch {}
+    try { modules.canvas.autoLayout(direction); } catch (e) { noteError('import:auto-layout', e); }
   }
   // Zones LAST: one in the graph while hierarchicalLayout runs would be ranked as a node.
   if (parsed.groups?.length) {

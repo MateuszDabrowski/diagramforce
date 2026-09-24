@@ -1,30 +1,32 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.24.2';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.2';
-import { resizeDataObjectToFit } from './components.js?v=1.24.2';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.2';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.2';
+import { diagramEmbedsImages } from './image-component.js?v=1.24.3';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.3';
+import { resizeDataObjectToFit } from './components.js?v=1.24.3';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.3';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.3';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.24.2';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.2';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.2';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.24.2';
-import { renderTemplateThumbnail } from './templates.js?v=1.24.2';
-import { showWhatsNewNow } from './whats-new.js?v=1.24.2';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.2';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.2';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.2';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.2';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.2';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.2';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.2';
+import { pctx } from './persistence/context.js?v=1.24.3';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.3';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.3';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.24.3';
+import { renderTemplateThumbnail } from './templates.js?v=1.24.3';
+import { showWhatsNewNow } from './whats-new.js?v=1.24.3';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.24.3';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.3';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.3';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.3';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.3';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.3';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.3';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.3';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.2';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.2';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.2';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.3';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.3';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.3';
+import { noteError } from './diagnostics.js?v=1.24.3';
 
 let modules = {};
 export function init(_modules) {
@@ -390,13 +392,13 @@ export function init(_modules) {
         // autoLayout also treats BPMN pools / subprocesses / loops as rigid container units (children translate
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
         modules.canvas.autoLayout(direction, { align: 'barycenter' });
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
         // Outcome labels ("Yes", "No, notify owner") describe the PIPE, not the target - so unlike datamodel
         // below, collision-only: a label moves off its route midpoint ONLY if it collides, and then to the
         // nearest clear point on its own path. Measured on a two-gateway BPMN fixture: two outcome labels
         // stacked at their corridor midpoints (133px^2); collision-only cleared it moving ONE label 9px,
         // where target-centring moved all four labels 17-66px for the same zero-overlap result.
-        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch {}
+        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch (e) { noteError('layout:labels', e); }
       } else if (type === 'datamodel') {
         // Data Model (1.22.0): the generic layout, with TWO deviations measured on a real 10-object data
         // graph. (a) `maxRankExtent: 0` - rank wrapping off. The M7 cap wrapped 7 same-parent siblings into
@@ -408,8 +410,8 @@ export function init(_modules) {
         // measured and tuned. (b) join labels get the flow-style target-centred placement afterwards -
         // snapLinksToPorts reseeds every label to its route midpoint, which can sit on top of a card.
         modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0 });
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
-        try { modules.canvas.resolveConnectorLabels(); } catch {}
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { modules.canvas.resolveConnectorLabels(); } catch (e) { noteError('layout:labels', e); }
       } else {
         // Architecture + org. snapLinksToPorts reseeds every label to its route midpoint, and until 1.22.0
         // nothing resolved them afterwards - labels could land on cards or each other. NOT the datamodel
@@ -419,8 +421,8 @@ export function init(_modules) {
         // target card's axis and moved non-colliding labels 23-58px; collision-only fixed the same overlaps
         // (0 label-label, 0 label-card) moving ONLY the colliding label, 8-99px to the nearest clear spot.
         modules.canvas.autoLayout(direction, opts);
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch {}
-        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch {}
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch (e) { noteError('layout:labels', e); }
       }
     }, () => { try { modules.canvas.fitContent(); } catch {} });   // re-fit on undo/redo so the camera follows the layout
     document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
@@ -441,7 +443,7 @@ export function init(_modules) {
   btn('btn-reface-connectors')?.addEventListener('click', () => {
     let changed = 0;
     modules.history.recordPositionsBatch(() => {
-      try { changed = modules.mermaidImport.refaceConnectors(modules.graph); } catch {}
+      try { changed = modules.mermaidImport.refaceConnectors(modules.graph); } catch (e) { noteError('layout:reface', e); }
     });
     rerouteAllLinks();
     showToast(
@@ -460,6 +462,7 @@ export function init(_modules) {
   btn('btn-help-ai')?.addEventListener('click', () => openAiModal());
   btn('btn-help-sfmeta')?.addEventListener('click', () => openSfMetadataModal());
   btn('btn-help-shortcuts')?.addEventListener('click', () => openShortcutsModal());
+  btn('btn-help-diagnostics')?.addEventListener('click', () => openDiagnosticsModal(modules));
   btn('btn-help-about')?.addEventListener('click', () => showAboutModal());
 
   // Change Review — close the Display menu, then open the baseline picker.
@@ -906,6 +909,9 @@ function setupHamburgerMenu() {
         break;
       case 'sfmeta':
         openSfMetadataModal();
+        break;
+      case 'diagnostics':
+        openDiagnosticsModal(modules);
         break;
       case 'about':
         showAboutModal();

@@ -8,18 +8,18 @@
 // Reads graph/selection + the panel DOM refs (bodyEl/footerEl) via prctx; imports the convert/widgets/clipboard/
 // components/type-meta leaves; never imports the facade. The facade re-exports autoSizeCell + buildCellActions
 // (app.js namespace access) and the staying renderers import finishStandardProps + autoSizeCell back.
-import { prctx } from './context.js?v=1.24.2';
-import { cctx } from '../canvas/context.js?v=1.24.2';   // leaf context object (no imports of its own) — safe here
-import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.24.2';
-import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.24.2';   // the exact set fitParentToChildren wraps
-import { showToast } from '../feedback.js?v=1.24.2';
-import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.2';
-import { resizeDataObjectToFit } from '../components.js?v=1.24.2';
-import { saveCellAsShape } from '../templates.js?v=1.24.2';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.24.2';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.24.2';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.24.2';
-import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.24.2';
+import { prctx } from './context.js?v=1.24.3';
+import { cctx } from '../canvas/context.js?v=1.24.3';   // leaf context object (no imports of its own) — safe here
+import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.24.3';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.24.3';   // the exact set fitParentToChildren wraps
+import { showToast } from '../feedback.js?v=1.24.3';
+import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.3';
+import { resizeDataObjectToFit } from '../components.js?v=1.24.3';
+import { saveCellAsShape } from '../templates.js?v=1.24.3';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.24.3';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.24.3';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.24.3';
+import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.24.3';
 
 /** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
  *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and

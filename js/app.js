@@ -1,33 +1,38 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.24.2';
-import * as icons       from './icons.js?v=1.24.2';
-import { getAllStencilSvgs } from './components.js?v=1.24.2';
-import * as shapes      from './shapes.js?v=1.24.2';
-import * as canvas      from './canvas.js?v=1.24.2';
-import * as stencil     from './stencil.js?v=1.24.2';
-import * as selection   from './selection.js?v=1.24.2';
-import * as history     from './history.js?v=1.24.2';
-import * as clipboard   from './clipboard.js?v=1.24.2';
-import * as templates    from './templates.js?v=1.24.2';
-import * as keyboard    from './keyboard.js?v=1.24.2';
-import * as toolbar     from './toolbar.js?v=1.24.2';
-import * as properties  from './properties.js?v=1.24.2';
-import * as persistence from './persistence.js?v=1.24.2';
-import * as tabs        from './tabs.js?v=1.24.2';
-import * as mermaidImport from './mermaid-import.js?v=1.24.2';
-import * as tableView    from './table-view.js?v=1.24.2';
-import * as walkthrough  from './walkthrough.js?v=1.24.2';
-import * as present      from './present.js?v=1.24.2';
-import * as whatsNew     from './whats-new.js?v=1.24.2';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.2';
-import * as singleWindow from './tabs/single-window.js?v=1.24.2';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.2';
-import * as externalImport from './persistence/external-import.js?v=1.24.2';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.24.2';
-import { seedDefaultPalette } from './brand-palette.js?v=1.24.2';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.2';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.24.3';
+import * as icons       from './icons.js?v=1.24.3';
+import { getAllStencilSvgs } from './components.js?v=1.24.3';
+import * as shapes      from './shapes.js?v=1.24.3';
+import * as canvas      from './canvas.js?v=1.24.3';
+import * as stencil     from './stencil.js?v=1.24.3';
+import * as selection   from './selection.js?v=1.24.3';
+import * as history     from './history.js?v=1.24.3';
+import * as clipboard   from './clipboard.js?v=1.24.3';
+import * as templates    from './templates.js?v=1.24.3';
+import * as keyboard    from './keyboard.js?v=1.24.3';
+import * as toolbar     from './toolbar.js?v=1.24.3';
+import * as properties  from './properties.js?v=1.24.3';
+import * as persistence from './persistence.js?v=1.24.3';
+import * as tabs        from './tabs.js?v=1.24.3';
+import * as mermaidImport from './mermaid-import.js?v=1.24.3';
+import * as tableView    from './table-view.js?v=1.24.3';
+import * as walkthrough  from './walkthrough.js?v=1.24.3';
+import * as present      from './present.js?v=1.24.3';
+import * as whatsNew     from './whats-new.js?v=1.24.3';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.3';
+import * as singleWindow from './tabs/single-window.js?v=1.24.3';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.3';
+import * as externalImport from './persistence/external-import.js?v=1.24.3';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.24.3';
+import { seedDefaultPalette } from './brand-palette.js?v=1.24.3';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.3';   // external-import timeout fallback
+import { installErrorCapture } from './diagnostics.js?v=1.24.3';
+
+// Record uncaught errors, unhandled rejections and console errors in memory for Help > Copy diagnostics. First
+// statement after the imports, so every later failure is caught. Nothing is sent anywhere (js/diagnostics.js).
+installErrorCapture();
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.

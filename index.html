@@ -45,15 +45,15 @@
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.24.2">
-  <link rel="stylesheet" href="css/theme.css?v=1.24.2">
-  <link rel="stylesheet" href="css/layout.css?v=1.24.2">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.24.2">
-  <link rel="stylesheet" href="css/stencil.css?v=1.24.2">
-  <link rel="stylesheet" href="css/properties.css?v=1.24.2">
-  <link rel="stylesheet" href="css/tabs.css?v=1.24.2">
-  <link rel="stylesheet" href="css/canvas.css?v=1.24.2">
-  <link rel="stylesheet" href="css/modals.css?v=1.24.2">
+  <link rel="stylesheet" href="css/variables.css?v=1.24.3">
+  <link rel="stylesheet" href="css/theme.css?v=1.24.3">
+  <link rel="stylesheet" href="css/layout.css?v=1.24.3">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.24.3">
+  <link rel="stylesheet" href="css/stencil.css?v=1.24.3">
+  <link rel="stylesheet" href="css/properties.css?v=1.24.3">
+  <link rel="stylesheet" href="css/tabs.css?v=1.24.3">
+  <link rel="stylesheet" href="css/canvas.css?v=1.24.3">
+  <link rel="stylesheet" href="css/modals.css?v=1.24.3">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -414,6 +414,10 @@
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.2" y="3.5" width="13.6" height="9" rx="1.5"/><path d="M3.6 6.2h.01M6 6.2h.01M8.4 6.2h.01M10.8 6.2h.01M3.6 8.4h.01M6 8.4h.01M8.4 8.4h.01M10.8 8.4h.01M5 10.4h6" stroke-linecap="round"/></svg>
               Keyboard shortcuts
             </button>
+            <button id="btn-help-diagnostics" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="A plain-text report of your version, browser, storage and recent errors, for a bug report">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="3" y="2.2" width="10" height="12.3" rx="1.4"/><path d="M6 2.2v-.6h4v.6M5.5 6.5h5M5.5 9h5M5.5 11.5h3" stroke-linecap="round"/></svg>
+              Copy diagnostics
+            </button>
             <div class="df-toolbar__menu-separator" role="separator"></div>
             <button id="btn-help-about" class="df-toolbar__menu-item df-toolbar__menu-item--icon" title="About Diagramforce">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
@@ -512,6 +516,11 @@
           <button class="df-toolbar__menu-item" data-action="sfmeta">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 520 520" fill="currentColor"><use href="#salesforce1"></use></svg>
             Use SF Metadata
+          </button>
+          <!-- Mirrors #btn-help-diagnostics - same twin rule as the AI entry above. -->
+          <button class="df-toolbar__menu-item" data-action="diagnostics">
+            <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="2.2" width="10" height="12.3" rx="1.4"/><path d="M6 2.2v-.6h4v.6M5.5 6.5h5M5.5 9h5M5.5 11.5h3" stroke-linecap="round"/></svg>
+            Copy diagnostics
           </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
@@ -687,7 +696,7 @@
             <rect x="130" y="92" width="60" height="30" rx="5"/>
             <rect x="220" y="92" width="60" height="30" rx="5"/>
           </svg>
-          <p class="df-canvas-empty__caption">Drag a shape from the sidebar to start →</p>
+          <p class="df-canvas-empty__caption">Click or drag a shape from the sidebar to start →</p>
           <!-- Visible homepage legal links (Google OAuth homepage requirement). Shown on the empty canvas - what a
                first-time visitor / crawler sees. The accessible copies live in the About modal (this splash is
                aria-hidden); pointer-events:auto re-enables clicks since the ghost itself is pointer-events:none. -->
@@ -783,8 +792,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.24.2"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.24.2"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.24.2"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.24.3"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.24.3"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.24.3"></script>
 </body>
 </html>

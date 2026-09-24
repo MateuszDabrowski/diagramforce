@@ -194,6 +194,13 @@
   background: var(--stencil-item-hover);
 }
 
+/* Items are keyboard-reachable buttons since 2026-09-24 (Enter / Space adds, quick add in stencil.js). */
+.df-stencil__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background: var(--stencil-item-hover);
+}
+
 .df-stencil__item:active {
   cursor: grabbing;
 }

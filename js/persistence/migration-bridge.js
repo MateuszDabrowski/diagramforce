@@ -18,11 +18,12 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.24.2';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.24.2';
-import { importTemplatesArray } from '../templates.js?v=1.24.2';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.24.2';
-import { haltSessionWrites } from '../tabs/single-window.js?v=1.24.2';
+import { showToast } from '../feedback.js?v=1.24.3';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.24.3';
+import { importTemplatesArray } from '../templates.js?v=1.24.3';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.24.3';
+import { haltSessionWrites } from '../tabs/single-window.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';
@@ -181,7 +182,7 @@ function applyMigration(store) {
     try {
       const arr = JSON.parse(store[TEMPLATES_KEY]);
       if (Array.isArray(arr) && arr.length) templates = importTemplatesArray(arr) || 0;
-    } catch { /* malformed - skip */ }
+    } catch (e) { noteError('migrate:templates', e); /* malformed - skip */ }
   }
   if (store[TEMPLATES_DELETED_KEY] && !lsGet(TEMPLATES_DELETED_KEY)) lsSet(TEMPLATES_DELETED_KEY, store[TEMPLATES_DELETED_KEY]);
   // 3. Named browser saves - copy; rename on a name clash with different content.
@@ -211,7 +212,7 @@ function applyMigration(store) {
     try {
       const s = JSON.parse(store[SESSION_KEY]);
       sessionTabs = Array.isArray(s?.tabs) ? s.tabs.length : 0;
-    } catch { /* malformed - the blob is still carried across, just not counted */ }
+    } catch (e) { noteError('migrate:count-saves', e); /* malformed - the blob is still carried across, just not counted */ }
   }
   return { saves, templates, session, sessionTabs, failed };
 }

@@ -21,11 +21,12 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.2';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.2';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.24.2';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.2';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.2';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.3';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.3';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.24.3';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.3';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.3';
+import { noteError } from './diagnostics.js?v=1.24.3';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -102,7 +103,7 @@ function getDeletedTombstones() {
   catch { return []; }
 }
 function writeDeletedTombstones(list) {
-  try { localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.isArray(list) ? list : [])); } catch { /* private mode / full */ }
+  try { localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.isArray(list) ? list : [])); } catch (e) { noteError('templates:save-tombstones', e); /* private mode / full */ }
 }
 
 /** Debounced push of the current library + tombstones to Drive after a local add / delete / import. Best-effort. */
@@ -111,7 +112,7 @@ function scheduleDrivePush() {
   if (_drivePushTimer) clearTimeout(_drivePushTimer);
   _drivePushTimer = setTimeout(() => {
     _drivePushTimer = null;
-    try { pushTemplates(getTemplates(), getDeletedTombstones()); } catch { /* best-effort */ }
+    try { pushTemplates(getTemplates(), getDeletedTombstones()); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
   }, 1500);
 }
 
@@ -125,7 +126,7 @@ export async function syncTemplatesWithDrive() {
   try { remote = await pullTemplates(); } catch { remote = null; }
   if (remote == null) {
     // No remote file yet (or unreadable) → seed Drive from this device's library + tombstones.
-    try { await pushTemplates(getTemplates(), getDeletedTombstones()); } catch { /* best-effort */ }
+    try { await pushTemplates(getTemplates(), getDeletedTombstones()); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
     return;
   }
   const res = mergeTemplatesWithTombstones({
@@ -154,9 +155,9 @@ export async function syncTemplatesWithDrive() {
   }
 
   try { writeTemplates(res.templates); writeDeletedTombstones(res.deleted); notifyChange(); }
-  catch { /* storage full → keep remote in Drive, local unchanged */ }
+  catch (e) { noteError('templates:save-merged', e); /* storage full → keep remote in Drive, local unchanged */ }
   // Push the merged result so other devices converge (deduped if identical to what we pulled).
-  try { await pushTemplates(res.templates, res.deleted); } catch { /* best-effort */ }
+  try { await pushTemplates(res.templates, res.deleted); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
 }
 
 /** Boot hook: if a Drive token is already valid this session, opportunistically sync (no sign-in popup). */

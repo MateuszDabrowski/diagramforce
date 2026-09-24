@@ -7,10 +7,11 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.2';
-import { pctx } from './context.js?v=1.24.2';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.2';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.2';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.3';
+import { pctx } from './context.js?v=1.24.3';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.3';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -201,7 +202,7 @@ export function evictRedundantArchives(targetBytes = STORAGE_WARNING_BYTES) {
       // Redundant = also in the user's Drive (has a driveFileId) → reloadable, so safe to shed. A browser-only
       // archive has no driveFileId and is NEVER a candidate (it would be permanent data loss).
       if (data && data.driveFileId) candidates.push({ key, ts: data.timestamp || 0 });
-    } catch { /* skip corrupt entry */ }
+    } catch (e) { noteError('storage:corrupt-save', e); /* skip corrupt entry */ }
   }
   candidates.sort((a, b) => a.ts - b.ts);   // oldest first
   let evicted = 0;
@@ -224,7 +225,7 @@ export function forgetArchivesForDriveFile(fileId) {
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key?.startsWith(NAMED_SAVE_PREFIX)) continue;
-    try { if (JSON.parse(localStorage.getItem(key))?.driveFileId === fileId) keys.push(key); } catch { /* skip */ }
+    try { if (JSON.parse(localStorage.getItem(key))?.driveFileId === fileId) keys.push(key); } catch (e) { noteError('storage:corrupt-save', e); /* skip */ }
   }
   for (const key of keys) localStorage.removeItem(key);
   return keys.length;
@@ -557,7 +558,7 @@ export function maybeShowBackupReminder() {
 
     try { localStorage.setItem(LAST_REMINDER_KEY, String(now)); } catch { /* ignore */ }
     showBackupReminderModal();
-  } catch { /* never block boot */ }
+  } catch (e) { noteError('storage:backup-reminder', e); /* never block boot */ }
 }
 
 /** The "Backup your diagrams" overlay. Close (left) + a single Export (right)

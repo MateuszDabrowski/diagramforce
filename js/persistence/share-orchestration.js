@@ -5,18 +5,19 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.2';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.2';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.2';
-import { escHtml, formatBytes } from '../util.js?v=1.24.2';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.2';
-import { pctx } from './context.js?v=1.24.2';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.2';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.2';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.2';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.2';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.2';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.2';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.3';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.3';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.3';
+import { escHtml, formatBytes } from '../util.js?v=1.24.3';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.3';
+import { pctx } from './context.js?v=1.24.3';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.3';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.3';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.3';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.3';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.3';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.3';
+import { noteError } from '../diagnostics.js?v=1.24.3';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -179,7 +180,7 @@ export function hasPendingUrlLoad() {
         const st = JSON.parse(stateRaw);
         const action = st && (st.action || 'open');
         if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) return true;
-      } catch { /* malformed → normal boot */ }
+      } catch (e) { noteError('share:malformed-link', e); /* malformed → normal boot */ }
     }
     // A `#new=<type>` boot makes its own tab - the picker would only sit on top of it.
     if (newDiagramTypeFromHash(window.location.hash)) return true;
@@ -232,7 +233,7 @@ export async function loadFromURL() {
   const stateRaw = new URLSearchParams(window.location.search).get('state');
   if (stateRaw) {
     history.replaceState(null, '', window.location.pathname);
-    let st = null; try { st = JSON.parse(stateRaw); } catch { /* malformed → ignore, normal boot */ }
+    let st = null; try { st = JSON.parse(stateRaw); } catch (e) { noteError('drive:open-with-state', e); /* malformed → ignore, normal boot */ }
     const action = st && (st.action || 'open');
     if (st && action === 'open' && Array.isArray(st.ids) && st.ids.length) {
       preloadDriveAuth();   // prime GIS NOW (Open-with launch) so the restricted-open modal's "Sign in & open" click isn't popup-blocked by first-load gesture loss

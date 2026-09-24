@@ -1,23 +1,56 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.2';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.2';
-import { getAllIcons, getCategories } from './icons.js?v=1.24.2';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.2';
-import { startImageAddFlow } from './image-component.js?v=1.24.2';
-import * as history from './history.js?v=1.24.2';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.2';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.2';
-import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.2';
-import { SVG } from './components/stencil-kit.js?v=1.24.2';
-import { confirmModal } from './feedback.js?v=1.24.2';
-import { escHtml } from './util.js?v=1.24.2';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.24.2'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.3';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.3';
+import { getAllIcons, getCategories } from './icons.js?v=1.24.3';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.3';
+import { startImageAddFlow } from './image-component.js?v=1.24.3';
+import * as history from './history.js?v=1.24.3';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.3';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.3';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.3';
+import { SVG } from './components/stencil-kit.js?v=1.24.3';
+import { confirmModal } from './feedback.js?v=1.24.3';
+import { escHtml } from './util.js?v=1.24.3';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.24.3'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
 let currentDiagramType = 'architecture';
+
+// ── Quick add (2026-09-24) ──
+// One click, or Enter / Space on a focused item, adds a single shape at the canvas centre. Double-click used to be
+// the only way besides drag and nothing said so: the empty-canvas caption named only drag, and the items were
+// plain divs a keyboard could not reach. A second click inside the double-click window is ignored, so a habitual
+// double-click still adds exactly one. Whole templates keep double-click (a stray click would drop a diagram's worth
+// of shapes) and gain Enter; a double-click fires one `dblclick`, so that path needs no repeat guard, and two
+// deliberate double-clicks insert twice. A click on a nested button (a template's eye or delete) never adds, nor does
+// the click that trails a touch long-press drag. A held key's auto-repeat never adds twice.
+const QUICK_ADD_REPEAT_MS = 500;
+let _touchDragEndedAt = 0;
+function bindQuickAdd(el, label, add, { click = true } = {}) {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  if (label) el.setAttribute('aria-label', `Add ${label}`);
+  if (click) {
+    let last = 0;
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const now = Date.now();
+      if (now - last < QUICK_ADD_REPEAT_MS || now - _touchDragEndedAt < QUICK_ADD_REPEAT_MS) return;
+      last = now;
+      add();
+    });
+  } else {
+    el.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) add(); });
+  }
+  el.addEventListener('keydown', (e) => {
+    if (e.target !== el || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    if (!e.repeat) add();
+  });
+}
 
 export function init(_graph, _paper) {
   graph = _graph;
@@ -348,9 +381,7 @@ function buildTemplateItem(template) {
     evt.dataTransfer.effectAllowed = 'copy';
   });
 
-  item.addEventListener('dblclick', () => {
-    instantiateTemplate(template.id, getCanvasCenterLocalPoint());
-  });
+  bindQuickAdd(item, template.name || 'shape', () => instantiateTemplate(template.id, getCanvasCenterLocalPoint()));
 
   return item;
 }
@@ -490,9 +521,7 @@ function buildMyTemplateRow(template) {
     evt.dataTransfer.setData('application/sf-diagrams-template', JSON.stringify({ id: template.id }));
     evt.dataTransfer.effectAllowed = 'copy';
   });
-  row.addEventListener('dblclick', () => {
-    instantiateTemplate(template.id, getCanvasCenterLocalPoint());
-  });
+  bindQuickAdd(row, `template ${template.name || ''}`.trim(), () => instantiateTemplate(template.id, getCanvasCenterLocalPoint()), { click: false });
   return row;
 }
 
@@ -549,9 +578,7 @@ function buildOfficialTemplatesSection(metas, label, categoryId) {
       evt.dataTransfer.setData('application/sf-diagrams-official-template', JSON.stringify({ id: meta.id }));
       evt.dataTransfer.effectAllowed = 'copy';
     });
-    row.addEventListener('dblclick', () => {
-      insertOfficialTemplateAt(meta.id, getCanvasCenterLocalPoint());
-    });
+    bindQuickAdd(row, `template ${meta.name}`, () => insertOfficialTemplateAt(meta.id, getCanvasCenterLocalPoint()), { click: false });
 
     items.appendChild(row);
   }
@@ -637,7 +664,7 @@ function buildShapePackSection(pack, label, categoryId) {
       evt.dataTransfer.effectAllowed = 'copy';
     });
     item.addEventListener('dragend', endDropGhost);
-    item.addEventListener('dblclick', () => {
+    bindQuickAdd(item, entry.label, () => {
       if (item._sfComponent) { addToCenter(item._sfComponent); return; }
       loadOfficialShapePack(pack.id).then((comps) => {
         const comp = comps?.find((c) => c.objectName === entry.objectName);
@@ -720,9 +747,8 @@ function buildIconSection(cat, icons, displayLabel) {
       evt.dataTransfer.effectAllowed = 'copy';
       setDragPreview(evt, iconTpl);
     });
-    // Double-click / double-tap adds to centre — the only add path on touch (HTML5 drag never fires from
-    // touch). Mirrors buildComponentItem so SLDS sprites are reachable on a tablet, not just by mouse drag.
-    item.addEventListener('dblclick', () => { addToCenter(iconTpl); });
+    // A tap adds to centre on touch too, where HTML5 drag never fires (quick add, above).
+    bindQuickAdd(item, icon.name, () => addToCenter(iconTpl));
 
     grid.appendChild(item);
   }
@@ -790,9 +816,7 @@ function buildComponentItem(template) {
   });
   item.addEventListener('dragend', endDropGhost);
 
-  item.addEventListener('dblclick', () => {
-    addToCenter(template);
-  });
+  bindQuickAdd(item, template.label, () => addToCenter(template));
 
   return item;
 }
@@ -1382,6 +1406,7 @@ function setupTouchDrag() {
   };
 
   const onEnd = (e) => {
+    if (dragging) _touchDragEndedAt = Date.now();   // the click that trails a long-press must not also quick-add
     if (dragging && (activeTemplate || activeTemplateId || activeOfficialId)) {
       const t = e.changedTouches?.[0];
       if (t) {
