@@ -18,7 +18,7 @@
 // Reads the live graph/paper + the load guard via the canvas context (cctx);
 // canvas.js calls initExternalLabelAutoplace() once in init() after the cctx
 // hydration block, and keeps cctx.isLoadingJSON synced in setLoadingJSON().
-import { cctx } from './context.js?v=1.24.3';
+import { cctx } from './context.js?v=1.24.4';
 
 const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnEvent',
@@ -28,12 +28,12 @@ const EXTERNAL_LABEL_SHAPES = new Set([
 
 export const EXTERNAL_LABEL_SIDES = ['bottom', 'top', 'right', 'left'];
 
-export const LABEL_SIDE_ATTRS = {
+export const LABEL_SIDE_ATTRS = Object.assign(Object.create(null), {
   bottom: { x: 'calc(0.5 * w)', y: 'calc(h + 10)', textAnchor: 'middle', textVerticalAnchor: 'top' },
   top:    { x: 'calc(0.5 * w)', y: -10,            textAnchor: 'middle', textVerticalAnchor: 'bottom' },
   right:  { x: 'calc(w + 10)',  y: 'calc(0.5 * h)', textAnchor: 'start', textVerticalAnchor: 'middle' },
   left:   { x: -10,             y: 'calc(0.5 * h)', textAnchor: 'end',   textVerticalAnchor: 'middle' },
-};
+});
 
 /**
  * Pure side-selection: pick the label side by priority bottom → top → right → left,

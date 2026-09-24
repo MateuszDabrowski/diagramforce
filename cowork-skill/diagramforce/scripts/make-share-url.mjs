@@ -92,12 +92,42 @@ const DICT_V2_TEXT =
 const DICT_V2 = Buffer.from(DICT_V2_TEXT, 'utf8');
 // ── end frozen block ─────────────────────────────────────────────────────────────────────────────────────────
 
-/** Rename long JSON keys to their single-char codes. Same walker as the app's. */
+const own = (table, k) => Object.prototype.hasOwnProperty.call(table, k);
+
+/** Rename long JSON keys to their single-char codes. Same walker as the app's: OWN keys of the table only (a key
+ *  named `toString` must not come back as the text of a function), and `__proto__` is never assigned. */
 function remapKeys(value, table) {
   if (Array.isArray(value)) return value.map((v) => remapKeys(v, table));
   if (value && typeof value === 'object') {
     const out = {};
-    for (const k of Object.keys(value)) out[table[k] ?? k] = remapKeys(value[k], table);
+    for (const k of Object.keys(value)) {
+      if (k === '__proto__') continue;
+      out[own(table, k) ? table[k] : k] = remapKeys(value[k], table);
+    }
+    return out;
+  }
+  return value;
+}
+
+// v3 (app 1.24.4+): v2 with an escape for keys that ARE a short code - `t`, `on`, `as` - which v2 would expand into
+// the wrong long key on open. Written only when a diagram has such a key, so every other link stays v2, byte for
+// byte. Mirrors js/share-codec.js; share-codec-replica.test.js pins the escape character.
+const ESC_V3 = '\u0001';
+const CODES_V2 = new Set(Object.values(MIN_V2));
+const needsEscapeV3 = (k) => (CODES_V2.has(k) && !own(MIN_V2, k)) || k.startsWith(ESC_V3);
+function hasCodecCollision(value) {
+  if (Array.isArray(value)) return value.some(hasCodecCollision);
+  if (value && typeof value === 'object') return Object.keys(value).some((k) => k !== '__proto__' && (needsEscapeV3(k) || hasCodecCollision(value[k])));
+  return false;
+}
+function minifyV3(value) {
+  if (Array.isArray(value)) return value.map(minifyV3);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) {
+      if (k === '__proto__') continue;
+      out[needsEscapeV3(k) ? ESC_V3 + k : (own(MIN_V2, k) ? MIN_V2[k] : k)] = minifyV3(value[k]);
+    }
     return out;
   }
   return value;
@@ -110,6 +140,17 @@ const bytesToUrlSafe = (bytes) =>
 export function encodeShareV2(data) {
   const json = JSON.stringify(remapKeys(data, MIN_V2));
   return 'v2.' + bytesToUrlSafe(deflateRawSync(Buffer.from(json, 'utf8'), { dictionary: DICT_V2, level: 9 }));
+}
+
+/** Encode to `v3.<base64url>` — the app's encodeShareV3, in Node. */
+export function encodeShareV3(data) {
+  const json = JSON.stringify(minifyV3(data));
+  return 'v3.' + bytesToUrlSafe(deflateRawSync(Buffer.from(json, 'utf8'), { dictionary: DICT_V2, level: 9 }));
+}
+
+/** v2 unless a key would collide with a short code, then v3 — the app's encodeShare. */
+export function encodeShare(data) {
+  return hasCodecCollision(data) ? encodeShareV3(data) : encodeShareV2(data);
 }
 
 /** The FILE envelope the skill authors is NOT the SHARE envelope the codec takes. buildShareURL() in
@@ -133,7 +174,7 @@ export function fileToShareData(file) {
 const MAX_URL = 8000;   // past this, browsers and chat clients start truncating
 
 export function makeShareUrl(file, origin = 'https://diagramforce.com/') {
-  const url = `${origin.replace(/\/*$/, '/')}#diagram=${encodeShareV2(fileToShareData(file))}`;
+  const url = `${origin.replace(/\/*$/, '/')}#diagram=${encodeShare(fileToShareData(file))}`;
   return { url, length: url.length, fits: url.length <= MAX_URL };
 }
 

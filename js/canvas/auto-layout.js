@@ -3,14 +3,14 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.24.3';
+import { cctx } from './context.js?v=1.24.4';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.3';
-import { startBatch, endBatch } from '../history.js?v=1.24.3';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.4';
+import { startBatch, endBatch } from '../history.js?v=1.24.4';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.24.3';
-import { flowConnectorType } from './link-styles.js?v=1.24.3';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.3';
+import { computeFlowLayout } from './flow-layout.js?v=1.24.4';
+import { flowConnectorType } from './link-styles.js?v=1.24.4';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.4';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -457,10 +457,10 @@ export function resolveConnectorLabels(opts = {}) {
 //   Ls = pos.y + topOffset       (lifeline start canvas Y)
 //   Sp = h - topOffset - botOffset  (lifeline span)
 //   n  = lifelinePortCount
-const SEQ_LANE_GEO = {
+const SEQ_LANE_GEO = Object.assign(Object.create(null), {
   'sf.SequenceParticipant': { top: 48, bottom: 48 },
   'sf.SequenceActor':       { top: 92, bottom: 0  },
-};
+});
 
 function _getSequenceLanes() {
   const { graph } = cctx;

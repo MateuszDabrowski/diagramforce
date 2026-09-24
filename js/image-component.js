@@ -1,4 +1,4 @@
-import { showError } from './feedback.js?v=1.24.3';
+import { showError } from './feedback.js?v=1.24.4';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //

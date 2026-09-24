@@ -63,12 +63,12 @@ export function showToast(message, kind = 'info', opts = {}) {
 
   // Inline SVG icon per kind — tiny, currentColor-driven so it follows the
   // toast's text colour and works in both light and dark themes.
-  const ICONS = {
+  const ICONS = Object.assign(Object.create(null), {
     success: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 10.5L3.5 8l-1 1L6 12.5l8-8-1-1L6 10.5z" fill="currentColor"/></svg>',
     info:    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 6.5V12M8 4.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
     warning: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.5L1 14h14L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6V10M8 12h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
     error:   '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
-  };
+  });
   toast.innerHTML = `
     <span class="df-toast__icon">${ICONS[kind] || ICONS.info}</span>
     <span class="df-toast__message"></span>

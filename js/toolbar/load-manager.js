@@ -1,11 +1,11 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.3';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.3';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.3';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.3';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.3';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.3';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.3';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.4';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.4';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.4';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.4';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.4';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.4';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.4';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -838,14 +838,14 @@ function tagActiveBrowserSave(name) {
   if (active && name) tctx.modules.tabs.setTabBrowserSaveName(active.id, name);
 }
 
-const MERMAID_INFO = {
+const MERMAID_INFO = Object.assign(Object.create(null), {
   flowchart: { name: 'flowchart', target: 'Process' },
   graph:     { name: 'graph', target: 'Process' },
   state:     { name: 'state diagram', target: 'Process' },
   er:        { name: 'ER diagram', target: 'Data Model' },
   sequence:  { name: 'sequence diagram', target: 'Sequence' },
   gantt:     { name: 'gantt', target: 'Gantt' },
-};
+});
 
 function buildLoadItem(save) {
   // Same shared two-line storage row as the Save Manager. Browser saves carry no group, so no group badge.

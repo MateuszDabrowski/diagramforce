@@ -6,11 +6,11 @@
 // action-provider, style, capture) live here now; selection.js re-exports their setters + copySelectionAsPng
 // so app.js / keyboard.js wiring is unchanged.
 
-import * as clipboard from '../clipboard.js?v=1.24.3';
-import * as history from '../history.js?v=1.24.3';
-import { wireMenuDismiss } from '../menu.js?v=1.24.3';
-import { saveSelectionAsTemplate } from '../templates.js?v=1.24.3';
-import { noteError } from '../diagnostics.js?v=1.24.3';
+import * as clipboard from '../clipboard.js?v=1.24.4';
+import * as history from '../history.js?v=1.24.4';
+import { wireMenuDismiss } from '../menu.js?v=1.24.4';
+import { saveSelectionAsTemplate } from '../templates.js?v=1.24.4';
+import { noteError } from '../diagnostics.js?v=1.24.4';
 
 // ── Injected selection context (wired by selection.init → initContextMenu). Read at CALL time; the
 // selectedIds Set is shared BY REFERENCE with selection.js so the menu sees the live selection. ──
@@ -176,7 +176,7 @@ function autoSizeSelection() {
 // Canvas context-menu glyphs (item 18). Clone + Delete are the EXACT SVGs the properties pane uses, so the same
 // action reads identically wherever it appears; the rest are matching 16-box line glyphs.
 const _ctxSvg = (inner) => `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
-const CTX_ICON = {
+const CTX_ICON = Object.assign(Object.create(null), {
   clone: _ctxSvg('<rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11H2.5A1.5 1.5 0 011 9.5V2.5A1.5 1.5 0 012.5 1h7A1.5 1.5 0 0111 2.5V3"/>'),
   copy: _ctxSvg('<rect x="4" y="3" width="8" height="11" rx="1.5"/><path d="M6 3V1.8h4V3"/>'),
   copyPng: _ctxSvg('<rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/><circle cx="5.5" cy="6.5" r="1"/><path d="M3 11.5l3-3 2 2 2.5-2.5 2.5 2.5"/>'),
@@ -208,7 +208,7 @@ const CTX_ICON = {
   ungroup: _ctxSvg('<rect x="2" y="3.5" width="7.5" height="9" rx="1.5" stroke-dasharray="2.2 1.6"/><path d="M8.5 8H14M11.5 5.5L14 8l-2.5 2.5"/>'),
   // Group: a (dashed) container with an arrow entering it — capture the selected shapes into a container.
   group: _ctxSvg('<rect x="6.5" y="3.5" width="7.5" height="9" rx="1.5" stroke-dasharray="2.2 1.6"/><path d="M1.5 8H7M4.5 5.5L7 8l-2.5 2.5"/>'),
-};
+});
 
 /** Whether a cell participates in any grouping — it either CAPTURED children (a captor) or IS captured
  *  (has a parent). Drives whether the Ungroup menu item is offered. */

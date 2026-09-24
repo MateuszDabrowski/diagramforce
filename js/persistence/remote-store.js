@@ -15,13 +15,13 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.3';
-import { pctx } from './context.js?v=1.24.3';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.3';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.3';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.3';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.3';
-import { noteError } from '../diagnostics.js?v=1.24.3';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.4';
+import { pctx } from './context.js?v=1.24.4';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.4';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.4';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.4';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.4';
+import { noteError } from '../diagnostics.js?v=1.24.4';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -37,7 +37,7 @@ const API    = 'https://www.googleapis.com/drive/v3/files';
 // prod origin + referrer-locked key are registered (see Extended-Share doc §5).
 // localhost embeds the DEV creds (below) so the feature works in every dev browser /
 // incognito without per-browser seeding. Empty clientId ⇒ feature self-gates off.
-const GOOGLE_CONFIG = {
+const GOOGLE_CONFIG = Object.assign(Object.create(null), {
   // PROD creds — PUBLIC by design (client-side Google app, no secret used). Safety comes from the locks, not
   // secrecy: the OAuth client is restricted to the JS origin https://diagramforce.mateuszdabrowski.pl, and the
   // API key is HTTP-referrer-locked to the same + restricted to the Drive + Picker APIs. A copied value works
@@ -58,7 +58,7 @@ const GOOGLE_CONFIG = {
     clientId: '873718407054-pag1jhjql4f96l7u8vsv195uvadppfuf.apps.googleusercontent.com',
     apiKey: 'AIzaSyC56ShCUdPEll_aaMs0JjqDnOCBUWkS3wQ',
   },
-};
+});
 
 // Dev creds loaded once from the gitignored dev/dev-config.json (localhost convenience). Held in memory only.
 let _devConfig = null;
@@ -504,7 +504,8 @@ export function hydrateTabDrive(id, meta) {
  *  (the "In My Drive" chip + Shared-copies list + session). The next connect's reconcile verifies the fileId,
  *  so a since-deleted master self-heals (clears the link + re-saves) rather than pointing at a ghost. */
 export function adoptDriveMetaIntoTab(id, meta) {
-  if (!meta || (!meta.driveFileId && !meta.driveSharedSource)) return;
+  // A look-only copy has no file of its own but must keep its flag (see archiveTabToBrowser in tabs.js).
+  if (!meta || (!meta.driveFileId && !meta.driveSharedSource && !meta.driveLocalOnly)) return;
   hydrateTabDrive(id, meta);
   persistState(id, tabState(id));
 }

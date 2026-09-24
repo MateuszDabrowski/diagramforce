@@ -1,27 +1,27 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.3';
-import { tbctx } from './tabs/context.js?v=1.24.3';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.3';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.3';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.3';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.3';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.4';
+import { tbctx } from './tabs/context.js?v=1.24.4';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.4';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.4';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.4';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.4';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.3';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.3';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.3';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.3';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.3';
-import { wireMenuDismiss } from './menu.js?v=1.24.3';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.3';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.3';
-import { getPalette } from './brand-palette.js?v=1.24.3';
-import { getAllIcons } from './icons.js?v=1.24.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.3';
-import { noteError } from './diagnostics.js?v=1.24.3';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.4';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.4';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.4';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.4';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.4';
+import { wireMenuDismiss } from './menu.js?v=1.24.4';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.4';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.4';
+import { getPalette } from './brand-palette.js?v=1.24.4';
+import { getAllIcons } from './icons.js?v=1.24.4';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.4';
+import { noteError } from './diagnostics.js?v=1.24.4';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -47,7 +47,7 @@ function buildShareGlyph(tab) {
   // 3-way directional glyph (by authority): out = #share_mobile, in = #share_link (chain), both = #socialshare. All
   // amber + 12px box (normalized to the tab's diagram-type icon); the ICON conveys the direction, not the colour.
   // (#share_mobile reads at the same visual weight as the others at 12px - the plain #share's exit arrow read off.)
-  const ICON = { out: '#share_mobile', in: '#share_link', both: '#socialshare' };
+  const ICON = Object.assign(Object.create(null), { out: '#share_mobile', in: '#share_link', both: '#socialshare' });
   const glyph = document.createElementNS(SVG_NS, 'svg');
   glyph.setAttribute('class', `df-tab__shared df-tab__shared--${kind}`);
   glyph.setAttribute('width', '12');
@@ -378,7 +378,7 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   if (importedTab) importedTab.lastModifiedAt = Date.now();
   // Item 1.3: re-link a loaded archive to its Drive master + restore the shares it fanned out to. Runs after the
   // tab exists so adopt mirrors the meta onto the new tab object (chips + session); reconcile verifies on connect.
-  if (driveMeta && (driveMeta.driveFileId || driveMeta.driveSharedSource)) {
+  if (driveMeta && (driveMeta.driveFileId || driveMeta.driveSharedSource || driveMeta.driveLocalOnly)) {
     persistenceModule.adoptDriveMetaIntoTab?.(id, driveMeta);
   }
   // #7: a single diagram saved/exported from a tab GROUP carries its group meta - recreate-or-REJOIN that group
@@ -551,7 +551,7 @@ function updateClosingArchive(id, meta) {
     if (!raw) return;
     const d = JSON.parse(raw);
     for (const k of ['driveFileId', 'driveLastSavedAt', 'driveImported', 'driveFolderId', 'driveDriveId', 'driveHeadRevisionId',
-      'driveLastHash', 'driveCopies', 'driveSharedSource', 'driveSharedInEdit', 'driveOutgoingGrants']) {
+      'driveLastHash', 'driveCopies', 'driveSharedSource', 'driveSharedInEdit', 'driveOutgoingGrants', 'driveLocalOnly']) {
       if (k in meta) d[k] = meta[k] ?? null;
     }
     localStorage.setItem(key, JSON.stringify(d));
@@ -610,6 +610,10 @@ function archiveTabToBrowser(id) {
       driveFolderId: tab.driveFolderId || null,
       driveDriveId: tab.driveDriveId || null,
       driveOutgoingGrants: tab.driveOutgoingGrants || 0,   // direct view/edit invites on the master → "shared out" glyph
+      // A look-only older version (Version history) has no Drive file of its own. Without the flag, reopening this
+      // archive made it an ordinary diagram, and the next sweep saved the older version to Drive as a new master -
+      // the very thing the flag exists to stop (audit 2026-09-23, left open there; fixed 2026-09-24).
+      driveLocalOnly: !!tab.driveLocalOnly,
     };
     write = () => localStorage.setItem('sfdiag::save::' + name, JSON.stringify(data));
     write();

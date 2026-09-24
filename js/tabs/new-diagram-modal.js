@@ -3,11 +3,11 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.24.3';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.24.3';
-import { normalizeDiagramType } from '../persistence.js?v=1.24.3';
-import { showError } from '../feedback.js?v=1.24.3';
+import { tbctx } from './context.js?v=1.24.4';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.4';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.24.4';
+import { normalizeDiagramType } from '../persistence.js?v=1.24.4';
+import { showError } from '../feedback.js?v=1.24.4';
 
 export function showNewDiagramModal(targetGroupId = null) {
   const { tabs } = tbctx;                                            // shared array ref (read length for dismiss-guard)
@@ -219,12 +219,12 @@ export function showNewDiagramModal(targetGroupId = null) {
 
   // Card clicks — a "Create" card makes that diagram type (in the target group, if any); an "Open" card
   // routes to the matching opener (all of which open the result as a new tab).
-  const OPEN_ACTIONS = {
+  const OPEN_ACTIONS = Object.assign(Object.create(null), {
     paste: () => persistenceModule.openPasteImport?.(),
     'import-json': () => persistenceModule.importJSON(),
     load: () => persistenceModule.openLoadModal?.(),
     drive: () => persistenceModule.openDriveLibrary?.(),
-  };
+  });
   overlay.querySelectorAll('.df-new-modal__card').forEach(card => {
     card.addEventListener('click', () => {
       overlay.remove();

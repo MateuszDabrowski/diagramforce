@@ -11,37 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.24.3';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.24.3';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.24.4';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.24.4';
 // The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
-import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.3';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.24.3';
-import { SF_FIELD_TYPES } from './properties.js?v=1.24.3';
-import { keyImpliesRequired } from './field-model.js?v=1.24.3';
-import { buildModal, showToast, showError } from './feedback.js?v=1.24.3';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.24.3';
-import { triggerDownload } from './persistence.js?v=1.24.3';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.24.3';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.24.3';
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.4';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.24.4';
+import { SF_FIELD_TYPES } from './properties.js?v=1.24.4';
+import { keyImpliesRequired } from './field-model.js?v=1.24.4';
+import { buildModal, showToast, showError } from './feedback.js?v=1.24.4';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.24.4';
+import { triggerDownload } from './persistence.js?v=1.24.4';
+import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.24.4';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.24.4';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './table-view/builders.js?v=1.24.3';
+} from './table-view/builders.js?v=1.24.4';
 // The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
 // properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
 // debounced input handler - never from render() - so graph-change re-renders stay silent.
-import { announce } from './a11y.js?v=1.24.3';
+import { announce } from './a11y.js?v=1.24.4';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.24.3';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.24.4';
 // 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
 // context shape as gantt-plan.js - it never imports this facade back.
-import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.24.3';
-import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.24.3';
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.24.4';
+import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.24.4';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -112,7 +112,7 @@ let _requestTableView = null;   // () => switch the toolbar back to Table view (
 // Nullable checkbox (derived from required + key). Object-level (Object Name / Category / Data Layer) and
 // mapping-level (Cardinality / Mapping Type / Expression) cells stay read-only — they affect a whole
 // object/relationship and belong on the canvas.
-const EDIT_COLS = {
+const EDIT_COLS = Object.assign(Object.create(null), {
   srcApi:           { side: 'src', kind: 'text',   prop: 'apiName' },
   srcLabel:         { side: 'src', kind: 'text',   prop: 'label' },
   srcType:          { side: 'src', kind: 'select', prop: 'type' },
@@ -135,7 +135,7 @@ const EDIT_COLS = {
   // Data MODEL table only (single-sided per-field schema): Length text + Deprecated checkbox.
   srcLength:        { side: 'src', kind: 'text', prop: 'length' },
   srcDeprecatedEdit:{ side: 'src', kind: 'bool', prop: 'deprecated' },
-};
+});
 // The field props a session may write (everything else on the field — fid — is preserved untouched).
 // Drives the snapshot, the diff, and the apply. `required` + `deprecated` are compared as booleans.
 const EDIT_PROPS = ['apiName', 'label', 'type', 'sampleValues', 'keyType', 'required', 'length', 'deprecated'];
@@ -146,7 +146,7 @@ const BOOL_PROPS = new Set(['required', 'deprecated']);
 // re-slots the bar via resequenceGanttOrders on Save. Dependencies stay a draft-free LIVE editor (they are
 // ganttDep links, not a scalar prop — see the deps popover). The draft stores the primitive props +
 // groupId; `GANTT_EDIT_PROPS` drives the diff + apply.
-const GANTT_EDIT_COLS = {
+const GANTT_EDIT_COLS = Object.assign(Object.create(null), {
   name:     { kind: 'text',   prop: 'taskLabel' },
   start:    { kind: 'date',   prop: 'startDate' },
   end:      { kind: 'date',   prop: 'endDate' },
@@ -155,7 +155,7 @@ const GANTT_EDIT_COLS = {
   assignee: { kind: 'text',   prop: 'assignee' },
   group:    { kind: 'groupSelect', prop: 'groupId' },   // <select> of the timeline's groups[] + Ungrouped
   dependencies: { kind: 'depEdit' },   // a button → the live predecessor-link editor (ganttDep links)
-};
+});
 const GANTT_EDIT_PROPS = ['taskLabel', 'startDate', 'endDate', 'progress', 'assignee', 'groupId'];
 const barDirty = (d, o) => !!o && GANTT_EDIT_PROPS.some(p => (d[p] ?? '') !== (o[p] ?? ''));
 const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));

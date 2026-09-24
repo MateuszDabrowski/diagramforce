@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.3';
-import { showToast, showError } from '../feedback.js?v=1.24.3';
-import { sanitizeFilenamePart } from '../util.js?v=1.24.3';
-import { pctx } from './context.js?v=1.24.3';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.4';
+import { showToast, showError } from '../feedback.js?v=1.24.4';
+import { sanitizeFilenamePart } from '../util.js?v=1.24.4';
+import { pctx } from './context.js?v=1.24.4';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -595,7 +595,7 @@ function replaceForeignObjects(svgRoot) {
   // SVG Blob URL, so we walk each FO's HTML tree, build (text, marks[]) runs,
   // word-wrap them across lines, and emit per-segment tspans with the marks
   // applied. Inline tags outside this whitelist degrade to plain text.
-  const MARK_TO_TSPAN = {
+  const MARK_TO_TSPAN = Object.assign(Object.create(null), {
     strong: { 'font-weight': 'bold' },
     b:      { 'font-weight': 'bold' },
     em:     { 'font-style': 'italic' },
@@ -603,7 +603,7 @@ function replaceForeignObjects(svgRoot) {
     del:    { 'text-decoration': 'line-through' },
     s:      { 'text-decoration': 'line-through' },
     code:   { 'font-family': 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'fill': '#C8553D' },
-  };
+  });
   // Approximate per-char width contribution by font-style. SVG text in raster
   // export is laid out by char count, so the wrap calc cares only about
   // relative width — bold and code take more space; italic about the same.

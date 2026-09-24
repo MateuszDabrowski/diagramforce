@@ -1,9 +1,9 @@
 // Per-type colour-field schema + icon recolour (CLEANUP S2, slice 1) — extracted from properties.js so the
 // style-clip helpers (copyCellStyle/pasteCellStyle, which read COLOR_SCHEMA) can later move to properties/widgets.js
 // without a cycle back to the facade. Never imports properties.js.
-import { getIconDataUri } from '../icons.js?v=1.24.3';
-import { sanitizeCssColor } from '../util.js?v=1.24.3';
-import { contrastTextColor } from '../components.js?v=1.24.3';
+import { getIconDataUri } from '../icons.js?v=1.24.4';
+import { sanitizeCssColor } from '../util.js?v=1.24.4';
+import { contrastTextColor } from '../components.js?v=1.24.4';
 
 /** Re-colour a cell's icon to match a new colour (used for fill/label colour changes). */
 export function recolorCellIcon(cell, newColor) {
@@ -29,7 +29,7 @@ export function recolorCellIcon(cell, newColor) {
 // selected types support are shown. Getters return the current value (or
 // a type default); setters apply the same side-effects as the single-
 // element renderer (e.g. SimpleNode Fill also updates text contrast).
-export const COLOR_SCHEMA = {
+export const COLOR_SCHEMA = Object.assign(Object.create(null), {
   'sf.SimpleNode': [
     { label: 'Fill',
       get: c => c.attr('body/fill'),
@@ -236,7 +236,7 @@ export const COLOR_SCHEMA = {
         c.attr('conditionText/fill', v);
       } },
   ],
-};
+});
 
 // Default schema for BPMN / Flow shapes — Fill, Border, Label color.
 const BASIC_COLOR_SCHEMA = [

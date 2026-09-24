@@ -74,7 +74,7 @@ export function foldChild(out, key, val) {
 // escaped and free of DTDs or processing instructions beyond the declaration. It is not a general XML parser
 // and does not pretend to be one - it recognises exactly the constructs that corpus contains and reports
 // anything it cannot make sense of rather than guessing.
-const ENTITY = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const ENTITY = Object.assign(Object.create(null), { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" });
 /** Decode the XML entities DOMParser would, so both tokenisers hand the converter identical strings. */
 function decodeEntities(s) {
   if (!s.includes('&')) return s;   // the overwhelmingly common case, and the scan is not free

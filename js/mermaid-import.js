@@ -11,15 +11,15 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.24.3';
-import { ER_MARKER_D } from './er-markers.js?v=1.24.3';
-import { showError, showToast } from './feedback.js?v=1.24.3';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.3';
+import { createElementFromComponent } from './components.js?v=1.24.4';
+import { ER_MARKER_D } from './er-markers.js?v=1.24.4';
+import { showError, showToast } from './feedback.js?v=1.24.4';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.4';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.24.3';
-import { noteError } from './diagnostics.js?v=1.24.3';
+  from './gantt-layout.js?v=1.24.4';
+import { noteError } from './diagnostics.js?v=1.24.4';
 
 let modules = {};
 
@@ -1550,13 +1550,13 @@ const SEQ_CONST = {
 // grey to match the generic participant default — sequence diagrams read
 // cleaner when only roles with a semantic colour (Salesforce green, API blue,
 // External amber) stand out visually.
-const SEQ_ROLE_COLORS = {
+const SEQ_ROLE_COLORS = Object.assign(Object.create(null), {
   generic:    '#8A9099',
   salesforce: '#2E844A',
   api:        '#1D73C9',
   external:   '#F6B355',
   actor:      '#8A9099',
-};
+});
 
 /** Guess a participant role from its id / displayed label. */
 function inferSequenceRole(id, label) {

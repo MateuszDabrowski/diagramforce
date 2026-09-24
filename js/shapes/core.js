@@ -1,10 +1,10 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.24.3';
-import { portGroups, portItems } from './ports.js?v=1.24.3';
-import { sanitizeCssColor } from '../util.js?v=1.24.3';
-import { getIconDataUri } from '../icons.js?v=1.24.3';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.24.4';
+import { portGroups, portItems } from './ports.js?v=1.24.4';
+import { sanitizeCssColor } from '../util.js?v=1.24.4';
+import { getIconDataUri } from '../icons.js?v=1.24.4';
 
 // The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
 // than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a
@@ -191,8 +191,8 @@ export function registerCore() {
       const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
       if (raciGroupEl) {
         raciGroupEl.innerHTML = '';
-        const RACI_COLORS = { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' };
-        const RACI_NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+        const RACI_COLORS = Object.assign(Object.create(null), { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' });
+        const RACI_NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
         const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
         if (active.length > 0) {
           const PILL = 16;

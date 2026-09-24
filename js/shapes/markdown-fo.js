@@ -1,6 +1,6 @@
 // Markdown foreignObject helper (CLEANUP S3, CR-6.1) — sf.TextLabel/Note render inline markdown as native HTML
 // inside an SVG <foreignObject>. Moved out of shapes.js so every registrar view can call it.
-import { parseMarkdown } from '../markdown.js?v=1.24.3';
+import { parseMarkdown } from '../markdown.js?v=1.24.4';
 
 // ── Markdown foreignObject helper (CR-6.1) ─────────────────────────
 // sf.TextLabel and sf.Note render their text as native HTML inside an SVG
@@ -15,7 +15,7 @@ export const SVG_NS_SHAPES = 'http://www.w3.org/2000/svg';
 
 // The non-markdown path (see `opts.plain` below). Mirrors what parseMarkdown does BEFORE its marker pass, so
 // plain and markdown cells escape identically and differ only in marker interpretation.
-const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const HTML_ESC = Object.assign(Object.create(null), { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' });
 const escapePlain = (text) => String(text ?? '')
   .replace(/[&<>"']/g, (c) => HTML_ESC[c])
   .replace(/\n/g, '<br>');

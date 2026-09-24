@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.24.3';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.24.3';
-import { ER_MARKER_D } from '../er-markers.js?v=1.24.3';
+import { cctx } from './context.js?v=1.24.4';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.24.4';
+import { ER_MARKER_D } from '../er-markers.js?v=1.24.4';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -170,12 +170,12 @@ export function applyMappingLinkStyle(link) {
 // on the canvas where they'd otherwise hide behind overlapping parallel lines.
 // Standard (direct copy) gets NO token — only non-direct transforms are flagged, so a
 // mix of Standard + transform mappings into one field reads cleanly.
-const MAPPING_TYPE_CODE = {
+const MAPPING_TYPE_CODE = Object.assign(Object.create(null), {
   'Formula': 'F',
   'Streaming Transform': 'ST',
   'Batch Transform': 'BT',
   'Calculated Insight': 'CI',
-};
+});
 // A type-code badge label is distinguished from a user label by its `badgeBox` selector.
 const isMappingTypeBadge = l => !!(l && l.attrs && l.attrs.badgeBox);
 

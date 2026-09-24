@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.24.3';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.24.3';
-import { durationDays } from '../gantt-scale.js?v=1.24.3';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.24.3';
+import { keyImpliesRequired } from '../field-model.js?v=1.24.4';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.24.4';
+import { durationDays } from '../gantt-scale.js?v=1.24.4';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.24.4';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -98,7 +98,7 @@ export function mappingTypeOf(link) {
 // Master-Detail is grouped with Text (it's an ID-like relationship key). Types still left
 // unlisted (Formula) are intentionally ungrouped → never flagged (we can't classify their
 // effective type, so we don't raise a false alarm).
-export const TYPE_GROUP = {};
+export const TYPE_GROUP = Object.assign(Object.create(null), {});
 (function buildTypeGroups() {
   const add = (group, types) => types.forEach(t => { TYPE_GROUP[t.toLowerCase()] = group; });
   add('text', ['Text', 'ID', 'Lookup', 'Master-Detail', 'Phone', 'Email', 'URL', 'Picklist', 'Multi-Picklist', 'Text Area', 'Long Text Area', 'Rich Text Area', 'Auto Number']);
@@ -395,11 +395,11 @@ export const FLOW_ASSET_COLUMNS = Object.freeze([
   { key: 'assetName', label: 'Asset Name', sortable: true, wrap: true },
 ]);
 
-const WRITE_OPS = {
+const WRITE_OPS = Object.assign(Object.create(null), {
   'df.FlowCreateRecords': 'Create',
   'df.FlowUpdateRecords': 'Update',
   'df.FlowDeleteRecords': 'Delete',
-};
+});
 // A Create carrying match criteria is an UPSERT, and flow-convert.js argues that is the single fact a
 // reader most needs ("could this create duplicates?"). This head row is the ONLY evidence: a Create
 // never gets a `filters` prop - the converter deliberately routes the criteria into `details` instead,
@@ -459,14 +459,14 @@ const FLOW_DEF = new Map(FLOW_ELEMENTS.map(e => ['df.Flow' + e.cls, e]));
 // panel DOM stack, and pulling that chain in here would cost this module its Node-testability. The
 // parity test in dev/tests/table-builders.test.js parses the renderer's SOURCE (registry-sync style),
 // so a label drift fails CI instead of shipping a cell that disagrees with the panel.
-export const FLOW_FIELD_LABELS = {
+export const FLOW_FIELD_LABELS = Object.assign(Object.create(null), {
   processType: 'Process Type', triggerType: 'Trigger Type', object: 'Object', filters: 'Filters',
   components: 'Screen Components', actionName: 'Action Name', actionType: 'Action Type',
   flowName: 'Referenced Flow', waitEvents: 'Wait Events', stageSteps: 'Steps',
   assignmentItems: 'Assignments', outcomes: 'Outcomes', collectionReference: 'Collection',
   conditions: 'Conditions', transformTarget: 'Target', message: 'Error Message', template: 'Template',
   activation: 'Activation', configuration: 'Configuration',
-};
+});
 
 // Configuration = the element's per-kind SCALAR props only, "Label: value" segments joined with the
 // converter's own ' · '. The `details` rows are deliberately EXCLUDED - measured as the wall-of-text
@@ -791,17 +791,17 @@ function flowDecisionRows(graph, labelOf) {
 // sendMobileInAppMessage likewise). A contentId on any OTHER type (a send kind the converter maps to
 // the generic df.FlowAction) is skipped rather than guessed at - the closed Kind list follows
 // flow-convert.js's own rule that a missing row invites a question while a wrong row ends it.
-const CONTENT_KIND = {
+const CONTENT_KIND = Object.assign(Object.create(null), {
   'df.FlowSendEmail': 'Email content',
   'df.FlowSendSms': 'SMS content',
   'df.FlowSendWhatsApp': 'WhatsApp content',
   'df.FlowSendMobileApp': 'Mobile app content',
   'df.FlowSendMobileInApp': 'In-app content',
-};
+});
 // These three labels identify their kind on their OWN: they are action parameter names (only an
 // actionCalls-derived card can carry them), so they are matched wherever they appear - the same
 // scoping the CLI resolver uses, which walks EVERY card's details rather than a type list.
-const ID_ASSET_KIND = {
+const ID_ASSET_KIND = Object.assign(Object.create(null), {
   communicationSubscriptionId: 'Subscription',
   commSubscriptionChannelTypeId: 'Subscription channel',
   senderId: 'Sender',
@@ -810,10 +810,10 @@ const ID_ASSET_KIND = {
   // a deliberate extension after review flagged it emitted-but-skipped; the id-only map is safe because
   // the label is an API param name, not a phrase (the Start-card collision rule below does not apply).
   emailTemplateId: 'Email template',
-};
+});
 // The Start card's labels are converter-authored PHRASES, so they are honoured only on df.FlowStart -
 // matching them on any card would let an action parameter that happens to be named 'Segment' collide.
-const START_ASSET_KIND = { 'Segment': 'Segment', 'Data graph': 'Data graph' };
+const START_ASSET_KIND = Object.assign(Object.create(null), { 'Segment': 'Segment', 'Data graph': 'Data graph' });
 
 // "id (Name)" -> { assetId, assetName }. Parses ONE producer's format: flow-to-diagramforce.mjs
 // resolveReferences appends ' (Name)' to the reference it resolved, so the shape is mechanical, not

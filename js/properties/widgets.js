@@ -2,17 +2,17 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.24.3';
-import * as history from '../history.js?v=1.24.3';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.3';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.24.3';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.24.3';
-import { confirmModal, showToast } from '../feedback.js?v=1.24.3';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.24.3';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.24.3';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.24.3';
-import { escHtml } from '../util.js?v=1.24.3';
-import { saveCellAsShape } from '../templates.js?v=1.24.3';
+import { prctx, asUndoBatch } from './context.js?v=1.24.4';
+import * as history from '../history.js?v=1.24.4';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.24.4';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.24.4';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.24.4';
+import { confirmModal, showToast } from '../feedback.js?v=1.24.4';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.24.4';
+import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.24.4';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.24.4';
+import { escHtml } from '../util.js?v=1.24.4';
+import { saveCellAsShape } from '../templates.js?v=1.24.4';
 
 /** One undo batch per TYPING RUN: opened by the first keystroke, closed on blur or after a pause. It used to open on
  *  FOCUS and close only on blur - but clicking a shape does not blur the panel input (JointJS prevents the default on
@@ -73,7 +73,7 @@ export function section(parent, title, open = true) {
  */
 export function orderPeerLabel(cell) {
   const type = cell.get('type');
-  const SPECIFIC = {
+  const SPECIFIC = Object.assign(Object.create(null), {
     // Process — backgrounds tier is dominated by BpmnPool
     'sf.BpmnPool':            'pools',
     // Sequence — containers tier maps cleanly to fragments
@@ -89,7 +89,7 @@ export function orderPeerLabel(cell) {
     'sf.GanttTask':           'tasks and milestones',
     'sf.GanttMilestone':      'tasks and milestones',
     'sf.GanttMarker':         'tasks and milestones',
-  };
+  });
   return SPECIFIC[type] || tierNameForType(type);
 }
 
@@ -428,12 +428,12 @@ export function field(parent, label) {
  */
 export function wireMarkdownShortcuts(inputEl, hintParent) {
   if (!inputEl) return;
-  const SHORTCUTS = {
+  const SHORTCUTS = Object.assign(Object.create(null), {
     b: '**',
     i: '*',
     e: '`',
     // Strike uses Shift+X to avoid colliding with text-cut (Cmd+X).
-  };
+  });
   inputEl.addEventListener('keydown', (evt) => {
     const mod = evt.ctrlKey || evt.metaKey;
     if (!mod) return;
@@ -749,7 +749,7 @@ export function addRaciPicker(parent, label, value, onChange) {
   const grid = document.createElement('div');
   grid.className = 'df-raci-picker';
   const state = { R: !!value?.R, A: !!value?.A, C: !!value?.C, I: !!value?.I };
-  const NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+  const NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
   for (const key of ['R', 'A', 'C', 'I']) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1219,7 +1219,7 @@ export function addAutoSizeBtn(parent, onClick) {
   parent.appendChild(btn);
 }
 
-export const TYPE_PLURALS = {
+export const TYPE_PLURALS = Object.assign(Object.create(null), {
   'sf.SimpleNode':     'Nodes',
   'sf.Container':      'Containers',
   'sf.Zone':           'Zones',
@@ -1248,7 +1248,7 @@ export const TYPE_PLURALS = {
   'sf.GanttMarker':    'Markers',
   'sf.GanttTimeline':  'Timelines',
   'sf.GanttGroup':     'Groups',
-};
+});
 
 // The shared "standard tail" every element renderer ends with (CLEANUP V8): a Size & Order section (Width/Height
 // pair, a square Diameter/Size, or width-only; + optional Auto Size / Apply-to-all / rotation) followed by the

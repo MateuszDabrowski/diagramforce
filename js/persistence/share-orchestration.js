@@ -5,19 +5,19 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.3';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.3';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.3';
-import { escHtml, formatBytes } from '../util.js?v=1.24.3';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.3';
-import { pctx } from './context.js?v=1.24.3';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.3';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.3';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.3';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.3';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.3';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.3';
-import { noteError } from '../diagnostics.js?v=1.24.3';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.4';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.4';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.4';
+import { escHtml, formatBytes } from '../util.js?v=1.24.4';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.4';
+import { pctx } from './context.js?v=1.24.4';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.4';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.4';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.4';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.4';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.4';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.4';
+import { noteError } from '../diagnostics.js?v=1.24.4';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -38,7 +38,7 @@ function buildShareURL() {
     mappingMode: mappingModeCb ? mappingModeCb() : false,
     graph: slimForShare(graph.toJSON()),
   };
-  return `${window.location.origin}${window.location.pathname}#diagram=${encodeShareV2(data)}`;
+  return `${window.location.origin}${window.location.pathname}#diagram=${encodeShare(data)}`;   // v2, or v3 when a key collides
 }
 
 export function shareAsURL() {
@@ -289,8 +289,11 @@ export async function loadFromURL() {
     if (verMatch) {
       const ver = parseInt(verMatch[1], 10);
       // Every shipped decoder stays alive (forward links from a newer build are the
-      // only ones we can't read). v2 is current; v1 covers links made before it.
-      if (ver === 2) {
+      // only ones we can't read). v2 is current; v3 is v2 with escaped colliding keys
+      // (written only when needed); v1 covers links made before v2.
+      if (ver === 3) {
+        data = decodeShareV3(`v3.${verMatch[2]}`);
+      } else if (ver === 2) {
         data = decodeShareV2(`v2.${verMatch[2]}`);
       } else if (ver === 1) {
         data = decodeShareV1(`v1.${verMatch[2]}`);
@@ -360,7 +363,7 @@ function showShareLoadError(message, title = "Couldn't load shared diagram") {
 
 // (i) pros/cons copy for each link type — surfaces the tradeoffs from the link analysis so users
 // pick the right one. Plain data; rendered into a toggle-able panel next to each section label.
-const SHARE_INFO = {
+const SHARE_INFO = Object.assign(Object.create(null), {
   classic: {
     how: 'The whole diagram is packed into the link itself.',
     pros: ['Opens with no account, even offline', 'Nothing is stored anywhere but the link', 'A frozen snapshot of this exact version'],
@@ -384,7 +387,7 @@ const SHARE_INFO = {
       { label: 'Collab', text: 'they can edit, and their changes sync back so you both work on the same diagram.' },
     ],
   },
-};
+});
 function infoPanelHtml(key) {
   const i = SHARE_INFO[key];
   const body = i.points
@@ -651,7 +654,7 @@ function showShareModal(url, opts = {}) {
       const anyoneLink = directGrants.some((g) => g.scope === 'anyone');
       // The status glyph must MATCH the tab glyph for the same role (the user reads one cue in two places). Source it
       // from the same shareGlyphKind() the tab uses: out -> #share_mobile, in -> #share_link, both -> #socialshare.
-      const GLYPH_ICON = { out: 'share_mobile', in: 'share_link', both: 'socialshare' };
+      const GLYPH_ICON = Object.assign(Object.create(null), { out: 'share_mobile', in: 'share_link', both: 'socialshare' });
       let icon = GLYPH_ICON[shareGlyphKind(st.role)] || '';
       let text = '', manageUrl = '', manageLabel = '';
       if (st.role === 'shared-out') {

@@ -1,7 +1,7 @@
 // Organisation-diagram shapes (OrgPerson) (CLEANUP S3). registerOrg() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { portGroups, portItems } from './ports.js?v=1.24.3';
+import { portGroups, portItems } from './ports.js?v=1.24.4';
 
 export function registerOrg() {
   // --- OrgPerson ---
@@ -261,7 +261,7 @@ export function registerOrg() {
       // by `detailOrder`. The view auto-migrates them into `details` on first
       // render so subsequent saves use the new shape; the legacy fields stay
       // on the cell untouched for forward-compat with rollbacks.
-      const DETAIL_LABELS = { email: 'Email', phone: 'Phone', role: 'Role', stream: 'Stream', location: 'Location', company: 'Company' };
+      const DETAIL_LABELS = Object.assign(Object.create(null), { email: 'Email', phone: 'Phone', role: 'Role', stream: 'Stream', location: 'Location', company: 'Company' });
       const fieldValues = { email, phone, role, stream, location, company };
       let detailEntries = m.get('details');
       if (!Array.isArray(detailEntries) || detailEntries.length === 0) {
@@ -469,8 +469,8 @@ export function registerOrg() {
       const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
       if (raciGroupEl) {
         raciGroupEl.innerHTML = '';
-        const RACI_COLORS = { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' };
-        const RACI_NAMES = { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' };
+        const RACI_COLORS = Object.assign(Object.create(null), { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' });
+        const RACI_NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
         const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
         if (active.length > 0) {
           const PILL = 16;

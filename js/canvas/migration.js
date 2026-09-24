@@ -2,15 +2,15 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.24.3';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.24.3';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.24.3';
-import { applyMappingLinkStyle } from './link-styles.js?v=1.24.3';
-import { nodeContrastText } from '../util.js?v=1.24.3';
-import { getIconDataUri } from '../icons.js?v=1.24.3';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.24.3';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.3';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.24.3';
+import { cctx } from './context.js?v=1.24.4';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.24.4';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.24.4';
+import { applyMappingLinkStyle } from './link-styles.js?v=1.24.4';
+import { nodeContrastText } from '../util.js?v=1.24.4';
+import { getIconDataUri } from '../icons.js?v=1.24.4';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.24.4';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.4';
+import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.24.4';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -39,7 +39,7 @@ export function updateNoteIconLayout(cell) {
 // having to re-pick the style. Applies to sf.Line elements (line/strokeDasharray)
 // in migrateNodes and — defensively — to any legacy connector whose dasharray
 // was hoisted onto lineStyle in migrateLinks.
-const LEGACY_DASH_REMAP = { '3 4': '0 6', '16 8 2 8': '16 8' };
+const LEGACY_DASH_REMAP = Object.assign(Object.create(null), { '3 4': '0 6', '16 8 2 8': '16 8' });
 
 // Links whose label POSITION the app seeded during this load, rather than the document carrying one.
 //

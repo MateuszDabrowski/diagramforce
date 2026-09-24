@@ -66,14 +66,14 @@ function joinConditions(parts, logic) {
 // table - "DetailsChoice EqualTo {!No}" takes a beat to parse. Render the comparison operators as symbols and
 // the wordy ones as words. Anything unmapped falls back to the raw enum de-camel-cased, so a new operator
 // degrades to readable English rather than disappearing.
-const OPERATOR = {
+const OPERATOR = Object.assign(Object.create(null), {
   EqualTo: '=', NotEqualTo: '\u2260',
   GreaterThan: '>', GreaterThanOrEqualTo: '\u2265', LessThan: '<', LessThanOrEqualTo: '\u2264',
   Contains: 'contains', StartsWith: 'starts with', EndsWith: 'ends with',
   IsNull: 'is null', IsChanged: 'changed', IsBlank: 'is blank',
   WasSet: 'was set', WasSelected: 'was selected', WasVisited: 'was visited',
   In: 'in', NotIn: 'not in',
-};
+});
 const readOperator = (op) => OPERATOR[op] || String(op || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 const summarizeFilters = (filters, logic) => joinConditions((filters || [])
   .map((f) => [f.field, readOperator(f.operator), pickValue(f.value)].filter(Boolean).join(' ')), logic);
@@ -255,7 +255,7 @@ function flattenScreenFields(list, out = [], depth = 0) {
 }
 /** Orchestrator / approval stage steps: what each step is, and who it falls to. For an approval flow this IS
  *  the content - a stage named "Legal Review" says nothing without the assignee and the step kind. */
-const STEP_KIND = { stepApproval: 'approval', stepBackground: 'background', stepInteractive: 'interactive' };
+const STEP_KIND = Object.assign(Object.create(null), { stepApproval: 'approval', stepBackground: 'background', stepInteractive: 'interactive' });
 const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
   label: st.label || st.name,
   value: [
@@ -282,7 +282,7 @@ const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
 // approval step IS an action call (Salesforce's own standard_approvals__EvaluateApproval), a background step
 // invokes a flow, and an interactive step puts a screen in front of a person - so the card a reader already
 // knows how to read is the correct card.
-const STEP_SHAPE = {
+const STEP_SHAPE = Object.assign(Object.create(null), {
   stepApproval: 'df.FlowAction',
   stepBackground: 'df.FlowSubflow',
   // UNTESTED against real metadata: the flow this was built from has no interactive step, and neither does any
@@ -290,10 +290,10 @@ const STEP_SHAPE = {
   // Action would be a worse guess - but the card stays conservative (`components` is left UNSET, since an
   // interactive step names an action, not a field list, so any value would be invented) and the run warns.
   stepInteractive: 'df.FlowScreen',
-};
+});
 /** `Legal_Reviewers` -> `Legal Reviewers`. A public group is STORED by API name and RECOGNISED by its label. */
 const humanName = (s) => String(s || '').replace(/_/g, ' ').trim();
-const ASSIGNEE_KIND = { Group: 'Public group', User: 'User', Queue: 'Queue' };
+const ASSIGNEE_KIND = Object.assign(Object.create(null), { Group: 'Public group', User: 'User', Queue: 'Queue' });
 /** WHO the step falls to, and whether that is a fixed group or a per-record user - the first question an
  *  approval audit asks, and the one difference `stageStepRows` above flattens away. An elementReference is
  *  resolved AT RUNTIME ({!Get_Record_Data.Outputs.coachUsername} is a different person on every record), so it
@@ -312,11 +312,11 @@ function assigneeText(a) {
 // contract, so its `ActionInput__` prefix is plumbing and the names can be read out in English. Any OTHER
 // action keeps its raw parameter name: that is the author's own identifier and the only trace from the card
 // back to the metadata, which is worth more than the two words renaming it would save.
-const APPROVAL_INPUT = {
+const APPROVAL_INPUT = Object.assign(Object.create(null), {
   ActionInput__RecordId: 'Record',
   ActionInput__CustomEmailSubject: 'Email subject',
   ActionInput__CustomEmailBody: 'Email body',
-};
+});
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Which fields the rest of the flow reads off a step's output. A background step exists to PRODUCE something,
  *  and nothing on its card said what: `outputParameters` is empty on every real step measured, because an
@@ -437,12 +437,12 @@ const inputRows = (el) => {
 // What a Create matches on when it is really an UPSERT. Salesforce spells `operationMultMatchingRecords` as an
 // enum; phrase it, because "UpdateFirstRecord" in a documentation table is a puzzle rather than an answer.
 // Unknown values pass through raw - Salesforce can add one, and the raw value beats a silent drop.
-const MULT_MATCH = {
+const MULT_MATCH = Object.assign(Object.create(null), {
   UpdateFirstRecord: 'update the first match only',
   UpdateLatestRecord: 'update the most recent match only',   // the value every upsert in the sample org used
   UpdateAllRecords: 'update every match',
   ThrowError: 'fail with an error',
-};
+});
 const createRows = (el) => {
   const rows = inputRows(el);
   const match = summarizeFilters(el.filters, el.filterLogic);
@@ -495,9 +495,9 @@ function rows2(list, toRow) {
   }
   return out;
 }
-const SORT_ORDER = { Asc: 'ascending', Desc: 'descending' };
+const SORT_ORDER = Object.assign(Object.create(null), { Asc: 'ascending', Desc: 'descending' });
 // Flow Builder spells these out; the raw enum reads as jargon and, for RecordField, as a field name.
-const TIME_SOURCE = { RecordTriggerEvent: 'the trigger', RecordField: 'a record field' };
+const TIME_SOURCE = Object.assign(Object.create(null), { RecordTriggerEvent: 'the trigger', RecordField: 'a record field' });
 /** Collection Sort / Filter / Map. A Sort card that never says WHICH field it sorts by is decorative. */
 const collectionRows = (el) => {
   const rows = [];
@@ -624,10 +624,10 @@ const actionParamRows = (el) => {
 // and de-underscore what is left. A pure "el_0" placeholder carries no meaning at all - fall back to the
 // duration there, which is the one useful thing a timed wait branch can say.
 /** The wait mechanisms Flow Builder names in plain language; anything unmapped prints its own API name. */
-const WAIT_EVENT_TYPE = {
+const WAIT_EVENT_TYPE = Object.assign(Object.create(null), {
   AlarmEvent: 'absolute time alarm',
   DateRefAlarmEvent: 'alarm relative to a record date',
-};
+});
 function waitEventLabel(ev, parentName) {
   const raw = ev.label || ev.name || '';
   let stem = raw;
@@ -701,7 +701,7 @@ const waitRows = (el) => rows(el.waitEvents, (ev) => ({
 // would silently MISLABEL real elements, which is worse than the generic card, so they stay unmapped until
 // a real flow supplies the discriminator. df.FlowExit is different: FLOW_ELEMENTS documents its trigger
 // (REMOVE_FROM_FLOW), so it is mapped below.
-const ACTION_CLASS = {
+const ACTION_CLASS = Object.assign(Object.create(null), {
   sendEmailMessage: ['df.FlowSendEmail', (el) => ({ template: contentKey(actionParam(el, 'contentId')) })],
   // Classic CRM email actions - the pre-Marketing-Cloud-Next vocabulary, and by far the most common in
   // ordinary orgs. They were missing entirely, so every "Send Email" in a classic flow drew as a bare Action.
@@ -716,7 +716,7 @@ const ACTION_CLASS = {
   createCampaignMember: ['df.FlowCreateCampaignMember', (el) => ({ actionName: el.actionName, object: 'CampaignMember' })],
   createTask: ['df.FlowCreateTask', (el) => ({ actionName: el.actionName })],
   REMOVE_FROM_FLOW: ['df.FlowExit', () => ({})],
-};
+});
 function actionType(el) {
   const hit = ACTION_CLASS[String(el.actionType || '')] || ACTION_CLASS[String(el.actionName || '')];
   if (hit) return [hit[0], hit[1](el)];
@@ -727,7 +727,7 @@ function actionType(el) {
 // missed entirely, so those flows looked home-grown); and `released`/`beta` mean this org is the package
 // SOURCE, so calling them "managed package" content would be backwards. Unknown values pass through rather
 // than vanish - Salesforce can add a state, and a raw value beats a silent drop.
-const PACKAGE_STATE = {
+const PACKAGE_STATE = Object.assign(Object.create(null), {
   installed: 'installed from a package (not editable here)',
   installedEditable: 'installed from an unlocked/2GP package (editable)',
   deprecated: 'deprecated package component',
@@ -735,7 +735,7 @@ const PACKAGE_STATE = {
   released: 'this org is the package source (released)',
   beta: 'this org is the package source (beta)',
   deleted: 'marked for deletion in the package',
-};
+});
 function packageState(raw) {
   const v = String(raw || '').trim();
   if (!v || /^unmanaged$/i.test(v)) return null;   // the org's own flow - the row means nothing
@@ -918,16 +918,16 @@ function resourceRows(md, choiceIdx) {
 }
 
 // Flow Builder's Loop panel renders iterationOrder as a sentence, not the raw enum.
-const ITERATION_ORDER = { Asc: 'First item to last item', Desc: 'Last item to first item' };
-const WAIT_SUBTYPE = { WaitDuration: 'df.FlowWait', WaitUntilDate: 'df.FlowWaitUntilDate', WaitUntilTime: 'df.FlowWaitUntilDate', WaitUntilEvent: 'df.FlowWaitUntilEvent' };
+const ITERATION_ORDER = Object.assign(Object.create(null), { Asc: 'First item to last item', Desc: 'Last item to first item' });
+const WAIT_SUBTYPE = Object.assign(Object.create(null), { WaitDuration: 'df.FlowWait', WaitUntilDate: 'df.FlowWaitUntilDate', WaitUntilTime: 'df.FlowWaitUntilDate', WaitUntilEvent: 'df.FlowWaitUntilEvent' });
 // collectionProcessors: an explicit subtype map. A substring test for "Sort" used to decide this, so every
 // non-Sort subtype (RecommendationMap included) was silently relabelled "Collection Filter" - a wrong card,
 // not a missing one. Anything unmapped now falls back to Filter AND names itself in the warnings.
-const COLLECTION_PROCESSOR_SUBTYPE = {
+const COLLECTION_PROCESSOR_SUBTYPE = Object.assign(Object.create(null), {
   SortCollectionProcessor: 'df.FlowCollectionSort',
   FilterCollectionProcessor: 'df.FlowCollectionFilter',
   RecommendationMapCollectionProcessor: 'df.FlowCollectionFilter',
-};
+});
 
 // Each collection -> [cell type (or resolver), per-kind field extractor].
 const COLLECTIONS = [
@@ -1775,7 +1775,7 @@ function convert(input, opts = {}) {
  *   already importable today. Forces the computed layout, because a step has no metadata coordinate.
  * @returns {{diagram: object, stats: object}}
  */
-const OPPOSITE = { 'port-top': 'port-bottom', 'port-bottom': 'port-top', 'port-left': 'port-right', 'port-right': 'port-left' };
+const OPPOSITE = Object.assign(Object.create(null), { 'port-top': 'port-bottom', 'port-bottom': 'port-top', 'port-left': 'port-right', 'port-right': 'port-left' });
 /** Which of the four baked-in ports a connector should leave from and arrive at, given the two cards' positions
  *  and the connector kind ('fault' | 'goto' | anything else). EXPORTED because the app needs the identical rule
  *  on the LOAD path: a hand- or LLM-authored flow link that omits `source.port`/`target.port` anchors to the
@@ -1829,7 +1829,7 @@ export function flowLinkPorts(aPos, bPos, kind) {
 }
 
 /** Frequency -> the unit an interval counts in, so `frequencyNumber` can be read out in English. */
-const SCHEDULE_UNIT = { Hourly: 'hours', Daily: 'days', Weekly: 'weeks', Monthly: 'months' };
+const SCHEDULE_UNIT = Object.assign(Object.create(null), { Hourly: 'hours', Daily: 'days', Weekly: 'weeks', Monthly: 'months' });
 /** "every 2 hours - from 2026-07-21 16:15". Two things were being dropped here, both reported from a real org:
  *  - `frequencyNumber` was never read, so a flow running every 2 hours was documented as plain "Hourly" - the
  *    schedule looked twice as frequent as it is.

@@ -2,12 +2,12 @@
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
 // Build via widgets + finishStandardProps (render-core) + TYPE_LABELS (type-meta), reading graph + the panel DOM
 // refs via prctx; never imports the facade. The showProperties() dispatch imports the eight back.
-import * as history from '../history.js?v=1.24.3';
-import { prctx } from './context.js?v=1.24.3';
-import { contrastTextColor } from '../components.js?v=1.24.3';
-import { finishStandardProps } from './render-core.js?v=1.24.3';
-import { TYPE_LABELS } from './type-meta.js?v=1.24.3';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.3';
+import * as history from '../history.js?v=1.24.4';
+import { prctx } from './context.js?v=1.24.4';
+import { contrastTextColor } from '../components.js?v=1.24.4';
+import { finishStandardProps } from './render-core.js?v=1.24.4';
+import { TYPE_LABELS } from './type-meta.js?v=1.24.4';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.4';
 
 export function renderBpmnEventProps(cell) {
   // Content

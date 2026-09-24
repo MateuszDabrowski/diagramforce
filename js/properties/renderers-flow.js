@@ -4,15 +4,15 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.24.3';
-import { finishStandardProps } from './render-core.js?v=1.24.3';
-import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.24.3';
-import { escHtml } from '../util.js?v=1.24.3';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.24.3';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.24.3';
+import { prctx } from './context.js?v=1.24.4';
+import { finishStandardProps } from './render-core.js?v=1.24.4';
+import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.24.4';
+import { escHtml } from '../util.js?v=1.24.4';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.24.4';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.24.4';
 // Cycle-safe: tabs.js never imports the properties stack (the properties FACADE already imports
 // getActiveTabName from it), and the type gate below needs the live tab type at render time.
-import { getActiveTabType } from '../tabs.js?v=1.24.3';
+import { getActiveTabType } from '../tabs.js?v=1.24.4';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -25,7 +25,7 @@ const TRIGGER_TYPE_SUGGESTIONS = ['RecordAfterSave', 'RecordBeforeSave', 'Record
 // Per-kind field metadata: human label + whether it wants a multi-line box (summaries) vs a single input, or a
 // free-text input with a datalist of `suggestions`. Keys match the `fields` arrays in FLOW_ELEMENTS. A key with no
 // entry falls back to a title-cased label.
-const FIELD_SPECS = {
+const FIELD_SPECS = Object.assign(Object.create(null), {
   processType:         { label: 'Process Type', suggestions: PROCESS_TYPE_SUGGESTIONS },
   triggerType:         { label: 'Trigger Type', suggestions: TRIGGER_TYPE_SUGGESTIONS },
   object:              { label: 'Object' },
@@ -51,7 +51,7 @@ const FIELD_SPECS = {
   activation:          { label: 'Activation' },
   // Start-only free-text for arbitrary setup notes (schedule cadence, entry conditions, etc.).
   configuration:       { label: 'Configuration', multiline: true },
-};
+});
 
 export function renderFlowElementProps(cell) {
   const type = cell.get('type');

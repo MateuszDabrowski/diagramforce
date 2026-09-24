@@ -21,8 +21,8 @@ const IS_MAC = (() => {
 
 // Token → symbol mapping. macOS uses the Apple key glyphs (⌘ ⌥ ⌃ ⇧);
 // every other platform uses the plain English words separated by `+`.
-const MAC_TOKENS = { Ctrl: '⌘', Cmd: '⌘', Meta: '⌘', Alt: '⌥', Option: '⌥', Shift: '⇧' };
-const PC_TOKENS  = { Ctrl: 'Ctrl', Cmd: 'Ctrl', Meta: 'Ctrl', Alt: 'Alt', Option: 'Alt', Shift: 'Shift' };
+const MAC_TOKENS = Object.assign(Object.create(null), { Ctrl: '⌘', Cmd: '⌘', Meta: '⌘', Alt: '⌥', Option: '⌥', Shift: '⇧' });
+const PC_TOKENS  = Object.assign(Object.create(null), { Ctrl: 'Ctrl', Cmd: 'Ctrl', Meta: 'Ctrl', Alt: 'Alt', Option: 'Alt', Shift: 'Shift' });
 
 /**
  * Format a key combo for tooltips / hint text. Accepts tokens separated by

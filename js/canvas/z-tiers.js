@@ -10,9 +10,9 @@
 // _isLoadingJSON guard (via cctx.isLoadingJSON) keeps graph.fromJSON() from clobbering
 // saved z values on reload. Reads the live graph via cctx; the constants + tierNameForType
 // are re-exported by canvas.js for properties.js / properties/widgets.js (reorder controls).
-import { cctx } from './context.js?v=1.24.3';
+import { cctx } from './context.js?v=1.24.4';
 
-export const Z_BASE = {
+export const Z_BASE = Object.assign(Object.create(null), {
   'sf.Zone':           0,
   'sf.TaskGroup':      0,   // RACI section grouper — Zone tier, behind its embedded Tasks (500)
   'sf.BpmnPool':       0,
@@ -48,7 +48,7 @@ export const Z_BASE = {
   'sf.SequenceParticipant': 2000,  // node tier — participants + lifelines
   'sf.SequenceActor':       2000,
   'sf.SequenceActivation':  2200,  // above participant lifeline, below links
-};
+});
 export const Z_TIER_SPAN = 499;   // 500 slots per tier (0–499 relative to base)
 const Z_LINK_BASE  = 3000;
 // Gantt dependency links render BELOW the task bars (2000 tier) but above the timeline grid (1000), so a connector

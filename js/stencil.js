@@ -1,19 +1,19 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.3';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.3';
-import { getAllIcons, getCategories } from './icons.js?v=1.24.3';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.3';
-import { startImageAddFlow } from './image-component.js?v=1.24.3';
-import * as history from './history.js?v=1.24.3';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.3';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.3';
-import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.3';
-import { SVG } from './components/stencil-kit.js?v=1.24.3';
-import { confirmModal } from './feedback.js?v=1.24.3';
-import { escHtml } from './util.js?v=1.24.3';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.24.3'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.24.4';
+import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.24.4';
+import { getAllIcons, getCategories } from './icons.js?v=1.24.4';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.24.4';
+import { startImageAddFlow } from './image-component.js?v=1.24.4';
+import * as history from './history.js?v=1.24.4';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.24.4';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.4';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.24.4';
+import { SVG } from './components/stencil-kit.js?v=1.24.4';
+import { confirmModal } from './feedback.js?v=1.24.4';
+import { escHtml } from './util.js?v=1.24.4';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.24.4'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl;
@@ -891,7 +891,7 @@ function setupDropZone() {
     // A representative child each STRUCTURED parent accepts, so the "does it host anything?" probe is TRUE for it.
     // (Using a generic 'sf.SimpleNode' missed the Gantt timeline — it only accepts Gantt children — so the timeline
     // never lit up during a dragover. That was the "timeline shows no capture highlight" report.)
-    const PROBE_CHILD = { 'sf.GanttTimeline': 'sf.GanttTask', 'sf.SequenceParticipant': 'sf.SequenceActivation', 'sf.SequenceActor': 'sf.SequenceActivation', 'sf.Task': 'sf.OrgPerson' };
+    const PROBE_CHILD = Object.assign(Object.create(null), { 'sf.GanttTimeline': 'sf.GanttTask', 'sf.SequenceParticipant': 'sf.SequenceActivation', 'sf.SequenceActor': 'sf.SequenceActivation', 'sf.Task': 'sf.OrgPerson' });
     for (const cell of candidates) {
       const t = cell.get('type');
       // Match any STRUCTURED parent that accepts SOME child — cheap proxy for "container-like". Walking is short

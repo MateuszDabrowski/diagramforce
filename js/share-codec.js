@@ -278,6 +278,72 @@ export function decodeShareV2(payload) {
   return remapKeys(JSON.parse(json), EXPAND_V2);
 }
 
+// ── v3: v2 plus an escape for keys that collide with a short code (2026-09-24) ─────────────────────────────────
+// v2 renames known keys to short codes and expands every short code back on decode, so a diagram that carries a
+// key which IS a short code (`t`, `on`, `as` - possible in LLM-authored JSON) decoded it as the long key (`type`),
+// and a diagram holding both `type` and `t` lost one of them. v3 uses the same MIN_V2 and DICT_V2 and prefixes
+// such keys with ESC, so they skip expansion. It is written ONLY when a payload has such a key: every other
+// diagram still encodes to the exact v2 bytes, so no existing or future link changes form (audit 2026-09-23,
+// deliberately left for a new codec version; versioning.md "Permanent link formats"). Frozen once shipped.
+const ESC_V3 = '\u0001';
+const CODES_V2 = new Set(Object.values(MIN_V2));
+const own = (table, k) => Object.prototype.hasOwnProperty.call(table, k);
+const codeFor = (table, k) => (own(table, k) ? table[k] : k);   // OWN keys only: `toString` stays `toString`
+const needsEscapeV3 = (k) => (CODES_V2.has(k) && !own(MIN_V2, k)) || k.startsWith(ESC_V3);
+
+/** True when some key in `value` would be misread by v2 (see needsEscapeV3). */
+export function hasCodecCollision(value) {
+  if (Array.isArray(value)) return value.some(hasCodecCollision);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).some((k) => k !== '__proto__' && (needsEscapeV3(k) || hasCodecCollision(value[k])));
+  }
+  return false;
+}
+
+function minifyV3(value) {
+  if (Array.isArray(value)) return value.map(minifyV3);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) {
+      if (k === '__proto__') continue;
+      out[needsEscapeV3(k) ? ESC_V3 + k : codeFor(MIN_V2, k)] = minifyV3(value[k]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function expandV3(value) {
+  if (Array.isArray(value)) return value.map(expandV3);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) {
+      if (k === '__proto__') continue;
+      out[k.startsWith(ESC_V3) ? k.slice(ESC_V3.length) : codeFor(EXPAND_V2, k)] = expandV3(value[k]);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Encode a share-data object to `v3.<base64url>` (the escaped form; see encodeShare for when). */
+export function encodeShareV3(data) {
+  const compressed = pako.deflateRaw(JSON.stringify(minifyV3(data)), { dictionary: DICT_V2, level: 9 });
+  return 'v3.' + bytesToUrlSafe(compressed);
+}
+
+/** Decode a `v3.<base64url>` payload back to the share-data object. */
+export function decodeShareV3(payload) {
+  if (!payload.startsWith('v3.')) throw new Error('Not a v3 share payload');
+  const json = inflateCapped(urlSafeToBytes(payload.slice(3)), DICT_V2);   // same decompression-bomb guard
+  return expandV3(JSON.parse(json));
+}
+
+/** Encode for a share link: v2 unless a key would collide with a short code, then v3. */
+export function encodeShare(data) {
+  return hasCodecCollision(data) ? encodeShareV3(data) : encodeShareV2(data);
+}
+
 // ── Group link codec (g1) ────────────────────────────────────────────────────
 // A "Share Group" link doesn't carry diagram CONTENT (that lives in each member's
 // own Drive file) — only the Drive file ids + the group's display metadata, so the

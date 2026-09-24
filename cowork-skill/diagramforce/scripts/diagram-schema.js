@@ -55,7 +55,7 @@ export const ALLOWED_CELL_TYPES = new Set([
 
 const VALID_DIAGRAM_TYPES = new Set(['architecture', 'process', 'datamodel', 'datamapping', 'org', 'gantt', 'sequence', 'flow']);
 // Aliases the loader normalises (kept lenient).
-const DIAGRAM_TYPE_ALIASES = { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping', salesforceflow: 'flow', flowbuilder: 'flow', sfflow: 'flow' };
+const DIAGRAM_TYPE_ALIASES = Object.assign(Object.create(null), { data: 'datamodel', datamodel: 'datamodel', organisation: 'org', organization: 'org', mapping: 'datamapping', salesforceflow: 'flow', flowbuilder: 'flow', sfflow: 'flow' });
 
 /** The diagram type(s) a TYPE-SPECIFIC shape belongs to. Cross-type generics (Note/TextLabel/Line/Image/Pill/Legend/
  *  Table/Link/Container/Zone/SimpleNode/Annotation/Task) return null - they're valid anywhere, so no warning. */

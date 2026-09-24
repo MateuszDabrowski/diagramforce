@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.24.3';
-import { escHtml } from './util.js?v=1.24.3';
+import { trapFocus } from './feedback.js?v=1.24.4';
+import { escHtml } from './util.js?v=1.24.4';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -115,7 +115,7 @@ const BASE_TOUR = [
 
 // Genuinely type-specific feature steps — spliced in before the closing "Time to Build" step
 // only when that diagram type is active, so the spotlight lands on a feature that's on screen.
-const TYPE_STEP = {
+const TYPE_STEP = Object.assign(Object.create(null), {
   datamapping: {
     target: '#view-switch-group', placement: 'below',
     title: 'Diagram vs. Table Views',
@@ -136,7 +136,7 @@ const TYPE_STEP = {
     title: 'Document a Salesforce Flow',
     body: 'Drag the real Flow elements - Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records - and connect them. Connectors are Standard, Fault or Go To, picked in the connector panel, and one-click **Auto Layout** in the View menu straightens the whole flow into a clean vertical tree. Switch to **Table** view to read it as a spec. Great for screen, record-triggered, and marketing/campaign flows.',
   },
-};
+});
 
 // ── Init / public API ─────────────────────────────────────────────────────────
 export function init(_modules) {
