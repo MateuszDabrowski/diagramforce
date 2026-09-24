@@ -1,44 +1,47 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Diagramforce — PRODUCTION (GitHub Pages) repo
+# Diagramforce - PRODUCTION (GitHub Pages) repo
 #
-# Ships ONLY the static app. Everything dev-only is filtered, so `git add -A`
-# after copying from the dev folder stages just the app files. (Listed files may
-# physically exist in the folder after a copy — git won't track them, so Pages
-# never serves them.)
+# ALLOWLIST. Everything is ignored unless it is named below, so a stray file in
+# this folder stays private by default. Promotion is `npm run promote` in the
+# dev repo, which copies only its SHIP list from a release tag. Keep the two in
+# step: the script stops when this file would drop a file it ships.
+#
+# An ignore rule does NOT untrack a file that is already committed (that is how
+# drive-icons.sketch stayed public from 1.19.3). After any edit here, this must
+# print nothing:  git ls-files -ci --exclude-standard
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Test suite + its tooling (the app itself is build-free & dependency-free)
-tests/
-/scripts/
-playwright.config.js
-package.json
-package-lock.json
-node_modules/
-test-results/
-playwright-report/
-playwright/.cache/
-blob-report/
+/*
+!/.gitignore
+!/CNAME
+!/LICENSE
+!/README.md
+!/DIAGRAM_JSON_SPEC.md
+!/index.html
+!/privacy.html
+!/support.html
+!/terms.html
+!/manifest.json
+!/sw.js
+!/assets/
+!/css/
+!/js/
+!/shapes/
+!/templates/
+!/how-to-use/
+!/cowork-skill/
 
-# CI lives on the private dev repo, not here. A copied workflow would run and
-# fail (no test suite in this repo).
-.github/
+# Inside the shipped folders: the skill ships its package and bundle only
+/cowork-skill/*
+!/cowork-skill/diagramforce/
+!/cowork-skill/diagramforce.skill
 
-# Internal dev docs + assistant files — not public
-Documentation/
-CLAUDE.md
-.claude/
-examples/
-dev/
+# Design sources stay private
 *.sketch
 
-# Dev-only debug pages
-reset.html
-
-# OS / editor noise
+# OS / editor noise, at any depth
 .DS_Store
 Thumbs.db
-.idea/
-.vscode/
 *.swp
 *.swo
 *~
