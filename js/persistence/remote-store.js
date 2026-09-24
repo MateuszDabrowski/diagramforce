@@ -1,5 +1,5 @@
 // Remote store — user-owned cloud storage for diagrams (Google Drive first), with
-// NO backend. Phase 1 (Documentation/Diagramforce-Extended-Share.md §8): "Save to
+// NO backend. Phase 1 (design now in Documentation/drive/sync-model.md): "Save to
 // Google Drive" + "Open from Google Drive". The diagram lives in the END-USER's own
 // Drive, owned by them; the developer's Cloud project is only the app's API identity
 // (it stores nothing). Validated end-to-end by spike/gdrive-spike.html.
@@ -15,12 +15,12 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.1';
-import { pctx } from './context.js?v=1.24.1';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.1';
-import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.1';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.1';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.2';
+import { pctx } from './context.js?v=1.24.2';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.2';
+import { revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.2';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.2';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.2';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -2944,7 +2944,7 @@ async function fetchGraphAuthed(fileId) {
 // `appProperties.dfKind='templates'` so it does NOT show in the diagram library (myDiagramsQuery matches
 // `.dgf`/DGF_MIME only). Cross-device model: pull+merge on connect/boot, push on local change. Deletes
 // PROPAGATE via tombstones carried in the file's `deleted` list (the merge + confirm overlay live in
-// templates.js / util.mergeTemplatesWithTombstones; see Diagramforce-Sync.md §8.4). Both fns are
+// templates.js / util.mergeTemplatesWithTombstones; see Documentation/drive/sync-model.md, custom-templates sync). Both fns are
 // OPPORTUNISTIC: they use an existing valid token and NEVER pop a sign-in (the caller guarantees one).
 const LS_TEMPLATES_FILE = 'df.gdrive.templatesFileId';
 // OWNED only: a templates file someone else shared (and the user opened once through the Picker) is visible under

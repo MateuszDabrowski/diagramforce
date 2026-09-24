@@ -2,8 +2,8 @@
 // split-table + tri-state helpers, mutate) DOM for the Save / Load / Close managers' rows, chips, collapsible
 // split tables, and select-alls (including the V4/V5 helpers). Depends only on the genuinely-pure helpers that
 // stay in util.js + the zero-dep drive-sync-logic leaf (hasVerifiedMyDriveBackup — the chip's honesty rule).
-import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.24.1';
-import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.1';
+import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.24.2';
+import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.2';
 
 export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', active = false, checkbox = '',
   diagramType = '', typeTitle = '', icon: iconOverride = '', leadingIcon = false, name = '', nameSuffix = '', groupBadge = '', count = null,
@@ -50,7 +50,7 @@ export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', acti
 
 /**
  * The directional share-chip icon SVG for a storage row (matches the 3-way tab glyph: `shareGlyphKind`):
- *   'out' → #share (your save wins), 'in' → #share_link / the chain (their save wins), 'both' → #socialshare
+ *   'out' → #share_mobile (your save wins), 'in' → #share_link / the chain (their save wins), 'both' → #socialshare
  *   (collaboration / Shared Drive, edits flow both ways). Used on the amber "Shared Drive / Shared File" chips in
  *   the Save Manager, Load, and Close & Delete rows so the chip reads the same direction as the tab. Filled,
  *   currentColor; same 16-viewBox box as the other chip checks.

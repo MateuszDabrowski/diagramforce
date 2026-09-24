@@ -5,18 +5,18 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.1';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.1';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.1';
-import { escHtml, formatBytes } from '../util.js?v=1.24.1';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.1';
-import { pctx } from './context.js?v=1.24.1';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.1';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.1';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.1';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.1';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.1';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.1';
+import { decodeShareV1, encodeShareV2, decodeShareV2, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.2';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.2';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.2';
+import { escHtml, formatBytes } from '../util.js?v=1.24.2';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.2';
+import { pctx } from './context.js?v=1.24.2';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.2';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.2';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.2';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.2';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.2';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.2';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -227,8 +227,8 @@ export async function loadFromURL() {
   const { sanitizeGraphJSON, normalizeDiagramType, checkVersionWarning, onImport: onImportCallback } = pctx;
   // Google Drive "Open with Diagramforce" / "New" — Drive loads the app with a `?state=` QUERY param
   // (URL-encoded JSON {ids,action,...}). `open` opens the file id (via the #gd= read path); `create`/`new`
-  // falls through to the normal new-diagram boot. ACTIVATION needs the Cloud Console Drive UI integration
-  // + prod creds (see Documentation/Diagramforce-Extended-Share.md §"Open with"); until then this never fires.
+  // falls through to the normal new-diagram boot. Live on prod via the Cloud Console Drive UI integration
+  // (Documentation/drive/open-with.md).
   const stateRaw = new URLSearchParams(window.location.search).get('state');
   if (stateRaw) {
     history.replaceState(null, '', window.location.pathname);

@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.24.1';
-import { escHtml } from './util.js?v=1.24.1';
+import { trapFocus } from './feedback.js?v=1.24.2';
+import { escHtml } from './util.js?v=1.24.2';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -66,7 +66,7 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Welcome to Diagramforce',
-    body: "A fast, browser-based canvas for architecture, data models, Data Cloud mappings, process flows, org charts, Gantt charts, and UML sequence diagrams - no account, and nothing leaves your browser.\n\nLet's do a quick 60-second tour of the key tools.\n\nIn a rush? Hit skip. You can always jump right back into this walkthrough by clicking the {{help}} Help icon in the top toolbar.",
+    body: "A fast, browser-based canvas for architecture, data models, Data Cloud mappings, Salesforce Flows, process flows, org charts, Gantt charts, and UML sequence diagrams - no account, and nothing leaves your browser.\n\nLet's do a quick 60-second tour of the key tools.\n\nIn a rush? Hit skip. You can always jump right back into this walkthrough by clicking the {{help}} Help icon in the top toolbar.",
   },
   {
     targets: ['#btn-save', '#btn-load', '#btn-share-url'], placement: 'below-start',
@@ -134,7 +134,7 @@ const TYPE_STEP = {
   flow: {
     target: '#btn-display', placement: 'below',
     title: 'Document a Salesforce Flow',
-    body: 'Drag the real Flow elements - Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records - and connect them. Connectors carry their role (decision outcome, default, fault, loop), and one-click **Auto Layout** in the View menu straightens the whole flow into a clean vertical tree. Great for screen, record-triggered, and marketing/campaign flows.',
+    body: 'Drag the real Flow elements - Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records - and connect them. Connectors are Standard, Fault or Go To, picked in the connector panel, and one-click **Auto Layout** in the View menu straightens the whole flow into a clean vertical tree. Switch to **Table** view to read it as a spec. Great for screen, record-triggered, and marketing/campaign flows.',
   },
 };
 

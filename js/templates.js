@@ -21,11 +21,11 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.1';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.1';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.24.1';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.1';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.1';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.2';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.2';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.24.2';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.2';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.2';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a

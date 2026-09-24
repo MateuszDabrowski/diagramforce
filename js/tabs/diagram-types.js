@@ -1,4 +1,4 @@
-// Diagram-type registry (CLEANUP S5) — the 7 workspace types (label/short) + their inline SVG glyphs. Pure data
+// Diagram-type registry (CLEANUP S5) — the 8 workspace types (label/short) + their inline SVG glyphs. Pure data
 // + a pure switch; zero imports. Shared by tabs.js (tab bar / new-diagram picker) and stencil.js (workspace
 // labels), so it lives in a leaf both import without a cycle.
 

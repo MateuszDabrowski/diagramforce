@@ -1,40 +1,38 @@
 // SF Diagrams — App bootstrap
 // Initializes all modules in order. JointJS is a global (loaded via CDN script tag).
 
-import * as theme       from './theme.js?v=1.24.1';
-import * as icons       from './icons.js?v=1.24.1';
-import { getAllStencilSvgs } from './components.js?v=1.24.1';
-import * as shapes      from './shapes.js?v=1.24.1';
-import * as canvas      from './canvas.js?v=1.24.1';
-import * as stencil     from './stencil.js?v=1.24.1';
-import * as selection   from './selection.js?v=1.24.1';
-import * as history     from './history.js?v=1.24.1';
-import * as clipboard   from './clipboard.js?v=1.24.1';
-import * as templates    from './templates.js?v=1.24.1';
-import * as keyboard    from './keyboard.js?v=1.24.1';
-import * as toolbar     from './toolbar.js?v=1.24.1';
-import * as properties  from './properties.js?v=1.24.1';
-import * as persistence from './persistence.js?v=1.24.1';
-import * as tabs        from './tabs.js?v=1.24.1';
-import * as mermaidImport from './mermaid-import.js?v=1.24.1';
-import * as tableView    from './table-view.js?v=1.24.1';
-import * as walkthrough  from './walkthrough.js?v=1.24.1';
-import * as present      from './present.js?v=1.24.1';
-import * as whatsNew     from './whats-new.js?v=1.24.1';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.1';
-import * as singleWindow from './tabs/single-window.js?v=1.24.1';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.1';
-import * as externalImport from './persistence/external-import.js?v=1.24.1';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.24.1';
-import { seedDefaultPalette } from './brand-palette.js?v=1.24.1';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.1';   // external-import timeout fallback
+import * as theme       from './theme.js?v=1.24.2';
+import * as icons       from './icons.js?v=1.24.2';
+import { getAllStencilSvgs } from './components.js?v=1.24.2';
+import * as shapes      from './shapes.js?v=1.24.2';
+import * as canvas      from './canvas.js?v=1.24.2';
+import * as stencil     from './stencil.js?v=1.24.2';
+import * as selection   from './selection.js?v=1.24.2';
+import * as history     from './history.js?v=1.24.2';
+import * as clipboard   from './clipboard.js?v=1.24.2';
+import * as templates    from './templates.js?v=1.24.2';
+import * as keyboard    from './keyboard.js?v=1.24.2';
+import * as toolbar     from './toolbar.js?v=1.24.2';
+import * as properties  from './properties.js?v=1.24.2';
+import * as persistence from './persistence.js?v=1.24.2';
+import * as tabs        from './tabs.js?v=1.24.2';
+import * as mermaidImport from './mermaid-import.js?v=1.24.2';
+import * as tableView    from './table-view.js?v=1.24.2';
+import * as walkthrough  from './walkthrough.js?v=1.24.2';
+import * as present      from './present.js?v=1.24.2';
+import * as whatsNew     from './whats-new.js?v=1.24.2';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.2';
+import * as singleWindow from './tabs/single-window.js?v=1.24.2';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.2';
+import * as externalImport from './persistence/external-import.js?v=1.24.2';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.24.2';
+import { seedDefaultPalette } from './brand-palette.js?v=1.24.2';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.2';   // external-import timeout fallback
 
 // Clickjacking defence. `frame-ancestors` / `X-Frame-Options` cannot be sent
 // from a static GitHub Pages file, so the framing policy is enforced here.
 // Scoped to the production origins so local dev and embedded previews still work.
-// The diagramforce.com entry is DORMANT on the old host (the check is simply never
-// true there, so behaviour on diagramforce.mateuszdabrowski.pl is unchanged) and
-// only activates once this same code is served from the new host after the move.
+// diagramforce.com is the live host; the old subdomain is kept for the migration bridge.
 const FRAME_BUST_HOSTS = ['diagramforce.mateuszdabrowski.pl', 'diagramforce.com'];
 if (window.top !== window.self && FRAME_BUST_HOSTS.includes(location.hostname)) {
   try {
@@ -334,7 +332,7 @@ main().catch(err => {
 // --- Service worker (offline support) ---
 // Same-origin only; falls through gracefully if the browser doesn't support it
 // or the registration fails. Cache invalidation is handled inside sw.js by
-// keying on APP_VERSION — a version bump lands in a fresh cache and old
+// keying on CACHE_VERSION — a version bump lands in a fresh cache and old
 // caches are purged on activation.
 //
 // DEVELOPMENT BYPASS: on localhost / 127.0.0.1 / file:// we actively

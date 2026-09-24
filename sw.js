@@ -4,12 +4,12 @@
  * so that a version bump (changing CACHE_VERSION + all `?v=` query strings) lands
  * in a fresh cache and the old cache is purged on activation.
  *
- * CACHE_VERSION is the CACHE key `RELEASE.DEV_BUILD` (e.g. 1.17.0.3), NOT the
- * displayed release (js/persistence.js APP_VERSION = 1.17.0). `npm run bump`/`bump:dev`
+ * CACHE_VERSION is the CACHE key `RELEASE.DEV_BUILD` (e.g. 1.24.1.3), NOT the
+ * displayed release (js/persistence.js APP_VERSION, e.g. 1.24.1). `npm run bump`/`bump:dev`
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.24.1';
+const CACHE_VERSION = '1.24.2';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is

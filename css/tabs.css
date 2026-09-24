@@ -712,6 +712,9 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
+  /* No taller than the row's name line (19.8px). It inherited the page's 1.65 line-height and stood 24.1px, so
+     every row carrying a group grew 4.4px and a Load list of mixed rows went uneven (owner report 2026-09-24). */
+  line-height: 1.2;
   color: var(--text-secondary);
   padding: 2px 8px;
   border: 1px solid var(--border-color);

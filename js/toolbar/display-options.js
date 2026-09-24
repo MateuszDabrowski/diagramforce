@@ -1,8 +1,13 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.24.1';
-import { btn, tctx } from './context.js?v=1.24.1';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.24.2';
+import { btn, tctx } from './context.js?v=1.24.2';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
+
+// View-menu actions that rearrange the canvas. With a table open the canvas is hidden, so running one moved
+// shapes and re-ported connectors the user could not see (backlog 2026-09-24). Disabled while the table is up;
+// every route into and out of Table view passes through setViewMode, so this is the one place to gate them.
+const CANVAS_LAYOUT_ACTIONS = ['btn-auto-layout-h', 'btn-auto-layout-v', 'btn-auto-layout-layered', 'btn-reface-connectors', 'btn-sequence-auto-layout'];
 
 export function setViewMode(mode) {
   const diag = document.getElementById('btn-view-diagram');
@@ -10,6 +15,13 @@ export function setViewMode(mode) {
   const isTable = mode === 'table';
   const wasTable = !!tctx.modules.tableView?.isActive?.();
   if (isTable) tctx.modules.tableView?.show?.(); else tctx.modules.tableView?.hide?.();
+  for (const id of CANVAS_LAYOUT_ACTIONS) {
+    const el = document.getElementById(id);
+    if (!el || el.disabled === isTable) continue;
+    if (isTable) { el.dataset.diagramTitle = el.title; el.title = 'Switch to Diagram view to use this'; }
+    else { el.title = el.dataset.diagramTitle || ''; delete el.dataset.diagramTitle; }
+    el.disabled = isTable;
+  }
   // Auto-hide the side panels in Table mode (the table wants the full width); restore the
   // stencil on the way back to Diagram (or any tab change away from Table). Act only on a
   // real transition so repeated diagram-mode calls don't clobber a manually-closed stencil.

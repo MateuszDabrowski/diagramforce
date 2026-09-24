@@ -3,8 +3,8 @@
 // (finishStandardProps from render-core), reading graph/paper/selection + the panel DOM refs + the showProperties
 // dispatch via prctx at CALL time; never imports the facade back. The facade's showProperties() dispatch imports
 // these four back.
-import * as history from '../history.js?v=1.24.1';
-import { prctx } from './context.js?v=1.24.1';
+import * as history from '../history.js?v=1.24.2';
+import { prctx } from './context.js?v=1.24.2';
 
 // Port rebuilds and the Actor lifeline toggle rewrite `ports` (and attrs / size), which history does not record - so
 // an undo reverted the COUNT but left the ports, and undoing "Hide lifeline" showed a lifeline with no ports
@@ -40,8 +40,8 @@ function undoableLifelineOp(cell, op) {
     history.recordCommand(() => applyLifeline(cell, before), () => applyLifeline(cell, after));
   }
 }
-import { finishStandardProps } from './render-core.js?v=1.24.1';
-import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.1';
+import { finishStandardProps } from './render-core.js?v=1.24.2';
+import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.24.2';
 
 export function renderSequenceParticipantProps(cell) {
   // Content

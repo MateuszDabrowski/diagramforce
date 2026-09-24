@@ -846,6 +846,14 @@
 .df-modal__body.df-modal__row-list {
   padding: var(--spacing-sm) var(--spacing-lg);
 }
+/* The BODY is the scroll region, so its children keep their content height. Without this, a long list makes
+   flexbox shrink them to fit, and any child that is itself a scroll container (min-height resolves to 0) gives way
+   first: the Load tab strip (overflow-x: auto) collapsed to 10px under 30 rows, its tabs squashed half out of
+   view (owner report 2026-09-24, after the 1.24.0 sticky fix). Same cause as the list-box rule below, fixed once
+   for every row-list body (Load, Save, Drive history). */
+.df-modal__body.df-modal__row-list > * {
+  flex-shrink: 0;
+}
 
 /* Bordered container around the Select-all header + rows (Save / Export / Load), also the box of each
    .df-split-table (Load -> Drive / Browser, Close & Delete). overflow:hidden clips the header background and the

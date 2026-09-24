@@ -19,7 +19,7 @@
 // which proved this extraction byte-identical across 40 graph × direction × align combinations.
 //
 // GOTCHAS inherited from the original (do NOT "fix" without measuring — see
-// Documentation/Diagramforce-AutoLayout-StageC.md §3b prior art):
+// Documentation/approaches/auto-layout.md prior art):
 //  - Coordinates come out UNROUNDED and un-translated. The caller must translate the whole
 //    layout by one global offset and round to INTEGER — never grid-snap per node (different-width
 //    centre-aligned nodes snap to different centres and kink the connector; reverted in 1.19.0.29).

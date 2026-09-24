@@ -2,7 +2,7 @@
 // it open in a NEW TAB, with the payload passed via window.postMessage (never the URL, so there is
 // no share-URL size ceiling — a data-mapping diagram that blows past the ~8000-char URL limit still
 // works). The public contract + a copy-paste opener snippet live in DIAGRAM_JSON_SPEC.md ("Open a
-// diagram from another site"). Behaviour: functions/save-share.md. Threat model: limits/gotchas-security.md.
+// diagram from another site"). Behaviour: functions/save-share.md. Threat model: limits/security.md.
 //
 // Flow (all client-side, no backend):
 //   1. The other site runs `window.open('https://diagramforce…/#import=postmessage')` — WITHOUT
