@@ -1,11 +1,11 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.6';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.6';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.6';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.6';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.6';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.6';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.6';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.7';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.7';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.7';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.7';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.7';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.7';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.7';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -23,7 +23,8 @@ function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templat
 
 let _loadMgrClose = null;
 
-export function showLoadManagerModal(initialTab = null, importStats = null) {
+/** `opts.replace` (the tab menu's "Replace with JSON"): the Replace current tab box starts ticked. */
+export function showLoadManagerModal(initialTab = null, importStats = null, opts = {}) {
   const p = tctx.modules.persistence;
   _loadMgrClose?.(); _loadMgrClose = null;                 // release any prior instance's focus trap
   document.querySelector('.df-load-manager-modal')?.remove();
@@ -53,6 +54,8 @@ export function showLoadManagerModal(initialTab = null, importStats = null) {
   });
   _loadMgrClose = () => { _loadMgrClose = null; close(); };
   const pane = body.querySelector('.df-load-mgr__pane');
+  // The Replace current tab box, shared by Paste and File: the same decision in both, so switching between them keeps it.
+  const replaceState = { on: !!opts.replace };
 
   const select = (key) => {
     active = key;
@@ -61,7 +64,7 @@ export function showLoadManagerModal(initialTab = null, importStats = null) {
     });
     footer.innerHTML = '';
     pane.innerHTML = '';
-    const ctx = { pane, footer, close };
+    const ctx = { pane, footer, close, replaceState };
     if (key === 'browser') renderBrowserLoadPane(ctx, importStats);
     else if (key === 'drive') renderDriveLoadPane(ctx);
     else if (key === 'file') renderFileLoadPane(ctx);
@@ -86,7 +89,7 @@ export function hideLoadModal() { _loadMgrClose?.(); }
 // Legacy entry points → the Load Manager on the matching tab (keeps persistence callbacks + New-Diagram wiring).
 export function showLoadModal(importStats = null) { showLoadManagerModal('browser', importStats); }
 export function showDriveLibraryModal() { if (tctx.modules.persistence.isDriveConfigured?.()) showLoadManagerModal('drive'); }
-export function showPasteImportModal() { showLoadManagerModal('paste'); }
+export function showPasteImportModal(opts = {}) { showLoadManagerModal('paste', null, opts); }
 
 // --- Load Manager: Browser pane (reopen a closed diagram from the named-saves shelf) ---
 
@@ -471,6 +474,9 @@ function renderDriveLoadPane({ pane, footer, close }) {
 /** What a dropped or picked file may be. Mirrors the `accept` on the Load modal's file input, so the picker and
  *  a drop refuse exactly the same things - a file the picker greys out must not sneak in past a drop. */
 const OPENABLE_EXTENSIONS = new Set(['dgf', 'json', 'xml', 'flow-meta.xml']);
+// The View menu's checkbox glyph (box + tick, the same SVG as its toggle items), for a `.df-check` label: it follows
+// a real, invisible <input type="checkbox">, which keeps native keyboard, focus and `change` handling.
+const CHECK_GLYPH = '<svg class="df-toolbar__checkbox df-check__box" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /**
  * Open ONE dropped or picked file as a new tab. The single path both the Load modal's drop zone and the
@@ -480,29 +486,13 @@ const OPENABLE_EXTENSIONS = new Set(['dgf', 'json', 'xml', 'flow-meta.xml']);
  * @param {Function} [close] - closes the Load modal when the file came from there; omitted for a window drop.
  */
 export async function openDroppedFile(f, close) {
-  if (!f) return;
-  // EXTENSION FIRST, before the file is even read. Everything downstream assumes text, so dropping a PNG got as
-  // far as JSON.parse and surfaced the parser's own complaint about the file's magic bytes:
-  //   Failed to load "datamodel.png": Unexpected token '<?>', "<?>PNG   "... is not valid JSON
-  // which describes the failure in terms of a parser the reader never invoked. The extension is the cheapest
-  // signal available and it is enough to say the useful thing instead: what this app opens, and what they
-  // dropped. A file with NO extension still goes through - the content check below is the real authority, and
-  // an export saved without a suffix is a fair thing to drop.
-  const ext = (/\.(flow-meta\.xml|[a-z0-9]+)$/i.exec(f.name) || [])[1]?.toLowerCase() || '';
-  if (ext && !OPENABLE_EXTENSIONS.has(ext)) {
-    showError(`Diagramforce cannot open .${ext} files. Drop a Diagramforce .dgf or .json export, `
-      + 'or a Salesforce Flow (.flow-meta.xml or its Tooling API .json).');
-    return;
-  }
-  let text;
-  try { text = await f.text(); } catch { showError('Could not read that file.'); return; }
-  // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
-  // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
-  const base = f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '');
+  const file = await readOpenableFile(f);
+  if (!file) return;
+  const { text, base } = file;
   close?.();   // close first; loadJSONText handles single/bundle/templates (a bundle reopens the Browser tab with a summary)
   // The SAME content-detect chain as the Paste pane, in the same order - a file is just a paste that arrived
   // by another door, and the two routes diverging is exactly how a saved Connect response or a retrieved
-  // ObjectSourceTargetMap .xml (whose extension passes the gate above) used to die in loadJSONText's
+  // ObjectSourceTargetMap .xml (whose extension passes readOpenableFile's gate) used to die in loadJSONText's
   // JSON.parse with the parser's own complaint, while the identical bytes pasted fine. Detect by CONTENT, not
   // extension - a Tooling response is a .json like any other, and the user may well have renamed the file.
   const P = tctx.modules.persistence;
@@ -511,6 +501,74 @@ export async function openDroppedFile(f, close) {
   else if (P.looksLikeDataGraphJson?.(text)) await P.loadDataGraph(text, base);
   else if (P.looksLikeRoleQueryJson?.(text)) await P.loadRoleHierarchy(text, base);
   else await P.loadJSONText(text, base);
+}
+
+/** One of the four Salesforce formats the Paste chain routes before Diagramforce JSON (they are JSON or XML too). */
+function isSalesforceText(text) {
+  const P = tctx.modules.persistence;
+  return !!(P.isFlowSourceText?.(text) || P.looksLikeMappingJson?.(text) || P.looksLikeDataGraphJson?.(text) || P.looksLikeRoleQueryJson?.(text));
+}
+
+/** The File tab with Replace current tab ticked: the picked file replaces the open tab's content, as a paste does,
+ *  instead of opening a new tab. Only a Diagramforce diagram can; anything else is refused with the
+ *  reason, and the modal stays open so the box can be unticked. */
+async function replaceFromFile(f, close) {
+  const file = await readOpenableFile(f);
+  if (!file) return;
+  const P = tctx.modules.persistence;
+  if (isSalesforceText(file.text)) { showError(notReplaceable('Salesforce metadata')); return; }
+  const blocker = replaceBlocker(P.describePastedJSON(file.text), tctx.modules.tabs.getReplaceTarget?.());
+  if (blocker) { showError(blocker); return; }
+  if (await P.replaceActiveWithJSONText(file.text)) close?.();
+}
+
+/** Why a Diagramforce document cannot replace `target` (getReplaceTarget: the active tab, or null when it is empty),
+ *  or null when it can. `d` is describePastedJSON's result. The Paste pane shows it beside its disabled button, the
+ *  File tab as an error. A tab's type is fixed when it is made; a document that names no type takes the tab's. */
+function replaceBlocker(d, target) {
+  if (!target) return 'Replace needs an open diagram with content.';
+  if (!d.ok) return d.error;
+  if (!d.single) return `Replace takes a single diagram, not a bundle or a templates file. ${UNTICK}`;
+  if (d.typed && d.diagramType !== target.diagramType) {
+    return `Replace needs the open tab's type, ${typeLabelFor(target.diagramType)}, and this diagram is ${typeLabelFor(d.diagramType)}. ${UNTICK}`;
+  }
+  return null;
+}
+/** Replace takes only Diagramforce JSON: what the box says about anything else it recognised (`what`). */
+const notReplaceable = (what) => `Replace works with a Diagramforce diagram, and this is ${what}. ${UNTICK}`;
+const UNTICK = 'Untick Replace current tab to open it in a new tab.';
+
+/** The Replace current tab box: the SAME control, wording and place (footer, left) in Paste and File. A box set before
+ *  acting, so Load stays one step. The tab's name follows on one line, cut short when long (full name on hover),
+ *  because the modal covers the tab bar. */
+function replaceToggleHtml(target, on) {
+  return `<label class="df-load-replace df-check" title="Replace &quot;${escHtml(target.name)}&quot; instead of opening a new tab">`
+    + `<input type="checkbox" class="df-load-replace__cb df-check__input"${on ? ' checked' : ''}>${CHECK_GLYPH}`
+    + `<span class="df-load-replace__text">Replace current tab:</span><span class="df-load-replace__name">${escHtml(target.name)}</span></label>`;
+}
+
+/** Refuse by extension, then read. Returns { text, base } (base = the file name without its compound extension,
+ *  the new tab's fallback title), or null after telling the user why not. */
+async function readOpenableFile(f) {
+  if (!f) return null;
+  // EXTENSION FIRST, before the file is even read. Everything downstream assumes text, so dropping a PNG got as
+  // far as JSON.parse and surfaced the parser's own complaint about the file's magic bytes:
+  //   Failed to load "datamodel.png": Unexpected token '<?>', "<?>PNG   "... is not valid JSON
+  // which describes the failure in terms of a parser the reader never invoked. The extension is the cheapest
+  // signal available and it is enough to say the useful thing instead: what this app opens, and what they
+  // dropped. A file with NO extension still goes through - the callers' content check is the real authority, and
+  // an export saved without a suffix is a fair thing to drop.
+  const ext = (/\.(flow-meta\.xml|[a-z0-9]+)$/i.exec(f.name) || [])[1]?.toLowerCase() || '';
+  if (ext && !OPENABLE_EXTENSIONS.has(ext)) {
+    showError(`Diagramforce cannot open .${ext} files. Drop a Diagramforce .dgf or .json export, `
+      + 'or a Salesforce Flow (.flow-meta.xml or its Tooling API .json).');
+    return null;
+  }
+  let text;
+  try { text = await f.text(); } catch { showError('Could not read that file.'); return null; }
+  // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
+  // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
+  return { text, base: f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '') };
 }
 
 // --- Drop a file anywhere on the app window ---------------------------------------------------------------
@@ -584,7 +642,7 @@ export function initWindowFileDrop() {
 }
 
 // --- Load Manager: File pane (open a .dgf / .json export by drop or picker) ---
-function renderFileLoadPane({ pane, footer, close }) {
+function renderFileLoadPane({ pane, footer, close, replaceState }) {
   pane.innerHTML = `
     <div class="df-load-file" tabindex="0" role="button" aria-label="Choose a file or drop it here">
       <svg class="df-load-file__icon" aria-hidden="true"><use href="#upload"></use></svg>
@@ -592,10 +650,22 @@ function renderFileLoadPane({ pane, footer, close }) {
       <p class="df-load-file__sub">A Diagramforce <strong>.dgf</strong> or <strong>.json</strong> export - single diagram, group bundle, or templates.<br>Or a Salesforce Flow: a <strong>.flow-meta.xml</strong> source file, or the Tooling API JSON for a flow.</p>
       <input type="file" class="df-load-file__input" accept=".dgf,.json,.xml,application/json,text/xml" hidden>
     </div>`;
-  footer.innerHTML = '<span class="df-load-mgr__foot-hint">Files load into a new tab.</span>';
+  // Replace current tab (only while the open tab has content): the picked file replaces its content in place.
+  const target = tctx.modules.tabs.getReplaceTarget?.();
+  footer.innerHTML = target ? replaceToggleHtml(target, replaceState.on) : '<span class="df-load-mgr__foot-hint">Files load into a new tab.</span>';
   const zone = pane.querySelector('.df-load-file');
   const input = pane.querySelector('.df-load-file__input');
-  const onFiles = (files) => openDroppedFile(files?.[0], close);
+  const replaceCb = footer.querySelector('.df-load-replace__cb');
+  const title = pane.querySelector('.df-load-file__title');
+  const syncTitle = () => {
+    title.textContent = replaceCb?.checked ? 'Drop a diagram file to replace the current tab, or click to choose' : 'Drop a diagram file here, or click to choose';
+  };
+  replaceCb?.addEventListener('change', () => { replaceState.on = replaceCb.checked; syncTitle(); });
+  syncTitle();
+  const onFiles = async (files) => {
+    await (replaceCb?.checked ? replaceFromFile(files?.[0], close) : openDroppedFile(files?.[0], close));
+    input.value = '';   // picking the same file again (after unticking Replace, say) must fire `change` again
+  };
   zone.addEventListener('click', () => input.click());
   zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
   input.addEventListener('change', () => onFiles(input.files));
@@ -605,7 +675,7 @@ function renderFileLoadPane({ pane, footer, close }) {
 }
 
 // --- Load Manager: Paste pane (auto-detect Diagramforce JSON vs Mermaid) ---
-function renderPasteLoadPane({ pane, footer, close }) {
+function renderPasteLoadPane({ pane, footer, close, replaceState }) {
   pane.innerHTML = `
     <div class="df-paste-modal">
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON, Salesforce metadata, or Mermaid code - the format is detected automatically:</p>
@@ -624,6 +694,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
           <div class="df-paste-modal__fmt-body" hidden>
             <div class="df-paste-modal__fmt-sub">A diagram exported via <strong>Save &rarr; Export to JSON</strong>, or generated with the <a href="https://github.com/MateuszDabrowski/diagramforce/blob/main/DIAGRAM_JSON_SPEC.md" target="_blank" rel="noopener" class="df-paste-modal__fmt-anchor">Diagramforce LLM Spec</a>.</div>
             <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> Hand that spec to an LLM along with what you want drawn, and paste back what it returns. A <code>.dgf</code> or <code>.json</code> file does the same thing on the <strong>File</strong> tab - or drop it anywhere on the app.</div>
+            <div class="df-paste-modal__fmt-how"><strong>Updating a diagram?</strong> Right-click its tab and choose <strong>Copy JSON</strong>, have the LLM edit it, then right-click the tab again and choose <strong>Replace with JSON</strong>, or tick <strong>Replace current tab</strong> below. The tab keeps its name and its file in Google Drive, and Undo brings the old version back. A file from the LLM works the same way on the <strong>File</strong> tab.</div>
           </div>
         </div>
         <div class="df-paste-modal__fmt" data-fmt="flow">
@@ -686,7 +757,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
               <code class="df-paste-modal__url df-paste-modal__url--wrap">sf data query --query "SELECT Id, Name, DeveloperName, ParentRoleId, PortalType, (SELECT Name FROM Users WHERE IsActive = true) FROM UserRole" --json</code>
               <span class="df-paste-modal__fmt-note">Paste the whole output. The same SELECT in <a href="https://workbench.developerforce.com" target="_blank" rel="noopener">Workbench</a> <strong>REST Explorer</strong> (<code>/services/data/v64.0/query?q=...</code>) works too. Leave out the <code>Users</code> subquery and the cards show roles only, with no holders and no vacancies.</span>
             </div>
-            <label class="df-paste-modal__roles-portal"><input type="checkbox" class="df-paste-modal__roles-portal-cb"> Include portal roles</label>
+            <label class="df-paste-modal__roles-portal df-check"><input type="checkbox" class="df-paste-modal__roles-portal-cb df-check__input">${CHECK_GLYPH}<span>Include portal roles</span></label>
           </div>
         </div>
         <div class="df-paste-modal__fmt" data-fmt="mermaid">
@@ -711,10 +782,15 @@ function renderPasteLoadPane({ pane, footer, close }) {
         </div>
       </div>
     </div>`;
-  footer.innerHTML = '<button class="df-modal__btn df-modal__btn--accent df-paste-modal__load" style="margin-left:auto" disabled>Load</button>';
+  // Replace current tab (only while the open tab has content), as on the File tab: ticked, the one button reads Replace
+  // and swaps the tab's content in place (same name, same Drive file) instead of opening a new tab.
+  const target = tctx.modules.tabs.getReplaceTarget?.();
+  footer.innerHTML = (target ? replaceToggleHtml(target, replaceState.on) : '')
+    + '<button class="df-modal__btn df-modal__btn--accent df-paste-modal__load" disabled>Load</button>';
   const input = pane.querySelector('.df-paste-modal__input');
   const status = pane.querySelector('.df-paste-modal__status');
   const loadBtn = footer.querySelector('.df-paste-modal__load');
+  const replaceCb = footer.querySelector('.df-load-replace__cb');
   const fmtCols = pane.querySelectorAll('.df-paste-modal__fmt');
   // Each card expands to how-to-get-it detail. Collapsed by default so the four supported formats read as a
   // scannable list rather than a wall - the standalone "How do I get a Flow out of Salesforce?" disclosure this
@@ -780,7 +856,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
     }
     if (t[0] === '{' || t[0] === '[') {
       const d = tctx.modules.persistence.describePastedJSON(t);
-      return d.ok ? { kind: 'json', rawType: d.rawType, diagramType: d.diagramType } : { kind: 'error', error: d.error };
+      return d.ok ? { kind: 'json', rawType: d.rawType, diagramType: d.diagramType, single: !!d.single, typed: !!d.typed } : { kind: 'error', error: d.error };
     }
     const v = tctx.modules.mermaidImport.validateMermaid(t);
     if (v.ok) return { kind: 'mermaid', mtype: v.type };
@@ -788,12 +864,19 @@ function renderPasteLoadPane({ pane, footer, close }) {
   };
   const validate = () => {
     resetHighlight();
+    const replacing = !!replaceCb?.checked;
+    loadBtn.textContent = replacing ? 'Replace' : 'Load';
+    status.style.color = 'var(--text-secondary)';   // the error branch turns it red; a Replace blocker is not an error
     const d = detect(input.value);
     if (d.kind === 'empty') { mode = null; loadBtn.disabled = true; status.textContent = ''; return; }
     if (d.kind === 'error') { mode = null; loadBtn.disabled = true; status.style.color = errColor; status.textContent = d.error; fmtCols.forEach(c => c.classList.add('is-err')); return; }
     mode = d.kind;
-    loadBtn.disabled = false;
-    status.textContent = '';
+    // Ticked, only a Diagramforce diagram of the tab's type can go; anything else says why (the card still lights).
+    const blocker = !replacing ? null
+      : d.kind === 'json' ? replaceBlocker({ ok: true, ...d }, target)
+      : notReplaceable(d.kind === 'mermaid' ? 'Mermaid' : 'Salesforce metadata');
+    loadBtn.disabled = !!blocker;
+    status.textContent = blocker || '';
     if (d.kind === 'flow') {
       const col = pane.querySelector('.df-paste-modal__fmt[data-fmt="flow"]');
       col?.classList.add('is-on');
@@ -855,7 +938,13 @@ function renderPasteLoadPane({ pane, footer, close }) {
   input.addEventListener('input', validate);
   mtargetSel?.addEventListener('change', validate);
   portalCb?.addEventListener('change', validate);
+  replaceCb?.addEventListener('change', () => { replaceState.on = replaceCb.checked; validate(); });
+  validate();   // a box that starts ticked (the tab menu's Replace with JSON) names the button Replace before any paste
   loadBtn.addEventListener('click', async () => {
+    if (replaceCb?.checked) {
+      if (mode === 'json' && await tctx.modules.persistence.replaceActiveWithJSONText(input.value)) close();
+      return;
+    }
     let ok = false;
     if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
     else if (mode === 'dcmapping') ok = await tctx.modules.persistence.loadDataCloudMapping(input.value, 'Data Cloud Mappings');

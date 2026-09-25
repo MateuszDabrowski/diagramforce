@@ -7,17 +7,17 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.24.6';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.24.6';
-import { normalizeDateSuffix } from '../util.js?v=1.24.6';
-import { escHtml } from '../util.js?v=1.24.6';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.24.6';
-import { pctx } from './context.js?v=1.24.6';
-import { slimForShare } from '../share-codec.js?v=1.24.6';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.24.7';
+import { KNOWN_EXT_RE } from './df-format.js?v=1.24.7';
+import { normalizeDateSuffix } from '../util.js?v=1.24.7';
+import { escHtml } from '../util.js?v=1.24.7';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.24.7';
+import { pctx } from './context.js?v=1.24.7';
+import { slimForShare } from '../share-codec.js?v=1.24.7';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.24.6';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.24.7';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
@@ -556,6 +556,64 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
 }
 
 /**
+ * The one diagram a parsed document holds, or null. Two shapes qualify: a single-diagram file (`{graph:{cells}}`), and
+ * an export bundle carrying exactly one diagram and no templates (loadJSONText opens that one as a tab too). Returns
+ * `{ graph, diagramType, name, appVersion }` with `diagramType` as written (undefined when the file names none). Pure:
+ * the Paste pane's Replace gate and replaceActiveWithJSONText read the same answer.
+ */
+export function singleDiagramOf(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (Array.isArray(data.graph?.cells)) {
+    return { graph: data.graph, diagramType: data.diagramType || undefined, name: data.title || data.name, appVersion: data.appVersion };
+  }
+  const ds = Array.isArray(data.diagrams) ? data.diagrams : null;
+  const ts = Array.isArray(data.templates) ? data.templates : [];
+  if (ds && ds.length === 1 && ts.length === 0 && Array.isArray(ds[0]?.graph?.cells)) {
+    const d = ds[0];
+    return { graph: d.graph, diagramType: d.diagramType || undefined, name: d.name || d.title, appVersion: d.appVersion || data.appVersion };
+  }
+  return null;
+}
+
+/**
+ * Replace the ACTIVE tab's content with a pasted diagram, in place: the tab keeps its name, type, group and Drive
+ * link, so the next save writes the new content to the same file (Drive keeps the old one in its version history).
+ * For iterating on a diagram with an LLM - export, have it edited, paste it back - without a new tab and a new Drive
+ * file each round. Only a diagram of the tab's own type is accepted: the type is fixed when a tab is made (stencil,
+ * type tools), and a file that names no type takes the tab's. tabs.js does the swap as ONE undo step and a real edit
+ * (dirty, Drive autosave, the view-share fork). Returns true when the swap ran or is waiting on the table-edit guard.
+ */
+export async function replaceActiveWithJSONText(jsonText) {
+  const { normalizeDiagramType, diagramTypeCb, tabNameCb, onReplaceContent } = pctx;
+  let data;
+  try { data = JSON.parse(jsonText); }
+  catch (err) { showError(`Failed to read the JSON: ${err.message}`); return false; }
+  const d = singleDiagramOf(data);
+  if (!d) { showError('Replace takes a single diagram. Use Load for a bundle or a templates file.'); return false; }
+  const tabType = diagramTypeCb ? diagramTypeCb() : 'architecture';
+  if (d.diagramType && normalizeDiagramType(d.diagramType) !== tabType) {
+    showError(`The open tab is a ${tabType} diagram and this JSON is ${normalizeDiagramType(d.diagramType)}. Use Load to open it in a new tab.`);
+    return false;
+  }
+  const okVer = await checkVersionWarning(d.appVersion || null, String(d.name || 'Pasted'), data);
+  if (!okVer) return false;
+  const countLinks = (g) => (g?.cells || []).filter((c) => c && (c.source || c.target)).length;
+  const linksBefore = countLinks(d.graph);
+  try { sanitizeGraphJSON(d.graph); }
+  catch (err) { showError(`Failed to load the pasted diagram: ${err.message}`); return false; }
+  const droppedLinks = Math.max(0, linksBefore - countLinks(d.graph));
+  if (!onReplaceContent) { showError('Replace is unavailable.'); return false; }
+  const name = tabNameCb ? tabNameCb() : 'Diagram';
+  return onReplaceContent(d.graph, () => {
+    if (droppedLinks > 0) {
+      showToast(`Replaced "${name}" - skipped ${droppedLinks} connector${droppedLinks === 1 ? '' : 's'} pointing to a shape that isn't in the file.`, 'warning');
+    } else {
+      showToast(`Replaced "${name}" ✓ - Undo brings the old version back.`, 'success');
+    }
+  });
+}
+
+/**
  * Paste-from-JSON modal: shows a textarea, validates the input is parseable
  * JSON with a `graph` field, and loads it via the same pipeline as `importJSON`.
  */
@@ -573,16 +631,21 @@ export function describePastedJSON(text) {
   catch (err) { return { ok: false, error: `Invalid JSON: ${err.message}` }; }
   const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams' || Array.isArray(data?.diagrams);
   const isTemplates = data?.schema === 'diagramforce-templates' || (Array.isArray(data?.templates) && !data?.graph && !Array.isArray(data?.diagrams));
+  // `single` = the document holds exactly one diagram (singleDiagramOf), so it can Replace the open tab; `typed` =
+  // it names its own diagramType (an untyped one takes the tab's).
+  const one = singleDiagramOf(data);
+  const single = one ? { single: true, typed: !!one.diagramType } : {};
   if (data?.graph?.cells) {
     const norm = normalizeDiagramType(data.diagramType);
     // `rawType` = the diagramType string as it appears in the pasted JSON (may be an alias, e.g. "organization");
     // `diagramType` = the normalised internal type. The Paste pane shows "rawType → friendly label".
-    return { ok: true, diagramType: norm, rawType: String(data.diagramType || norm), label: `<strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(norm)}, ${data.graph.cells.length} cells)` };
+    return { ok: true, diagramType: norm, rawType: String(data.diagramType || norm), ...single, label: `<strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(norm)}, ${data.graph.cells.length} cells)` };
   }
   if (isBundle) {
     const dN = Array.isArray(data.diagrams) ? data.diagrams.length : 0;
     const tN = Array.isArray(data.templates) ? data.templates.length : 0;
-    return { ok: true, label: `Bundle - ${dN} diagram${dN === 1 ? '' : 's'}${tN ? `, ${tN} template${tN === 1 ? '' : 's'}` : ''}` };
+    const typeOf = one ? { diagramType: normalizeDiagramType(one.diagramType) } : {};
+    return { ok: true, ...typeOf, ...single, label: `Bundle - ${dN} diagram${dN === 1 ? '' : 's'}${tN ? `, ${tN} template${tN === 1 ? '' : 's'}` : ''}` };
   }
   if (isTemplates) {
     const tN = Array.isArray(data.templates) ? data.templates.length : 0;

@@ -27,13 +27,14 @@ export const pctx = {
   persistTabDrive: null,   // (tabId, {driveFileId, driveSync, driveLastSavedAt, driveImported, driveFolderId, driveDriveId, driveHeadRevisionId, driveCopies}) => void — mirror Drive state into tab meta
   onImport: null,          // (name, type, graphJSON, viewport) => void
   onReplaceActive: null,   // (name, type, graphJSON, viewport, mappingMode) => void — load INTO the active tab in place (refresh)
+  onReplaceContent: null,  // (graphJSON, done) => boolean — a user's Replace from the Paste pane: swap the active tab's content as ONE undo step + a real edit
   onImportGroup: null,     // (groupMetas, diagrams) => void  (kind:'group' bundle)
   onNewDiagram: null,      // (type) => void  (a `#new=<type>` address - the manifest shortcuts, Slot's right-click)
   getAllTabs: null,        // () => tab[]              (all open tabs, incl. groupId)
   getGroups: null,         // () => group[]            ([{id,name,icon,color}] — so a full backup carries group data)
   getTabGraph: null,       // (tabId) => graphJSON     (a tab's graph)
   showLoadModal: null,     // (importStats) => void    (reveal Load-from-Browser)
-  showPasteImport: null,   // () => void               (open the unified Load-from-Paste modal — New-Diagram "Open" tab)
+  showPasteImport: null,   // (opts?) => void          (open the unified Load-from-Paste modal — New-Diagram "Open" tab; {replace:true} from the tab menu)
   templatesBackupApi: null,// { getTemplates, exportFn, importMerge }
   renderThumbnail: null,   // (template, size, height, diff) => HTMLElement — mini-paper preview (templates.js); diff highlights added/changed cells. Used by the Review conflict modal's side-by-side cards.
   getTabViewport: null,    // (tabId) => viewport

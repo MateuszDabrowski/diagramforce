@@ -5,19 +5,19 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.6';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.6';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.6';
-import { escHtml, formatBytes } from '../util.js?v=1.24.6';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.6';
-import { pctx } from './context.js?v=1.24.6';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.6';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.6';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.6';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.6';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.6';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.6';
-import { noteError } from '../diagnostics.js?v=1.24.6';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.7';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.7';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.7';
+import { escHtml, formatBytes } from '../util.js?v=1.24.7';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.7';
+import { pctx } from './context.js?v=1.24.7';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.7';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.7';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.7';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.7';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.7';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.7';
+import { noteError } from '../diagnostics.js?v=1.24.7';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -415,6 +415,22 @@ function buildDiagramJSONText() {
   try { viewport = getTabViewport && activeTabIdCb ? (getTabViewport(activeTabIdCb()) || null) : null; } catch { viewport = null; }
   const data = buildSingleDiagram(tabNameCb(), diagramTypeCb(), compactGraphForSave(graph.toJSON()), viewport, mappingModeCb ? mappingModeCb() : false, null);
   return JSON.stringify(data, null, 2);
+}
+
+/** Copy ANY open tab as that same single-diagram JSON - the tab right-click "Copy JSON", the start of the LLM round
+ *  trip (Replace with JSON is the end). Reads the tab's own graph (live for the active tab, stored for the rest), so a
+ *  background tab is copied without switching to it. Call from the click itself: the clipboard needs the gesture. */
+export function copyTabJSON(tabId) {
+  const { getAllTabs, getTabGraph, getTabDiagramType, getTabViewport, getTabMappingMode } = pctx;
+  const tab = (getAllTabs ? getAllTabs() : []).find((t) => t.id === tabId);
+  const g = tab && getTabGraph ? getTabGraph(tabId) : null;
+  if (!tab || !g) { showToast('Nothing to copy.', 'warning'); return Promise.resolve(false); }
+  const data = buildSingleDiagram(tab.name, getTabDiagramType ? getTabDiagramType(tabId) : 'architecture', compactGraphForSave(g),
+    getTabViewport ? (getTabViewport(tabId) || null) : null, getTabMappingMode ? getTabMappingMode(tabId) : false, null);
+  return navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(
+    () => { showToast(`Copied "${tab.name}" as JSON ✓`, 'success'); return true; },
+    () => { showToast('Could not copy automatically - use Export diagram to JSON instead.', 'warning'); return false; },
+  );
 }
 
 function showShareModal(url, opts = {}) {

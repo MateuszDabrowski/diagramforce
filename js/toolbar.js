@@ -1,32 +1,32 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.24.6';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.6';
-import { resizeDataObjectToFit } from './components.js?v=1.24.6';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.6';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.6';
+import { diagramEmbedsImages } from './image-component.js?v=1.24.7';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.7';
+import { resizeDataObjectToFit } from './components.js?v=1.24.7';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.7';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.7';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.24.6';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.6';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.6';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.24.6';
-import { renderTemplateThumbnail } from './templates.js?v=1.24.6';
-import { showWhatsNewNow } from './whats-new.js?v=1.24.6';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.24.6';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.6';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.6';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.6';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.6';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.6';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.6';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.6';
+import { pctx } from './persistence/context.js?v=1.24.7';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.7';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.7';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.24.7';
+import { renderTemplateThumbnail } from './templates.js?v=1.24.7';
+import { showWhatsNewNow } from './whats-new.js?v=1.24.7';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.24.7';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.7';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.7';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.7';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.7';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.7';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.7';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.7';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.6';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.6';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.6';
-import { noteError } from './diagnostics.js?v=1.24.6';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.7';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.7';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.7';
+import { noteError } from './diagnostics.js?v=1.24.7';
 
 let modules = {};
 export function init(_modules) {
@@ -145,7 +145,7 @@ export function init(_modules) {
   // Wire the "Your Drive diagrams" library so tabs.js's New-Diagram modal can offer cross-device restore.
   modules.persistence.setShowDriveLibrary?.(() => showDriveLibraryModal());
   // Wire the unified Load-from-Paste modal so the New-Diagram modal's "Open" tab can offer it.
-  modules.persistence.setShowPasteImport?.(() => showPasteImportModal());
+  modules.persistence.setShowPasteImport?.((opts) => showPasteImportModal(opts));
 
   // Load → the tabbed Load Manager overlay (Browser / Google Drive / File / Paste), opened directly. The old
   // per-source dropdown items are now its tabs.

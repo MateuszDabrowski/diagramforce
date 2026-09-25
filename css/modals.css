@@ -667,6 +667,24 @@
   min-height: 300px;
 }
 .df-load-mgr__foot-hint { color: var(--text-muted); font-size: var(--font-size-sm); }
+/* Load manager footer, Paste AND File: the "Replace current tab: <name>" box, left. One line: the name is cut short
+   (full name in the title), so a long tab name never wraps the footer, and it stops a --spacing-md short of Paste's
+   button. Box, text and name share ONE colour, so hover (.df-check) brightens the whole line together. */
+.df-load-replace { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; margin-right: var(--spacing-md); color: var(--text-secondary); font-size: var(--font-size-sm); cursor: pointer; }
+.df-load-replace__text { flex-shrink: 0; }
+.df-load-replace__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* .df-check: the View menu's checkbox (.df-toolbar__menu-item--toggle: the same box + tick glyph in the label's own
+   text colour, 0.85 opacity off, full on, brighter on hover) for a real <input type="checkbox"> that sits invisibly on
+   top of the glyph - native keyboard, focus and change events, Diagramforce look.
+   Markup: <label class="df-check"><input class="df-check__input" type="checkbox"><svg class="df-toolbar__checkbox df-check__box">…</svg>text</label> */
+.df-check { position: relative; }
+.df-check:hover { color: var(--text-primary); }
+.df-check__input { position: absolute; z-index: 1; left: 0; top: 50%; width: 16px; height: 16px; margin: 0; transform: translateY(-50%); opacity: 0; cursor: pointer; }   /* above the glyph, so the click lands on the input itself */
+.df-check__box { border-radius: 3px; }
+.df-check__box .df-toolbar__checkbox-tick { display: none; }
+.df-check__input:checked + .df-check__box { opacity: 1; }
+.df-check__input:checked + .df-check__box .df-toolbar__checkbox-tick { display: inline; }
+.df-check__input:focus-visible + .df-check__box { outline: 2px solid var(--brand-primary); outline-offset: 1px; }
 
 /* Drive tab: "Search Google Drive" (Picker) block below the My-Drive library list — reaches files added
    manually / on Shared Drives that the app's own .dgf list can't show. */
@@ -1300,11 +1318,11 @@
 .df-paste-modal__fmt-detected { margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--brand-green); }
 .df-paste-modal__fmt-detected:empty { display: none; }
 .df-paste-modal__fmt-detected code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+.df-paste-modal__load { margin-left: auto; }   /* right-aligned, with or without the Replace box on its left */
 .df-paste-modal__fmt.is-err { color: var(--brand-red); border-color: var(--brand-red); }
 /* The role-hierarchy card's one control. Readable text colour rather than the card's muted inherit: it is a
    control, not a description. */
 .df-paste-modal__roles-portal { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--text-primary); cursor: pointer; }
-.df-paste-modal__roles-portal input { margin: 0; }
 /* Small amber "Beta" badge (the Mermaid format hint). */
 .df-badge--beta { display: inline-block; padding: 1px 5px; font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; border-radius: 3px; background: var(--brand-amber); color: #1A1A1A; vertical-align: middle; }
 

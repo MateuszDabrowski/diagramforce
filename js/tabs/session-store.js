@@ -4,14 +4,14 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.24.6';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.6';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.6';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.6';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.6';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.6';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.6';
-import { noteError } from '../diagnostics.js?v=1.24.6';
+import { tbctx } from './context.js?v=1.24.7';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.7';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.7';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.7';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.7';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.7';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.7';
+import { noteError } from '../diagnostics.js?v=1.24.7';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -559,26 +559,82 @@ export function setupSessionFlush() {
 }
 
 export function setupAutoSave() {
+  const { graph } = tbctx.modules;
+  graph.on('change add remove', noteContentEdit);
+}
+
+/** What a content edit on the active tab sets off: dirty, the view-share fork, Drive autosave, the session save.
+ *  The graph listener above runs it per edit; replaceActiveContent runs it once after a swap, whose fromJSON fires
+ *  a 'reset' this listener never hears. */
+function noteContentEdit() {
   const { tabs } = tbctx;
-  const { persistence: persistenceModule, graph, canvas: canvasModule } = tbctx.modules;
+  const { persistence: persistenceModule, canvas: canvasModule } = tbctx.modules;
   const { markDirty } = tbctx;
-  graph.on('change add remove', () => {
-    // Capture "this is the FIRST real content edit on the active tab" BEFORE markDirty flips the flag. markDirty's
-    // own isLoadingJSON guard means a load/restore/migration never counts; viewport + selection never reach here.
-    const tab = tabs.find(t => t.id === tbctx.activeTabId);
-    // A tab whose diagram failed to load: edits on its empty canvas are not the diagram, and must never reach Drive,
-    // where they would overwrite the real file with them (see loadTabGraph).
-    if (tab && tab.loadFailed) return;
-    const firstRealEdit = !!tab && !tab.dirty && !canvasModule.isLoadingJSON?.();
-    markDirty();
-    // Mode C: a VIEW (Copy) share diverges into the user's own copy on its first edit → rename to "(changed)".
-    if (firstRealEdit) maybeForkViewShareOnEdit(tab);
-    // Drive autosave — only on REAL edits (markDirty's same isLoadingJSON gate), so a
-    // tab switch / open / restore doesn't trigger a Drive write.
-    if (!canvasModule.isLoadingJSON?.()) persistenceModule.notifyDriveChange?.();
-    clearTimeout(tabSaveTimer);
-    tabSaveTimer = setTimeout(() => saveTabs(), 1000);
-  });
+  // Capture "this is the FIRST real content edit on the active tab" BEFORE markDirty flips the flag. markDirty's
+  // own isLoadingJSON guard means a load/restore/migration never counts; viewport + selection never reach here.
+  const tab = tabs.find(t => t.id === tbctx.activeTabId);
+  // A tab whose diagram failed to load: edits on its empty canvas are not the diagram, and must never reach Drive,
+  // where they would overwrite the real file with them (see loadTabGraph).
+  if (tab && tab.loadFailed) return;
+  const firstRealEdit = !!tab && !tab.dirty && !canvasModule.isLoadingJSON?.();
+  markDirty();
+  // Mode C: a VIEW (Copy) share diverges into the user's own copy on its first edit → rename to "(changed)".
+  if (firstRealEdit) maybeForkViewShareOnEdit(tab);
+  // Drive autosave — only on REAL edits (markDirty's same isLoadingJSON gate), so a
+  // tab switch / open / restore doesn't trigger a Drive write.
+  if (!canvasModule.isLoadingJSON?.()) persistenceModule.notifyDriveChange?.();
+  clearTimeout(tabSaveTimer);
+  tabSaveTimer = setTimeout(() => saveTabs(), 1000);
+}
+
+/** The active tab, when its content can be replaced from the Paste pane: it has content (Replace on an empty tab is
+ *  just Load) and it loaded (a `loadFailed` tab's real diagram is not on the canvas, and its edits never save). */
+export function getReplaceTarget() {
+  const { tabs } = tbctx;
+  const { graph } = tbctx.modules;
+  const tab = tabs.find(t => t.id === tbctx.activeTabId);
+  if (!tab || tab.loadFailed || graph.getCells().length === 0) return null;
+  return { id: tab.id, name: tab.name, diagramType: tab.diagramType || 'architecture' };
+}
+
+/** Swap the active tab's content for `graphJSON` (already sanitised) as a USER EDIT, unlike the Drive pull
+ *  (onReplaceActive), which is a sync and clears the undo stack:
+ *   - ONE undo step. The command holds whole-graph snapshots and reloads them, rather than recording per-cell
+ *     add/remove, so undo restores exactly the old diagram (containment and all) however large it is.
+ *   - a real edit: dirty, Drive autosave to the tab's own file (Mode B writes the shared file, a view share forks
+ *     to "(changed)"), the session save. Undo and redo are edits too, so they save as well.
+ *   - the load path's fromJSON + migrations, so 'reset' fires and overlays, the table filter and crossing bumps
+ *     reset as for any load.
+ *  A throwing load leaves the old diagram in place. Returns true when the swap ran. */
+export function replaceActiveContent(graphJSON) {
+  const { graph, canvas: canvasModule, selection: selectionModule, history: historyModule } = tbctx.modules;
+  if (!getReplaceTarget()) return false;
+  const load = (json) => {
+    canvasModule.setLoadingJSON(true);
+    try { graph.fromJSON(json); canvasModule.migrateLinks(); canvasModule.migrateNodes(); }
+    finally { canvasModule.setLoadingJSON(false); }
+  };
+  const swapTo = (json) => {
+    selectionModule.clearSelection();
+    load(json);
+    noteContentEdit();
+    requestAnimationFrame(() => canvasModule.fitContent());
+  };
+  historyModule.flushPendingDragCommit?.();   // a drag merge still pending belongs BEFORE this step, not after it
+  selectionModule.clearSelection();
+  const before = graph.toJSON();
+  try { load(graphJSON); }
+  catch (err) {
+    console.error('Diagramforce: replace failed, restoring the previous diagram:', err);
+    try { load(before); } catch { /* the snapshot came off this canvas a moment ago */ }
+    showError(`Could not replace the diagram: ${err.message}. Nothing was changed.`);
+    return false;
+  }
+  const after = graph.toJSON();   // post-migration, so redo lands on exactly what the user saw
+  historyModule.recordCommand(() => swapTo(before), () => swapTo(after));
+  noteContentEdit();
+  requestAnimationFrame(() => canvasModule.fitContent());
+  return true;
 }
 
 // Mode C (shared-copy): a diagram opened from someone else's VIEW (Copy) share carries a `driveSharedSource` but no

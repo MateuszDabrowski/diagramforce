@@ -1,27 +1,28 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.6';
-import { tbctx } from './tabs/context.js?v=1.24.6';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.6';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.6';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.6';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.6';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.7';
+import { tbctx } from './tabs/context.js?v=1.24.7';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.7';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.7';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.7';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.7';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.6';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.6';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.6';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.6';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.6';
-import { wireMenuDismiss } from './menu.js?v=1.24.6';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.6';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.6';
-import { getPalette } from './brand-palette.js?v=1.24.6';
-import { getAllIcons } from './icons.js?v=1.24.6';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.6';
-import { noteError } from './diagnostics.js?v=1.24.6';
+export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.7';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.7';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.7';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.7';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.7';
+import { wireMenuDismiss } from './menu.js?v=1.24.7';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.7';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.7';
+import { getPalette } from './brand-palette.js?v=1.24.7';
+import { getAllIcons } from './icons.js?v=1.24.7';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.7';
+import { noteError } from './diagnostics.js?v=1.24.7';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -245,6 +246,21 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     render();
     requestAnimationFrame(() => canvasModule.fitContent());
     saveTabs();
+  });
+
+  // Replace from the Paste pane: the user's own edit, unlike the pull above (session-store replaceActiveContent).
+  // An open Edit-in-Table session gets the same Save / Discard prompt a tab switch does; `run` goes after it.
+  persistenceModule.setReplaceContentHandler((graphJSON, done) => {
+    const target = getReplaceTarget();
+    if (!target) return false;
+    const run = () => {
+      if (tbctx.activeTabId !== target.id) return false;
+      const ok = replaceActiveContent(graphJSON);
+      if (ok) done?.();
+      return ok;
+    };
+    if (_switchGuard && !_switchGuard(run)) return true;
+    return run();
   });
 
   // Group import (v1.16.0) — a `kind:'group'` bundle (from "Export group") restores
@@ -1356,6 +1372,15 @@ const CLONE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" str
 // rects). Kept in sync with the toolbar "Compare with" button icon in index.html.
 const COMPARE_GLYPH = '<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="5" height="10" rx="1.4"/><rect x="9" y="3" width="5" height="10" rx="1.4"/></g>';
 
+// A tab's diagram cells: the live graph for the active tab, the stored graph otherwise (and for a failed load, whose
+// canvas is empty but whose stored graph is the real diagram - same rule as getTabGraphJSON).
+function tabCells(tab) {
+  if (!tab) return [];
+  return (tab.id === tbctx.activeTabId && !tab.loadFailed ? graph.getCells() : tab.graphJSON?.cells) || [];
+}
+// A tab Replace could act on once active (mirrors session-store getReplaceTarget, which reads the live graph).
+function tabHasContent(tab) { return !!tab && !tab.loadFailed && tabCells(tab).length > 0; }
+
 // Right-click a tab → clone / export / share it, or assign it to a group (ungroup / create a new group).
 function openTabGroupMenu(anchorEl, tab) {
   openFloating(anchorEl, 'df-tab-pop--menu', (panel) => {
@@ -1397,6 +1422,18 @@ function openTabGroupMenu(anchorEl, tab) {
       saveCurrentTabState();   // flush the active tab's live graph before reading it
       persistenceModule.exportSelection({ tabIds: [tab.id] });
     }, { icon: 'download' }));
+    // Copy JSON: the same envelope as the export, straight to the clipboard, for pasting into an LLM. Copies THIS
+    // tab without switching to it (copyTabJSON reads the tab's own graph).
+    if (tabCells(tab).length) panel.appendChild(menuItem('Copy JSON', () => { persistenceModule.copyTabJSON?.(tab.id); }, { icon: 'copy_to_clipboard' }));
+    // Replace with JSON: the other half of the LLM round trip (copy or export above, edit, paste back). Opens the
+    // Paste pane leading with Replace current tab. Replace acts on the ACTIVE tab, so switch first; an Edit-in-Table
+    // prompt that blocks the switch leaves the pane closed. Not offered where the pane would offer no Replace.
+    if (tabHasContent(tab)) {
+      panel.appendChild(menuItem('Replace with JSON', () => {
+        switchTab(tab.id);
+        if (tbctx.activeTabId === tab.id) persistenceModule.openPasteImport?.({ replace: true });
+      }, { icon: 'paste' }));
+    }
     // switchTab (NOT activateTab): on the ACTIVE tab it early-returns, so the LIVE canvas — including edits made
     // since the last tab switch — rasterizes as-is. activateTab() has no same-tab guard and re-runs
     // graph.fromJSON(tab.graphJSON), silently REVERTING the canvas to the stale stored snapshot. copyCellsAsPng

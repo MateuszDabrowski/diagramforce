@@ -2,10 +2,10 @@
 // tags / RACI / vacancy) + renderTaskProps. Build via the widget builders + finishStandardProps (render-core),
 // reading graph/paper/selection + the panel DOM refs via prctx; never imports the facade. The showProperties()
 // dispatch imports both back.
-import { prctx } from './context.js?v=1.24.6';
-import { finishStandardProps } from './render-core.js?v=1.24.6';
-import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section } from './widgets.js?v=1.24.6';
-import { prepareImageFile } from '../image-component.js?v=1.24.6';
+import { prctx } from './context.js?v=1.24.7';
+import { finishStandardProps } from './render-core.js?v=1.24.7';
+import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section } from './widgets.js?v=1.24.7';
+import { prepareImageFile } from '../image-component.js?v=1.24.7';
 
 export function renderOrgPersonProps(cell) {
   // Content (uniform section name across all shapes; stored fields keep their
