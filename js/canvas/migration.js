@@ -2,15 +2,17 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.24.4';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.24.4';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.24.4';
-import { applyMappingLinkStyle } from './link-styles.js?v=1.24.4';
-import { nodeContrastText } from '../util.js?v=1.24.4';
-import { getIconDataUri } from '../icons.js?v=1.24.4';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.24.4';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.4';
-import { applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.24.4';
+import { cctx } from './context.js?v=1.24.6';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.24.6';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.24.6';
+import { applyMappingLinkStyle } from './link-styles.js?v=1.24.6';
+import { nodeContrastText } from '../util.js?v=1.24.6';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.24.6';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.24.6';
+import { getIconDataUri } from '../icons.js?v=1.24.6';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.24.6';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.6';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.24.6';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -411,6 +413,29 @@ export function updateSimpleNodeLayout(cell) {
   }
 }
 
+// ── Authored props -> the attrs that render them (owner call, 2026-09-25) ──────────────────────────────────────
+// A shape's descriptive prop (`headerColor`, `lineStyle`, `eventType`, `fragmentLabel`, ...) renders only through its
+// attrs, and only the stencil and the panel wrote both. propAttrPlan (diagram-schema.js) is the ONE table the
+// validator reads too: it applies an authored prop to attrs still at their class default and leaves authored attrs
+// alone, so anything saved from the app - where the two always agree - is untouched. Idempotent; non-silent like
+// the heals above so the view repaints (the load guard records no history).
+function applyAuthoredProps(el) {
+  const type = el.get('type');
+  const { patches } = propAttrPlan(type, (k) => el.get(k), (p) => el.attr(p));
+  const paths = Object.keys(patches);
+  for (const p of paths) el.attr(p, patches[p]);
+  // The fragment's title TAB is a path sized to its text; the panel resizes it on every label edit.
+  if (type === 'sf.SequenceFragment' && paths.includes('titleText/text')) joint.shapes.sf.updateFragmentTitleTab?.(el);
+  // A Gantt bar takes its GROUP's colour, but the view recolours only on a groupId CHANGE, never on load - so a bar
+  // authored into a group rendered the default blue. Same gate as the table: only a bar still on the default fill,
+  // and never one the user coloured by hand (`colorManual`).
+  if (type === 'sf.GanttTask' && el.get('groupId') && !el.get('colorManual') && el.attr('progressBar/fill') === '#1D73C9') {
+    const tl = ganttTimelineFor(el);
+    const grp = tl && (tl.get('groups') || []).find((g) => g && g.id === el.get('groupId'));
+    if (grp && grp.color && grp.color !== '#1D73C9') el.attr('progressBar/fill', grp.color);
+  }
+}
+
 // ── Theme-aware text contrast for hardcoded node colours ──────────────────────
 // LLM-generated / imported diagrams routinely hardcode a light `body.fill` (e.g. #FFFFFF)
 // tuned for light mode but leave label/subtitle on the theme default (var(--node-text)).
@@ -560,6 +585,7 @@ export function migrateNodes() {
   for (const el of graph.getElements()) {
     healLinkIcon(el);
     healLinkSublabel(el);
+    applyAuthoredProps(el);
     if (el.get('type') === 'sf.SimpleNode' && !el.get('iconMode')) {
       updateSimpleNodeLayout(el);
       // Keep hardcoded light "cards" (common in LLM/imported diagrams) legible in dark mode:
@@ -682,6 +708,9 @@ export function migrateNodes() {
       el.attr('lifeline/visibility', 'visible');
       el.attr('lifelineHitbox/visibility', 'visible');
       el.attr('lifelineHitbox/magnet', true);
+      // The panel's toggle also RESIZES a collapsed actor (the stick figure alone is 92 tall, so its lifeline would
+      // have no length); an actor authored with `showLifeline: true` at the default size needs the same.
+      if (el.size().height < 120) el.resize(el.size().width, 340);
       // Only seed ports when none were saved — preserves link endpoints when
       // the JSON already ships the port list.
       const items = el.prop('ports/items');
@@ -690,6 +719,17 @@ export function migrateNodes() {
         const ratios = el.get('lifelinePortRatios');
         joint.shapes.sf.rebuildSeqActorPorts?.(el, n, ratios);
       }
+    }
+    // SequenceActivation: `lifelinePortCount` is what the panel edits, but only Participant and Actor ports were
+    // rebuilt on load - an activation authored with 4 kept the class's own count, and a link to `seq-port-left-3`
+    // dangled. Rebuild when the saved port list does not match the count (an app save always does, so it is
+    // untouched), keeping any custom ratios.
+    if (el.get('type') === 'sf.SequenceActivation' && el.get('lifelinePortCount')) {
+      const n = el.get('lifelinePortCount');
+      const ratios = el.get('lifelinePortRatios');
+      const want = buildSeqActivationPorts(Math.max(1, n | 0), ratios).length;
+      const have = (el.prop('ports/items') || []).length;
+      if (have !== want) joint.shapes.sf.rebuildSeqActivationPorts?.(el, n, ratios);
     }
     // Gantt rework: a task bar's x + width DERIVE from its start/end dates against its timeline. (Load guard
     // suppresses history + markDirty for all of this.)

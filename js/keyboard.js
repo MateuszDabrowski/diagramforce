@@ -53,8 +53,6 @@ export const SHORTCUT_GROUPS = [
   { title: 'File', items: [
     ['Ctrl+S', 'Save'],
     ['Ctrl+O', 'Load'],
-    ['Ctrl+N', 'New diagram'],
-    ['Ctrl+W', 'Close current tab'],
   ] },
   { title: 'Edit', items: [
     ['Ctrl+Z', 'Undo'],
@@ -160,9 +158,9 @@ function handleKeydown(evt) {
     modules.stencil?.toggle?.();
     return;
   }
-  // While presenting, nothing that would put ANOTHER diagram on screen: the managers, New, Close tab. Their
-  // buttons are hidden with the toolbar; this is the keyboard half of the same lock. Editing keys stay live.
-  if (modules.present?.isPresenting?.() && mod && ['s', 'o', 'n', 'w'].includes(key)) {
+  // While presenting, nothing that would put ANOTHER diagram on screen: the managers. Their buttons are hidden with
+  // the toolbar; this is the keyboard half of the same lock. Editing keys stay live.
+  if (modules.present?.isPresenting?.() && mod && ['s', 'o'].includes(key)) {
     evt.preventDefault();
     return;
   }
@@ -263,12 +261,8 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Ctrl+N — New diagram
-  if (mod && key === 'n') {
-    evt.preventDefault();
-    modules.persistence.newDiagram();
-    return;
-  }
+  // No Ctrl/Cmd+N (removed 2026-09-24, owner call, like Ctrl/Cmd+W below): browsers keep that chord for a new BROWSER
+  // window and do not let a page prevent it. New diagram is the + Diagram button.
 
   // Ctrl+0 — Fit to content
   if (mod && key === '0') {
@@ -312,12 +306,9 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Ctrl+W — Close current tab
-  if (mod && key === 'w') {
-    evt.preventDefault();
-    modules.tabs?.closeTab(modules.tabs.getActiveTabId());
-    return;
-  }
+  // No Ctrl/Cmd+W (removed 2026-09-24, owner call): browsers keep that chord for closing the BROWSER tab and do not
+  // let a page prevent it, so the advertised "Close current tab" closed the whole app instead. Close a diagram from
+  // its tab's ×, or Close & Delete.
 
   // Escape — Clear selection; and leave a present. The full-screen one usually leaves natively first, on
   // fullscreenchange, and then this is a no-op; when the key reaches the page while still full screen -

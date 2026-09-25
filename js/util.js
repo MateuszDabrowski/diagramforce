@@ -134,16 +134,19 @@ export function parseSolidColor(c) {
 /**
  * Given an explicit `body.fill`, the label + subtitle colours that contrast it (dark text on a
  * light body, light text on a dark body) — or null when the body is theme-adaptive/translucent
- * (caller keeps the theme defaults). Threshold uses Rec. 709 perceptual luminance. The returned
- * hexes match the light/dark `--node-text` tokens so a recoloured node matches its native peers.
+ * (caller keeps the theme defaults). The returned hexes match the light/dark `--node-text` tokens
+ * so a recoloured node matches its native peers.
+ *
+ * The light-or-dark CHOICE is the tab-group chip's (contrastInk, WCAG contrast), so a colour reads
+ * the same way on a node and on a group chip (owner call, 2026-09-25). The previous perceptual
+ * threshold (Rec. 709 luma > 0.6) put light text on every palette accent, 4.0-4.4:1 on nine of ten;
+ * the WCAG choice puts dark text on those nine and keeps light text on the blue.
  */
 export function nodeContrastText(bodyFill) {
-  const rgb = parseSolidColor(bodyFill);
-  if (!rgb) return null;
-  const lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
-  return lum > 0.6
-    ? { label: '#1C1E21', subtitle: 'rgba(0, 0, 0, 0.55)' }       // light body ⇒ dark text
-    : { label: '#F5F6F7', subtitle: 'rgba(255, 255, 255, 0.6)' }; // dark body ⇒ light text
+  if (!parseSolidColor(bodyFill)) return null;
+  return contrastInk(bodyFill) === '#ffffff'
+    ? { label: '#F5F6F7', subtitle: 'rgba(255, 255, 255, 0.6)' }  // dark body ⇒ light text
+    : { label: '#1C1E21', subtitle: 'rgba(0, 0, 0, 0.55)' };      // light body ⇒ dark text
 }
 
 /**

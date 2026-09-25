@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // make-share-url.mjs — turn an authored Diagramforce diagram into a ONE-CLICK https://diagramforce.com/#diagram=
-// link, so the user opens the diagram by clicking rather than by downloading a file and running Load > Import.
+// link, so the user opens the diagram by clicking rather than by downloading a file and opening it via Load > File.
 //
 //   node scripts/make-share-url.mjs my-diagram.json
 //   node scripts/make-share-url.mjs my-diagram.json --origin https://diagramforce.com
@@ -203,7 +203,7 @@ if (isMain) {
   const { url, length, fits } = makeShareUrl(parsed, origin);
   if (!fits) {
     console.error(`Too large for a link: ${length} chars (ceiling ${MAX_URL}).`);
-    console.error('Hand the user the .json file instead and tell them to open it via Load > Import.');
+    console.error('Hand the user the .json file instead and tell them to open it via Load > File, or drop it on the app.');
     process.exit(2);
   }
   console.log(url);

@@ -1,7 +1,7 @@
 // Organisation-diagram shapes (OrgPerson) (CLEANUP S3). registerOrg() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { portGroups, portItems } from './ports.js?v=1.24.4';
+import { portGroups, portItems } from './ports.js?v=1.24.6';
 
 export function registerOrg() {
   // --- OrgPerson ---
@@ -349,6 +349,10 @@ export function registerOrg() {
         avatarTextEl.setAttribute('y', String(avatarCy));
         const fs = hasPhoto ? 18 : iconText ? (iconText.length > 2 ? 14 : 18) : 18;
         avatarTextEl.setAttribute('font-size', String(fs));
+        // Same stamp as the name label above, and it bites harder here: a card loaded from JSON with no
+        // `attrs.avatarText.text` (every converted, LLM-authored or spec-example card) first renders the avatar
+        // text EMPTY, JointJS hides the empty node, and the initials set a moment later stay invisible.
+        avatarTextEl.removeAttribute('display');
       }
       const avatarEl = this.el.querySelector('[joint-selector="avatar"]');
       if (avatarEl) {

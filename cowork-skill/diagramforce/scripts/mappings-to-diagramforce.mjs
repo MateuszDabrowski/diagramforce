@@ -233,7 +233,10 @@ if (isMain) {
     + `${stats.streamSources ? ` · ${stats.streamSources} source(s) stated as a "Source: …" row on their stream cards` : ''}`
     + `${stats.streamsIngestApi ? ` · ${stats.streamsIngestApi} Ingestion API stream(s) - the org cannot name their upstream, so none is drawn` : ''}`
     + `${stats.dlosWithoutStream ? ` · ${stats.dlosWithoutStream} DLO(s) with no stream in the payload` : ''}`
-  : `\n  Source lane named by NAME-MATCHING over the mapping metadata (unverified against the org) - pass --org or --streams to draw the source -> stream -> DLO chain from org fact`}${
+  // Only when there IS a Source lane: a Connect payload starts at the DLO, and the note then described nothing.
+  : stats.layers.some((l) => /^source\b/i.test(l))
+    ? `\n  Source lane named by NAME-MATCHING over the mapping metadata (unverified against the org) - pass --org or --streams to draw the source -> stream -> DLO chain from org fact`
+    : ''}${
   stats.unmapped ? `\n  + ${stats.unmapped} unmapped field(s) shown from the catalogue - the gaps to discuss` : ''}${
   lineageAdded ? `\n  + ${lineageAdded} upstream map(s) added to complete the lineage (--no-lineage to skip)` : ''}${
   stats.prunedUpstream ? `\n  - ${stats.prunedUpstream} upstream mapping(s) dropped: ingested but never forwarded to a data model object `

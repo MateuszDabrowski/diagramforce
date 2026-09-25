@@ -1301,6 +1301,10 @@
 .df-paste-modal__fmt-detected:empty { display: none; }
 .df-paste-modal__fmt-detected code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
 .df-paste-modal__fmt.is-err { color: var(--brand-red); border-color: var(--brand-red); }
+/* The role-hierarchy card's one control. Readable text colour rather than the card's muted inherit: it is a
+   control, not a description. */
+.df-paste-modal__roles-portal { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--text-primary); cursor: pointer; }
+.df-paste-modal__roles-portal input { margin: 0; }
 /* Small amber "Beta" badge (the Mermaid format hint). */
 .df-badge--beta { display: inline-block; padding: 1px 5px; font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; border-radius: 3px; background: var(--brand-amber); color: #1A1A1A; vertical-align: middle; }
 
@@ -2332,6 +2336,9 @@
   white-space: pre;
   user-select: all;
 }
+/* A whole CLI command, not a URL: it wraps, because a query hidden past a scrollbar is a query the reader runs
+   without reading. `user-select: all` still takes the whole command on one click. */
+.df-paste-modal__url--wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   .df-paste-modal__fmt-chev, .df-paste-modal__fmt { transition: none; }
 }

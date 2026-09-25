@@ -5,16 +5,17 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.24.4';
-import { prctx } from './context.js?v=1.24.4';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.4';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.24.4';
-import { startImageAddFlow } from '../image-component.js?v=1.24.4';
-import { recolorCellIcon } from './color-schema.js?v=1.24.4';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.24.4';
-import { renderFieldEditor } from './field-editor.js?v=1.24.4';
-import { finishStandardProps } from './render-core.js?v=1.24.4';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.24.4';
+import * as history from '../history.js?v=1.24.6';
+import { prctx } from './context.js?v=1.24.6';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.24.6';
+import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.24.6';
+import { startImageAddFlow } from '../image-component.js?v=1.24.6';
+import { recolorCellIcon } from './color-schema.js?v=1.24.6';
+import { DASH_BY_LINE_STYLE, BRACKET_PATHS, BRACKET_LABEL_X } from '../persistence/diagram-schema.js?v=1.24.6';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.24.6';
+import { renderFieldEditor } from './field-editor.js?v=1.24.6';
+import { finishStandardProps } from './render-core.js?v=1.24.6';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.24.6';
 
 /** df.Placeholder — Label + Description, and deliberately nothing else.
  *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
@@ -284,8 +285,8 @@ export function renderLineProps(cell) {
       // stroke-linecap:round, so `0 6` paints round dots; `16 8` = clean
       // long-dashes). Previously dotted `3 4` read as small dashes and breaks
       // `16 8 2 8` was a dash-DOT — neither matched its preview.
-      const dashMap = { solid: 'none', dashed: '12 6', dotted: '0 6', breaks: '16 8' };
-      cell.attr('line/strokeDasharray', dashMap[style] || 'none');
+      // One table with the loader, which applies an authored `lineStyle` (diagram-schema.js).
+      cell.attr('line/strokeDasharray', DASH_BY_LINE_STYLE[style] || 'none');
     } finally {
       history.endBatch();
     }
@@ -570,19 +571,13 @@ export function renderAnnotationProps(cell) {
     { value: 'right', label: 'Right' },
   ], v => {
     cell.set('bracketSide', v);
-    if (v === 'right') {
-      // Bracket { on right edge, text on left
-      cell.attr('bracket/d', 'M calc(w) 0 Q calc(w - 12) 0 calc(w - 12) calc(0.25 * h) L calc(w - 12) calc(0.45 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 16) calc(0.5 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 12) calc(0.55 * h) L calc(w - 12) calc(0.75 * h) Q calc(w - 12) calc(h) calc(w) calc(h)');
-      cell.attr('label/x', 0);
-      cell.attr('label/textAnchor', 'start');
-      cell.attr('label/textWrap', { width: 'calc(w - 18)', maxLineCount: 6, ellipsis: true });
-    } else {
-      // Bracket } on left edge, text on right
-      cell.attr('bracket/d', 'M 0 0 Q 12 0 12 calc(0.25 * h) L 12 calc(0.45 * h) Q 12 calc(0.5 * h) 16 calc(0.5 * h) Q 12 calc(0.5 * h) 12 calc(0.55 * h) L 12 calc(0.75 * h) Q 12 calc(h) 0 calc(h)');
-      cell.attr('label/x', 18);
-      cell.attr('label/textAnchor', 'start');
-      cell.attr('label/textWrap', { width: 'calc(w - 18)', maxLineCount: 6, ellipsis: true });
-    }
+    // Right: bracket { on the right edge, text on the left. Left: bracket } on the left edge, text on the right.
+    // Paths and offsets are one table with the loader, which applies an authored `bracketSide` (diagram-schema.js).
+    const side = v === 'right' ? 'right' : 'left';
+    cell.attr('bracket/d', BRACKET_PATHS[side]);
+    cell.attr('label/x', BRACKET_LABEL_X[side]);
+    cell.attr('label/textAnchor', 'start');
+    cell.attr('label/textWrap', { width: 'calc(w - 18)', maxLineCount: 6, ellipsis: true });
   });
 
   // Note: the annotation label is auto-kept horizontal regardless of the

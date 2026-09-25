@@ -18,5 +18,17 @@
   {"query": "is Diagramforce free, and do I need to sign in to use it?", "should_trigger": false},
   {"query": "convert this existing draw.io file to a PNG so I can drop it into a slide deck", "should_trigger": false},
   {"query": "review my Salesforce data model and flag any normalization or naming problems", "should_trigger": false},
-  {"query": "set up a validation rule requiring Email on the Contact object before save", "should_trigger": false}
+  {"query": "set up a validation rule requiring Email on the Contact object before save", "should_trigger": false},
+  {"query": "here's the sf data query output for our UserRole table - chart the role hierarchy so I can see who reports to whom", "should_trigger": true},
+  {"query": "visualise the Profile data graph from our Data Cloud org as a tree of its related objects", "should_trigger": true},
+  {"query": "I have this mermaid flowchart in our README - turn it into something my team can edit visually and share", "should_trigger": true},
+  {"query": "pull Account, Contact and Opportunity from my org with the CLI and draw an ERD with the lookups between them", "should_trigger": true},
+  {"query": "give me a link I can send a colleague that opens this architecture diagram, no file attachments", "should_trigger": true},
+  {"query": "draw the Data Cloud mapping from our Contact_Home DLO into Individual and Contact Point Email, with the formulas", "should_trigger": true},
+  {"query": "write a SOQL query that returns every role and its parent role in our org", "should_trigger": false},
+  {"query": "explain how the role hierarchy affects record sharing in Salesforce", "should_trigger": false},
+  {"query": "build a new record-triggered Flow that emails the owner when a Case escalates", "should_trigger": false},
+  {"query": "create a Data Cloud segment of contacts who opened an email in the last 30 days", "should_trigger": false},
+  {"query": "count how many users hold each role and show it as a pie chart", "should_trigger": false},
+  {"query": "is our Individual DMO mapping correct? just tell me, don't draw anything", "should_trigger": false}
 ]

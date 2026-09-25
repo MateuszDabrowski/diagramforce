@@ -186,14 +186,14 @@
         },
         {
           "label": "Email Latest Bounce Date Time",
-          "apiName": "ssot__EmailLatestBouncedateTime__c",
+          "apiName": "ssot__EmailLatestBounceDateTime__c",
           "type": "DateTime",
           "keyType": null,
           "fid": "cpe_bdt"
         },
         {
           "label": "Email Latest Bounce Reason Text",
-          "apiName": "ssot__EmailLatestBounceReasontext__c",
+          "apiName": "ssot__EmailLatestBounceReasonText__c",
           "type": "Text",
           "keyType": null,
           "fid": "cpe_brt"
@@ -237,14 +237,14 @@
         },
         {
           "label": "Telephone Number",
-          "apiName": "ssot__Telephonenumber__c",
+          "apiName": "ssot__TelephoneNumber__c",
           "type": "Text",
           "keyType": null,
           "fid": "cpp_tel"
         },
         {
           "label": "Formatted E164 Phone Number",
-          "apiName": "ssot__FormattedE164Phonenumber__c",
+          "apiName": "ssot__FormattedE164PhoneNumber__c",
           "type": "Text",
           "keyType": null,
           "fid": "cpp_e164"
@@ -344,7 +344,7 @@
         },
         {
           "label": "Device System Token Text",
-          "apiName": "ssot__DeviceSystemTokentext__c",
+          "apiName": "ssot__DeviceSystemTokenText__c",
           "type": "Text",
           "keyType": null,
           "fid": "dev_tok"
@@ -583,7 +583,7 @@
         },
         {
           "label": "Consent Captured Date Time",
-          "apiName": "ssot__ConsentCaptureddateTime__c",
+          "apiName": "ssot__ConsentCapturedDateTime__c",
           "type": "DateTime",
           "keyType": null,
           "fid": "csc_cap"

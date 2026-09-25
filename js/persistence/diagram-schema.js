@@ -7,6 +7,109 @@
 // Cap mirrored from the loader (sanitizeGraphJSON throws above this).
 export const MAX_CELL_COUNT = 2000;
 
+// ── Props that render only through attrs (owner call, 2026-09-25) ────────────────────────────────────────────────
+// Several shapes carry a top-level prop that DESCRIBES the look (`headerColor`, `lineStyle`, `eventType`, ...) while
+// the view draws only the matching `attrs`. The stencil and the properties panel write both, so anything made in the
+// app agrees with itself; JSON written by a converter, an LLM or the spec's own examples often set only the prop, and
+// rendered the class default. One table, three readers: the loader applies an authored prop to attrs it finds still
+// at their class default (js/canvas/migration.js), the validator warns when an authored prop and authored attrs
+// DISAGREE (below), and the panel and stencil take their values from the same tables. Lookup tables are
+// prototype-free: they are indexed by values out of user JSON.
+const table = (o) => Object.assign(Object.create(null), o);
+export const DASH_BY_LINE_STYLE = table({ solid: 'none', dashed: '12 6', dotted: '0 6', breaks: '16 8' });
+export const BRACKET_PATHS = table({
+  right: 'M calc(w) 0 Q calc(w - 12) 0 calc(w - 12) calc(0.25 * h) L calc(w - 12) calc(0.45 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 16) calc(0.5 * h) Q calc(w - 12) calc(0.5 * h) calc(w - 12) calc(0.55 * h) L calc(w - 12) calc(0.75 * h) Q calc(w - 12) calc(h) calc(w) calc(h)',
+  left: 'M 0 0 Q 12 0 12 calc(0.25 * h) L 12 calc(0.45 * h) Q 12 calc(0.5 * h) 16 calc(0.5 * h) Q 12 calc(0.5 * h) 12 calc(0.55 * h) L 12 calc(0.75 * h) Q 12 calc(h) 0 calc(h)',
+});
+export const BRACKET_LABEL_X = table({ right: 0, left: 18 });
+// `external` was #F6B355 (1.75:1 on the light canvas); the palette's amber clears 3:1 on both.
+export const SEQ_ROLE_ACCENT = table({ generic: '#8A9099', salesforce: '#2E844A', api: '#1D73C9', external: '#A06F03', actor: '#8A9099' });
+export const BPMN_EVENT_STYLE = table({
+  start:        { 'body/fill': '#DCF1E2', 'body/stroke': '#008B46', 'body/strokeWidth': 1.5, 'innerRing/stroke': 'none', 'icon/fill': '#008B46' },
+  intermediate: { 'body/fill': '#FDF1DC', 'body/stroke': '#A06F03', 'body/strokeWidth': 1.5, 'innerRing/stroke': '#A06F03', 'innerRing/strokeWidth': 1.5, 'icon/fill': '#A06F03' },
+  end:          { 'body/fill': '#F9E3E5', 'body/stroke': '#DA4E55', 'body/strokeWidth': 4, 'innerRing/stroke': 'none', 'icon/fill': '#DA4E55' },
+});
+export const BPMN_GATEWAY_GLYPH = table({ exclusive: '×', parallel: '+', inclusive: '○', event: '◇' });
+
+// Per type: each rule names its prop, the prop's class default (a prop AT its default was not authored - except
+// where `always` says the default is itself a look worth applying), the attrs it wants, and the attr values that
+// mean "untouched" (the class defaults; `undefined` always counts). Keep `dflt` / `untouched` equal to the shape
+// classes' own defaults - dev/tests/e2e/prop-attrs.spec.js reads them off the live classes and fails on drift.
+export const PROP_ATTR_RULES = table({
+  'sf.DataObject': [
+    { prop: 'objectName', dflt: 'Object', want: (v) => ({ 'headerLabel/text': v }), untouched: { 'headerLabel/text': ['Object'] } },
+    { prop: 'headerColor', dflt: '#1D73C9', want: (v) => ({ 'header/fill': v, 'headerCover/fill': v }),
+      untouched: { 'header/fill': ['#1D73C9'], 'headerCover/fill': ['#1D73C9'] } },
+  ],
+  'sf.Line': [
+    { prop: 'lineStyle', dflt: 'solid', values: Object.keys(DASH_BY_LINE_STYLE),
+      want: (v) => ({ 'line/strokeDasharray': DASH_BY_LINE_STYLE[v] }), untouched: { 'line/strokeDasharray': ['none'] } },
+  ],
+  'sf.Annotation': [
+    { prop: 'bracketSide', dflt: 'right', values: Object.keys(BRACKET_PATHS),
+      want: (v) => ({ 'bracket/d': BRACKET_PATHS[v], 'label/x': BRACKET_LABEL_X[v] }),
+      untouched: { 'bracket/d': [BRACKET_PATHS.right], 'label/x': [0] } },
+  ],
+  'sf.SequenceParticipant': [
+    { prop: 'participantRole', dflt: 'generic', values: Object.keys(SEQ_ROLE_ACCENT),
+      want: (v) => ({ 'headerAccent/fill': SEQ_ROLE_ACCENT[v], 'headerBottomAccent/fill': SEQ_ROLE_ACCENT[v] }),
+      untouched: { 'headerAccent/fill': ['var(--color-primary)'], 'headerBottomAccent/fill': ['var(--color-primary)'] } },
+  ],
+  'sf.SequenceFragment': [
+    { prop: 'fragmentLabel', dflt: 'loop', want: (v) => ({ 'titleText/text': v }), untouched: { 'titleText/text': ['loop'] } },
+    { prop: 'condition', dflt: '', want: (v) => ({ 'conditionText/text': `[${v}]` }), untouched: { 'conditionText/text': [''] } },
+    { prop: 'fragmentType', dflt: 'standard', values: ['standard', 'alternative'],
+      want: (v, get) => (v === 'alternative' ? {
+        'dividerLine/visibility': 'visible', 'elseText/visibility': 'visible',
+        'elseText/text': get('elseCondition') ? `[${get('elseCondition')}]` : '[else]',
+      } : null),
+      untouched: { 'dividerLine/visibility': ['hidden'], 'elseText/visibility': ['hidden'], 'elseText/text': [''] } },
+  ],
+  // `always`: the class's own default look (white body, black ring) is no event type at all, so even the default
+  // `start` is applied - otherwise every hand-written start event renders as neither start nor anything else.
+  'sf.BpmnEvent': [
+    { prop: 'eventType', dflt: 'start', always: true, values: Object.keys(BPMN_EVENT_STYLE),
+      want: (v) => BPMN_EVENT_STYLE[v],
+      untouched: { 'body/fill': ['#FFFFFF'], 'body/stroke': ['#222222'], 'body/strokeWidth': [1.5], 'innerRing/stroke': ['none'],
+        'innerRing/strokeWidth': [1], 'icon/fill': ['#222222'] } },
+  ],
+  // `always` for the same reason, from the other side: a BLANK glyph is never a look anyone chose (the stencil and
+  // the panel always set one), so even the default `exclusive` fills an empty marker.
+  'sf.BpmnGateway': [
+    { prop: 'gatewayType', dflt: 'exclusive', always: true, values: Object.keys(BPMN_GATEWAY_GLYPH),
+      want: (v) => ({ 'marker/text': BPMN_GATEWAY_GLYPH[v] }), untouched: { 'marker/text': [BPMN_GATEWAY_GLYPH.exclusive, ''] } },
+  ],
+});
+
+/**
+ * What a cell's authored props mean for its attrs. Pure: `get(prop)` and `getAttr('a/b')` read either a live JointJS
+ * cell (class defaults merged in) or plain JSON (absent = undefined), so the loader and the validator share it.
+ * Returns `{ patches, conflicts, unknown }`: `patches` are attr writes for props whose target attrs are all still
+ * untouched; `conflicts` name an authored prop whose authored attr says something else (the attr renders, so the
+ * loader leaves it); `unknown` names a prop value the table does not know (nothing to apply).
+ */
+export function propAttrPlan(type, get, getAttr) {
+  const patches = {}, conflicts = [], unknown = [];
+  for (const r of PROP_ATTR_RULES[type] || []) {
+    const v = get(r.prop);
+    if (v === undefined || v === null || (!r.always && v === r.dflt)) continue;
+    if (r.values && !r.values.includes(v)) { unknown.push({ prop: r.prop, value: v, values: r.values }); continue; }
+    const want = r.want(v, get);
+    if (!want) continue;
+    const mine = {}, clash = [];
+    for (const [path, value] of Object.entries(want)) {
+      const cur = getAttr(path);
+      if (cur === value) continue;
+      if (cur === undefined || (r.untouched[path] || []).includes(cur)) mine[path] = value;
+      else clash.push({ path, cur, value });
+    }
+    // All or nothing per prop: half-applying a look (a red cover over a blue header) is worse than either.
+    if (clash.length) conflicts.push({ prop: r.prop, value: v, clash });
+    else Object.assign(patches, mine);
+  }
+  return { patches, conflicts, unknown };
+}
+
 // Every cell `type` the app will render. A cell with any other type is SILENTLY DROPPED on load (a deliberate
 // security choice - a noisy error would let an attacker probe the allowlist), which is exactly the one failure an
 // author can't see without this validator.
@@ -276,6 +379,21 @@ export function validateDiagram(diagram) {
     }
   }
 
+  // A link with no `router` falls back to JointJS's default, a STRAIGHT line - right for a sequence message, a
+  // diagonal everywhere else. The loader adds the router for only three kinds (migrateLinks): Flow connectors (an
+  // end on a df.Flow* card, or a legacy `connectorKind`), mapping links and Gantt dependencies. The JSON spec's
+  // own Org example shipped without one and this validator called it clean (fixed 2026-09-24). One grouped
+  // warning, not one per link: a generator that forgets routers forgets them on every link.
+  if (type !== 'sequence') {
+    const healed = (c) => c.linkKind === 'mapping' || c.linkKind === 'ganttDep' || c.connectorKind != null
+      || [c.source, c.target].some((e) => String(byId.get(e?.id)?.type || '').startsWith('df.Flow'));
+    const bare = cells.filter((c) => c && c.type === 'standard.Link' && c.router == null && !healed(c));
+    if (bare.length) {
+      const ids = bare.slice(0, 3).map((c) => `"${c.id ?? '?'}"`).join(', ') + (bare.length > 3 ? ', …' : '');
+      warnings.push(`${bare.length} link(s) have no \`router\` (${ids}) - outside a Flow, the loader does not add one, so each renders as a straight DIAGONAL line. Add "router": { "name": "sfManhattan" } and "connector": { "name": "rounded", "args": { "radius": 8 } }.`);
+    }
+  }
+
   // DataObject field ports: a link end referencing `field-{left,right}-<fid>` must name a fid that exists on that
   // object's `fields` - a stale fid builds no port, so the link end dangles. Only checked when the object's fields
   // actually carry fids (generators MAY omit them; the app assigns on load) and the ref isn't the legacy numeric
@@ -298,12 +416,23 @@ export function validateDiagram(diagram) {
   }
 
   // BpmnGateway: the decision glyph lives in `attrs.marker.text` and is NOT derived from `gatewayType` on load
-  // (it's applied only at stencil-drop), so an authored gateway without it renders blank / inert.
+  // (it's applied only at stencil-drop). Since 2026-09-25 the loader DOES derive it (propAttrPlan above), so an
+  // authored gateway without a glyph renders right; what still renders wrong is covered by the prop/attrs check below.
+
+  // Props vs attrs (propAttrPlan): the loader applies an authored prop only to attrs still at their class default,
+  // so a prop and an authored attr that DISAGREE render the attr and ignore the prop - the author meant one of them.
   for (const c of cells) {
-    if (!c || c.type !== 'sf.BpmnGateway') continue;
-    const t = c.attrs?.marker?.text;
-    if (typeof t !== 'string' || t.trim() === '') {
-      warnings.push(`BpmnGateway "${c.id ?? '?'}" has no \`attrs.marker.text\` glyph (× exclusive / + parallel / ○ inclusive / ◇ event) - it renders blank (the loader doesn't derive it from gatewayType).`);
+    if (!c || typeof c.type !== 'string') continue;
+    const plan = propAttrPlan(c.type, (k) => c[k], (path) => {
+      const [a, b] = path.split('/');
+      return c.attrs?.[a]?.[b];
+    });
+    for (const u of plan.unknown) {
+      warnings.push(`${c.type} "${c.id ?? '?'}" has \`${u.prop}\` "${u.value}", which is not one of ${u.values.join(' / ')} - nothing renders from it.`);
+    }
+    for (const k of plan.conflicts) {
+      const said = k.clash.map((x) => `attrs.${x.path.replace('/', '.')} is ${JSON.stringify(x.cur)} (the prop means ${JSON.stringify(x.value)})`).join('; ');
+      warnings.push(`${c.type} "${c.id ?? '?'}" has \`${k.prop}\` "${k.value}" but ${said} - the attrs render and the prop is ignored. Make them agree, or drop the attrs and let the loader apply the prop.`);
     }
   }
 

@@ -65,8 +65,6 @@ Free browser-based visual diagramming tool for Salesforce architects and consult
 | Rubber-band select | Shift + Drag (on blank canvas) |
 | Save | Cmd/Ctrl + S |
 | Load | Cmd/Ctrl + O |
-| New diagram | Cmd/Ctrl + N |
-| Close tab | Cmd/Ctrl + W |
 | Zoom in / out | + / − (or scroll / pinch) |
 | Fit to screen | Ctrl + 0 |
 

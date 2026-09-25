@@ -3,14 +3,15 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.24.4';
+import { cctx } from './context.js?v=1.24.6';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.24.6';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.4';
-import { startBatch, endBatch } from '../history.js?v=1.24.4';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.24.6';
+import { startBatch, endBatch } from '../history.js?v=1.24.6';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.24.4';
-import { flowConnectorType } from './link-styles.js?v=1.24.4';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.4';
+import { computeFlowLayout } from './flow-layout.js?v=1.24.6';
+import { flowConnectorType } from './link-styles.js?v=1.24.6';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.6';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -225,8 +226,12 @@ export function applyDataMappingLayout() {
   const OBJ_GAP = 36;   // vertical gap between objects within a zone
   const ZONE_GAP = 56;  // vertical gap between stacked zones in one column
   const LANE_GAP = 200; // horizontal gap between columns
-  const PAD = 16;       // zone inner side/bottom padding
-  const HEAD = 44;      // zone inner top inset (clears the layer label)
+  // Zone inner padding = the frame fit's (embedding.js PARENT_FIT_PADDING), derived the same way from the router so
+  // the two cannot drift. At the old 16 the lane border ran through every connector end (the router's 16px arrow
+  // offset), and the first card drag re-fitted the lane to 48 anyway - wider, shifted, and out of step with its
+  // neighbours (owner call 2026-09-25, 1.22.4 for the frame rule itself). 48 also clears the layer label on top.
+  const PAD = ROUTER_STUB + ROUTER_PAD;   // 48: zone inner side / bottom padding
+  const HEAD = PAD;                       // zone inner top inset
   const TOP = 0;        // shared upper edge for every column
 
   // Undirected object↔object mapping adjacency (for the barycentre).

@@ -9,12 +9,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 292,
-          "height": 924
+          "width": 356,
+          "height": 960
         },
         "z": 0,
         "position": {
-          "x": 492,
+          "x": 556,
           "y": 0
         },
         "id": "54ddb584-9553-49e7-abd7-90b51ef32979",
@@ -36,8 +36,8 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 292,
-          "height": 836
+          "width": 356,
+          "height": 872
         },
         "z": 1,
         "position": {
@@ -62,12 +62,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 292,
-          "height": 1266
+          "width": 356,
+          "height": 1302
         },
         "z": 2,
         "position": {
-          "x": 984,
+          "x": 1112,
           "y": 0
         },
         "id": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -94,13 +94,13 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 292,
-          "height": 198
+          "width": 356,
+          "height": 234
         },
         "z": 4,
         "position": {
           "x": 0,
-          "y": 892
+          "y": 928
         },
         "id": "20e50d0d-b413-4cfa-8d29-bb30ec9cd81f",
         "layerStage": "datastream",
@@ -198,14 +198,14 @@
           {
             "label": "Birthdate",
             "apiName": "Birthdate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_birthdate"
           },
           {
             "label": "DeceasedDate",
             "apiName": "DeceasedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_deceaseddate"
           },
@@ -233,7 +233,7 @@
           {
             "label": "PhotoUrl",
             "apiName": "PhotoUrl",
-            "type": "Text",
+            "type": "URL",
             "keyType": null,
             "fid": "d_photourl"
           },
@@ -261,14 +261,14 @@
           {
             "label": "Email",
             "apiName": "Email",
-            "type": "Text",
+            "type": "Email",
             "keyType": null,
             "fid": "d_email"
           },
           {
             "label": "EmailBouncedDate",
             "apiName": "EmailBouncedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_emailbounceddate"
           },
@@ -282,14 +282,14 @@
           {
             "label": "Phone",
             "apiName": "Phone",
-            "type": "Text",
+            "type": "Phone",
             "keyType": null,
             "fid": "d_phone"
           },
           {
             "label": "MobilePhone",
             "apiName": "MobilePhone",
-            "type": "Text",
+            "type": "Phone",
             "keyType": null,
             "fid": "d_mobilephone"
           },
@@ -303,14 +303,14 @@
           {
             "label": "AssistantPhone",
             "apiName": "AssistantPhone",
-            "type": "Text",
+            "type": "Phone",
             "keyType": null,
             "fid": "d_assistantphone"
           },
           {
             "label": "Fax",
             "apiName": "Fax",
-            "type": "Text",
+            "type": "Phone",
             "keyType": null,
             "fid": "d_fax"
           },
@@ -366,28 +366,28 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_lastmodifieddate"
           },
           {
             "label": "LastActivityDate",
             "apiName": "LastActivityDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "d_lastactivitydate"
           }
         ],
         "position": {
-          "x": 508,
-          "y": 44
+          "x": 604,
+          "y": 48
         },
         "id": "16f7243d-632a-4384-9e37-570971f7bfa9",
         "parent": "54ddb584-9553-49e7-abd7-90b51ef32979",
@@ -420,7 +420,7 @@
           {
             "label": "Id",
             "apiName": "Id",
-            "type": "Id",
+            "type": "ID",
             "keyType": "pk",
             "fid": "s_id",
             "required": true
@@ -651,8 +651,8 @@
           }
         ],
         "position": {
-          "x": 16,
-          "y": 44
+          "x": 48,
+          "y": 48
         },
         "id": "dcab18c3-466a-4bdd-8ef3-b3f591a4def9",
         "parent": "b7cad7a0-6b83-42ea-8bb2-0682b259dce9",
@@ -742,14 +742,14 @@
           {
             "label": "BirthDate",
             "apiName": "BirthDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ind_birthdate"
           },
           {
             "label": "DeathDate",
             "apiName": "DeathDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ind_deathdate"
           },
@@ -775,8 +775,8 @@
             "fid": "ind_pronoun"
           },
           {
-            "label": "PhotoUrl",
-            "apiName": "PhotoUrl",
+            "label": "PhotoURL",
+            "apiName": "PhotoURL",
             "type": "Text",
             "keyType": null,
             "fid": "ind_photourl"
@@ -805,21 +805,21 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ind_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ind_lastmodifieddate"
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 44
+          "x": 1160,
+          "y": 48
         },
         "id": "1f4006be-c37a-4d35-beeb-9df46d8837c9",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -874,7 +874,7 @@
           {
             "label": "EmailLatestBounceDateTime",
             "apiName": "EmailLatestBounceDateTime",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpe_emaillatestbouncedatetime"
           },
@@ -902,21 +902,21 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpe_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpe_lastmodifieddate"
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 570
+          "x": 1160,
+          "y": 574
         },
         "id": "5eb3828d-1fc8-4198-84d3-d1dcf9bbc302",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -999,21 +999,21 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpp_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpp_lastmodifieddate"
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 854
+          "x": 1160,
+          "y": 858
         },
         "id": "f49db389-e65c-4e18-96d6-bcba905a536b",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -1153,21 +1153,21 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpa_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpa_lastmodifieddate"
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 940
+          "x": 1160,
+          "y": 944
         },
         "id": "57abb620-014d-40b4-9a54-37fb332108d9",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -1335,7 +1335,7 @@
           {
             "label": "LastActivityDate",
             "apiName": "LastActivityDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ac_lastactivitydate"
           },
@@ -1356,21 +1356,21 @@
           {
             "label": "CreatedDate",
             "apiName": "CreatedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ac_createddate"
           },
           {
             "label": "LastModifiedDate",
             "apiName": "LastModifiedDate",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ac_lastmodifieddate"
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 1026
+          "x": 1160,
+          "y": 1030
         },
         "id": "a6d90bfc-621b-45e8-9a89-7f46bf4efc28",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -1432,8 +1432,8 @@
           }
         ],
         "position": {
-          "x": 1000,
-          "y": 1112
+          "x": 1160,
+          "y": 1116
         },
         "id": "92b713d3-e6f4-432c-a994-bdd77b696b55",
         "parent": "048cdc62-775a-4610-9d6e-9ac8f6e766a6",
@@ -1461,7 +1461,7 @@
           "height": 138
         },
         "z": 2008,
-        "objectName": "Data Stream Fields",
+        "objectName": "Data Stream Formulas",
         "headerColor": "#1D73C9",
         "fields": [
           {
@@ -1497,8 +1497,8 @@
           }
         ],
         "position": {
-          "x": 16,
-          "y": 936
+          "x": 48,
+          "y": 976
         },
         "id": "3b1c6245-d22e-4c9d-adf2-2e35c4011e51",
         "parent": "20e50d0d-b413-4cfa-8d29-bb30ec9cd81f",

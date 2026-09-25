@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.24.4** — matches the app's current `appVersion`; set `"appVersion": "1.24.4"` in generated files.
+> **Spec snapshot: v1.24.6** — matches the app's current `appVersion`; set `"appVersion": "1.24.6"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -14,9 +14,9 @@
 
 > **Agent self-correction loop.** When you generate a diagram programmatically (e.g. from an LLM CLI like Claude
 > Code), don't stop at "it parsed as JSON". Run the loop: **generate -> `validate-diagram.mjs file.json` -> fix every
-> ERROR and re-run until the file is clean -> then open it in the app (Load > Import) and eyeball the render.**
+> ERROR and re-run until the file is clean -> then open it in the app (Load > Paste, or Load > File) and eyeball the render.**
 > ERRORS mean cells or links will silently vanish on load; WARNINGS are quiet-degrade traps (a shape that loads but
-> renders wrong - a one-sided embed, a name in the wrong field, a stale field-port id, a gateway with no glyph). The
+> renders wrong - a one-sided embed, a name in the wrong field, a stale field-port id, a link with no router). The
 > validator proves the diagram will **load intact** - it does **not** judge whether the layout **reads well** (spacing,
 > overlaps, flow), so the final visual pass is on you: fix ERRORS, then WARNINGS, then look at it.
 
@@ -25,16 +25,12 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
   "graph": {
     "cells": [ /* elements and links */ ]
-  },
-  "viewport": {
-    "zoom": 1,
-    "translate": { "tx": 0, "ty": 0 }
   }
 }
 ```
@@ -48,12 +44,12 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.24.4"` |
+| `appVersion` | string | Yes | Semver string, currently `"1.24.6"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
-| `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases `"data"`/`"organisation"`/`"salesforceflow"` are accepted but the canonical forms are `"datamodel"`, `"org"`, and `"flow"` |
+| `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
 | `graph` | object | Yes | Contains `cells` array — the JointJS graph data |
-| `viewport` | object | No | Pan/zoom state **only**. Omit and the app zooms to fit the content on load; it never moves or resizes a cell. See [Layout Tips](#layout-tips) - import is verbatim |
+| `viewport` | object | No | Ignored on import - the app always zooms to fit the content. Omit it |
 | `group` | object | No | `{ "name", "icon", "color" }` of the tab GROUP this diagram belonged to. Present only when the diagram was saved/exported from a named tab group. On load the app recreate-or-REJOINS a group of that name and drops the tab into it (so reopening one grouped diagram restores its group). Omit for ungrouped diagrams. Added v1.17.0 |
 
 > ⚠️ **Always set `diagramType` to match the shapes in the diagram.** If it is missing or wrong, the diagram opens as an architecture tab and the type-specific tools (the sequence Auto Layout, the data-model stencil, the Gantt timeline controls, etc.) are gated off until the tab is recreated. **Pick the type by the QUESTION your diagram answers using [Choosing the right diagram type](#choosing-the-right-diagram-type) - not by the shapes that first come to mind - before you author any cells.**
@@ -63,8 +59,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.4", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.4" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.6", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.6" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -74,7 +70,8 @@
 > (`entry.appVersion || bundle.appVersion || current`) instead of being
 > re-stamped as current, so its provenance survives a backup round-trip.
 >
-> On import, a `diagramforce-export` bundle dedups its entries against what's
+> A bundle with exactly ONE diagram and no templates opens straight as a tab, like a
+> single-diagram file. Otherwise, on import, a `diagramforce-export` bundle dedups its entries against what's
 > already present (exact-content matches are skipped; name clashes with different
 > content get `"(Restored)"`), then saves the surviving `diagrams[]` to the
 > browser and merges `templates[]` into the Templates library; both keys are
@@ -96,10 +93,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.4", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.6", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.4" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.6" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -121,7 +118,7 @@
 | Type | Use For | Primary Shapes |
 |------|---------|----------------|
 | `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image, Placeholder |
-| `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnLoop, BpmnPool, BpmnDataObject, Flow* shapes, Annotation |
+| `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnLoop, BpmnPool, BpmnDataObject, `sf.Flow*` flowchart shapes (not the `df.Flow*` Salesforce Flow elements), Annotation |
 | `datamodel` | ERDs, Salesforce object models (pure ER) | DataObject |
 | `datamapping` | Data Cloud / Data 360 field mapping (mapping mode always on — all-field ports, Category, source→DMO mapping links) | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone` with `layerStage`: `source`/`datastream`/`dlo`/`dmo`/`activation`) |
 | `org` | Org charts, team structures, RACI workflows | OrgPerson, Container (Team), Zone (Department), Task, TaskGroup (RACI section) |
@@ -200,9 +197,11 @@ adds a concrete rule.
 
 The traps below are **type-specific** - things the loader silently heals, drops, or derives, so emitting them wrong
 fails quietly. `validate-diagram.mjs` catches the generic mistakes (unknown shape `type`, a link to a missing id,
-duplicate ids, a wrong `diagramType`) **plus the five highest-frequency type-specific traps below** - a one-sided
-embed, a duplicate Gantt `order`, an OrgPerson missing top-level `personName`, a stale DataObject field-port `<fid>`,
-and a BpmnGateway with no marker glyph. The rest still fail quietly, so this section stays your guide. Each rule is
+duplicate ids, a wrong `diagramType`) plus these type-specific traps: a one-sided embed or cards sitting inside a
+frame without being embedded, a duplicate Gantt `order`, an OrgPerson missing top-level `personName`, a stale
+DataObject field-port `<fid>`, a `port-left`/`port-right` on a DataObject, an ER relationship with a marker on one end
+or none, links with no `router` outside a Flow, and a descriptive prop (`headerColor`, `eventType`, ...) that
+contradicts authored attrs. The rest still fail quietly, so this section stays your guide. Each rule is
 `✗ wrong → ✓ right`.
 
 **`architecture`**
@@ -212,15 +211,15 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 - ✗ explicit `fill`/`stroke` on an arrow `targetMarker` → ✓ OMIT `targetMarker` (the loader normalises it to `M 0 -6 L -14 0 L 0 6 z`); `fill`/`stroke` are only for ER crow's-foot markers.
 
 **`process`**
-- ✗ `sf.BpmnEvent`/`sf.BpmnGateway` with only the discriminator (`eventType`/`gatewayType`) and default `attrs` - it's inert on load (the colour/glyph are applied only at stencil-drop) → ✓ also emit the matching `attrs`: a gateway needs `attrs.marker.text` (exclusive `×`, parallel `+`, inclusive `○`, event `◇`); a non-start event needs its `body` fill/stroke (see the BpmnEvent reference).
-- ✗ `targetMarker: {type:"none"}` (or any markerless object) on a flow you want arrowed - the loader skips markers with no `d`, so it loads undirected → ✓ OMIT `targetMarker` for a directed flow. `sourceMarker` is NOT auto-arrowed.
+- ✗ hand-writing an event's colours or a gateway's glyph that disagree with its `eventType` / `gatewayType` → ✓ set just the discriminator: the loader applies the matching look (event ring and fill; gateway glyph `×` / `+` / `○` / `◇`). Authored `attrs` win over the prop, so leave them out unless you mean to override it.
+- ✗ `targetMarker: {type:"none"}` (or a marker object with no `d`) to get an undirected line - the loader drops it and the default arrowhead returns → ✓ for no arrowhead use the None stub `{ "type": "path", "d": "M 0 0 L -12 0" }`; for a directed flow OMIT `targetMarker`. `sourceMarker` is NOT auto-arrowed.
 - ✗ linking TO a `sf.BpmnPool` (it has no ports) → ✓ attach links to the step shapes (Task/Event/Gateway); embed steps with `parent:"pool-id"` + the id in the pool's `embeds[]`.
 - ✗ `sf.Container` lanes drawn BEHIND their cards with an empty `embeds[]` → ✓ set BOTH sides on every card (`embeds[]` + `parent`); an undeclared frame is decorative and doesn't group-move. See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
 - ✗ varying card size to make a layout fit, or sizing each lane to its own card count → ✓ ONE card size for the whole diagram and ONE height for every lane. See [Container lanes](#container-lanes-columns-of-grouped-cards).
 
 **`flow`** (Salesforce Flow - see the [Flow Shapes](#flow-shapes-salesforce-flow-diagrams) reference)
 - ✗ putting the element name/label inside `attrs.label.text` → ✓ set the TOP-LEVEL `name` prop (it drives the card label via the model); the element TYPE renders as the grey subtitle automatically (shown once `name` differs from the type); `apiName`, `description` + the per-kind fields are also top-level documentation metadata (edited in the panel, NOT shown on the card). Nothing element-specific goes in `attrs`.
-- ✗ setting `attrs.icon.href` (or inventing an icon) → ✓ OMIT it entirely - each `df.Flow*` class bakes its own canonical white SLDS glyph on load. Authoring an icon href does nothing useful (and `refreshAllIconHrefs` skips flow cells).
+- ✗ setting `attrs.icon.href` (or inventing an icon) → ✓ OMIT it entirely - each `df.Flow*` class bakes its own canonical white SLDS glyph when the href is empty. An authored href REPLACES that glyph.
 - ✗ `type:"sf.Link"` / a BPMN gateway to branch a decision → ✓ `type:"standard.Link"` with `source`/`target` `{id, port}` between `df.Flow*` cells; the four baked-in port ids (`port-top`/`port-right`/`port-bottom`/`port-left`) apply. A flow connector is **Standard** (grey, the default), **Fault** (set `attrs.line.stroke` to `#EA001E`), **Go To** (set `attrs.line.stroke` to the Go To blue `#0B5CAB` - a dotted jump to an existing element), or **Loop** (set top-level `flowKind:"loop"` on a Loop element's two branches - grey like Standard but with an arrowhead, v1.22.0) - see [Flow connectors](#flow-shapes-salesforce-flow-diagrams). Add outcome/loop labels via `labels`.
 - ✗ mixing `processType` and `triggerType` values → ✓ `processType` is the FLOW-level kind (`Flow` = screen flow, `AutoLaunchedFlow`, `Orchestrator`, `EvaluationFlow`, `Survey`, `Journey`, `PromptFlow`, `CheckoutFlow`, `RoutingFlow`, `Workflow`, `CustomEvent`, `InvocableProcess`, … - this is the complete standard set); `triggerType` exists only on an autolaunched Start (`RecordAfterSave`/`RecordBeforeSave`/`RecordBeforeDelete`/`Scheduled`/`PlatformEvent`/`DataCloudDataChange`/`DataGraphDataChange`/`AutomationEvent`/`ExternalSystemChange`/`EnterpriseScaleExternalSystemChange`/`Activation`/`Segment`/`CampaignMember`/`CrmRecordQuery`/`List`/`ScheduledJourney`/`Capability`/`FormSubmissionEvent`/`IndivRelatedRecord`). A screen flow's Start has no `triggerType`. In the property panel these two Start fields are FREE-TEXT inputs with a datalist of the most popular values as suggestions (`renderers-flow.js`) - type any value; the JSON value is always a free string. Every per-kind field is free text - never validated.
 - ✗ reaching for a `df.FlowDecision` diamond or a BPMN gateway to show a branch → ✓ every element is the SAME uniform card (`210 x 56`); the branch is expressed by the outgoing `standard.Link`s, not by the element shape.
@@ -251,7 +250,7 @@ and a BpmnGateway with no marker glyph. The rest still fail quietly, so this sec
 **`sequence`**
 - ✗ serializing a `ports.items` array (hand-written `seq-port-left-0`…) → ✓ set ONLY the integer `lifelinePortCount` (>= messages received; 10 is safe) and omit `ports` - the loader regenerates `seq-port-{left,right}-<i>`.
 - ✗ a `sf.SequenceActor` with messages but `showLifeline` omitted/false (no lifeline, no ports → links dangle) → ✓ set `showLifeline:true` on any messaging Actor (Participants always have a lifeline).
-- ✗ dashing a reply via `attrs.line.strokeDasharray` (auto-dash only fires on interactive draw) → ✓ set top-level `lineStyle:"6 4"`; a reply also swaps direction (`source seq-port-left-<i>` → `target seq-port-right-<i>`).
+- ✗ leaving a reply solid → ✓ set top-level `lineStyle:"6 4"` (an authored `attrs.line.strokeDasharray` is moved into `lineStyle` on load, so either works; `lineStyle` is the form the app saves); a reply also swaps direction (`source seq-port-left-<i>` → `target seq-port-right-<i>`).
 
 ## Cell Structure (Elements)
 
@@ -264,8 +263,7 @@ Every element in the `cells` array follows this structure:
   "position": { "x": 100, "y": 200 },
   "size": { "width": 180, "height": 64 },
   "z": 2000,
-  "attrs": { /* shape-specific visual attributes */ },
-  "ports": { /* port definitions — include for shapes with ports */ }
+  "attrs": { /* shape-specific visual attributes */ }
 }
 ```
 
@@ -280,7 +278,7 @@ Every element in the `cells` array follows this structure:
 | `z` | Z-order layer (see Z-Order section) |
 | `attrs` | Nested attribute object keyed by SVG selector |
 | `parent` | Optional. Id of the frame that OWNS this cell. MUST be paired with the frame listing this id in its `embeds[]` - see [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them). A one-sided declaration is not reconciled on load. |
-| `embeds` | Optional, frames only (Zone / Container / Pool / Subprocess / Loop / TaskGroup). Ids of the cells this frame owns. MUST be paired with `parent` on each child. A frame merely drawn behind cells is decorative. |
+| `embeds` | Optional, frames only (Zone / Container / Pool / Subprocess / Loop / TaskGroup / Task / GanttTimeline). Ids of the cells this frame owns. MUST be paired with `parent` on each child. A frame merely drawn behind cells is decorative. |
 
 ### Z-Order Values
 
@@ -288,37 +286,29 @@ Assign these `z` values to keep layers rendering correctly:
 
 | Shape Type | Z Value | Layer |
 |-----------|---------|-------|
-| Zone, BpmnPool | `0` | Background |
-| BpmnSubprocess, BpmnLoop, SequenceFragment | `500` | Sub-containers |
+| Zone, BpmnPool, TaskGroup | `0` | Background |
+| BpmnSubprocess, BpmnLoop, SequenceFragment, Task | `500` | Sub-containers |
 | Container, GanttTimeline, GanttGroup | `1000` | Containers |
-| SimpleNode, Note, TextLabel, DataObject, OrgPerson, all Bpmn/Flow shapes, GanttTask, GanttMilestone, GanttMarker, SequenceParticipant, SequenceActor | `2000` | Elements |
+| Image | `1500` | Pictures behind the cards |
+| SimpleNode, Note, TextLabel, Line, Link, DataObject, OrgPerson, all Bpmn/Flow shapes, GanttTask, GanttMilestone, GanttMarker, SequenceParticipant, SequenceActor | `2000` | Elements |
 | SequenceActivation | `2200` | Overlays on top of elements |
+| `df.Table` | `2300` | Tables |
+| `df.Pill`, `df.Legend` | `2400` | Badges and keys |
 | Links | `3000` or higher | Connections |
+
+An authored `z` survives load, so a frame given an element's `2000` covers its own children - use the tier above.
 
 ### Port Definitions
 
-Most shapes need ports for connecting links. Include this `ports` block for any shape that should be connectable:
+**Omit `ports` on every element.** Each connectable shape builds its own from its class: the four ring ports
+`port-top` / `port-right` / `port-bottom` / `port-left`, plus the DataObject header (`er-left` / `er-right`) and
+field ports, and the sequence lifeline ports. Reference them by id from a link endpoint. Never emit a `ports` block,
+least of all a partial one: dropping "unused" ports - a common LLM mistake - strips the anchors a user needs to wire
+new connections after generation.
 
-```json
-"ports": {
-  "groups": {
-    "top":    { "position": { "name": "top" },    "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] },
-    "right":  { "position": { "name": "right" },  "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] },
-    "bottom": { "position": { "name": "bottom" }, "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] },
-    "left":   { "position": { "name": "left" },   "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] }
-  },
-  "items": [
-    { "id": "port-top",    "group": "top" },
-    { "id": "port-right",  "group": "right" },
-    { "id": "port-bottom", "group": "bottom" },
-    { "id": "port-left",   "group": "left" }
-  ]
-}
-```
-
-Shapes that do NOT have ports: `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Link`, `sf.Zone`, `sf.TaskGroup`, `sf.BpmnPool`.
-
-> **Never delete, rename, or restyle the standard ports — always leverage the out-of-the-box (OOTB) ones.** Emit the standard port block exactly as shown above (or omit `ports` entirely on shapes that supply them automatically, e.g. `sf.DataObject`), and **do not prune ports just because no link currently connects to them.** Every connectable shape ships with its full set of attachment points so the user can wire up *new* connections after generation. Dropping "unused" ports — a common LLM mistake — silently strips those anchors and forces the user to rebuild them by hand. Reference the ports you need from link endpoints and leave every other port intact.
+Shapes with NO ports (a link cannot attach to them): `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Link`, `sf.Image`,
+`sf.Zone`, `sf.TaskGroup`, `sf.BpmnPool`, `sf.SequenceFragment`, `sf.GanttTimeline`, `df.Pill`, `df.Legend`,
+`df.Table`.
 
 ## Link Structure
 
@@ -366,15 +356,14 @@ Links connect two elements via ports:
 |-------|----------|-------------|
 | `source` | Yes | `{ "id": "element-id", "port": "port-name" }` |
 | `target` | Yes | `{ "id": "element-id", "port": "port-name" }` |
-| `router` | Yes | Always `{ "name": "sfManhattan" }` for orthogonal routing |
-| `connector` | Yes | Always `{ "name": "rounded", "args": { "radius": 8 } }` |
+| `router` | Yes* | `{ "name": "sfManhattan" }` for orthogonal routing. *Omit it only where the loader sets it: `linkKind: "mapping"` and `linkKind: "ganttDep"` links, and Flow connectors (an end on a `df.Flow*` card). Sequence messages use `{ "name": "normal" }`. Anywhere else a missing router draws a straight diagonal (the validator warns) |
+| `connector` | Yes* | `{ "name": "rounded", "args": { "radius": 8 } }` with `sfManhattan`; the same exceptions as `router` (sequence: `{ "name": "normal" }`) |
 | `vertices` | No | Array of `{ "x": n, "y": n }` waypoints for manual routing |
 | `labels` | No | Array of label objects (see below) |
 | `lineStyle` | No | Dashed/dotted dash pattern as a raw SVG `stroke-dasharray` string (`"8 4"` dashed, `"2 4"` dotted, `"6 4"` for sequence replies). Stored as a **top-level cell property** — NOT `attrs.line.strokeDasharray`. Rendered as a bg-coloured overlay clone because Safari leaks `stroke-dasharray` into `<marker>` content. Omitted / `null` means solid. |
-| `linkKind` | No | `"mapping"` marks a Data Cloud source→DMO field mapping (v1.15.0); absent ⇒ an ER relationship. Top-level cell property. A field→field link drawn while the diagram's mapping mode is on is auto-tagged; mapping links render with a distinct colour (`#A06F03`, the palette amber), a single direction arrow, **1 px** stroke, and custom routing that flows cleanly left→right like the Data Cloud mapping canvas: `router: { name: "sfMappingRouter" }` adds a short horizontal stub off each field port and `connector: { name: "sfMappingConnector" }` draws that straight stub + a cubic bézier, so the line leaves and arrives **perpendicular** to the port edge (never parallel / hugging it). The ends use `source`/`target` `connectionPoint: { name: "anchor", args: { offset: 12 } }` (overriding the default 16 px offset) so the line reads as landing on its specific field port with the arrow tip right at the object edge — not diving over the field text. |
-| `mappingType` | No | Data Cloud transform classification of a mapping link (v1.15.0): one of `"Standard"` (direct copy, the default applied to a fresh mapping), `"Formula"`, `"Streaming Transform"`, `"Batch Transform"`, or `"Calculated Insight"`. Top-level cell property, authored via the link inspector's **Mapping type** picklist; surfaced in the table view's **Mapping Type** column. A **non-Standard** value renders an outlined **monospace** code token (`F` / `ST` / `BT` / `CI`, tinted to the connector colour) as a link label on the target stub (see Link Labels); **Standard renders no token**. `migrateLinks` re-syncs tokens on load. A legacy `mapsTo` / `transform` attribute on an older draft is read as a fallback. |
+| `linkKind` | No | `"mapping"` marks a Data Cloud source→DMO field mapping; `"ganttDep"` a Gantt dependency. Top-level cell property; absent on an ER relationship. Set the prop and nothing else: the loader applies the mapping look (amber `#A06F03`, 1 px, one arrow, its own field-port routing) or the dependency look. |
+| `mappingType` | No | Data Cloud transform classification of a mapping link (v1.15.0): one of `"Standard"` (direct copy, the default applied to a fresh mapping), `"Formula"`, `"Streaming Transform"`, `"Batch Transform"`, or `"Calculated Insight"`. Top-level cell property, authored via the link inspector's **Mapping type** picklist; surfaced in the table view's **Mapping Type** column. A **non-Standard** value renders an outlined **monospace** code token (`F` / `ST` / `BT` / `CI`, tinted to the connector colour) as a link label on the target stub (see Link Labels); **Standard renders no token**. `migrateLinks` re-syncs tokens on load. |
 | `expressionRule` | No | The transform **expression / rule** note for a non-Standard mapping link (v1.15.0; was briefly `mappingLabel` pre-release, still read as a fallback). Top-level cell property, authored via the link inspector's progressively-disclosed **Expression / rules** field (shown whenever `mappingType` ≠ `"Standard"`); surfaced in the table view's **Expression / Rule** column (empty ⇒ dimmed em-dash). Distinct from the link's visual `labels`. |
-| `mapsTo` | No | *Legacy (read-only fallback).* Superseded by `mappingType` above; loaders still read it when `mappingType` is absent, and preserve it if an older draft has it. |
 | `connectionFrequency` | No | Integration **frequency** for an Architecture connector (v1.15.0): a free-text cadence string (e.g. `"Real-time"`, `"Every 15 mins"`, `"Nightly"`). Top-level cell property, authored via the link inspector's **Frequency** field (shown only for `architecture` diagrams). When non-empty it auto-renders a secondary link label — a small clock icon + the text in muted grey — **below** the connector line (see Link Labels). Clearing it removes the label. `migrateLinks` rebuilds the label from this prop on load, so a spec may set just the prop. |
 
 **Why `lineStyle` and not `attrs.line.strokeDasharray` (v1.7.0+):** Safari propagates a path's `stroke-dasharray` into its SVG `<marker>` elements at the renderer level, causing arrowheads / ER notation to render dashed along with the line. The app keeps the real path solid and paints a canvas-bg-coloured clone (with the dash pattern) on top to simulate dashes. `lineStyle` is the canonical storage; legacy `attrs.line.strokeDasharray` values on loaded diagrams are auto-migrated to `lineStyle` and the attr is cleared.
@@ -395,23 +384,9 @@ Links connect two elements via ports:
 `position` is 0–1 (0 = source end, 0.5 = middle, 1 = target end). A negative
 `position.distance` measures back from the target end instead.
 
-**Mapping-type code badge (v1.15.0).** A non-Standard mapping link auto-manages an extra
-label — a rounded outlined box with the monospace type code (`F` / `ST` / `BT` / `CI`), transparent
-(canvas-coloured) fill, and border + letters in the connector's `line/stroke` colour — pinned
-to the target stub at `position.distance: -20`. It's identified by its `attrs.badgeBox` selector
-and regenerated from `mappingType` by `syncMappingTypeBadge`; loaders preserve it like any label.
-Editing a link's user label preserves the badge (and vice-versa).
-
-**Connection-frequency overlay (v1.15.0).** An Architecture link with a non-empty
-`connectionFrequency` prop auto-manages a secondary label: a 12 px clock icon (`<image>` with the
-SLDS `clock` data URI) + the cadence text in a fixed muted grey (`#888`, legible on both themes),
-centered on the link midpoint (icon pinned to the text's left edge via `ref`) with an absolute
-downward `offset: { x: 0, y: 26 }` so it always sits a fixed distance **below** the connector —
-regardless of segment orientation, never flipping sides or colliding with the on-line user label.
-A canvas-bg mask rect (`freqBg`) breaks the connector line behind the overlay (like the user
-label's body rect), leaving a short visible run of line between the label and the frequency.
-Identified by its `attrs.freqText` selector and (re)built by `syncFrequencyLabel`; loaders rebuild it
-from the prop. Editing a link's user label preserves it (and vice-versa).
+**Labels the app builds for you.** A non-Standard mapping link's type token (`F` / `ST` / `BT` / `CI`) and an
+Architecture link's frequency label (clock + cadence, below the line) are generated from `mappingType` and
+`connectionFrequency` on every load. Set the prop; never author those labels.
 
 ### Marker Types
 
@@ -444,8 +419,8 @@ When you hardcode a colour (a hex like `"#FFFFFF"` or `rgb()/rgba()`), it is **f
 **Rules of thumb:**
 
 1. **Prefer the theme defaults.** Omit `fill` on `body`, `label`, `subtitle` (or keep the `var(--…)` values) and the node is fully theme-adaptive — readable in light *and* dark with zero effort. This is the best choice unless a colour carries meaning.
-2. **If you hardcode `body.fill`, you don't need to hand-pick the text colour** — the importer **auto-contrasts** a node's `label`/`subtitle` against an explicit solid `body.fill` (dark text on a light card, light text on a dark card) for any text still on the theme default. So a hardcoded "white card" stays legible in dark mode. *(You can still set `label.fill`/`subtitle.fill` explicitly to override; an explicit text colour is always respected.)*
-3. **Use hardcoded colour where it carries meaning, on the parts that read on any background** — `stroke` (borders), `accent` (Container/Zone bars), brand-coloured `body.fill`. A coloured *stroke* on a theme-default body reads on both themes; a coloured *body* with white text (`label.fill: "#FFFFFF"`) reads on both themes.
+2. **If you hardcode a SimpleNode's `body.fill`, leave its text on the theme default** — the loader picks the text colour against the explicit solid fill by WCAG contrast (the rule the tab-group chips use): near-black `#1C1E21` on light and mid fills, which includes **nine of the ten palette accents**, and light `#F5F6F7` on dark fills and on the palette **blue**. *(An explicit `label.fill` / `subtitle.fill` is always respected; if you set one, follow the same rule - white text on a palette accent other than blue is 4.0-4.4:1, under the 4.5:1 text floor.)*
+3. **Use hardcoded colour where it carries meaning, on the parts that read on any background** — `stroke` (borders), `accent` (Container/Zone bars), brand-coloured `body.fill`. A coloured *stroke* on a theme-default body reads on both themes, and so does a coloured *body* whose text follows rule 2.
 4. **Translucent fills** (`rgba(…, 0.03)` Zone/Layer tints) intentionally show the canvas through them, so they stay theme-adaptive and are *not* auto-contrasted — leave their labels on the theme default.
 5. **Every hardcoded colour must clear 3:1 against BOTH canvas backgrounds.** See below - this is the rule that makes point 3's "reads on any background" checkable instead of a hope.
 
@@ -476,19 +451,21 @@ Use them **in that order** when you need N distinct accents (one per object, per
 Two things the numbers explain that are otherwise surprising:
 
 - **Every entry is a mid-tone.** Clearing 3:1 on a near-white *and* a near-black background confines relative luminance to a narrow band, and the best any single colour can do on both at once is 4.13:1. So there are no pale pastels and no deep navies here - all the separation comes from hue and chroma. Do not "brighten" one of these; you will push it off the dark canvas or off the light one.
-- **Two Data Cloud stage colours moved.** The DLO amber and Activation green were `#F6B355` and `#27AE60`, which score 1.75 and 2.75 on light. The palette keeps their hue and drops their lightness, so `#A06F03` and `#008B46` still read as amber and green. The converters, the stencil presets and the bundled templates all carry the new values; a diagram you are shown carrying the old ones was authored before 1.22.0.
+- **Older diagrams carry two retired stage colours**, `#F6B355` (DLO amber) and `#27AE60` (Activation green), at 1.75 and 2.75 on light. Use `#A06F03` and `#008B46`.
 
 Colours that are **not** on the canvas (modal chrome, export-only text fills) are outside this rule - they answer to the contrast of whatever surface they sit on.
 
 **Two hexes in this spec are PROTOCOL tokens, not colour choices, and you must use them exactly as written:** the Flow fault red `#EA001E` and the Flow Go To blue `#0B5CAB`. A flow connector stores no type field, so the loader reads its **stroke** to decide what kind of connector it is. Substitute a palette colour and you do not recolour a Go To - you stop it being one (no dotted line, no destination label). The Go To blue is under the floor on the dark canvas (2.60:1) and is a known exception; use it anyway.
 
-> The app's converters are held to this automatically: the palette lives in `js/persistence/diagram-palette.js` (bundled as `scripts/diagram-palette.js`) and `dev/tests/diagram-palette.test.js` fails the build on any converter hex that misses the floor.
 
 > ⚠️ The auto-contrast safety net covers `sf.SimpleNode` label/subtitle. For richer shapes (Container header, DataObject), prefer theme defaults or pair a coloured bar with `"#FFFFFF"` text.
 
 ---
 
 ## Shape Reference
+
+The generic net-new shapes `df.Placeholder`, `df.Pill`, `df.Legend` and `df.Table` are described under
+[Diagram Types](#diagram-types).
 
 ### sf.SimpleNode
 
@@ -533,8 +510,7 @@ Basic rounded-rect component node with optional icon and subtitle. The most comm
       "visibility": "hidden",
       "textWrap": { "width": "calc(w - 24)", "height": "calc(h - 48)", "ellipsis": true }
     }
-  },
-  "ports": { /* standard 4-port config */ }
+  }
 }
 ```
 
@@ -569,7 +545,7 @@ Leave `icon/href` as `""` for a text-only node. A node whose `body/fill` is a br
 | **Activation Channels** | `email` · `sms` (SMS / LINE) · `whatsapp` · `page` (Website) · `live_chat` (Chat) · `social` (Social Media Ads) · `push` (Mobile Push) · `notification` (Web Push) · `voice_call` (Voice / IVR) · `store` (Point of Sale) · `agent_astro` (Agent) |
 | **Other common SLDS** | `data_lake_objects` (Data Lake) · `segments` (Personalization) · `einstein` · `campaign` · `advertising` · `macros` (Automation) · `desktop_and_phone` (Web App) · `phone_portrait` (Mobile) · `light_bulb` (Note) · `apex` · `integration` · `record` |
 | **Data Model / Data Mapping headers** (`sf.DataObject` `headerIcon/href`) | `individual` (Individual / Unified Individual) · `contact` (CRM Contact/Lead) · `email` · `sms` (Phone / SMS) · `push` (Mobile App / Contact Point App) · `phone_portrait` (Device) · `connected_apps` (Software Application) · `record_consent` (Consent / Subscription Consent / Preference Centre) · `broadcast` (Communication Subscription) · `topic2` (Channel Type) · `record` (Status / Purpose / Legal Basis lookups) · `address` (Contact Point Address) · `account` (Account / Account junctions) · `data_lake_objects` (DLO) · `data_mapping` (Data Stream / Unified Link) |
-| **Flow elements** (`df.Flow*` - AUTO-applied, do not set) | Real SLDS `standard:*` glyphs (verified against Flow Builder), baked WHITE on the category chip: `right` (Start) · `stop` (End) · `screen` · `custom_notification` (Action / Send to Data 360 / Mobile App / In-App / Campaign Member / Task) · `flow` (Subflow) · `sales_cadence` (Send to a Flow) · `email` · `sms` · `whatsapp` · `bot` (Forward to Bot) · `agent_astro` (Run Agent) · `outcome` (Exit) · `assignment` · `decision` · `loop` · `data_mapping` (Transform) · `path_experiment` · `sort` (Collection Sort) · `filter` (Collection Filter) · `today` (Wait / Wait Until Date / Wait Until Event) · `story` (Einstein Decision) · `record` (Determine CRM Record) · `record_lookup` (Get) · `record_create` (Create) · `record_update` (Update) · `record_delete` (Delete) · `recent` (Roll Back) · `stage` (Stage). Each `df.Flow*` class bakes its own icon on load, so an author never sets these. |
+| **Flow elements** (`df.Flow*` - AUTO-applied, do not set) | Each `df.Flow*` class bakes its own white SLDS glyph on load. Never set an icon on a flow card. |
 
 > These tables are the **complete allowed set** — do **not** use an ID that is not listed, even if it sounds like a plausible SLDS name (an unknown ID renders an invisible blank, with no error). If no listed token fits the concept, leave `href` as `""`. Note: the minimal href is **expanded to the full SVG on load**, so a generated file and its loaded/saved form are not byte-identical — this matches how in-app icon drops are already stored, and `contentSignature` (used for import dedup) reflects the resolved full href.
 
@@ -624,8 +600,7 @@ Group node with a coloured accent bar header. Can visually contain child element
       "text": "",
       "textWrap": { "width": "calc(w - 28)", "maxLineCount": 4, "ellipsis": true }
     }
-  },
-  "ports": { /* standard 4-port config */ }
+  }
 }
 ```
 
@@ -648,9 +623,9 @@ content-hug (which otherwise re-wraps a frame around its children on every child
 the frame is deliberately bigger than its contents - uniform lane heights, reserved space. Cleared by the
 right-click **Auto size** action; a resize-handle drag sets it. Absent/false = the frame hugs its children.
 
-**Accent colors:** Change `accent/fill` and `accentFill/fill` together to set the header bar color. Common Salesforce colours:
-- Sales: `#032E61`, Service: `#7F2B82`, Marketing: `#F49825`
-- Platform: `#1D73C9`, Data: `#0D9DDA`, Commerce: `#61C754`
+**Accent colors:** Change `accent/fill` and `accentFill/fill` together to set the header bar color. Pick from the
+[palette](#the-both-themes-rule-pick-colours-from-this-palette): an accent must clear 3:1 on both canvases, and the
+familiar brand navies and pastels do not (`#032E61` is 1.30:1 on dark, `#F49825` 2.15:1 on light).
 
 **`tags` (since v1.10)** — Optional `string[]` rendered as right-aligned pills in the header (after the title). Primary use case is the Team variant in Org Chart diagrams; available on every Container regardless of diagram type. Empty / unset arrays render nothing. Overflow on the left side is replaced by a `+N` chip with hover tooltip listing the dropped tags.
 
@@ -734,36 +709,17 @@ Post-it style sticky note.
   "size": { "width": 200, "height": 120 },
   "z": 2000,
   "attrs": {
-    "body": {
-      "d": "M 0 0 L calc(w - 14) 0 L calc(w) 14 L calc(w) calc(h) L 0 calc(h) Z",
-      "fill": "#FFF9C4", "stroke": "#E8D44D", "strokeWidth": 1, "strokeLinejoin": "round"
-    },
-    "fold": {
-      "d": "M calc(w - 14) 0 L calc(w - 14) 14 L calc(w) 14 Z",
-      "fill": "#EDD56A", "stroke": "#E8D44D", "strokeWidth": 1, "strokeLinejoin": "round"
-    },
-    "icon": { "x": 10, "y": 10, "width": 20, "height": 20, "href": "" },
-    "label": {
-      "x": 36, "y": 14,
-      "textAnchor": "start", "textVerticalAnchor": "top",
-      "fontSize": 13, "fontWeight": 600,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#5D4037",
-      "text": "Note Title",
-      "textWrap": { "width": "calc(w - 48)", "maxLineCount": 1, "ellipsis": true }
-    },
-    "subtitle": {
-      "x": 12, "y": 38,
-      "textAnchor": "start", "textVerticalAnchor": "top",
-      "fontSize": 11,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#795548",
-      "text": "Note body text goes here",
-      "textWrap": { "width": "calc(w - 24)", "height": "calc(h - 48)", "ellipsis": true }
-    }
+    "label": { "text": "Note Title" },
+    "subtitle": { "text": "The body goes here - **markdown** works" }
   }
 }
 ```
+
+- `label` is a ONE-line title (longer text is cut with an ellipsis). Put the body in `subtitle`: it renders markdown
+  and the note grows to fit it (never shorter than 120).
+- The yellow look is the default; set `body.fill` / `body.stroke` to recolour. The folded corner follows `body.stroke`.
+- An empty `icon.href` gets the default light-bulb on load. To keep a note icon-free, set top-level
+  `"iconCleared": true`.
 
 No ports.
 
@@ -821,34 +777,17 @@ Decorative horizontal line separator with an optional caption. Available in all 
   "position": { "x": 100, "y": 300 },
   "size": { "width": 200, "height": 8 },
   "z": 2000,
-  "lineStyle": "solid",
-  "attrs": {
-    "hitArea": {
-      "width": "calc(w)", "height": "calc(h)",
-      "fill": "transparent", "stroke": "none"
-    },
-    "line": {
-      "x1": 0, "y1": "calc(0.5 * h)", "x2": "calc(w)", "y2": "calc(0.5 * h)",
-      "stroke": "var(--text-muted)", "strokeWidth": 2, "strokeLinecap": "round"
-    },
-    "label": {
-      "text": "", "fontSize": 13,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--text-secondary)"
-    }
-  }
+  "lineStyle": "dashed",
+  "attrs": { "label": { "text": "Optional caption" } }
 }
 ```
 
-**`attrs.label.text`** (since v1.14.0) — optional caption rendered above the line's left edge, left-aligned. Empty by default. Supports the same inline markdown as Notes (`**bold**`, `*italic*`, `~~strike~~`, `` `code` ``); underscores are literal (not italic). When set it paints via a `<foreignObject>`, and a transparent hit rect sized to the caption makes it clickable/selectable.
+**`attrs.label.text`** — optional caption rendered above the line's left edge, left-aligned. Empty by default.
+Supports the same inline markdown as Notes (`**bold**`, `*italic*`, `~~strike~~`, `` `code` ``); underscores are
+literal (not italic).
 
-**`lineStyle`** — `"solid"` (default), `"dashed"`, `"dotted"`, or `"breaks"`. Controls `strokeDasharray`:
-- `solid` → `none`
-- `dashed` → `12 6`
-- `dotted` → `0 6` (round dots; was `3 4` before v1.14.0)
-- `breaks` → `16 8` (long dashes; was `16 8 2 8` before v1.14.0)
-
-Diagrams saved before v1.14.0 with the legacy `3 4` / `16 8 2 8` values are auto-migrated to `0 6` / `16 8` on load.
+**`lineStyle`** — `"solid"` (default), `"dashed"`, `"dotted"`, or `"breaks"`. Set the prop; the loader applies the
+matching dash (`none`, `12 6`, `0 6`, `16 8`) to `attrs.line.strokeDasharray`. Recolour with `attrs.line.stroke`.
 
 No ports.
 
@@ -866,46 +805,16 @@ Clickable external-link element with a terminator (pill) shape: label + external
   "size": { "width": 220, "height": 44 },
   "z": 2000,
   "url": "https://example.com",
-  "attrs": {
-    "body": {
-      "x": 0, "y": 0, "width": "calc(w)", "height": "calc(h)",
-      "rx": "calc(0.5 * h)", "ry": "calc(0.5 * h)",
-      "fill": "var(--card-bg, #FFFFFF)",
-      "stroke": "var(--border-muted, #D0D5DD)", "strokeWidth": 1
-    },
-    "label": {
-      "x": 20, "y": "calc(0.5 * h - 8)",
-      "textAnchor": "start", "textVerticalAnchor": "middle",
-      "fontSize": 14, "fontWeight": 600,
-      "fill": "#1D73C9",
-      "text": "API Docs"
-    },
-    "domain": {
-      "x": 20, "y": "calc(0.5 * h + 10)",
-      "textAnchor": "start", "textVerticalAnchor": "middle",
-      "fontSize": 10, "fill": "var(--text-muted, #6B7280)",
-      "text": "example.com"
-    },
-    "iconImage": {
-      "x": "calc(w - 34)", "y": "calc(0.5 * h - 10)",
-      "width": 20, "height": 20,
-      "pointerEvents": "none",
-      "href": "data:image/svg+xml,..."
-    },
-    "iconHit": {
-      "x": "calc(w - 40)", "y": "calc(0.5 * h - 16)",
-      "width": 32, "height": 32,
-      "rx": 16, "ry": 16,
-      "fill": "transparent",
-      "stroke": "var(--border-muted, #D0D5DD)", "strokeWidth": 1
-    }
-  }
+  "attrs": { "label": { "text": "API Docs" } }
 }
 ```
 
-**`url`** — Target URL. Opened in a new tab (`noopener,noreferrer`) when the icon is clicked. Empty string disables click-through.
+**`url`** — Target URL. Opened in a new tab (`noopener,noreferrer`) when the icon is clicked; the full URL is the
+hover tooltip. Empty string disables click-through.
 
-**`attrs.domain.text`** — optional hostname shown as a small second line under the label (the app auto-fills it from `url` on drop). When present, `label.y` shifts up to `calc(0.5 * h - 8)` to make room (as above); for a single-line link with no domain, use `label.y: "calc(0.5 * h)"` and omit `domain`.
+Author only `url` and the label text. The loader draws the external-link icon from the label colour when
+`iconImage.href` is empty - an authored `href` placeholder draws an empty circle instead - and it hides the old
+`domain` sub-line and centres the label, so leave both out.
 
 No ports.
 
@@ -913,61 +822,33 @@ No ports.
 
 Database table / Salesforce object with coloured header and dynamic field rows. Used in data model diagrams.
 
-**Default size:** `260 x 80` (height auto-adjusts: 32px header + 22px per field + 4px padding)
+**Default size:** `260 x 80` (height auto-adjusts: see the Sizing rule below)
 
 ```json
 {
   "id": "obj-1",
   "type": "sf.DataObject",
   "position": { "x": 100, "y": 100 },
-  "size": { "width": 260, "height": 128 },
+  "size": { "width": 260, "height": 138 },
   "z": 2000,
   "objectName": "Account",
   "headerColor": "#1D73C9",
   "fields": [
-    { "label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "length": null, "required": false, "deprecated": false },
+    { "label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "length": null, "required": true, "deprecated": false },
     { "label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "length": 255, "required": true, "deprecated": false },
     { "label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "length": null, "required": false, "deprecated": false },
     { "label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "length": null, "required": true, "deprecated": false }
   ],
   "showLabels": false,
   "showFieldLengths": false,
-  "keyFieldsOnly": false,
-  "attrs": {
-    "body": {
-      "width": "calc(w)", "height": "calc(h)",
-      "rx": 4, "ry": 4,
-      "fill": "var(--node-bg)", "stroke": "var(--node-border)", "strokeWidth": 1
-    },
-    "header": {
-      "width": "calc(w)", "height": 32,
-      "rx": 4, "ry": 4,
-      "fill": "#1D73C9", "stroke": "none"
-    },
-    "headerCover": {
-      "width": "calc(w)", "height": 16, "y": 16,
-      "fill": "#1D73C9", "stroke": "none"
-    },
-    "headerIcon": {
-      "x": 10, "y": 8, "width": 16, "height": 16,
-      "href": "data:image/svg+xml,<svg data-icon-id=\"account\"/>",
-      "preserveAspectRatio": "xMidYMid meet"
-    },
-    "headerLabel": {
-      "x": 32, "y": 16,
-      "textAnchor": "start", "textVerticalAnchor": "middle",
-      "fontSize": 13, "fontWeight": "bold",
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#FFFFFF",
-      "text": "Account"
-    }
-  }
-  // NOTE: no "ports" block — you can omit it entirely on a DataObject (v1.15.5). The app
-  // supplies the object ports (port-top / port-bottom), the header relationship anchors, AND
-  // one mapping port per field automatically. Just REFERENCE the ports you need from links
-  // (field-left-<fid> / field-right-<fid>) — see "Linking DataObjects" below.
+  "keyFieldsOnly": false
 }
 ```
+
+**`objectName` and `headerColor` draw the header.** Set the props; the loader writes them to the header's attrs
+(`headerLabel.text`, and `header.fill` + `headerCover.fill`). Do not also author those attrs unless they say the same
+thing: authored attrs win over the props, and the validator warns when they disagree. Omit `ports` (see Linking
+DataObjects below).
 
 **Field object structure:**
 
@@ -992,13 +873,11 @@ Database table / Salesforce object with coloured header and dynamic field rows. 
 | `keyFieldsOnly` | `false` | When `true`, only fields with `keyType` (PK/FK) are rendered; the object height shrinks to fit |
 | `collapsed` | `false` | When `true`, the object renders **header-only** (all field rows hidden, height = `32 + 18`); a bottom toggle row flips it. Mapping links converge to the header while collapsed. Top-level prop; omit it for a normal expanded object. |
 
-**Data Cloud metadata (mapping mode, v1.15.0):** an optional object-level attribute, omitted when blank. Editable in the DataObject panel's **Data Mapping** section (a three-position segmented slider) only when the diagram's mapping mode is on; it renders (as a hollow header pill) and round-trips regardless of mode.
+**Data Cloud metadata (mapping mode, v1.15.0):** an optional object-level attribute, omitted when blank. Editable in the DataObject panel's **Data Mapping** section (a three-position segmented slider) and drawn as a hollow header pill only in a Data Mapping diagram; it round-trips in any type.
 
 | Attr | Type | Description |
 |------|------|-------------|
 | `category` | `"Profile"` / `"Engagement"` / `"Other"` | Data Cloud DMO category (platform-enforced). The one object-level mapping attribute. |
-
-> Pre-release v1.15.0 iterations also carried `dataSource` (Origin System) and `kind` (Pipeline Tier) free-text attributes; both were removed before release. Loaders ignore them harmlessly if an older draft still has them. Object role/tier is expressed via Zone / Container grouping instead.
 
 **Optional header icon (`headerIcon/href`, v1.15.0):** an optional contextual SLDS / custom icon in the header bar (e.g. `account`, `contact`, `email`, `custom-snowflake` - bare SLDS names or `custom-*` brand logos, NOT a `standard-` prefix; see the [Icon ID reference](#icon-id-reference)) to make a large schema scannable at a glance — empty by default. Uses the **same `data-icon-id` data-URI pattern** as the Node `icon/href` (above) and resolves to white via `refreshAllIconHrefs`. When set, the icon renders at `16×16` on the header's left (`x:10, y:8`) and `headerLabel/x` shifts to `32`; when blank, `headerIcon` collapses to `width/height:0` and `headerLabel/x` returns to `12`. `updateDataObjectHeaderLayout` applies this on edit + on load. Persists in `attrs.headerIcon.href`; no separate top-level prop.
 
@@ -1006,16 +885,11 @@ Database table / Salesforce object with coloured header and dynamic field rows. 
 
 **Linking DataObjects for ER diagrams:**
 
-> **Omit the `ports` block — don't emit it at all (v1.15.5).** The shape definition already
-> carries every port *group*, and the app generates the actual ports on load: `port-top` /
-> `port-bottom` (object-level), the header relationship anchors, and **one mapping port per
-> field**. So you never write the verbose `ports` boilerplate (it was ~40 lines of identical
-> JSON per object and a frequent source of mistakes) — you only **reference** the ports you need
-> from links. Listing them is harmless (older exports do) but pure noise.
+Omit `ports`: the app builds every DataObject port on load. Reference them from link endpoints:
 
-Two port conventions to **reference** from link endpoints:
-
-1. **Object-level ports (`port-top`, `port-bottom`)** — for "this table relates to that table" links.
+1. **Object-level ports** — the header anchors `er-left` / `er-right` (the usual choice for an ER relationship) and
+   the ring `port-top` / `port-bottom` — for "this table relates to that table" links. There is no `port-left` /
+   `port-right` on a DataObject.
 2. **Field-level ports (`field-left-{fid}`, `field-right-{fid}`)** — for field→field mappings and PK→FK relationships. The view renders one for every field with a `keyType`, **every field when the diagram's mapping mode is on** (so all of `datamapping`), and any field a live link points at. `{fid}` is the field's stable `fid` (see field table), **not** its array index, so a link stays anchored to the same field across reorder, delete, and rename. *(Saves ≤ v1.14.x used the zero-based array index, `field-left-{i}`; `migrateLinks` re-keys those to `fid` form on load.)*
 
 Just reference them from link endpoints: `"source": { "id": "obj-contact", "port": "field-right-<fid>" }` — where `<fid>` is copied verbatim from a field in that object.
@@ -1049,93 +923,29 @@ Person card for organisation charts with avatar circle and detail fields.
   "size": { "width": 280, "height": 90 },
   "z": 2000,
   "personName": "Jane Smith",
-  "jobTitle": "VP Engineering — Platform & Data",
+  "jobTitle": "VP Engineering - Platform & Data",
+  "iconText": "JS",
   "details": [
     { "label": "Email", "value": "jane@example.com" },
-    { "label": "Role", "value": "Leadership" },
-    { "label": "Location", "value": "London" },
-    { "label": "Company", "value": "Acme Corp" }
+    { "label": "Location", "value": "London" }
   ],
   "tags": ["leadership", "platform"],
   "raci": { "R": true, "A": true },
   "vacant": false,
-  "imageUrl": "",
-  "iconText": "JS",
-  "email": "jane@example.com",
-  "phone": "",
-  "role": "Leadership",
-  "stream": "",
-  "location": "London",
-  "company": "Acme Corp",
-  "detailOrder": ["email", "phone", "role", "stream", "location", "company"],
-  "attrs": {
-    "body": {
-      "width": "calc(w)", "height": "calc(h)",
-      "rx": 8, "ry": 8,
-      "fill": "var(--node-bg)", "stroke": "var(--node-border)", "strokeWidth": 1.5
-    },
-    "accentBar": {
-      "width": "calc(w)", "height": 4, "rx": 8, "ry": 8,
-      "fill": "#1D73C9", "stroke": "none"
-    },
-    "accentBarMask": {
-      "width": "calc(w)", "height": 2, "y": 2,
-      "fill": "#1D73C9", "stroke": "none"
-    },
-    "avatar": {
-      "r": 34, "cx": 44, "cy": 48,
-      "fill": "#1D73C9", "stroke": "var(--node-border)", "strokeWidth": 1
-    },
-    "avatarText": {
-      "x": 44, "y": 48,
-      "textAnchor": "middle", "dominantBaseline": "central",
-      "fontSize": 18, "fontWeight": 700,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#FFFFFF",
-      "text": "JS"
-    },
-    "avatarImage": {
-      "x": 10, "y": 14, "width": 68, "height": 68,
-      "href": "", "opacity": 0
-    },
-    "nameLabel": {
-      "x": 88, "y": 14,
-      "textAnchor": "start", "dominantBaseline": "hanging",
-      "fontSize": 13, "fontWeight": 700,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--node-text)",
-      "text": "Jane Smith"
-    },
-    "positionLabel": {
-      "x": 88, "y": 30,
-      "textAnchor": "start", "dominantBaseline": "hanging",
-      "fontSize": 11,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--text-secondary)",
-      "text": "VP Engineering"
-    },
-    "detailsLabel": {
-      "x": 88, "y": 46,
-      "textAnchor": "start", "dominantBaseline": "hanging",
-      "fontSize": 10,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--text-muted)",
-      "text": "Email: jane@example.com\nRole: Leadership\nLocation: London\nCompany: Acme Corp",
-      "lineHeight": 14
-    }
-  },
-  "ports": { /* standard 4-port config */ }
+  "attrs": { "accentBar": { "fill": "#1D73C9" }, "accentBarMask": { "fill": "#1D73C9" } }
 }
 ```
 
 **Tips:**
-- Set `iconText` to 1-4 characters for the avatar circle (typically initials).
-- Set `avatar/fill` to match `accentBar/fill` for a cohesive look.
-- Height auto-adjusts: ~60 px base + ~14 px per visible detail row + 30 px when `tags` is non-empty.
+- The view draws every label from the props above and overwrites the label attrs on each render - author the props,
+  never `nameLabel` / `positionLabel` / `detailsLabel`.
+- `iconText` is 1-4 characters for the avatar (typically initials); `imageUrl` takes a photo instead. The avatar
+  colour is not yours to set: blue with initials, grey without.
+- The top bar is the colour you control: `accentBar.fill` and `accentBarMask.fill`, together.
+- Size is computed: height never below 90 (the avatar), growing 14 px per detail line once the text outgrows it and
+  30 px for a tag row; width never below 280 - a narrower card is widened on load, so leave room on the pitch.
 
 **`details` (since v1.11)** — Extensible array of `{ label, value }` rows shown beneath the position label. The view renders one line per entry where `value` is non-empty; empty rows are hidden. Entries with `value === ""` are kept in the model so the user can fill them in later.
-
-When loading a pre-v1.11 diagram, the view auto-migrates the legacy hardcoded fields (`email`, `phone`, `role`, `stream`, `location`, `company`) into `details` using `detailOrder` for the row order. The legacy fields stay on the cell so the JSON also opens cleanly in older versions.
 
 **`tags` (since v1.10)** — Array of strings rendered as muted pills along the bottom of the card. Empty array hides the tag row entirely. If many tags would overflow the card width, the trailing ones are hidden behind a `+N` overflow chip whose hover tooltip shows the missing tags.
 
@@ -1143,7 +953,7 @@ When loading a pre-v1.11 diagram, the view auto-migrates the legacy hardcoded fi
 
 **`vacant` (since v1.10)** — When `true`, the card renders with dashed body border, dashed transparent avatar (no fill), and faded text/details (~55 % opacity). Use as a recruitment placeholder ("position to be filled") or to mark an unassigned RACI slot.
 
-**Position field rename (since v1.10)** — The property panel label changed from "Position" to "Description". The underlying model field is still `jobTitle` for backward compatibility — pre-v1.10 diagrams keep working unchanged.
+**`jobTitle`** is the line under the name (the panel calls it "Description"); `\n` makes further lines.
 
 ### sf.Task (since v1.10)
 
@@ -1262,36 +1072,15 @@ Circle event node.
   "size": { "width": 40, "height": 40 },
   "z": 2000,
   "eventType": "start",
-  "attrs": {
-    "body": {
-      "cx": "calc(0.5 * w)", "cy": "calc(0.5 * h)", "r": "calc(0.5 * w)",
-      "fill": "#FFFFFF", "stroke": "#222222", "strokeWidth": 2
-    },
-    "innerRing": {
-      "cx": "calc(0.5 * w)", "cy": "calc(0.5 * h)", "r": "calc(0.5 * w - 3)",
-      "fill": "none", "stroke": "none", "strokeWidth": 1
-    },
-    "icon": {
-      "d": "", "fill": "#222222", "stroke": "none",
-      "transform": "translate(calc(0.5 * w - 6), calc(0.5 * h - 6))"
-    },
-    "label": {
-      "x": "calc(0.5 * w)", "y": "calc(h + 10)",
-      "textAnchor": "middle", "textVerticalAnchor": "top",
-      "fontSize": 11,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--text-secondary)",
-      "text": "Start"
-    }
-  },
-  "ports": { /* standard 4-port config */ }
+  "attrs": { "label": { "text": "Start" } }
 }
 ```
 
-**Event types:**
-- `"start"` — thin border (`strokeWidth: 2`)
-- `"intermediate"` — double ring (set `innerRing/stroke` to `"#222222"`)
-- `"end"` — thick border (`strokeWidth: 3`)
+**Event types** - set `eventType`; the loader applies the look (leave `body` / `innerRing` / `icon` attrs out, or
+they win over it):
+- `"start"` — green ring (`#008B46`, 1.5 px) on a pale green fill
+- `"intermediate"` — amber double ring (`#A06F03`)
+- `"end"` — red ring (`#DA4E55`, 4 px) on a pale red fill
 
 #### sf.BpmnTask
 
@@ -1306,29 +1095,12 @@ Rounded rectangle activity.
   "position": { "x": 200, "y": 185 },
   "size": { "width": 120, "height": 60 },
   "z": 2000,
-  "taskType": "task",
-  "attrs": {
-    "body": {
-      "width": "calc(w)", "height": "calc(h)",
-      "rx": 8, "ry": 8,
-      "fill": "#FFFFFF", "stroke": "#222222", "strokeWidth": 1.5
-    },
-    "taskIcon": { "x": 6, "y": 6, "width": 14, "height": 14, "href": "" },
-    "label": {
-      "x": "calc(0.5 * w)", "y": "calc(0.5 * h)",
-      "textAnchor": "middle", "textVerticalAnchor": "middle",
-      "fontSize": 12,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#222222",
-      "text": "Review Order",
-      "textWrap": { "width": "calc(w - 16)", "maxLineCount": 4, "ellipsis": true }
-    }
-  },
-  "ports": { /* standard 4-port config */ }
+  "attrs": { "label": { "text": "Review Order" } }
 }
 ```
 
-**Task types:** `"task"`, `"user"`, `"service"`, `"script"`, `"send"`, `"receive"`
+**`taskType`** (`"task"`, `"user"`, `"service"`, `"script"`, `"send"`, `"receive"`) is stored and shown in the panel
+only - nothing on the card changes with it. Say the kind in the label if the reader needs it.
 
 #### sf.BpmnGateway
 
@@ -1343,38 +1115,14 @@ Diamond decision/merge node.
   "position": { "x": 380, "y": 191 },
   "size": { "width": 48, "height": 48 },
   "z": 2000,
-  "gatewayType": "exclusive",
-  "attrs": {
-    "body": {
-      "d": "M calc(0.5 * w) 0 L calc(w) calc(0.5 * h) L calc(0.5 * w) calc(h) L 0 calc(0.5 * h) Z",
-      "fill": "#FFFFFF", "stroke": "#222222", "strokeWidth": 1.5
-    },
-    "marker": {
-      "x": "calc(0.5 * w)", "y": "calc(0.5 * h)",
-      "textAnchor": "middle", "textVerticalAnchor": "middle",
-      "fontSize": 22, "fontWeight": "bold",
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "#222222",
-      "text": "\u00d7"
-    },
-    "label": {
-      "x": "calc(0.5 * w)", "y": "calc(h + 10)",
-      "textAnchor": "middle", "textVerticalAnchor": "top",
-      "fontSize": 11,
-      "fontFamily": "system-ui, -apple-system, sans-serif",
-      "fill": "var(--text-secondary)",
-      "text": ""
-    }
-  },
-  "ports": { /* standard 4-port config */ }
+  "gatewayType": "parallel",
+  "attrs": { "label": { "text": "" } }
 }
 ```
 
-**Gateway marker symbols:**
-- `"exclusive"`: `"\u00d7"` (multiplication sign)
-- `"parallel"`: `"+"`
-- `"inclusive"`: `"\u25cb"` (circle)
-- `"event"`: `"\u25c7"` (diamond)
+**`gatewayType`** — `"exclusive"` (`×`, the default), `"parallel"` (`+`), `"inclusive"` (`○`), `"event"` (`◇`). Set the
+prop; the loader draws the glyph (`attrs.marker.text`). An authored glyph that says a different gateway wins and the
+validator warns.
 
 #### sf.BpmnSubprocess
 
@@ -1382,7 +1130,8 @@ Rounded rectangle container with [+] marker.
 
 **Default size:** `360 x 240`, **z:** `500`
 
-Same pattern as Container but with `expandMarker` rect and `expandPlus` text at the bottom.
+A `body`, a single-line top-left `label` and the `[+]` marker at the bottom - there is NO Container-style header.
+Name it with `attrs.label.text`, exactly like `sf.BpmnLoop` below.
 
 #### sf.BpmnLoop
 
@@ -1399,18 +1148,19 @@ Same `body` as Container/Subprocess, with a single-line top-left `label` (defaul
   "position": { "x": 100, "y": 100 },
   "size": { "width": 360, "height": 240 },
   "z": 500,
-  "attrs": { "label": { "text": "Process Each Order" } },
-  "ports": { /* standard 4-port config (top/right/bottom/left) — see Port Definitions */ }
+  "attrs": { "label": { "text": "Process Each Order" } }
 }
 ```
 
 #### sf.BpmnPool
 
-Horizontal pool/lane container.
+Pool/lane container, horizontal by default.
 
 **Default size:** `600 x 250`, **z:** `0`
 
-Has a narrow left `header` panel with rotated vertical label. No ports. A Pool groups by **embedding**, not by geometry: set `parent: "<pool-id>"` on every child AND list each child id in the Pool's `embeds[]` - both sides, every child. A Pool drawn behind tasks without that is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
+Has a narrow left `header` panel with a rotated vertical label. For a VERTICAL pool set top-level
+`"poolDirection": "vertical"`, size `250 x 600`, `attrs.header` `{ "width": "calc(w)", "height": 30 }` and
+`attrs.label` `{ "x": "calc(0.5 * w)", "y": 15, "transform": "rotate(0)" }` (what the stencil builds). No ports. A Pool groups by **embedding**, not by geometry: set `parent: "<pool-id>"` on every child AND list each child id in the Pool's `embeds[]` - both sides, every child. A Pool drawn behind tasks without that is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
 
 #### sf.BpmnDataObject
 
@@ -1427,8 +1177,7 @@ Small folded-corner document artifact representing a BPMN data object. Available
   "position": { "x": 100, "y": 100 },
   "size": { "width": 40, "height": 50 },
   "z": 2000,
-  "attrs": { "label": { "text": "Invoice" } },
-  "ports": { /* standard 4-port config (top/right/bottom/left) — see Port Definitions */ }
+  "attrs": { "label": { "text": "Invoice" } }
 }
 ```
 
@@ -1446,18 +1195,17 @@ All flowchart shapes follow the same simple pattern — a `body` path/rect and a
 | `sf.FlowIO` | Parallelogram | 140 x 60 |
 | `sf.FlowPredefined` | Rectangle with double vertical bars | 120 x 60 |
 | `sf.FlowOffPage` | Pentagon pointing down | 60 x 60 |
-| `sf.Annotation` | Text with curly bracket | 100 x 120 |
 
 All have standard 4-port configuration.
 
 ### sf.Annotation
 
-A curly-brace bracket with a text label — used to call out or group a region of a diagram. The brace spans the element's height on one side; the label sits beside it. Standard 4-port configuration.
+A curly-brace bracket with a text label — used to call out or group a region of a diagram, in any diagram type (it is a generic stencil shape). The brace spans the element's height on one side; the label sits beside it. Standard 4-port configuration.
 
 **Default size:** `100 x 120`, **z:** `2000`
 
 **Properties:**
-- `bracketSide` — `"right"` (default) or `"left"`. Which side the curly brace is drawn on.
+- `bracketSide` — `"right"` (default) or `"left"`. Set the prop; the loader draws the brace on that side and moves the label beside it.
 
 The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horizontal automatically**: if the element is rotated, the label counter-rotates so the text always reads level (there is no manual text-angle property).
 
@@ -1471,8 +1219,7 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
   "bracketSide": "right",
   "attrs": {
     "label": { "text": "Legacy systems" }
-  },
-  "ports": { /* standard 4-port config (top/right/bottom/left) — see Port Definitions */ }
+  }
 }
 ```
 
@@ -1483,7 +1230,7 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 **Shared structure (identical for every `df.Flow*` class).** Default size `210 x 56`. Persisted data lives in TOP-LEVEL props, NOT `attrs`:
 
 - `name` (string) - the visible card label. Seed it; it drives `attrs.label.text` via the model.
-- `apiName` (string, optional) - renders as a mono subtitle under the label (hidden when blank). Use the Flow element's API name.
+- `apiName` (string, optional) - the Flow element's API name, shown in the panel only. The card's grey subtitle is the element TYPE ("Get Records"), drawn automatically once `name` differs from it.
 - `details` (array, optional, since v1.21.0) - `[{ "label": "...", "value": "..." }]` rows rendered as a
   read-only **Metadata** table in the property panel, never on the card. A row may add **`"quiet": true`**
   (v1.22.0): quiet rows render inside a collapsed "N settings turned off" disclosure below the table instead of
@@ -1545,7 +1292,7 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 > "do nothing and continue", not "undefined", so inventing an element there would misrepresent the org. Put its
 > description in the card's `name` ("Approval step - TBD"); it takes no per-kind fields.
 
-> **Field-key note.** Where a real 1:1 Metadata API field exists the key IS that field name (`triggerType`, `object`, `filters`, `actionName`, `actionType`, `flowName`, `waitEvents`, `assignmentItems`, `collectionReference`, `conditions`). The rest are pragmatic summary keys (`components`, `outcomes`, `transformTarget`, `message`, `template`, `activation`, `configuration`) - a short human summary, not the raw metadata. The messaging sends store their content reference in `template` (the panel labels it per channel: Email / SMS / Message / Push Notification Message / In-App Message); Send to Data 360 uses `activation` (an API-activation reference, not message content). Start carries a free-text `configuration` (arbitrary setup notes - schedule cadence, entry conditions, etc.). `processType` is a Flow-level field parked on the Start card for convenience. (The Transform summary key is `transformTarget`, not `target`, to avoid colliding with a link's built-in `target` endpoint.)
+> **Field-key note.** Where a real 1:1 Metadata API field exists the key IS that field name (`triggerType`, `object`, `filters`, `actionName`, `actionType`, `flowName`, `waitEvents`, `assignmentItems`, `collectionReference`, `conditions`). The rest are pragmatic summary keys (`components`, `outcomes`, `transformTarget`, `template`, `activation`, `configuration`) - a short human summary, not the raw metadata. The messaging sends store their content reference in `template` (the panel labels it per channel: Email / SMS / Message / Push Notification Message / In-App Message); Send to Data 360 uses `activation` (an API-activation reference, not message content). Start carries a free-text `configuration` (arbitrary setup notes - schedule cadence, entry conditions, etc.). `processType` is a Flow-level field parked on the Start card for convenience. (The Transform summary key is `transformTarget`, not `target`, to avoid colliding with a link's built-in `target` endpoint.)
 
 **One element (minimal + with fields):**
 
@@ -1575,17 +1322,17 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 
 > **Flow-level metadata goes on a `df.Table`, not on Start.** The Start card holds only what the Start
 > *element* declares (trigger, object, entry filters). Facts about the FLOW - status, API version, run mode,
-> description, the resource inventory - have no element to live on, so put them on a `df.Table` placed above
-> Start (`highlightFirstCol: true`, `highlightFirstRow: false` gives the key/value look; `tableLabel` carries
-> the flow's name). `df.Table` is a generic shape available in every diagram type, so this needs no
+> description, the resource inventory - have no element to live on, so put them on a `df.Table` placed to the
+> LEFT of the flow, top-aligned with it (`highlightFirstCol: true`, `highlightFirstRow: false` gives the key/value
+> look; `tableLabel` carries the flow's name). A flow is tall and narrow, so the side is the free axis. `df.Table` is a generic shape available in every diagram type, so this needs no
 > flow-specific grammar. Give it no connectors - it documents the flow, it is not a step in it.
 > A flow that declares input/output variables SHOULD get an `Inputs` / `Outputs` row stating the full call
 > signature - list every item up to 12, then truncate with `+N more`.
 
 > **A second `df.Table` carries the RESOURCES** (v1.22.0) - the formulas, text templates, choice sets,
 > constants and described variables a flow references, which have no card of their own and were otherwise
-> reduced to a count. Place it as a SIDEBAR to the RIGHT of everything, not stacked above Start: a flow is tall
-> and thin, so height is the scarce axis and fit-to-screen is height-bound. Set **`plainCells: true`** on it -
+> reduced to a count. Place it directly UNDER the facts table, in the same left column, so the two read as one
+> block of documentation beside the flow. Set **`plainCells: true`** on it -
 > formula expressions are code, and a `*` operator is a markdown italic marker. Row grammar mirrors the flow
 > card: resource name in the left column, `Kind (Type) · definition` in the right.
 > Curate, do not dump: a resource earns a row when it carries real content (a formula's expression, a text
@@ -1593,11 +1340,9 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 > `Not listed` accounting row that sums everything skipped (e.g. `Not listed | 14 record variables, 3
 > constants`) so the listed rows plus that row reconcile with the flow's true resource count.
 
-> ⚠️ **On a `flow` diagram, always set a `port` on both endpoints of every link** (`port-top` / `port-right` /
-> `port-bottom` / `port-left`). This is the single most common way an authored flow diagram comes out looking
-> broken, and it fails QUIETLY: with no port, JointJS anchors the link to the element's CENTRE, the orthogonal
-> router has nothing to work against, and connectors cut diagonally straight across the cards instead of running
-> down the spine. The diagram still validates and still loads - it just looks nothing like Flow Builder.
+> **Set a `port` on both endpoints of every flow link** (`port-top` / `port-right` / `port-bottom` / `port-left`). The
+> loader fills a MISSING port by the rule below, but which port a branch leaves from is part of the drawing, so
+> choose it.
 >
 > **Which port: a flow reads top-to-bottom, so ANY step to a different row is `port-bottom` → `port-top`.** The
 > orthogonal router draws the horizontal jog for you, so a decision branch that moves further sideways than down
@@ -1630,10 +1375,10 @@ The date-ruler backbone: a header row of period columns (days / weeks / months) 
 - `numPeriods` — number of columns (default `12`; stencil presets: day `14`, week `12`, month `12`).
 - `startDate` / `endDate` — `"YYYY-MM-DD"`. `endDate` auto-computes from `startDate` + `numPeriods` when blank (day → +N days, week → +N×7 days, month → +N months). The view snaps `startDate` to the configured `weekStartDay` (week) or the 1st (month). `startDate` is the **origin** every bar's dates are measured from.
 - `todayDate` — `"YYYY-MM-DD"` (optional). Draws a full-height dashed **today line** at that date's column (omit / blank = no line). Data-first: the line's x is derived from the date.
-- `weekStartDay` — `0`–`6` (0 = Sunday … 6 = Saturday), the first day of the week — controls where the **week** view splits its columns. Default `1` (Monday). The Display menu's "Week Starts:" control cycles the three practical conventions: Monday (ISO 8601), Sunday (Americas), Saturday (MENA).
-- `weekendStartDay` — `6` (Saturday → Sat–Sun weekend) or `5` (Friday → Fri–Sat weekend). The first day of the 2-day weekend block shaded as non-working columns in the **day** view. Default `6` (Saturday). Cycled from the Display menu's "Weekend Starts:" control.
-- `showWeekNumber` — `true`/`false`. When `true`, **week**-view columns are labelled `"W23"` (week number, counted relative to `weekStartDay`) instead of the week-start date (`"3 Apr"`). Default `false`. Toggled from the Display menu's "Week Numbers".
-- `showProjectSummary` — `true`/`false`. When `true`, a read-only **Project Summary** lane is drawn at the top of the timeline (between the date header and the first row): a single overview row condensing every group summary bar (in its group colour), milestone (diamond), and day marker (triangle) for the timeline. Adds one lane-height to the header, so the task rows shift down. Default `false`. Toggled from the Display menu's "Project Summary Row" (gantt only).
+- `weekStartDay` — `0`–`6` (0 = Sunday … 6 = Saturday), the first day of the week — controls where the **week** view splits its columns. Default `1` (Monday). The View menu's "Week Starts:" control cycles the three practical conventions: Monday (ISO 8601), Sunday (Americas), Saturday (MENA).
+- `weekendStartDay` — `6` (Saturday → Sat–Sun weekend) or `5` (Friday → Fri–Sat weekend). The first day of the 2-day weekend block shaded as non-working columns in the **day** view. Default `6` (Saturday). Cycled from the View menu's "Weekend Starts:" control.
+- `showWeekNumber` — `true`/`false`. When `true`, **week**-view columns are labelled `"W23"` (week number, counted relative to `weekStartDay`) instead of the week-start date (`"3 Apr"`). Default `false`. Toggled from the View menu's "Week Numbers".
+- `showProjectSummary` — `true`/`false`. When `true`, a read-only **Project Summary** lane is drawn at the top of the timeline (between the date header and the first row): a single overview row condensing every group summary bar (in its group colour), milestone (diamond), and day marker (triangle) for the timeline. Adds one lane-height to the header, so the task rows shift down. Default `false`. Toggled from the View menu's "Project Summary Row" (gantt only).
 - `groups` — optional array of `{ id, label, color, order }` phase headers. A `sf.GanttTask` joins one via its `groupId`; the group header takes a panel row above its bars. Omit for a flat (ungrouped) plan.
 - `taskListWidth` — width (px) of the left panel (default `200`).
 - `rowHeight` — height (px) per row (default / min `48`).
@@ -1672,7 +1417,7 @@ A scheduled bar. **The dates are the source of truth** — `startDate`/`endDate`
 - `taskLabel` — the bar's label.
 - `startDate` / `endDate` — `"YYYY-MM-DD"`. Position + width derive from these against the timeline's axis.
 - `order` — integer row slot (0-based). The bar's Y derives from it; any group headers above it shift it down a row. **Emit it** — an `order`less bar keeps its manual Y while the panel rows it last, so it paints in the wrong row (an old diagram, or one built by dropping stencil tasks, is auto-healed on load: `order` is back-filled from each bar's current Y order).
-- `groupId` — id of a `timeline.groups[]` entry, or omit / `null` for ungrouped.
+- `groupId` — id of a `timeline.groups[]` entry, or omit / `null` for ungrouped. A grouped bar takes its group's `color` on load; set top-level `colorManual: true` (and `attrs.progressBar.fill`) to keep a colour of your own.
 - `progress` — `0`–`100` (fills the progress bar).
 - `assignee` — short initials shown on the bar (optional).
 
@@ -1708,7 +1453,7 @@ A diamond marker for a point-in-time event. **`milestoneDate` is the source of t
 {
   "id": "milestone-1",
   "type": "sf.GanttMilestone",
-  "milestoneDate": "2026-03-01",
+  "milestoneDate": "2026-07-20",
   "position": { "x": 0, "y": 160 },
   "parent": "timeline-1",
   "attrs": { "label": { "text": "Launch" } }
@@ -1750,7 +1495,7 @@ A dependency between two tasks is a **`standard.Link`** tagged **`linkKind:"gant
 }
 ```
 
-> Phase 3 records + renders the dependency; it does NOT auto-move the successor bar (auto-scheduling + a critical path are future). Keep the kinds distinct: `ganttDep` is a schedule dependency, not a Data Mapping (`mapping`) or ER relationship link.
+> The app records and draws the dependency; it does NOT auto-move the successor bar (auto-scheduling + a critical path are future). Keep the kinds distinct: `ganttDep` is a schedule dependency, not a Data Mapping (`mapping`) or ER relationship link.
 
 ---
 
@@ -1787,7 +1532,7 @@ A UML participant — a bordered header with an accent bar plus a dashed vertica
 **Default size:** `140 x 360`, **z:** `2000`
 
 **Properties:**
-- `participantRole` — `"generic"`, `"salesforce"`, `"api"`, or `"external"` (drives the accent-bar colour).
+- `participantRole` — `"generic"`, `"salesforce"`, `"api"`, or `"external"`. Set it; the loader tints the accent bar (top and bottom) from the table below.
 - `lifelinePortCount` — how many connectable points appear on each side of the lifeline (default `5`).
 - `showBottomLabel` — boolean, default `true`. When `true`, `headerBottom`, `headerBottomAccent`, `labelBottom`, and `underlineBottom` are visible.
 
@@ -1798,7 +1543,7 @@ Only the **accent bar** is tinted by the role colour; the header border, underli
 | `generic` | `#8A9099` |
 | `salesforce` | `#2E844A` |
 | `api` | `#1D73C9` |
-| `external` | `#F6B355` |
+| `external` | `#A06F03` |
 
 ```json
 {
@@ -1811,12 +1556,9 @@ Only the **accent bar** is tinted by the role colour; the header border, underli
   "lifelinePortCount": 5,
   "showBottomLabel": true,
   "attrs": {
-    "label":              { "text": "Salesforce" },
-    "labelBottom":        { "text": "Salesforce" },
-    "headerAccent":       { "fill": "#2E844A" },
-    "headerBottomAccent": { "fill": "#2E844A" }
-  },
-  "ports": { /* seq-left / seq-right port groups generated by the shape */ }
+    "label":       { "text": "Salesforce" },
+    "labelBottom": { "text": "Salesforce" }
+  }
 }
 ```
 
@@ -1827,7 +1569,7 @@ Stick-figure actor with an optional dashed lifeline.
 **Default size:** `100 x 92` (stick figure + label only), **z:** `2000`
 
 **Properties:**
-- `showLifeline` — boolean, default `false`. When `true`, the dashed lifeline and its ports appear and the element auto-resizes to `100 x 340`. When `false`, the actor renders as a compact stick-figure + label block.
+- `showLifeline` — boolean, default `false`. When `true`, the dashed lifeline and its ports appear; an actor shorter than 120 is grown to `100 x 340` on load, but size it to the lifeline you need. When `false`, the actor renders as a compact stick-figure + label block.
 - `lifelinePortCount` — how many connectable points appear on the lifeline when it is shown (default `5`).
 
 The stick figure uses the theme-aware `var(--node-text)` stroke by default — no role accent. A manual "Stroke" colour can still be applied via the properties panel if users want to tint an individual actor.
@@ -1850,7 +1592,7 @@ The stick figure uses the theme-aware `var(--node-text)` stroke by default — n
 
 #### sf.SequenceActivation
 
-Narrow grey box overlaid on a participant's lifeline to show when that participant is "active" (executing). It carries its own `lifelinePortCount` (default `2`) `seq-left` / `seq-right` port pairs, so messages can attach directly to the active box instead of the bare lifeline.
+Narrow grey box overlaid on a participant's lifeline to show when that participant is "active" (executing). It carries its own `lifelinePortCount` (default `2`) `seq-left` / `seq-right` port pairs - the loader builds that many - so messages can attach directly to the active box instead of the bare lifeline.
 
 **Default size:** `12 x 80`, **z:** `2200`
 
@@ -1877,12 +1619,12 @@ UML fragment box with a trapezoidal label tab in the top-left corner. Wraps the 
 **Default size:** `400 x 200`, **z:** `500`
 
 **Properties:**
-- `fragmentType` — **`"standard"` (default) or `"alternative"` — these are the only two values.** `standard` is a single-compartment frame (use it for loop / opt / par / critical / break). `alternative` is the UML `alt`: a dashed horizontal divider splits the frame into two compartments — for it to render you must *also* set the `dividerLine` and `elseText` attrs to `visibility: "visible"` (see example).
-- `fragmentLabel` — the free-text keyword shown in the title tab (default `"loop"`). **This is where the operator name (`loop` / `alt` / `opt` / `par` / `critical` / `break`) actually goes** — NOT `fragmentType`. The tab text re-syncs from this prop on import.
-- `condition` — top-compartment condition; the visible text lives in `attrs.conditionText.text` and is conventionally `[bracketed]`.
-- `elseCondition` — bottom-compartment condition (alternative only); visible text lives in `attrs.elseText.text`.
+- `fragmentType` — **`"standard"` (default) or `"alternative"` — these are the only two values.** `standard` is a single-compartment frame (use it for loop / opt / par / critical / break). `alternative` is the UML `alt`: the loader shows a dashed divider splitting the frame into two compartments.
+- `fragmentLabel` — the free-text keyword shown in the title tab (default `"loop"`). **This is where the operator name (`loop` / `alt` / `opt` / `par` / `critical` / `break`) actually goes** — NOT `fragmentType`. The loader writes it to the tab and sizes the tab to fit.
+- `condition` — top-compartment condition, WITHOUT brackets; the loader shows it as `[condition]`.
+- `elseCondition` — bottom-compartment condition (alternative only); shown as `[elseCondition]`, or `[else]` when empty.
 
-For a single-compartment fragment (e.g. a loop), set `"fragmentType": "standard"`, `"fragmentLabel": "loop"`, and omit `elseCondition` plus the `dividerLine` / `elseText` attrs.
+Set the props, not the text attrs: the loader derives `titleText`, `conditionText`, `dividerLine` and `elseText` from them.
 
 ```json
 {
@@ -1894,14 +1636,7 @@ For a single-compartment fragment (e.g. a loop), set `"fragmentType": "standard"
   "fragmentType": "alternative",
   "fragmentLabel": "alt",
   "condition": "customer exists",
-  "elseCondition": "customer not found",
-  "attrs": {
-    "body":          { "stroke": "#8A9099", "fill": "rgba(138,144,153,0.05)" },
-    "titleText":     { "text": "alt" },
-    "conditionText": { "text": "[customer exists]" },
-    "dividerLine":   { "visibility": "visible" },
-    "elseText":      { "text": "[customer not found]", "visibility": "visible" }
-  }
+  "elseCondition": "customer not found"
 }
 ```
 
@@ -1911,15 +1646,15 @@ Sequence messages are `standard.Link` instances that connect port-to-port betwee
 
 When a user draws an interactive link from a `seq-left` port to a `seq-right` port (the "right-to-left" UML reply direction), the app automatically sets `lineStyle: "6 4"` on the link. For generated JSON, set that property yourself on replies so they render dashed.
 
-| Operator | `style` | `arrow` | Visual |
-|----------|---------|---------|--------|
-| Sync request | `"solid"` | `"solid"` | Solid line + filled arrow head |
-| Sync response | `"dashed"` | `"solid"` | Dashed line + filled arrow head |
-| Open request (legacy) | `"solid"` | `"open"` | Solid line + open V head |
-| Open response (legacy) | `"dashed"` | `"open"` | Dashed line + open V head |
-| Async (fire-and-forget) | `"solid"` | `"openAsync"` | Solid line + open V head |
-| Async response | `"dashed"` | `"openAsync"` | Dashed line + open V head |
-| Lost | either | `"lost"` | Line ending in an `X` |
+The message KIND is the target marker and the line style - there is no message-type prop:
+
+| Message | `targetMarker` | Line |
+|---------|----------------|------|
+| Sync request | `{ "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" }` (filled) | solid |
+| Reply | the same filled arrow | top-level `"lineStyle": "6 4"` |
+| Async (fire-and-forget) | `{ "type": "path", "d": "M 0 -6 L -14 0 L 0 6", "fill": "none", "stroke": "#5E6B7A", "stroke-width": 2 }` (open) | solid |
+| Async reply | the open arrow | `"lineStyle": "6 4"` |
+| Lost | `{ "type": "path", "d": "M -10 -6 L 0 6 M -10 6 L 0 -6", "fill": "none", "stroke": "#5E6B7A", "stroke-width": 2 }` (an `X`) | either |
 
 ```json
 {
@@ -1952,8 +1687,6 @@ When a user draws an interactive link from a `seq-left` port to a `seq-right` po
 
 For a dashed response, set top-level `lineStyle` on the link to `"6 4"` (the app renders the dashes as a bg-coloured overlay so the arrow marker stays solid on Safari). Replies also typically swap direction: `source.port: "seq-port-left-<i>"` → `target.port: "seq-port-right-<i>"`.
 
-For an async open arrow, replace `targetMarker.d` with `"M -14 -6 L 0 0 L -14 6"` and add `"fill": "none", "stroke": "#5E6B7A", "stroke-width": 2`.
-
 **Legacy topLeft anchors still load.** Existing diagrams that use `anchor: { name: "topLeft", args: { dx, dy } }` will continue to render correctly, and the Auto Layout action compensates anchor `dy` values when it repositions lanes so those messages stay horizontal. New LLM-generated diagrams should prefer ports.
 
 ---
@@ -1978,7 +1711,7 @@ A layer is an `sf.Zone` carrying a `layerStage` property. **Place every DataObje
 
 - **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO — omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
 - **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do. Only the stream's own companion object lives in the Data Stream Zone - every real source table (in an org import, the suffix-less DSO names; DLOs carry `__dll`, DMOs `__dlm`) MUST stay in the Source Zone above. Start the Data Stream Zone ~56 px below the Source Zone's bottom edge so the two read as one ingestion column.
-- **Coordinates:** give each layer its own column. A workable grid: object width 260, ~200 px between columns ⇒ column pitch ≈ 480. e.g. Source objects at `x:80`, DLO at `x:560`, DMO at `x:1040`, Activation at `x:1520`. When objects are ~480 px wide (both label and API name shown — the Data Cloud norm, §3), keep **at least ~140 px clear between columns**, more if many links fan out of one object. Make each Zone ≈ `60` px wider/taller than the objects it wraps, with the objects inset ~`40` px. Or omit `viewport` and let the user run **Auto Layout** (it re-columns layers with a 200 px lane gap, 36 px between objects, top-aligned).
+- **Coordinates:** one column per layer, using the numbers in §3b: 260 px cards inset 48 px in a 356 px zone, zones 556 px apart (a 200 px gutter), so zone `x` = 0 / 556 / 1112 / 1668 and each card `x` = zone `x` + 48.
 - A generic `Layer` Zone (no `layerStage`) is available for grouping that isn't one of the canonical tiers; it reports its own label as the Data Layer.
 
 ### 2. Objects — `category` is mandatory for DLO/DMO
@@ -2000,29 +1733,29 @@ Populate `fields` as an array of field **objects** (never bare strings); see the
 - **`fid`** — give each field a short stable id (`"c_email"`, `"dlo_email"`, …). Field-level link ports derive from it (§4). If you omit it the app assigns one on load, but then *you can't reference the field from a link*, so **always set `fid` on any field you map**.
 - **`keyType`** — `"pk"` (primary key, amber), `"fk"` (foreign key, blue), or `"fqk"` (**Fully Qualified Key**, brand red). In Data Cloud the FQK is the primary key **qualified by its data source / source object** so identical ids from different sources stay distinct — mark a DLO/DMO primary key as `"fqk"` when it must be source-qualified. `"pk"`/`"fqk"` auto-set `required: true`.
 - **`deprecated`** — `true` strikes the row through (field still present but slated for removal). *(Replaces the old `decommissioned` flag — loaders migrate it.)*
-- **Type normalization (document the evolution across layers).** Source objects may use native source types (`varchar(255)`, `Id`, `nvarchar`, `timestamp`, `picklist`, `number(18,0)`). **DLO and DMO fields must normalize to Data Cloud's strict primitive set** in the `type` string:
+- **Type normalization (document the evolution across layers).** Source objects may use native source types (`varchar(255)`, `Id`, `nvarchar`, `timestamp`, `picklist`, `number(18,0)`). **DLO and DMO fields use Data Cloud's own type set** in the `type` string - the Data 360 field types are Text, Number, Percent, Date, DateTime, Boolean, Email, Phone and URL (plus Lookup on DMOs, which a diagram draws as a relationship link, not as a type):
 
-  | Data Cloud primitive (`type`) | Absorbs source types |
-  |---|---|
-  | `"Text"` | strings, ids, picklists, emails, phone, URLs |
-  | `"Number"` | int / decimal / double / currency / percent |
-  | `"Date"` / `"Date Time"` | date, datetime, timestamp |
-  | `"Boolean"` | true/false flags |
+  | Data Cloud type (`type`) | Absorbs source types | Where |
+  |---|---|---|
+  | `"Text"` | strings, ids, picklists | DLO and DMO. On a **standard** DMO also every email, phone and URL |
+  | `"Email"` / `"Phone"` / `"URL"` | email, phone, url | DLO, and custom DMO fields |
+  | `"Number"` / `"Percent"` | int / decimal / double / currency; percent | DLO and DMO |
+  | `"Date"` / `"DateTime"` | date, datetime, timestamp | DLO and DMO |
+  | `"Boolean"` | true/false flags | DLO, and custom DMO fields |
 
-  Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** — real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
+  A DLO keeps the type its data stream gave it: a Salesforce CRM stream keeps `email`, `phone` and `url` (measured on an org's `Contact_Home__dll`), while the standard DMO fields those map to (`ContactPointEmail.EmailAddress`, `ContactPointPhone.TelephoneNumber`, `Individual.PhotoURL`) are `Text`. Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** — real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
 
-### 3b. Geometry and layers: MEASURE the shipped template (v1.22.0)
+### 3b. Geometry and layers
 
-`templates/` carries an official diagram for both data types, and it **is** the contract. Three converters
-shipped with invented numbers and all three validated cleanly while looking nothing like the app's own output -
-the validator proves a diagram LOADS, not that it reads right.
+Use these numbers. The validator proves a diagram LOADS, not that it reads right, and invented geometry is the
+usual way a generated diagram looks nothing like the app's own.
 
 | | Data Mapping | Data Model |
 |---|---|---|
 | Card width | **260** | **480** (an ERD row is `Label (ApiName)` + a type column) |
-| Lane / zone width | **292** on a **492** pitch | n/a |
-| Card inset in lane | **16** | n/a |
-| First card / card gap | **44** / **36** | |
+| Lane / zone width | **356** on a **556** pitch (200 px gutter) | n/a |
+| Card inset in lane | **48** left, right and bottom - the app's frame fit, so a card drag never resizes the zone | n/a |
+| First card / card gap | zone `y` + **48** / **36** | |
 | Link ports | `field-right-*` -> `field-left-*` | child FK field `field-<side>-<fid>` -> parent header `er-<side>` - **FIELD level** in the Table view (what `objects-to-diagramforce.mjs` emits); `er-right` -> `er-left` only for an object-level relationship with no key field |
 | Link router / connector | applied on load from `linkKind` | **you must author** `router:{name:"sfManhattan"}` + `connector:{name:"rounded",args:{radius:8}}` |
 
@@ -2039,9 +1772,9 @@ the validator proves a diagram LOADS, not that it reads right.
 >              "label": { "text": "Data Lake Object", "fill": "#A06F03" } } }
 > ```
 > Accents: `source`/`datastream` `#1D73C9`, `dlo` `#A06F03`, `dmo` `#DA4E55`, `activation` `#008B46`. Each
-> card's `headerColor` takes its own lane's accent.
+> card's `headerColor` takes its own lane's accent (the loader paints the header from it).
 
-**Field mix on an ERD card:** 105 of the official model's 169 fields carry NO key, 43 are fk, 21 are pk. Do not
+**Field mix on an ERD card:** 105 of the official model's 167 fields carry NO key, 42 are fk, 20 are pk. Do not
 fill a card with foreign keys - a standard object has ~15 lookups and they will consume the whole budget before
 a single business field. A reader identifies a record by its name, not its `MasterRecordId`.
 
@@ -2062,7 +1795,7 @@ A mapping link carries one attribute from a source-side field to a target-side f
 
 That is the **minimal** correct form — endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#A06F03`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
 
-The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour — which is how a user's deliberate recolour survives a reload. Authoring the canonical amber explicitly is still valid and produces an identical result. (Before v1.22.0 the colour was *not* auto-applied, so pre-existing JSON that sets it is unaffected.)
+The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour — which is how a user's deliberate recolour survives a reload. So author NO line attrs, or author BOTH `stroke: "#A06F03"` and `strokeWidth: 1`: either one alone switches the heal off and leaves a grey 1 px or an amber 2 px line.
 
 | `mappingType` | Code badge on target | Meaning |
 |---|---|---|
@@ -2072,7 +1805,7 @@ The style heal is **gated on the line being untouched** (`standard.Link`'s `#333
 | `"Batch Transform"` | `BT` | Scheduled batch transform. |
 | `"Calculated Insight"` | `CI` | Multi-dimensional metric (CI). |
 
-For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` — it surfaces in the link inspector and the table's *Expression / Rule* column. (`mappingType`/`expressionRule` superseded the pre-release `mapsTo`/`mappingLabel`, still read as fallbacks.)
+For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` — it surfaces in the link inspector and the table's *Expression / Rule* column. (`expressionRule` superseded the pre-release `mappingLabel`, which is still read as a fallback.)
 
 **Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column — e.g. a Source object feeding the Data Stream Zone stacked below it — anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
 
@@ -2097,8 +1830,8 @@ To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER mo
   "router": { "name": "sfManhattan" },
   "connector": { "name": "rounded", "args": { "radius": 8 } },
   "attrs": { "line": { "stroke": "#888888", "strokeWidth": 2,
-    "sourceMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888" },
-    "targetMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888" } } }
+    "sourceMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888", "stroke-width": 2 },
+    "targetMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888", "stroke-width": 2 } } }
 }
 ```
 
@@ -2106,65 +1839,39 @@ Keep the two link kinds distinct: **field-level = `linkKind:"mapping"`, amber, f
 
 Two composition rules that make a large mapping read well:
 
-- **Pair overlay: one grey ER link per mapped object pair.** For every object pair that exchanges field mappings, also draw a single header-level relationship link (`er-right → er-left`, grey, ONE at the feeding object, MANY into the fed object; skip `→ Activation` pairs and source→Data-Stream key inputs). The diagram then reads at two levels — object relationships at a glance, field lineage in detail. Derive the pair list from the mapping links themselves so it can't drift.
+- **Pair overlay: one grey ER link per mapped object pair.** For every object pair that exchanges field mappings, also draw a single header-level relationship link (`er-right → er-left`, grey, ONE at the feeding object, ONE-OR-MANY into the fed object - a mapped record can land in one fed record or several; skip `→ Activation` pairs and source→Data-Stream key inputs). The diagram then reads at two levels — object relationships at a glance, field lineage in detail. Derive the pair list from the mapping links themselves so it can't drift.
 - **Identity Resolution is a relationship, never a field mapping.** IR *generates* the Unified records — their keys and attributes are reconciled, not copied — so **no mapping link may point into Unified Individual** (a `Batch Transform` into the unified PK is the tell-tale mistake). Draw the identity spine `Individual → Unified Link Individual → Unified Individual` as grey ER relationship links (no `linkKind`, labelled "Identity Resolution", `port-top`/`port-bottom` when the three are stacked in one column), and give the unified objects no Source/DLO feed.
 
-### 6. Worked example — Contact → DLO → DMO
+### 6. Worked example — Contact → DLO → Individual and Contact Point Email
 
-A complete, importable three-layer mapping (Source CRM Contact → Contact DLO → Individual DMO), with one `Formula` mapping. Copy, import, then run Auto Layout to tidy.
+A complete, importable three-layer mapping, built on real object and field names. It follows §3 (types per layer),
+§3b (geometry), §4 (minimal mapping links), §5 (one grey ER link per mapped pair, plus the DMO-to-DMO relationship)
+and §7 (every source and DLO field mapped; every DMO key mapped). The email goes to **Contact Point Email**: the
+Individual DMO has no email or phone field - contact points are their own objects.
 
 ```json
 {
-  "version": 1, "appVersion": "1.24.4", "title": "Contact → Individual Mapping", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.24.6", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
-    { "id": "zone-src", "type": "sf.Zone", "position": { "x": 40, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
-      "layerStage": "source", "embeds": ["obj-src"],
-      "attrs": { "body": { "fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9", "strokeWidth": 1, "strokeDasharray": "8 4" },
-        "label": { "text": "Source", "fill": "#1D73C9" } } },
-    { "id": "obj-src", "type": "sf.DataObject", "position": { "x": 80, "y": 100 }, "size": { "width": 260, "height": 102 }, "z": 2000,
-      "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9",
-      "fields": [
-        { "label": "Id", "apiName": "Id", "type": "Id", "keyType": "pk", "fid": "s_id", "required": true },
-        { "label": "Email", "apiName": "Email", "type": "varchar(255)", "keyType": null, "fid": "s_email" },
-        { "label": "First Name", "apiName": "FirstName", "type": "varchar(40)", "keyType": null, "fid": "s_fname" }
-      ],
-      "attrs": { "header": { "fill": "#1D73C9" }, "headerCover": { "fill": "#1D73C9" }, "headerLabel": { "text": "Salesforce Contact" } } },
-
-    { "id": "zone-dlo", "type": "sf.Zone", "position": { "x": 520, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
-      "layerStage": "dlo", "embeds": ["obj-dlo"],
-      "attrs": { "body": { "fill": "rgba(160,111,3,0.05)", "stroke": "#A06F03", "strokeWidth": 1, "strokeDasharray": "8 4" },
-        "label": { "text": "Data Lake Object", "fill": "#A06F03" } } },
-    { "id": "obj-dlo", "type": "sf.DataObject", "position": { "x": 560, "y": 100 }, "size": { "width": 260, "height": 102 }, "z": 2000,
-      "parent": "zone-dlo", "objectName": "Contact DLO", "headerColor": "#A06F03", "category": "Profile",
-      "fields": [
-        { "label": "Id", "apiName": "Id__c", "type": "Text", "keyType": "fqk", "fid": "d_id", "required": true },
-        { "label": "Email", "apiName": "Email__c", "type": "Text", "keyType": null, "fid": "d_email" },
-        { "label": "First Name", "apiName": "FirstName__c", "type": "Text", "keyType": null, "fid": "d_fname" }
-      ],
-      "attrs": { "header": { "fill": "#A06F03" }, "headerCover": { "fill": "#A06F03" }, "headerLabel": { "text": "Contact DLO" } } },
-
-    { "id": "zone-dmo", "type": "sf.Zone", "position": { "x": 1000, "y": 40 }, "size": { "width": 340, "height": 280 }, "z": 0,
-      "layerStage": "dmo", "embeds": ["obj-dmo"],
-      "attrs": { "body": { "fill": "rgba(218,78,85,0.05)", "stroke": "#DA4E55", "strokeWidth": 1, "strokeDasharray": "8 4" },
-        "label": { "text": "Data Model Object", "fill": "#DA4E55" } } },
-    { "id": "obj-dmo", "type": "sf.DataObject", "position": { "x": 1040, "y": 100 }, "size": { "width": 260, "height": 102 }, "z": 2000,
-      "parent": "zone-dmo", "objectName": "Individual", "headerColor": "#DA4E55", "category": "Profile",
-      "fields": [
-        { "label": "Id", "apiName": "Id", "type": "Text", "keyType": "fqk", "fid": "m_id", "required": true },
-        { "label": "Email", "apiName": "Email", "type": "Text", "keyType": null, "fid": "m_email" },
-        { "label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "m_fname" }
-      ],
-      "attrs": { "header": { "fill": "#DA4E55" }, "headerCover": { "fill": "#DA4E55" }, "headerLabel": { "text": "Individual" } } },
-
-    { "id": "map-1", "type": "standard.Link", "source": { "id": "obj-src", "port": "field-right-s_email" }, "target": { "id": "obj-dlo", "port": "field-left-d_email" },
-      "linkKind": "mapping", "mappingType": "Standard",
-      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
-    { "id": "map-2", "type": "standard.Link", "source": { "id": "obj-dlo", "port": "field-right-d_email" }, "target": { "id": "obj-dmo", "port": "field-left-m_email" },
-      "linkKind": "mapping", "mappingType": "Standard",
-      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } },
-    { "id": "map-3", "type": "standard.Link", "source": { "id": "obj-dlo", "port": "field-right-d_fname" }, "target": { "id": "obj-dmo", "port": "field-left-m_fname" },
-      "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "PROPERCASE(FirstName__c)",
-      "attrs": { "line": { "stroke": "#A06F03", "strokeWidth": 1, "targetMarker": { "type": "path", "d": "M 0 -6 L -14 0 L 0 6 z" } } } }
+    {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
+    {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
+    {"id": "zone-dlo", "type": "sf.Zone", "position": {"x": 596, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "dlo", "embeds": ["obj-dlo"], "attrs": {"body": {"fill": "rgba(160,111,3,0.05)", "stroke": "#A06F03"}, "label": {"text": "Data Lake Object", "fill": "#A06F03"}}},
+    {"id": "obj-dlo", "type": "sf.DataObject", "position": {"x": 644, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-dlo", "objectName": "Contact_Home", "headerColor": "#A06F03", "category": "Profile", "fields": [{"label": "Id", "apiName": "Id__c", "type": "Text", "keyType": "pk", "fid": "d_id", "required": true}, {"label": "Email", "apiName": "Email__c", "type": "Email", "keyType": null, "fid": "d_email"}, {"label": "First Name", "apiName": "FirstName__c", "type": "Text", "keyType": null, "fid": "d_fname"}]},
+    {"id": "zone-dmo", "type": "sf.Zone", "position": {"x": 1152, "y": 40}, "size": {"width": 356, "height": 342}, "z": 0, "layerStage": "dmo", "embeds": ["obj-ind", "obj-cpe"], "attrs": {"body": {"fill": "rgba(218,78,85,0.05)", "stroke": "#DA4E55"}, "label": {"text": "Data Model Object", "fill": "#DA4E55"}}},
+    {"id": "obj-ind", "type": "sf.DataObject", "position": {"x": 1200, "y": 88}, "size": {"width": 260, "height": 94}, "z": 2000, "parent": "zone-dmo", "objectName": "Individual", "headerColor": "#DA4E55", "category": "Profile", "fields": [{"label": "Individual Id", "apiName": "ssot__Id__c", "type": "Text", "keyType": "pk", "fid": "i_id", "required": true}, {"label": "First Name", "apiName": "ssot__FirstName__c", "type": "Text", "keyType": null, "fid": "i_fname"}]},
+    {"id": "obj-cpe", "type": "sf.DataObject", "position": {"x": 1200, "y": 218}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-dmo", "objectName": "Contact Point Email", "headerColor": "#DA4E55", "category": "Profile", "fields": [{"label": "Contact Point Email Id", "apiName": "ssot__Id__c", "type": "Text", "keyType": "pk", "fid": "e_id", "required": true}, {"label": "Party", "apiName": "ssot__PartyId__c", "type": "Text", "keyType": "fk", "fid": "e_party"}, {"label": "Email Address", "apiName": "ssot__EmailAddress__c", "type": "Text", "keyType": null, "fid": "e_addr"}]},
+    {"id": "map-id", "type": "standard.Link", "source": {"id": "obj-src", "port": "field-right-s_id"}, "target": {"id": "obj-dlo", "port": "field-left-d_id"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-email", "type": "standard.Link", "source": {"id": "obj-src", "port": "field-right-s_email"}, "target": {"id": "obj-dlo", "port": "field-left-d_email"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-fname", "type": "standard.Link", "source": {"id": "obj-src", "port": "field-right-s_fname"}, "target": {"id": "obj-dlo", "port": "field-left-d_fname"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-ind-id", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "field-right-d_id"}, "target": {"id": "obj-ind", "port": "field-left-i_id"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-ind-fname", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "field-right-d_fname"}, "target": {"id": "obj-ind", "port": "field-left-i_fname"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "PROPER(FirstName__c)"},
+    {"id": "map-cpe-id", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "field-right-d_id"}, "target": {"id": "obj-cpe", "port": "field-left-e_id"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "CONCAT(Id__c, '-email')"},
+    {"id": "map-cpe-party", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "field-right-d_id"}, "target": {"id": "obj-cpe", "port": "field-left-e_party"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-cpe-addr", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "field-right-d_email"}, "target": {"id": "obj-cpe", "port": "field-left-e_addr"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "pair-src-dlo", "type": "standard.Link", "source": {"id": "obj-src", "port": "er-right"}, "target": {"id": "obj-dlo", "port": "er-left"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}},
+    {"id": "pair-dlo-ind", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "er-right"}, "target": {"id": "obj-ind", "port": "er-left"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}},
+    {"id": "pair-dlo-cpe", "type": "standard.Link", "source": {"id": "obj-dlo", "port": "er-right"}, "target": {"id": "obj-cpe", "port": "er-left"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0 M 3 -8 L 3 8", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}},
+    {"id": "rel-ind-cpe", "type": "standard.Link", "source": {"id": "obj-ind", "port": "port-bottom"}, "target": {"id": "obj-cpe", "port": "port-top"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}}
   ] }
 }
 ```
@@ -2188,16 +1895,15 @@ A syntactically valid mapping can still be **incomplete** — a box or field wit
 
 ### 8. Validation checklist (avoid the common mistakes)
 
-- ✅ `"diagramType": "datamapping"` — **not** `"mapping"` or `"data"`.
+- ✅ `"diagramType": "datamapping"` (`"mapping"` is an accepted alias; `"data"` opens a Data Model instead).
 - ✅ Layers are `sf.Zone` with `layerStage` (`source`/`datastream`/`dlo`/`dmo`/`activation`) — **not** a `sf.Container` named "Source".
 - ✅ Every DataObject is **embedded** in its layer Zone: object `parent` = zone id **and** zone `embeds` includes the object id.
 - ✅ Object typing is `category` = `Profile`/`Engagement`/`Other` (top-level, set on every DLO/DMO) — **not** `objectCategory`.
 - ✅ Field links reference ports via the endpoint **`port`** key as `field-right-<fid>` / `field-left-<fid>` — **not** `<fid>#fieldRight`. Source side uses `field-right-…`, target side `field-left-…`.
-- ✅ Mapping links: `linkKind:"mapping"`, amber `#A06F03` stroke, `strokeWidth:1`, `mappingType` from the five-value set; add `expressionRule` for non-`Standard`. Do **not** set `sfManhattan` on a mapping link — the app applies `sfMappingRouter`.
+- ✅ Mapping links: `linkKind:"mapping"` and a `mappingType` from the five-value set, NO `attrs` (the loader applies the amber 1 px look; author both `stroke` and `strokeWidth` or neither); add `expressionRule` for non-`Standard`. Do **not** set a router on a mapping link — the app applies `sfMappingRouter`.
 - ✅ ER relationship links: **no** `linkKind`, header ports (`er-left`/`er-right`), `sfManhattan` router, crow's-foot markers.
-- ✅ Mark any field you connect with a `fid`; never list field ports in `ports.items`.
-- ✅ Keep every OOTB port — **never** drop ports that have no connector. They are the user's attachment points for edits made after generation.
-- ✅ Normalize DLO/DMO field `type` to `Text`/`Number`/`Date`/`Date Time`/`Boolean`; keep native types only on Source objects (and remember standard DMO flags are `Text`, not `Boolean` — §3).
+- ✅ Mark any field you connect with a `fid`; omit `ports` entirely (never a partial list - the app builds every port, and a dropped one is an attachment point the user loses).
+- ✅ DLO/DMO field `type` from Data Cloud's set (`Text`/`Number`/`Percent`/`Date`/`DateTime`/`Boolean`/`Email`/`Phone`/`URL`); keep native types only on Source objects, and remember a **standard** DMO field is `Text` for flags, emails, phones and URLs (§3).
 - ✅ Every `data-icon-id` token comes from the **Icon ID reference** tables — never invent an SLDS-sounding name (an unknown ID renders an invisible blank). No fitting token → `href: ""`. Icons are all-or-none per diagram: a mix of iconed and icon-less objects reads as a bug.
 - ✅ No unconnected objects; field-level connectivity audited per §7 (Source/Data Stream/DLO/Activation fields all linked; keyed DMO fields mapped or exempted with a reason).
 - ✅ No mapping link points into Unified Individual — the identity spine is grey ER links (§5).
@@ -2218,26 +1924,26 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
     "cells": [
       { "id": "title", "type": "sf.TextLabel", "position": { "x": 60, "y": 24 }, "size": { "width": 600, "height": 28 }, "attrs": { "label": { "text": "**Order-to-Cash** - Salesforce to ERP integration (Level 2)" } } },
 
-      { "id": "sfcore", "type": "sf.Container", "position": { "x": 60, "y": 90 }, "size": { "width": 240, "height": 230 }, "attrs": { "accent": { "fill": "#1D73C9" }, "accentFill": { "fill": "#1D73C9" }, "headerLabel": { "text": "Salesforce Core" } }, "embeds": ["sales", "service"] },
-      { "id": "sales",   "type": "sf.SimpleNode", "parent": "sfcore", "position": { "x": 80, "y": 146 }, "size": { "width": 200, "height": 60 }, "attrs": { "label": { "text": "Sales Cloud" }, "subtitle": { "text": "Opportunities, Quotes" } } },
-      { "id": "service", "type": "sf.SimpleNode", "parent": "sfcore", "position": { "x": 80, "y": 236 }, "size": { "width": 200, "height": 60 }, "attrs": { "label": { "text": "Service Cloud" }, "subtitle": { "text": "Cases, Entitlements" } } },
+      { "id": "sfcore", "type": "sf.Container", "position": { "x": 60, "y": 90 }, "size": { "width": 296, "height": 286 }, "attrs": { "accent": { "fill": "#1D73C9" }, "accentFill": { "fill": "#1D73C9" }, "headerLabel": { "text": "Salesforce Core" } }, "embeds": ["sales", "service"] },
+      { "id": "sales",   "type": "sf.SimpleNode", "parent": "sfcore", "position": { "x": 108, "y": 178 }, "size": { "width": 200, "height": 60 }, "attrs": { "label": { "text": "Sales Cloud" }, "subtitle": { "text": "Opportunities, Quotes" } } },
+      { "id": "service", "type": "sf.SimpleNode", "parent": "sfcore", "position": { "x": 108, "y": 268 }, "size": { "width": 200, "height": 60 }, "attrs": { "label": { "text": "Service Cloud" }, "subtitle": { "text": "Cases, Entitlements" } } },
 
-      { "id": "erp", "type": "sf.SimpleNode", "position": { "x": 480, "y": 150 }, "size": { "width": 220, "height": 64 }, "attrs": { "label": { "text": "SAP ERP" }, "subtitle": { "text": "Orders, Invoices" }, "body": { "stroke": "#F6B355", "strokeWidth": 2 } } },
+      { "id": "erp", "type": "sf.SimpleNode", "position": { "x": 480, "y": 221 }, "size": { "width": 220, "height": 64 }, "attrs": { "label": { "text": "SAP ERP" }, "subtitle": { "text": "Orders, Invoices" }, "body": { "stroke": "#A06F03", "strokeWidth": 2 } } },
 
-      { "id": "l1", "type": "standard.Link", "source": { "id": "sales", "port": "port-right" }, "target": { "id": "erp", "port": "port-left" }, "connectionFrequency": "Real-time" },
-      { "id": "l2", "type": "standard.Link", "source": { "id": "service", "port": "port-right" }, "target": { "id": "erp", "port": "port-left" }, "connectionFrequency": "Nightly batch" },
+      { "id": "l1", "type": "standard.Link", "source": { "id": "sales", "port": "port-right" }, "target": { "id": "erp", "port": "port-left" }, "connectionFrequency": "Real-time", "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "l2", "type": "standard.Link", "source": { "id": "service", "port": "port-right" }, "target": { "id": "erp", "port": "port-left" }, "connectionFrequency": "Nightly batch", "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
 
-      { "id": "note", "type": "sf.Note", "position": { "x": 480, "y": 270 }, "size": { "width": 220, "height": 80 }, "attrs": { "label": { "text": "Orders sync via MuleSoft. See integration runbook." } } },
+      { "id": "note", "type": "sf.Note", "position": { "x": 480, "y": 320 }, "size": { "width": 220, "height": 120 }, "attrs": { "label": { "text": "Integration" }, "subtitle": { "text": "Orders sync via MuleSoft. See the integration runbook." } } },
 
-      { "id": "leg1", "type": "df.Legend", "position": { "x": 60, "y": 360 }, "attrs": { "swatch": { "fill": "#1D73C9" }, "label": { "text": "Salesforce platform" } } },
-      { "id": "leg2", "type": "df.Legend", "position": { "x": 60, "y": 396 }, "attrs": { "swatch": { "fill": "#F6B355" }, "label": { "text": "External system" } } }
+      { "id": "leg1", "type": "df.Legend", "position": { "x": 60, "y": 410 }, "attrs": { "swatch": { "fill": "#1D73C9" }, "label": { "text": "Salesforce platform" } } },
+      { "id": "leg2", "type": "df.Legend", "position": { "x": 60, "y": 446 }, "attrs": { "swatch": { "fill": "#A06F03" }, "label": { "text": "External system" } } }
     ]
   }
 }
@@ -2245,123 +1951,18 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 
 ### Data Model (ERD)
 
-Two related Salesforce objects with ER notation:
+Two related Salesforce objects: 480 px cards (§3b), the header drawn from `objectName` / `headerColor`, no `ports`,
+and one FIELD-level relationship drawn from the ONE end (Account's header) to the MANY end (Contact's `AccountId`
+row), so the Table view reports it as a field-level `1:Many`.
 
 ```json
 {
-  "version": 1,
-  "appVersion": "1.24.4",
-  "timestamp": 1712700000000,
-  "title": "Account-Contact ERD",
-  "diagramType": "datamodel",
-  "graph": {
-    "cells": [
-      {
-        "id": "obj-account",
-        "type": "sf.DataObject",
-        "position": { "x": 100, "y": 100 },
-        "size": { "width": 260, "height": 152 },
-        "z": 2000,
-        "objectName": "Account",
-        "headerColor": "#1D73C9",
-        "fields": [
-          { "label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "length": null, "required": false, "deprecated": false },
-          { "label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "length": 255, "required": true, "deprecated": false },
-          { "label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "length": null, "required": false, "deprecated": false, "sampleValues": "Technology, Manufacturing" },
-          { "label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "length": null, "required": false, "deprecated": false },
-          { "label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "length": null, "required": true, "deprecated": false }
-        ],
-        "showLabels": false,
-        "showFieldLengths": false,
-        "keyFieldsOnly": false,
-        "attrs": {
-          "body": { "width": "calc(w)", "height": "calc(h)", "rx": 4, "ry": 4, "fill": "var(--node-bg)", "stroke": "var(--node-border)", "strokeWidth": 1 },
-          "header": { "width": "calc(w)", "height": 32, "rx": 4, "ry": 4, "fill": "#1D73C9", "stroke": "none" },
-          "headerCover": { "width": "calc(w)", "height": 16, "y": 16, "fill": "#1D73C9", "stroke": "none" },
-          "headerIcon": { "x": 10, "y": 8, "width": 16, "height": 16, "href": "data:image/svg+xml,<svg data-icon-id=\"account\"/>" },
-          "headerLabel": { "x": 32, "y": 16, "textAnchor": "start", "textVerticalAnchor": "middle", "fontSize": 13, "fontWeight": "bold", "fontFamily": "system-ui, -apple-system, sans-serif", "fill": "#FFFFFF", "text": "Account" }
-        },
-        "ports": {
-          "groups": {
-            "top":    { "position": { "name": "top" },    "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] },
-            "bottom": { "position": { "name": "bottom" }, "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] }
-          },
-          "items": [
-            { "id": "port-top", "group": "top" },
-            { "id": "port-bottom", "group": "bottom" }
-          ]
-        }
-      },
-      {
-        "id": "obj-contact",
-        "type": "sf.DataObject",
-        "position": { "x": 500, "y": 100 },
-        "size": { "width": 260, "height": 152 },
-        "z": 2000,
-        "objectName": "Contact",
-        "headerColor": "#7F2B82",
-        "fields": [
-          { "label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "length": null, "required": false, "deprecated": false },
-          { "label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "length": 255, "required": true, "deprecated": false },
-          { "label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "length": null, "required": false, "deprecated": false, "sampleValues": "jane@acme.com, sam@globalmedia.com" },
-          { "label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "length": null, "required": false, "deprecated": false },
-          { "label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "length": 128, "required": false, "deprecated": false }
-        ],
-        "showLabels": false,
-        "showFieldLengths": false,
-        "keyFieldsOnly": false,
-        "attrs": {
-          "body": { "width": "calc(w)", "height": "calc(h)", "rx": 4, "ry": 4, "fill": "var(--node-bg)", "stroke": "var(--node-border)", "strokeWidth": 1 },
-          "header": { "width": "calc(w)", "height": 32, "rx": 4, "ry": 4, "fill": "#7F2B82", "stroke": "none" },
-          "headerCover": { "width": "calc(w)", "height": 16, "y": 16, "fill": "#7F2B82", "stroke": "none" },
-          "headerIcon": { "x": 10, "y": 8, "width": 16, "height": 16, "href": "data:image/svg+xml,<svg data-icon-id=\"contact\"/>" },
-          "headerLabel": { "x": 32, "y": 16, "textAnchor": "start", "textVerticalAnchor": "middle", "fontSize": 13, "fontWeight": "bold", "fontFamily": "system-ui, -apple-system, sans-serif", "fill": "#FFFFFF", "text": "Contact" }
-        },
-        "ports": {
-          "groups": {
-            "top":    { "position": { "name": "top" },    "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] },
-            "bottom": { "position": { "name": "bottom" }, "attrs": { "circle": { "r": 5, "magnet": true, "fill": "var(--port-color, #1D73C9)", "stroke": "#FFFFFF", "strokeWidth": 1.5 } }, "markup": [{ "tagName": "circle", "selector": "circle" }] }
-          },
-          "items": [
-            { "id": "port-top", "group": "top" },
-            { "id": "port-bottom", "group": "bottom" }
-          ]
-        }
-      },
-      {
-        "id": "link-account-contact",
-        "type": "standard.Link",
-        "z": 3001,
-        "source": { "id": "obj-account", "port": "port-top" },
-        "target": { "id": "obj-contact", "port": "port-top" },
-        "attrs": {
-          "line": {
-            "stroke": "#888888",
-            "strokeWidth": 2,
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#888888",
-              "stroke-width": 2
-            },
-            "targetMarker": {
-              "type": "path",
-              "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "none",
-              "stroke": "#888888",
-              "stroke-width": 2
-            }
-          }
-        },
-        "labels": [
-          { "position": 0.5, "attrs": { "text": { "text": "has" } } }
-        ],
-        "router": { "name": "sfManhattan" },
-        "connector": { "name": "rounded", "args": { "radius": 8 } }
-      }
-    ]
-  }
+  "version": 1, "appVersion": "1.24.6", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "graph": { "cells": [
+    {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
+    {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
+    {"id": "rel-account-contact", "type": "standard.Link", "source": {"id": "obj-account", "port": "er-right"}, "target": {"id": "obj-contact", "port": "field-left-c_account"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}, "labels": [{"position": 0.5, "attrs": {"text": {"text": "has"}}}]}
+  ] }
 }
 ```
 
@@ -2377,7 +1978,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2407,7 +2008,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2440,7 +2041,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2460,17 +2061,17 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
       { "id": "t4", "type": "sf.BpmnTask", "position": { "x": 430, "y": 380 }, "size": { "width": 150, "height": 68 }, "attrs": { "label": { "text": "Send rejection notice" } } },
       { "id": "rej", "type": "sf.BpmnEvent", "eventType": "end", "position": { "x": 640, "y": 392 }, "size": { "width": 48, "height": 48 }, "attrs": { "body": { "fill": "#F9E3E5", "stroke": "#DA4E55", "strokeWidth": 4 }, "icon": { "fill": "#DA4E55" }, "label": { "text": "Rejected" } } },
 
-      { "id": "a1", "type": "standard.Link", "source": { "id": "anno", "port": "port-bottom" }, "target": { "id": "t1", "port": "port-top" }, "lineStyle": "2 4" },
-      { "id": "f1", "type": "standard.Link", "source": { "id": "start", "port": "port-right" }, "target": { "id": "t1", "port": "port-left" } },
-      { "id": "f2", "type": "standard.Link", "source": { "id": "t1", "port": "port-right" }, "target": { "id": "gw1", "port": "port-left" } },
-      { "id": "f3", "type": "standard.Link", "source": { "id": "gw1", "port": "port-right" }, "target": { "id": "gw2", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "Yes" } } } ] },
-      { "id": "f4", "type": "standard.Link", "source": { "id": "gw1", "port": "port-bottom" }, "target": { "id": "t4", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "No" } } } ] },
-      { "id": "f5", "type": "standard.Link", "source": { "id": "gw2", "port": "port-top" }, "target": { "id": "t2", "port": "port-left" } },
-      { "id": "f6", "type": "standard.Link", "source": { "id": "gw2", "port": "port-bottom" }, "target": { "id": "t3", "port": "port-left" } },
-      { "id": "f7", "type": "standard.Link", "source": { "id": "t2", "port": "port-right" }, "target": { "id": "gw3", "port": "port-top" } },
-      { "id": "f8", "type": "standard.Link", "source": { "id": "t3", "port": "port-right" }, "target": { "id": "gw3", "port": "port-bottom" } },
-      { "id": "f9", "type": "standard.Link", "source": { "id": "gw3", "port": "port-right" }, "target": { "id": "done", "port": "port-left" } },
-      { "id": "f10", "type": "standard.Link", "source": { "id": "t4", "port": "port-right" }, "target": { "id": "rej", "port": "port-left" } }
+      { "id": "a1", "type": "standard.Link", "source": { "id": "anno", "port": "port-bottom" }, "target": { "id": "t1", "port": "port-top" }, "lineStyle": "2 4", "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f1", "type": "standard.Link", "source": { "id": "start", "port": "port-right" }, "target": { "id": "t1", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f2", "type": "standard.Link", "source": { "id": "t1", "port": "port-right" }, "target": { "id": "gw1", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f3", "type": "standard.Link", "source": { "id": "gw1", "port": "port-right" }, "target": { "id": "gw2", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "Yes" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f4", "type": "standard.Link", "source": { "id": "gw1", "port": "port-bottom" }, "target": { "id": "t4", "port": "port-left" }, "labels": [ { "attrs": { "text": { "text": "No" } } } ], "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f5", "type": "standard.Link", "source": { "id": "gw2", "port": "port-top" }, "target": { "id": "t2", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f6", "type": "standard.Link", "source": { "id": "gw2", "port": "port-bottom" }, "target": { "id": "t3", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f7", "type": "standard.Link", "source": { "id": "t2", "port": "port-right" }, "target": { "id": "gw3", "port": "port-top" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f8", "type": "standard.Link", "source": { "id": "t3", "port": "port-right" }, "target": { "id": "gw3", "port": "port-bottom" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f9", "type": "standard.Link", "source": { "id": "gw3", "port": "port-right" }, "target": { "id": "done", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "f10", "type": "standard.Link", "source": { "id": "t4", "port": "port-right" }, "target": { "id": "rej", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } }
     ]
   }
 }
@@ -2483,7 +2084,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2522,30 +2123,33 @@ top-level `personName` / `jobTitle` / `iconText` (avatar initials) / `raci` (`{R
 `vacant` (dashed "to be hired" placeholder) / a `details` array - the view renders every label and AUTO-SIZES from
 these props (never hand-write the label `attrs` or a tall `size`). A **Team is an `sf.Container`** (header via
 `attrs.headerLabel.text` + accent colour) that EMBEDS its people: set BOTH the container `embeds[]` and each person's
-`parent`. Reporting links join `port-bottom` → `port-top`. (Wrap the teams in a Department `sf.Zone` the same way for
-another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead - see their Shape Reference.)
-*(Validated with `validate-diagram.mjs`; rendered in-app.)*
+`parent`. Reporting links join `port-bottom` → `port-top` and, like every relationship link, carry
+`router: { "name": "sfManhattan" }` - without it an org link renders as a straight diagonal. (Wrap the teams in a
+Department `sf.Zone` the same way for another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup`
+instead - see their Shape Reference.) To chart a real org's **Salesforce role hierarchy**, do not author it by hand:
+the skill's `roles-to-diagramforce.mjs` builds it from one `UserRole` query, and the app takes the same query result
+on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.)*
 
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
     "cells": [
-      { "id": "lead", "type": "sf.OrgPerson", "position": { "x": 280, "y": 40 }, "personName": "Maria Chen", "jobTitle": "Programme Lead", "iconText": "MC", "raci": { "A": true }, "tags": ["sponsor"], "details": [ { "label": "Stream", "value": "Delivery" }, { "label": "Location", "value": "London" } ] },
+      { "id": "lead", "type": "sf.OrgPerson", "position": { "x": 336, "y": 40 }, "personName": "Maria Chen", "jobTitle": "Programme Lead", "iconText": "MC", "raci": { "A": true }, "tags": ["sponsor"], "details": [ { "label": "Stream", "value": "Delivery" }, { "label": "Location", "value": "London" } ] },
 
-      { "id": "platform", "type": "sf.Container", "position": { "x": 60, "y": 210 }, "size": { "width": 320, "height": 320 }, "tags": ["scrum"], "attrs": { "accent": { "fill": "#1D73C9" }, "accentFill": { "fill": "#1D73C9" }, "headerLabel": { "text": "Platform Team" } }, "embeds": ["sam", "vac1"] },
-      { "id": "sam",  "type": "sf.OrgPerson", "parent": "platform", "position": { "x": 80, "y": 264 }, "personName": "Sam Rivera", "jobTitle": "Tech Lead", "iconText": "SR", "raci": { "R": true } },
-      { "id": "vac1", "type": "sf.OrgPerson", "parent": "platform", "position": { "x": 80, "y": 400 }, "personName": "To be hired", "jobTitle": "Senior Engineer", "vacant": true },
+      { "id": "platform", "type": "sf.Container", "position": { "x": 60, "y": 240 }, "size": { "width": 376, "height": 346 }, "tags": ["scrum"], "attrs": { "accent": { "fill": "#1D73C9" }, "accentFill": { "fill": "#1D73C9" }, "headerLabel": { "text": "Platform Team" } }, "embeds": ["sam", "vac1"] },
+      { "id": "sam",  "type": "sf.OrgPerson", "parent": "platform", "position": { "x": 108, "y": 328 }, "personName": "Sam Rivera", "jobTitle": "Tech Lead", "iconText": "SR", "raci": { "R": true } },
+      { "id": "vac1", "type": "sf.OrgPerson", "parent": "platform", "position": { "x": 108, "y": 448 }, "personName": "To be hired", "jobTitle": "Senior Engineer", "vacant": true },
 
-      { "id": "data", "type": "sf.Container", "position": { "x": 440, "y": 210 }, "size": { "width": 320, "height": 320 }, "attrs": { "accent": { "fill": "#7F2B82" }, "accentFill": { "fill": "#7F2B82" }, "headerLabel": { "text": "Data Team" } }, "embeds": ["alex", "priya"] },
-      { "id": "alex",  "type": "sf.OrgPerson", "parent": "data", "position": { "x": 460, "y": 264 }, "personName": "Alex Kim", "jobTitle": "Data Lead", "iconText": "AK", "raci": { "R": true, "C": true } },
-      { "id": "priya", "type": "sf.OrgPerson", "parent": "data", "position": { "x": 460, "y": 400 }, "personName": "Priya Patel", "jobTitle": "Analytics Engineer", "iconText": "PP", "raci": { "C": true }, "tags": ["dbt", "CRMA"] },
+      { "id": "data", "type": "sf.Container", "position": { "x": 516, "y": 240 }, "size": { "width": 376, "height": 376 }, "attrs": { "accent": { "fill": "#B652A7" }, "accentFill": { "fill": "#B652A7" }, "headerLabel": { "text": "Data Team" } }, "embeds": ["alex", "priya"] },
+      { "id": "alex",  "type": "sf.OrgPerson", "parent": "data", "position": { "x": 564, "y": 328 }, "personName": "Alex Kim", "jobTitle": "Data Lead", "iconText": "AK", "raci": { "R": true, "C": true } },
+      { "id": "priya", "type": "sf.OrgPerson", "parent": "data", "position": { "x": 564, "y": 448 }, "personName": "Priya Patel", "jobTitle": "Analytics Engineer", "iconText": "PP", "raci": { "C": true }, "tags": ["dbt", "CRMA"] },
 
-      { "id": "r1", "type": "standard.Link", "source": { "id": "lead", "port": "port-bottom" }, "target": { "id": "platform", "port": "port-top" } },
-      { "id": "r2", "type": "standard.Link", "source": { "id": "lead", "port": "port-bottom" }, "target": { "id": "data", "port": "port-top" } }
+      { "id": "r1", "type": "standard.Link", "source": { "id": "lead", "port": "port-bottom" }, "target": { "id": "platform", "port": "port-top" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
+      { "id": "r2", "type": "standard.Link", "source": { "id": "lead", "port": "port-bottom" }, "target": { "id": "data", "port": "port-top" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } }
     ]
   }
 }
@@ -2555,13 +2159,15 @@ another grouping level; for a RACI matrix use `sf.Task` + `sf.TaskGroup` instead
 
 ## Layout Tips
 
-- **Import never moves your cells.** Every `position` and `size` you author loads **verbatim** - neither the
-  file/paste import nor the `postMessage` "Open in Diagramforce" path runs a layout pass. **Auto Layout** runs
-  only when the user picks it from the **Display** menu, after load. So if the render doesn't match your
-  numbers, your numbers are the diagram - look at the JSON, not at the app.
+- **Import never runs a layout.** Neither the file/paste import nor the `postMessage` "Open in Diagramforce" path
+  moves your cards; **Auto Layout** runs only when the user picks it from the **View** menu. What IS recomputed
+  on load is size and date-driven placement: DataObject heights (the Sizing rule), the content-sized cards
+  (OrgPerson, Note, `df.Table`), an OrgPerson narrower than 280 (widened), a lifeline Actor shorter than 120, and
+  Gantt bars and milestones (x from their dates). Everything else is your numbers - if the render is wrong, look at
+  the JSON, not at the app.
 - **Spacing:** Leave ~100-140px horizontal gaps and ~80-100px vertical gaps between TOP-LEVEL elements for clean
   routing. Cards stacked inside one container are a different case - see *Container lanes* below.
-- **Frame padding is 48px, and the number is not cosmetic.** A link into an embedded card turns **32px** out
+- **Frame padding is 48px (Data Mapping layer zones included), and the number is not cosmetic.** A link into an embedded card turns **32px** out
   from the port (the router's stub) and its arrow tip lands **16px** out. A frame padded by less than 32px
   therefore draws the connector **on its own border**: at 16px the arrow tips sit exactly on the edge, and at
   ~30px the vertical fan-out trunk does. Pad a `sf.Container` / `sf.Zone` by **48px** on left, right and bottom

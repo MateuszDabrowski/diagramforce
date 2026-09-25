@@ -2,12 +2,13 @@
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
 // Build via widgets + finishStandardProps (render-core) + TYPE_LABELS (type-meta), reading graph + the panel DOM
 // refs via prctx; never imports the facade. The showProperties() dispatch imports the eight back.
-import * as history from '../history.js?v=1.24.4';
-import { prctx } from './context.js?v=1.24.4';
-import { contrastTextColor } from '../components.js?v=1.24.4';
-import { finishStandardProps } from './render-core.js?v=1.24.4';
-import { TYPE_LABELS } from './type-meta.js?v=1.24.4';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.4';
+import * as history from '../history.js?v=1.24.6';
+import { prctx } from './context.js?v=1.24.6';
+import { contrastTextColor } from '../components.js?v=1.24.6';
+import { BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from '../persistence/diagram-schema.js?v=1.24.6';
+import { finishStandardProps } from './render-core.js?v=1.24.6';
+import { TYPE_LABELS } from './type-meta.js?v=1.24.6';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.24.6';
 
 export function renderBpmnEventProps(cell) {
   // Content
@@ -22,30 +23,11 @@ export function renderBpmnEventProps(cell) {
     { value: 'end',          label: 'End' },
   ], v => {
     cell.set('eventType', v);
-    // Apply the per-type color/stroke palette used at creation time. MUST stay byte-identical to the sf.BpmnEvent
-    // case in js/components.js: dropping an intermediate event and switching an existing one to intermediate are
-    // two paths to one look, and a user who does the second never sees the first. The ring colours moved off
-    // #F6B355 (1.75:1 on the light canvas) and #4FAE7B (2.62:1) for the reason written out there.
-    if (v === 'end') {
-      cell.attr('body/fill', '#F9E3E5');
-      cell.attr('body/stroke', '#DA4E55');
-      cell.attr('body/strokeWidth', 4);
-      cell.attr('innerRing/stroke', 'none');
-      cell.attr('icon/fill', '#DA4E55');
-    } else if (v === 'intermediate') {
-      cell.attr('body/fill', '#FDF1DC');
-      cell.attr('body/stroke', '#A06F03');
-      cell.attr('body/strokeWidth', 1.5);
-      cell.attr('innerRing/stroke', '#A06F03');
-      cell.attr('innerRing/strokeWidth', 1.5);
-      cell.attr('icon/fill', '#A06F03');
-    } else {
-      cell.attr('body/fill', '#DCF1E2');
-      cell.attr('body/stroke', '#008B46');
-      cell.attr('body/strokeWidth', 1.5);
-      cell.attr('innerRing/stroke', 'none');
-      cell.attr('icon/fill', '#008B46');
-    }
+    // Apply the per-type look used at creation time - ONE table (BPMN_EVENT_STYLE, diagram-schema.js) with the
+    // sf.BpmnEvent stencil in js/components.js and the loader: dropping an intermediate event and switching an
+    // existing one to intermediate are two paths to one look. The ring colours moved off #F6B355 (1.75:1 on the
+    // light canvas) and #4FAE7B (2.62:1) for the reason written out in the stencil.
+    for (const [path, value] of Object.entries(BPMN_EVENT_STYLE[v] || BPMN_EVENT_STYLE.start)) cell.attr(path, value);
   });
 
   // Appearance
@@ -93,7 +75,6 @@ export function renderBpmnGatewayProps(cell) {
     cell.attr('label/text', v);
     prctx.titleEl.textContent = v || '';
   });
-  const markers = { exclusive: '\u00D7', parallel: '+', inclusive: '\u25CB', event: '\u25C7' };
   addSelect(content, 'Type', cell.get('gatewayType') || 'exclusive', [
     { value: 'exclusive', label: 'Exclusive (XOR)' },
     { value: 'parallel',  label: 'Parallel (AND)' },
@@ -101,7 +82,7 @@ export function renderBpmnGatewayProps(cell) {
     { value: 'event',     label: 'Event-based' },
   ], v => {
     cell.set('gatewayType', v);
-    cell.attr('marker/text', markers[v] ?? '\u00D7');
+    cell.attr('marker/text', BPMN_GATEWAY_GLYPH[v] ?? BPMN_GATEWAY_GLYPH.exclusive);
   });
 
   // Appearance

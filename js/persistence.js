@@ -1,34 +1,35 @@
 // Persistence — named saves, JSON import/export, PNG/GIF export
 // (Auto-save is handled by the tabs module now.)
 
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.4';
-import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.24.4';
-import { pctx } from './persistence/context.js?v=1.24.4';
-export { assertPctxWired } from './persistence/context.js?v=1.24.4';   // S8 wiring self-check (app.js calls it at end of init)
+import { showToast, showError, trapFocus, buildModal } from './feedback.js?v=1.24.6';
+import { escHtml, compareSemver, normalizeDateSuffix } from './util.js?v=1.24.6';
+import { pctx } from './persistence/context.js?v=1.24.6';
+export { assertPctxWired } from './persistence/context.js?v=1.24.6';   // S8 wiring self-check (app.js calls it at end of init)
 
 // ── Facade (Phase 3, Slice 1): image export + share orchestration now live in
 // sub-modules; re-exported here so the public surface is unchanged. ──
-export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.24.4';
-export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.24.4';
+export { exportWEBP, exportPNG, exportSVG, copyCellsAsPng, isGifEncodingInProgress, setGifEncodingListener, exportGIF } from './persistence/image-export.js?v=1.24.6';
+export { shareAsURL, copyShareURL, shareGroupToDrive, loadFromURL, hasPendingUrlLoad } from './persistence/share-orchestration.js?v=1.24.6';
 // remote-store: user-owned cloud storage (Google Drive). Reads pctx like the other
 // sub-modules; no separate init needed. Phase 1 = saveToDrive / openFromDrive.
-export { ensureDriveConfig, autoConnectInSlot, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.24.4';
+export { ensureDriveConfig, autoConnectInSlot, isDriveConfigured, isDriveConnected, isSignedIn, saveToDrive, openFromDrive, enableAutosync, disableAutosync, disconnectDrive, isAutosyncOn, signIn, notifyDriveChange, flushDriveSave, saveTabNow, syncNow, getDriveStatus, setDriveStatusListener, setLoginHint, hydrateTabDrive, adoptDriveMetaIntoTab, saveTabsToDrive, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, resolveActiveConflict, activeHasDriveFile, activeIsImported, reopenLatestFromDrive, loadDriveRef, openGroupFromLink, publishTabsToSharedDrive, listMyDiagrams, openDriveDiagram, cloneSharedToMyDrive, forkSharedViewOnEdit, deleteDiagramFromDrive, renameDriveMaster, listRevisions, viewRevision, restoreRevision, pinRevision, readRevision, pullTemplates, pushTemplates, reconcileTabDriveLinks } from './persistence/remote-store.js?v=1.24.6';
 // versioning: contentSignature + classifyVersionDiff are public (tests/templates use them);
 // checkVersionWarning is imported for internal use (loadNamedSave/loadJSONText) + pctx wiring.
 // Local bindings (the re-export above doesn't create them) so init() can wire the Drive-aware backup gate.
-import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.24.4';
-import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.24.4';
+import { isDriveConnected as _isDriveConnected, isDriveConfigured as _isDriveConfigured, signIn as _driveSignIn } from './persistence/remote-store.js?v=1.24.6';
+import { contentSignature, classifyVersionDiff, checkVersionWarning } from './persistence/versioning.js?v=1.24.6';
 export { contentSignature, classifyVersionDiff };
 // Multi-load version-warning coalescing (item 3): wrap a Load-Selected loop in these so a shared old version
 // prompts once, not per file.
-export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.24.4';
+export { beginVersionWarningBatch, endVersionWarningBatch } from './persistence/versioning.js?v=1.24.6';
 // json-pipeline: sanitizeGraphJSON is public AND used internally (loadNamedSave);
 // importJSON is a public entry point; loadJSONText + describePastedJSON back the unified Load-from-Paste modal.
-import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.24.4';
-import { importFlowSource, looksLikeFlowXml, looksLikeFlowJson, stripHttpPreamble } from './persistence/flow-import.js?v=1.24.4';
+import { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON } from './persistence/json-pipeline.js?v=1.24.6';
+import { importFlowSource, looksLikeFlowXml, looksLikeFlowJson, stripHttpPreamble } from './persistence/flow-import.js?v=1.24.6';
 import { buildDiagram as buildMappingDiagram, fromConnectPayload, parseMappingXmlAll,
-  looksLikeMappingJson as _looksLikeMappingJson, looksLikeMappingXml } from './persistence/mapping-convert.js?v=1.24.4';
-import { looksLikeDataGraphJson as _looksLikeDataGraphJson, parseDataGraph, buildDataGraphDiagram } from './persistence/datagraph-convert.js?v=1.24.4';
+  looksLikeMappingJson as _looksLikeMappingJson, looksLikeMappingXml } from './persistence/mapping-convert.js?v=1.24.6';
+import { looksLikeDataGraphJson as _looksLikeDataGraphJson, parseDataGraph, buildDataGraphDiagram } from './persistence/datagraph-convert.js?v=1.24.6';
+import { looksLikeRoleQueryJson as _looksLikeRoleQueryJson, parseRoles, buildRoleDiagram } from './persistence/role-convert.js?v=1.24.6';
 export { sanitizeGraphJSON, compactGraphForSave, importJSON, loadJSONText, describePastedJSON };
 export { looksLikeFlowXml, looksLikeFlowJson };
 
@@ -97,6 +98,36 @@ export async function loadDataGraph(text, name) {
   return true;
 }
 
+/** A Salesforce ROLE HIERARCHY - the `sf data query --json` result of ROLE_QUERY in
+ *  js/persistence/role-convert.js (roles, parents, and their active holders in one payload). */
+export const looksLikeRoleQueryJson = (text) => _looksLikeRoleQueryJson(stripHttpPreamble(String(text || '')));
+
+/** Role and portal-role counts, for the Paste pane's detected line - it says what the Load button will draw, and
+ *  whether the portal checkbox changes anything. Null when the text does not parse. */
+export function describeRoleQuery(text) {
+  try {
+    const { roles } = parseRoles(JSON.parse(stripHttpPreamble(String(text || ''))));
+    return { roles: roles.length, portal: roles.filter((r) => r.portal).length };
+  } catch { return null; }
+}
+
+export async function loadRoleHierarchy(text, name, { includePortal = false } = {}) {
+  let built;
+  try {
+    const parsed = parseRoles(JSON.parse(stripHttpPreamble(String(text || ''))));
+    built = buildRoleDiagram(parsed, { appVersion: pctx.appVersion, title: name || null, includePortal });
+  } catch (e) { showToast(e.message || 'Could not read that role hierarchy.', 'error'); return false; }
+  const ok = await loadJSONText(JSON.stringify(built.diagram), built.diagram.title);
+  if (!ok) return false;
+  const s = built.stats;
+  // Say what the payload could NOT show, rather than letting an absent holder read as an empty role: without
+  // the Users subquery the cards carry no holders at all, and "vacant" is only claimed when they could have.
+  showToast(`${s.roles} roles, ${s.levels} levels`
+    + (s.vacant != null ? `, ${s.vacant} vacant` : '. No holders in the paste - add the Users subquery to show them')
+    + (s.portalSkipped ? `. ${s.portalSkipped} portal roles skipped.` : '.'), 'success', { duration: 7000 });
+  return true;
+}
+
 export async function loadDataCloudMapping(text, name) {
   let diagram, stats;
   try {
@@ -125,16 +156,16 @@ export async function loadDataCloudMapping(text, name) {
 
 // storage: getNamedSaves/readNamedSave/NAMED_SAVE_PREFIX feed pctx (read by
 // json-pipeline); the rest are the public storage surface.
-import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.24.4';
+import { getNamedSaves, readNamedSave, NAMED_SAVE_PREFIX } from './persistence/storage.js?v=1.24.6';
 export {
   namedSave, isQuotaError, getStorageFootprint, getStorageBreakdown, STORAGE_WARNING_BYTES, evictRedundantArchives, forgetArchivesForDriveFile,
   buildSingleDiagram,
   requestPersistentStorage, getNamedSaves, loadNamedSave, deleteNamedSave, getLastBackupAt,
   exportSelection, exportEverything, maybeShowBackupReminder, markFullBackup,
-} from './persistence/storage.js?v=1.24.4';
+} from './persistence/storage.js?v=1.24.6';
 
 let graph, paper, canvasModule;
-const APP_VERSION = '1.24.4';
+const APP_VERSION = '1.24.6';
 export { APP_VERSION };
 // Wire the version into pctx at module-eval (it's a constant) so the extracted
 // version helpers work even before init() runs — e.g. unit tests calling
@@ -186,8 +217,7 @@ let onImportGroupCallback = null;
 export function setImportGroupHandler(cb) { onImportGroupCallback = cb; pctx.onImportGroup = cb; }
 
 // Callback for a `#new=<type>` address (set by tabs module): a fresh tab of that type, as the "+ Diagram" menu
-// makes one. (type) => void. Distinct from setNewDiagramHandler below, which is Ctrl+N's typeless "open the
-// new-diagram picker".
+// makes one. (type) => void.
 export function setTypedNewDiagramHandler(cb) { pctx.onNewDiagram = cb; }
 
 // Callback to bring an open tab forward (set by tabs module). (tabId) => void
@@ -295,28 +325,6 @@ export function dateSuffix() {
 
 /** Stable (sorted-key) stringify — order-independent, so two structurally
  *  identical objects hash the same. Backs import dedup. */
-
-// newDiagram is now a thin wrapper — tabs module handles the actual logic.
-// This keeps backward compat for keyboard.js (Ctrl+N).
-let newDiagramHandler = null;
-export function setNewDiagramHandler(fn) { newDiagramHandler = fn; }
-export async function newDiagram() {
-  if (newDiagramHandler) { newDiagramHandler(); return; }
-  // Fallback (no tabs module)
-  if (graph.getCells().length > 0) {
-    const ok = await confirmModal({
-      title: 'Start a new diagram?',
-      message: 'Unsaved changes will be lost.',
-      okLabel: 'Start new',
-      cancelLabel: 'Cancel',
-      tone: 'danger',
-    });
-    if (!ok) return;
-  }
-  graph.clear();
-  canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
-}
-
 
 export function triggerDownload(url, filename) {
   const a = document.createElement('a');

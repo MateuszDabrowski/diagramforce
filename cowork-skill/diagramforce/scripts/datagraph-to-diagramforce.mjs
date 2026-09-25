@@ -29,9 +29,13 @@ function main(argv) {
   // sibling flow script's own advice is "use the org's latest": `GET /services/data/` lists what an org has.
   const apiVersion = val('--api-version') || 'v64.0';
   const positional = args.filter((a, i) => !a.startsWith('--') && !String(args[i - 1] || '').startsWith('--'));
-  const [inPath, outPath] = positional;
+  // With --org there is no input file, so the FIRST positional is the output (as in roles-to-diagramforce.mjs).
+  // Reading it as the input made `--org x --name Profile diagram.json` ignore diagram.json and write Profile.json.
+  const fromOrg = !!(org && name);
+  const inPath = fromOrg ? null : positional[0];
+  const outPath = fromOrg ? positional[0] : positional[1];
 
-  if (!inPath && !(org && name)) {
+  if (!inPath && !fromOrg) {
     die('usage: node scripts/datagraph-to-diagramforce.mjs <datagraph.json> [out.json] [--root <RootObjectName>] [--title T]\n'
       + '       node scripts/datagraph-to-diagramforce.mjs --org <alias> --name <DeveloperName> [out.json] [--api-version vXX.0]\n'
       + '\n'
@@ -43,7 +47,7 @@ function main(argv) {
 
   let doc;
   try {
-    doc = org && name ? fetchFromOrg(org, name, apiVersion) : JSON.parse(readFileSync(inPath, 'utf8'));
+    doc = fromOrg ? fetchFromOrg(org, name, apiVersion) : JSON.parse(readFileSync(inPath, 'utf8'));
   } catch (e) { die(`Could not read the data graph: ${e.message}`); }
 
   let parsed, built;
@@ -52,7 +56,7 @@ function main(argv) {
     built = buildDataGraphDiagram(parsed, { title });
   } catch (e) { die(e.message); }
 
-  const target = outPath || (org && name ? `${name}.json` : null);
+  const target = outPath || (fromOrg ? `${name}.json` : null);
   const json = JSON.stringify(built.diagram, null, 2);
   if (target) writeFileSync(target, json); else process.stdout.write(json);
 
@@ -66,4 +70,8 @@ function main(argv) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv);
+// File NAME, not the full URL: `import.meta.url` is percent-encoded and symlink-resolved while argv[1] is neither,
+// so an exact compare silently skipped main() for any install path with a space ("Application Support") or a
+// symlink - exit 0, no output. Same check as the sibling scripts.
+const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+if (isMain) main(process.argv);

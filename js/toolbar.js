@@ -1,32 +1,32 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.24.4';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.4';
-import { resizeDataObjectToFit } from './components.js?v=1.24.4';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.4';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.4';
+import { diagramEmbedsImages } from './image-component.js?v=1.24.6';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.24.6';
+import { resizeDataObjectToFit } from './components.js?v=1.24.6';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.24.6';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.24.6';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.24.4';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.4';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.4';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.24.4';
-import { renderTemplateThumbnail } from './templates.js?v=1.24.4';
-import { showWhatsNewNow } from './whats-new.js?v=1.24.4';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.24.4';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.4';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.4';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.4';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.4';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.4';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.4';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.4';
+import { pctx } from './persistence/context.js?v=1.24.6';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.6';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.24.6';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.24.6';
+import { renderTemplateThumbnail } from './templates.js?v=1.24.6';
+import { showWhatsNewNow } from './whats-new.js?v=1.24.6';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.24.6';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.24.6';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.24.6';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.24.6';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.24.6';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.24.6';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.24.6';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.24.6';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.4';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.4';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.4';
-import { noteError } from './diagnostics.js?v=1.24.4';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.24.6';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.24.6';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.24.6';
+import { noteError } from './diagnostics.js?v=1.24.6';
 
 let modules = {};
 export function init(_modules) {
@@ -715,7 +715,7 @@ const AI_ASSETS = [
   {
     id: 'skill',
     title: 'Build diagrams with Claude',
-    blurb: 'Describe the diagram you want and Claude hands one back, ready to open. The free skill also rebuilds a diagram from a screenshot, or builds one from your org: a real Flow, objects into a data model, Data Cloud mappings, or a data graph.',
+    blurb: 'Describe the diagram you want and Claude hands one back, ready to open. The free skill also rebuilds a diagram from a screenshot, or builds one from your org: a real Flow, objects into a data model, Data Cloud mappings, a data graph, or the role hierarchy.',
     file: 'cowork-skill/diagramforce.skill',
     view: 'https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce',
     downloadLabel: 'Download skill',
@@ -789,6 +789,10 @@ const SF_META = [
   {
     title: 'Data Graphs',
     blurb: 'Fetch a data graph definition with one REST call and paste it in. You get the root, every related object, the join named on each connector, and a facts card recording what the graph is for.',
+  },
+  {
+    title: 'Role Hierarchy',
+    blurb: 'Run one UserRole query with the Salesforce CLI and paste the result into Load. You get an Org Chart with a card per role, showing who holds it, how many people share it, or that it is vacant. Portal roles are skipped unless you keep them, and the Claude skill can draw a single branch of a large org.',
   },
 ];
 

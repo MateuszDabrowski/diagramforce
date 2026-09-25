@@ -138,14 +138,18 @@ const rgba05 = (hex) => {
 // it models what the stream ADDS on the way to the DLO - the formulas. The first cut staged suffix-less names
 // 'datastream', which put the DSO and its formulas companion in one shared lane and emitted no Source zone.
 const stageOf = (name) => (/__dlm$/i.test(name) ? 'dmo' : /__dll$/i.test(name) ? 'dlo' : 'source');
-// GEOMETRY, measured off templates/data360-contact-mapping.json rather than chosen. Every one of these was
-// wrong in the first cut, and the result read as a different tool's output: lanes too narrow and too close,
-// cards too wide for the lane they sit in.
-//   zone 292 wide on a 492 pitch (so a 200px gutter for the connectors), card 260 inset 16, first card 44 down
-//   (clearing the zone label), 36 between cards, 16 of bottom padding.
-const CARD_W = 260, ZONE_W = 292, LANE_PITCH = 492;
-const ZONE_INSET_X = 16, ZONE_TOP = 44, CARD_GAP = 36, ZONE_BOTTOM = 16;
-const HEADER_H = 44, ROW_H = 22, PAD = 12;
+// GEOMETRY. Card 260, 36 between cards, a 200px gutter between lanes for the connectors - measured off the
+// official template. The lane inset is the app's frame-fit padding, 48 on every side (router STUB + PAD, see
+// js/canvas/embedding.js): at the old 16 the lane border ran through every connector end, and the first card drag
+// re-fitted the lane to 48 anyway (owner call 2026-09-25). Restated rather than imported - this file is import-free
+// for the skill copy; dev/tests/mappings-convert.test.js pins 48 to the router's constants.
+const FIT_PAD = 48;
+const CARD_W = 260, ZONE_W = CARD_W + 2 * FIT_PAD, LANE_PITCH = ZONE_W + 200;
+const ZONE_INSET_X = FIT_PAD, ZONE_TOP = FIT_PAD, CARD_GAP = 36, ZONE_BOTTOM = FIT_PAD;
+// Card height = the DataObject's own sizing rule (32 header + 22 per row + the 18px collapse-toggle row), which the
+// app re-measures every card to on load. The old 44 + 22n + 12 was 6px taller, so each lane's bottom padding shrank
+// by 6 on load and the lane re-fitted on the first card nudge.
+const HEADER_H = 32, ROW_H = 22, PAD = 18;
 
 /** Full field lists per object, from a `/ssot/data-model-objects` catalogue. Merged in by `opts.catalogue` so
  *  a card can show the fields that are NOT mapped as well as the ones that are - the view you need when the
@@ -493,9 +497,11 @@ export function buildDiagram(maps, opts = {}) {
         // The org's own category, when the caller supplied one (CLI --org / --categories). A synthetic
         // Formulas companion can never match an org API name, so it stays keyless by construction.
         ...(cat ? { category: cat } : {}),
-        attrs: { headerLabel: { text: o.label || pretty(o.name) } },
         // The card header takes the LAYER's accent, as every card in the official template does - it is what
-        // makes a lane read as one thing at a glance.
+        // makes a lane read as one thing at a glance. ALL THREE slots: `headerColor` is what the properties panel
+        // reads, `attrs.header.fill` / `attrs.headerCover.fill` are what RENDER, and nothing syncs the prop to the
+        // attrs on load. Until 2026-09-24 only the prop was set, so every converted card rendered the default blue.
+        attrs: { headerLabel: { text: o.label || pretty(o.name) }, header: { fill: stage.color }, headerCover: { fill: stage.color } },
         headerColor: stage.color,
         showLabels: true, showFieldLengths: false,
         fields,

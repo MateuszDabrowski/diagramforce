@@ -40,13 +40,14 @@
 //
 // ── Getting the raw material out of an org ──────────────────────────────────────────────────────────────────
 //   core objects:  sf data query -t -r csv -o <org> \
-//                    -q "SELECT QualifiedApiName, Label, DataType, ReferenceTo, RelationshipName, IsNillable \
-//                        FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = 'Contact'"
-//                  `DataType` reads `Lookup(Account)` and `ReferenceTo` resolves the target, so a relationship
-//                  needs no extra lookup.
-//   Data Cloud:    sf api request rest "/services/data/v67.0/ssot/data-model-objects?limit=200" -o <org>
-//                  (paginate - the default is 50) and, for DMO-to-DMO relationships,
-//                  sf org list metadata -m FieldSrcTrgtRelationship -o <org>
+//                    -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, ReferenceTo, \
+//                        RelationshipName, IsNillable FROM FieldDefinition \
+//                        WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact')"
+//                  (EntityDefinitionId is what org-to-selection.mjs groups fields by.) `DataType` reads
+//                  `Lookup(Account)` and `ReferenceTo` resolves the target, so a relationship needs no extra lookup.
+//   Data Cloud:    one GET per DMO, /services/data/v67.0/ssot/data-model-objects/<name> (the list is paged
+//                  with no page token). DMO definitions carry no relationships - add those by hand.
+//   Both go through org-to-selection.mjs first, which drafts the selection this script draws.
 //
 // Emits the standard single-diagram envelope, validated by scripts/validate-diagram.mjs.
 import { readFileSync, writeFileSync } from 'node:fs';

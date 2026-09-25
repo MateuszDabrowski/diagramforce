@@ -5,27 +5,36 @@
       "id": 1,
       "name": "eval-arch",
       "prompt": "We capture leads from our marketing website's contact form, push them into Salesforce Sales Cloud, sync the qualified ones to Marketing Cloud Engagement through Marketing Cloud Connect, and replicate everything nightly into a Snowflake data warehouse for BI dashboards. I'd like a clean architecture diagram of this that I can open and edit in a diagramming tool.",
-      "expected_output": "An `architecture` diagram: one node per system (Web Form, Salesforce Sales Cloud, Marketing Cloud Engagement, Marketing Cloud Connect, Snowflake) with labeled connectors for each hop; JSON passes scripts/validate-diagram.mjs with 0 errors and 0 warnings; paste instructions provided.",
+      "expected_output": "An `architecture` diagram: one node per system (Web Form, Salesforce Sales Cloud, Marketing Cloud Engagement, Marketing Cloud Connect, Snowflake) with labeled connectors for each hop; JSON passes scripts/validate-diagram.mjs with 0 errors and 0 warnings; delivered as the `#diagram=` link from scripts/make-share-url.mjs (or, if it does not fit, the file plus the Load > File steps).",
       "files": []
     },
     {
       "id": 2,
       "name": "eval-datacloud",
       "prompt": "I'm setting up a Data Cloud mapping for contacts. The source is the Salesforce Contact object with fields Id, FirstName, LastName, Email, and Phone. It ingests into a Contact data lake object, which then maps to the Individual DMO with fields Id, First Name, Last Name, Email Address, and Phone Number. Can you visualize this Data Cloud field mapping for me?",
-      "expected_output": "A `datamapping` diagram: source Contact + Contact DLO + Individual DMO as DataObjects with field-to-field mapping links; JSON passes the validator with 0 errors and 0 warnings; paste instructions provided.",
+      "expected_output": "A `datamapping` diagram: source Contact + Contact DLO + DMO DataObjects in their layer zones with field-to-field mapping links. The Individual DMO has no email or phone field, so Email and Phone map to Contact Point Email (ssot__EmailAddress__c) and Contact Point Phone (ssot__TelephoneNumber__c) instead, and the reply says so rather than inventing Individual fields. JSON passes the validator with 0 errors and 0 warnings; delivered as the `#diagram=` link from scripts/make-share-url.mjs (or, if it does not fit, the file plus the Load > File steps).",
       "files": []
     },
     {
       "id": 3,
       "name": "eval-process",
       "prompt": "Help me document our expense approval process as a diagram: an employee submits an expense report; their manager reviews it; if it's under $500 it's auto-approved, otherwise it goes to Finance; Finance either approves or rejects it; and finally the employee is notified of the outcome.",
-      "expected_output": "A `process` diagram (BPMN-style) with a start, task/decision nodes for submit -> manager review -> amount gateway -> finance approve/reject -> notify, and an end; JSON passes the validator with 0 errors and 0 warnings; paste instructions provided.",
+      "expected_output": "A `process` diagram (BPMN-style) with a start, task/decision nodes for submit -> manager review -> amount gateway -> finance approve/reject -> notify, and an end; JSON passes the validator with 0 errors and 0 warnings; delivered as the `#diagram=` link from scripts/make-share-url.mjs (or, if it does not fit, the file plus the Load > File steps).",
       "files": []
     },
     {
       "id": 4,
       "prompt": "Draw our release pipeline as swimlanes: DEV, QA and PROD environments left to right, each holding its own deployment steps (DEV: build, unit tests; QA: deploy, regression; PROD: deploy, smoke test), with connectors from each step to the next environment's first step.",
-      "expected_output": "A `process` diagram with three `sf.Container` lanes, one per environment, each lane OWNING its steps: every step carries `parent: \"<lane-id>\"` AND its id is in the lane's `embeds[]` (a lane merely drawn behind its steps is wrong). Lanes share one top and one height; steps are `sf.BpmnTask`s wired left to right with `sfManhattan` links. JSON passes the validator with 0 errors and 0 warnings."
+      "expected_output": "A `process` diagram with three `sf.Container` lanes, one per environment, each lane OWNING its steps: every step carries `parent: \"<lane-id>\"` AND its id is in the lane's `embeds[]` (a lane merely drawn behind its steps is wrong). Lanes share one top and one height; steps are `sf.BpmnTask`s wired left to right with `sfManhattan` links. JSON passes the validator with 0 errors and 0 warnings; delivered as the `#diagram=` link from scripts/make-share-url.mjs (or, if it does not fit, the file plus the Load > File steps).",
+      "name": "eval-lanes",
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "eval-roles",
+      "prompt": "Here's our role hierarchy from `sf data query --json` - can you turn it into an org chart I can edit?\n\n{\"status\": 0, \"result\": {\"done\": true, \"totalSize\": 4, \"records\": [{\"attributes\": {\"type\": \"UserRole\"}, \"Id\": \"00E1\", \"Name\": \"CEO\", \"DeveloperName\": \"CEO\", \"ParentRoleId\": null, \"PortalType\": \"None\", \"Users\": {\"totalSize\": 1, \"done\": true, \"records\": [{\"attributes\": {\"type\": \"User\"}, \"Name\": \"Ada Lovelace\"}]}}, {\"attributes\": {\"type\": \"UserRole\"}, \"Id\": \"00E2\", \"Name\": \"VP of Sales\", \"DeveloperName\": \"VPSales\", \"ParentRoleId\": \"00E1\", \"PortalType\": \"None\", \"Users\": null}, {\"attributes\": {\"type\": \"UserRole\"}, \"Id\": \"00E3\", \"Name\": \"East Sales\", \"DeveloperName\": \"EastSales\", \"ParentRoleId\": \"00E2\", \"PortalType\": \"None\", \"Users\": {\"totalSize\": 3, \"done\": true, \"records\": [{\"attributes\": {\"type\": \"User\"}, \"Name\": \"A One\"}, {\"attributes\": {\"type\": \"User\"}, \"Name\": \"B Two\"}, {\"attributes\": {\"type\": \"User\"}, \"Name\": \"C Three\"}]}}, {\"attributes\": {\"type\": \"UserRole\"}, \"Id\": \"00E4\", \"Name\": \"Acme Partner Executive\", \"DeveloperName\": \"AcmePartnerExecutive\", \"ParentRoleId\": \"00E3\", \"PortalType\": \"Partner\", \"Users\": null}]}}",
+      "expected_output": "Runs scripts/roles-to-diagramforce.mjs on the saved payload (not a hand-authored chart): an `org` diagram with 3 role cards (the Partner portal role skipped by default, and the reply says so), CEO over VP of Sales over East Sales, VP of Sales a dashed Vacant card, East Sales showing 3 users; JSON passes the validator with 0 errors and 0 warnings; delivered as the `#diagram=` link from scripts/make-share-url.mjs (or, if it does not fit, the file plus the Load > File steps).",
+      "files": []
     }
   ]
 }

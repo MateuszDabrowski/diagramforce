@@ -1,27 +1,27 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.4';
-import { tbctx } from './tabs/context.js?v=1.24.4';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.4';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.4';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.4';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.4';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.6';
+import { tbctx } from './tabs/context.js?v=1.24.6';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.6';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.6';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.6';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy } from './tabs/session-store.js?v=1.24.6';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.4';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.4';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.4';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.4';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.4';
-import { wireMenuDismiss } from './menu.js?v=1.24.4';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.4';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.4';
-import { getPalette } from './brand-palette.js?v=1.24.4';
-import { getAllIcons } from './icons.js?v=1.24.4';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.4';
-import { noteError } from './diagnostics.js?v=1.24.4';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.6';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.6';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.6';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.6';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.6';
+import { wireMenuDismiss } from './menu.js?v=1.24.6';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.6';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.6';
+import { getPalette } from './brand-palette.js?v=1.24.6';
+import { getAllIcons } from './icons.js?v=1.24.6';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.6';
+import { noteError } from './diagnostics.js?v=1.24.6';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -183,7 +183,6 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   document.getElementById('btn-close-tabs')?.addEventListener('click', () => showCloseTabsModal());
 
   // Wire up persistence hooks
-  persistenceModule.setNewDiagramHandler(() => showNewDiagramModal());
   persistenceModule.onNamedSave((name) => renameActiveTab(name));
   persistenceModule.onSaveComplete((type) => markSaved(type));
   persistenceModule.onDriveTabSaved?.((id) => markTabDriveSaved(id));

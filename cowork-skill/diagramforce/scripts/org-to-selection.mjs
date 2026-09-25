@@ -2,7 +2,7 @@
 // org-to-selection.mjs — turn raw org metadata into a DRAFT selection for objects-to-diagramforce.mjs.
 //
 //   node scripts/org-to-selection.mjs fields.csv --title "Sales Core" > selection.json
-//   node scripts/org-to-selection.mjs dmos.json  --only ssot__Individual__dlm,ssot__ContactPointEmail__dlm
+//   node scripts/org-to-selection.mjs ind.json cpe.json --max-fields 25 > selection.json
 //
 // This closes the CLI loop. You query the org, this drafts the selection, you PRUNE it, then
 // objects-to-diagramforce.mjs draws it. The pruning step is yours on purpose - see below.
@@ -12,12 +12,11 @@
 //     sf data query -o <org> -t -r csv -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, \
 //        ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
 //        WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact')" > fields.csv
-//   Data Cloud DMOs (JSON):
-//     sf api request rest "/services/data/v67.0/ssot/data-model-objects?limit=200" -o <org> > dmos.json
-//     (paginate - the default page is 50, and `nextPageUrl` tells you there is more)
+//   Data Cloud DMOs (JSON), ONE GET per DMO - the list endpoint is paged with no page token:
+//     sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm" -o <org> > ind.json
 //
-// Format is auto-detected: a CSV with a `QualifiedApiName` column is FieldDefinition; JSON containing
-// `dataModelObject` is Data Cloud.
+// Format is auto-detected: JSON holding a DMO definition (the single-object response, or the list's
+// `dataModelObject` array) is Data Cloud, and several such files merge by name; anything else is the CSV.
 //
 //   OWD / sharing model (JSON), one query for every object:
 //     sf data query -o <org> -t --json -q "SELECT QualifiedApiName, InternalSharingModel, \
@@ -172,9 +171,18 @@ function fromFieldDefinition(rows) {
   return [...byObj].map(([name, fields]) => ({ name, label: name, fields }));
 }
 
-/** Data Cloud `/ssot/data-model-objects` -> objects. */
+/** Data Cloud DMO definitions -> objects. Takes the LIST response (`{ dataModelObject: [...] }`), the SINGLE-object
+ *  response of `/ssot/data-model-objects/<name>` (the object itself), or an array of either. The list is paged
+ *  (200 of Madrid's 1162, no page token), so one GET per wanted DMO is the reliable route. */
+export function dmoList(json) {
+  if (Array.isArray(json)) return json.flatMap(dmoList);
+  if (!json || typeof json !== 'object') return [];
+  if (Array.isArray(json.dataModelObject)) return json.dataModelObject;
+  return json.name && Array.isArray(json.fields) ? [json] : [];
+}
+
 function fromDataCloud(json) {
-  return (json.dataModelObject || []).map((o) => ({
+  return dmoList(json).map((o) => ({
     name: o.name, label: o.label || o.name,
     // PROFILE / ENGAGEMENT / OTHER is the DMO's own category and is exactly the datamodel card's vocabulary.
     category: o.category && o.category !== 'UNASSIGNED'
@@ -445,15 +453,27 @@ export function parseFieldList(raw) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith('--'));
+  const VALUED = new Set(['--only', '--max-fields', '--fields', '--owd', '--volume', '--title']);
+  const files = args.filter((a, i) => !a.startsWith('--') && !VALUED.has(args[i - 1]));
   const val = (flag) => { const i = args.indexOf(flag); return i > -1 ? args[i + 1] : null; };
-  if (!file) die('usage: node scripts/org-to-selection.mjs <fields.csv|dmos.json> [--only A,B] [--keys-only]'
+  if (!files.length) die('usage: node scripts/org-to-selection.mjs <fields.csv | dmo.json [dmo2.json ...]> [--only A,B] [--keys-only]'
     + ' [--max-fields N|all] [--fields Obj.Field,Obj.Other] [--owd owd.json] [--volume counts.json] [--title T]');
-  let raw;
-  try { raw = readFileSync(file, 'utf8'); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
+  // A DMO file is JSON (the list response or one object's definition); anything else is the FieldDefinition CSV.
   // The Salesforce CLI prints warnings before JSON, so find the payload rather than trusting position.
-  const i = raw.indexOf('{');
-  const input = (i > -1 && /"dataModelObject"/.test(raw)) ? JSON.parse(raw.slice(i)) : raw;
+  const dmoDocs = [], csv = [];
+  for (const file of files) {
+    let raw;
+    try { raw = readFileSync(file, 'utf8'); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
+    const i = raw.indexOf('{');
+    let doc = null;
+    if (i > -1) { try { doc = JSON.parse(raw.slice(i)); } catch { doc = null; } }
+    if (doc && dmoList(doc).length) dmoDocs.push(doc); else csv.push(raw);
+  }
+  if (csv.length && dmoDocs.length) die('Mix of a FieldDefinition CSV and DMO JSON - pass one kind at a time.');
+  if (csv.length > 1) die('One FieldDefinition CSV at a time - name every object in its query\'s IN list instead.');
+  // Several DMO files merge into one catalogue; the same DMO fetched twice counts once.
+  const input = csv.length ? csv[0]
+    : { dataModelObject: [...new Map(dmoDocs.flatMap(dmoList).map((o) => [o.name, o])).values()] };
 
   /** Read an annotation payload straight from the CLI. Sliced from the first `{` or `[` for the same reason the
    *  DMO catalogue is: `sf` prints its update banner before the JSON on some versions. */
@@ -484,7 +504,10 @@ if (isMain) {
       + ' - check the spelling, or the field has been removed' : ''}`
     + `${stats.prunedFields ? `\n  pruned ${stats.prunedFields} field(s)` : ''}`
     + `${stats.lostToPruning ? ` — which cost ${stats.lostToPruning} relationship(s); re-run with a larger --max-fields to keep them` : ''}`
-    + `${stats.droppedRels ? `\n  ${stats.droppedRels} relationship(s) point outside the selection and were dropped (add those objects with --only to keep them)` : ''}`
+    // --only FILTERS the input, it cannot add to it: a FieldDefinition CSV holds only the objects its query named.
+    + `${stats.droppedRels ? `\n  ${stats.droppedRels} relationship(s) point outside the selection and were dropped (${typeof input === 'string'
+      ? 'add those objects to the FieldDefinition query\'s IN list and re-export to keep them'
+      : 'add those objects with --only to keep them'})` : ''}`
     + `${stats.annotatedSharing ? `\n  sharing model on ${stats.annotatedSharing} object(s)` : ''}`
     + `${stats.annotatedRecords ? `\n  record count on ${stats.annotatedRecords} object(s)` : ''}`
     + `${stats.unmatched?.length ? `\n  NOT ANNOTATED: ${stats.unmatched.join(', ')}`

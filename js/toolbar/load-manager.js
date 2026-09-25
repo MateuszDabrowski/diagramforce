@@ -1,11 +1,11 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.4';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.4';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.4';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.4';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.4';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.4';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.4';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.6';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.6';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.6';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.6';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.6';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.6';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.6';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -509,6 +509,7 @@ export async function openDroppedFile(f, close) {
   if (P.isFlowSourceText?.(text)) await P.loadFlowSource(text, base);
   else if (P.looksLikeMappingJson?.(text)) await P.loadDataCloudMapping(text, base);
   else if (P.looksLikeDataGraphJson?.(text)) await P.loadDataGraph(text, base);
+  else if (P.looksLikeRoleQueryJson?.(text)) await P.loadRoleHierarchy(text, base);
   else await P.loadJSONText(text, base);
 }
 
@@ -672,6 +673,22 @@ function renderPasteLoadPane({ pane, footer, close }) {
             </div>
           </div>
         </div>
+        <div class="df-paste-modal__fmt" data-fmt="roles">
+          <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
+            <span class="df-paste-modal__fmt-title">Salesforce role hierarchy</span>
+            <span class="df-paste-modal__fmt-lead">A UserRole query result</span>
+            <svg class="df-paste-modal__fmt-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 8 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="df-paste-modal__fmt-detected" aria-live="polite"></div>
+          <div class="df-paste-modal__fmt-body" hidden>
+            <div class="df-paste-modal__fmt-sub">Becomes an Org Chart with a card per role, top-down from the top roles. Each card names who holds the role, how many people share it, or marks it vacant.</div>
+            <div class="df-paste-modal__fmt-how"><strong>How to get it.</strong> One query, with the Salesforce CLI:
+              <code class="df-paste-modal__url df-paste-modal__url--wrap">sf data query --query "SELECT Id, Name, DeveloperName, ParentRoleId, PortalType, (SELECT Name FROM Users WHERE IsActive = true) FROM UserRole" --json</code>
+              <span class="df-paste-modal__fmt-note">Paste the whole output. The same SELECT in <a href="https://workbench.developerforce.com" target="_blank" rel="noopener">Workbench</a> <strong>REST Explorer</strong> (<code>/services/data/v64.0/query?q=...</code>) works too. Leave out the <code>Users</code> subquery and the cards show roles only, with no holders and no vacancies.</span>
+            </div>
+            <label class="df-paste-modal__roles-portal"><input type="checkbox" class="df-paste-modal__roles-portal-cb"> Include portal roles</label>
+          </div>
+        </div>
         <div class="df-paste-modal__fmt" data-fmt="mermaid">
           <button type="button" class="df-paste-modal__fmt-head" aria-expanded="false">
             <span class="df-paste-modal__fmt-title">Mermaid <span class="df-badge df-badge--beta">Beta</span></span>
@@ -726,6 +743,7 @@ function renderPasteLoadPane({ pane, footer, close }) {
   const mtypeEls = pane.querySelectorAll('.df-paste-modal__fmt-list [data-mtype]');
   const mtarget = pane.querySelector('.df-paste-modal__mtarget');
   const mtargetSel = pane.querySelector('.df-paste-modal__mtarget-sel');
+  const portalCb = pane.querySelector('.df-paste-modal__roles-portal-cb');
   const errColor = 'var(--color-danger)';
   let mode = null;
 
@@ -755,13 +773,18 @@ function renderPasteLoadPane({ pane, footer, close }) {
     if (tctx.modules.persistence.looksLikeDataGraphJson?.(t)) {
       return { kind: 'datagraph', shape: /"sourceObject"\s*:/.test(t) ? 'definition' : 'preview' };
     }
+    // A ROLE HIERARCHY query result, before the describer for the same reason as the three above. Every record
+    // must be a UserRole, and anything carrying `graph`/`diagramType` falls through.
+    if (tctx.modules.persistence.looksLikeRoleQueryJson?.(t)) {
+      return { kind: 'roles', ...(tctx.modules.persistence.describeRoleQuery?.(t) || { roles: 0, portal: 0 }) };
+    }
     if (t[0] === '{' || t[0] === '[') {
       const d = tctx.modules.persistence.describePastedJSON(t);
       return d.ok ? { kind: 'json', rawType: d.rawType, diagramType: d.diagramType } : { kind: 'error', error: d.error };
     }
     const v = tctx.modules.mermaidImport.validateMermaid(t);
     if (v.ok) return { kind: 'mermaid', mtype: v.type };
-    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, Data Cloud mappings, or a supported Mermaid diagram.' };
+    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, Data Cloud mappings, a role hierarchy, or a supported Mermaid diagram.' };
   };
   const validate = () => {
     resetHighlight();
@@ -795,6 +818,17 @@ function renderPasteLoadPane({ pane, footer, close }) {
       if (det) det.textContent = d.xml ? 'ObjectSourceTargetMap → Data Mapping' : 'Connect API → Data Mapping';
       return;
     }
+    if (d.kind === 'roles') {
+      const col = pane.querySelector('.df-paste-modal__fmt[data-fmt="roles"]');
+      col?.classList.add('is-on');
+      const det = col?.querySelector('.df-paste-modal__fmt-detected');
+      const drawn = d.roles - (portalCb?.checked ? 0 : d.portal);
+      if (det) det.textContent = `${drawn} roles → Org Chart` + (d.portal && !portalCb?.checked ? ` (${d.portal} portal roles skipped)` : '');
+      // Open the card when the checkbox would change the result, for the reason the Mermaid card opens on a
+      // pickable type: a choice behind a collapsed header is a choice nobody knows they have.
+      if (d.portal) openFmtCard('roles');
+      return;
+    }
     if (d.kind === 'json') {
       jsonCol?.classList.add('is-on');
       // Showcase what the paste will become: "<diagramType from JSON> → <friendly Diagram Type>" in brand green.
@@ -820,11 +854,13 @@ function renderPasteLoadPane({ pane, footer, close }) {
   };
   input.addEventListener('input', validate);
   mtargetSel?.addEventListener('change', validate);
+  portalCb?.addEventListener('change', validate);
   loadBtn.addEventListener('click', async () => {
     let ok = false;
     if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
     else if (mode === 'dcmapping') ok = await tctx.modules.persistence.loadDataCloudMapping(input.value, 'Data Cloud Mappings');
     else if (mode === 'datagraph') ok = await tctx.modules.persistence.loadDataGraph(input.value, null);
+    else if (mode === 'roles') ok = await tctx.modules.persistence.loadRoleHierarchy(input.value, null, { includePortal: !!portalCb?.checked });
     else if (mode === 'json') ok = await tctx.modules.persistence.loadJSONText(input.value, 'Pasted');
     else if (mode === 'mermaid') ok = tctx.modules.mermaidImport.importMermaidText(input.value, { target: mtargetSel?.value });
     if (ok) close();

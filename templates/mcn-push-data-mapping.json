@@ -10,13 +10,13 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 560,
-          "height": 894
+          "width": 576,
+          "height": 880
         },
         "z": 0,
         "position": {
           "x": 20,
-          "y": 1340
+          "y": 1380
         },
         "id": "z-ds",
         "layerStage": "datastream",
@@ -40,12 +40,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 560,
-          "height": 1510
+          "width": 576,
+          "height": 1518
         },
         "z": 0,
         "position": {
-          "x": 780,
+          "x": 796,
           "y": 110
         },
         "id": "z-dlo",
@@ -70,12 +70,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 560,
-          "height": 3646
+          "width": 576,
+          "height": 3632
         },
         "z": 0,
         "position": {
-          "x": 1540,
+          "x": 1572,
           "y": 110
         },
         "id": "z-dmo",
@@ -109,12 +109,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 560,
-          "height": 204
+          "width": 576,
+          "height": 190
         },
         "z": 0,
         "position": {
-          "x": 2300,
+          "x": 2348,
           "y": 110
         },
         "id": "z-act",
@@ -136,12 +136,12 @@
       {
         "type": "sf.Zone",
         "size": {
-          "width": 536,
-          "height": 1148
+          "width": 576,
+          "height": 1188
         },
         "z": 0,
         "position": {
-          "x": 44,
+          "x": 20,
           "y": 110
         },
         "id": "z-src",
@@ -196,8 +196,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 150
+          "x": 1620,
+          "y": 158
         },
         "id": "dmo-uind",
         "showLabels": true,
@@ -248,8 +248,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 358
+          "x": 1620,
+          "y": 366
         },
         "id": "dmo-ulink",
         "showLabels": true,
@@ -316,7 +316,7 @@
           {
             "label": "Birth Date",
             "apiName": "ssot__BirthDate__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ind_bd"
           },
@@ -357,8 +357,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 544
+          "x": 1620,
+          "y": 552
         },
         "id": "dmo-ind",
         "showLabels": true,
@@ -431,8 +431,8 @@
           }
         ],
         "position": {
-          "x": 820,
-          "y": 150
+          "x": 844,
+          "y": 158
         },
         "id": "dlo-contact",
         "showLabels": true,
@@ -484,7 +484,7 @@
           {
             "label": "Received Date Time (system)",
             "apiName": "System: ingestion_timestamp()",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ds-contact_recv"
           },
@@ -497,8 +497,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 1380
+          "x": 68,
+          "y": 1428
         },
         "id": "ds-contact",
         "showLabels": true,
@@ -605,8 +605,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 862
+          "x": 1620,
+          "y": 870
         },
         "id": "dmo-cpa",
         "showLabels": true,
@@ -686,7 +686,7 @@
           },
           {
             "label": "Device System Token Text",
-            "apiName": "ssot__DeviceSystemTokentext__c",
+            "apiName": "ssot__DeviceSystemTokenText__c",
             "type": "Text",
             "keyType": null,
             "fid": "dev_tok"
@@ -707,8 +707,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 1202
+          "x": 1620,
+          "y": 1210
         },
         "id": "dmo-dev",
         "showLabels": true,
@@ -781,8 +781,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 1520
+          "x": 1620,
+          "y": 1528
         },
         "id": "dmo-app",
         "showLabels": true,
@@ -884,7 +884,7 @@
           {
             "label": "Engagement Date Time",
             "apiName": "ssot__EngagementDateTm__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dae_dt"
           },
@@ -918,8 +918,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 1750
+          "x": 1620,
+          "y": 1758
         },
         "id": "dmo-dae",
         "showLabels": true,
@@ -1049,14 +1049,14 @@
           {
             "label": "Received Date Time",
             "apiName": "ReceivedDateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dreg_recv"
           }
         ],
         "position": {
-          "x": 820,
-          "y": 446
+          "x": 844,
+          "y": 454
         },
         "id": "dlo-devreg",
         "showLabels": true,
@@ -1108,7 +1108,7 @@
           {
             "label": "Received Date Time (system)",
             "apiName": "System: ingestion_timestamp()",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ds-devreg_recv"
           },
@@ -1121,8 +1121,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 1588
+          "x": 68,
+          "y": 1636
         },
         "id": "ds-devreg",
         "showLabels": true,
@@ -1237,7 +1237,7 @@
           {
             "label": "Engagement Date Time",
             "apiName": "EngagementDateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dmo_dt"
           },
@@ -1258,14 +1258,14 @@
           {
             "label": "Received Date Time",
             "apiName": "ReceivedDateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dmob_recv"
           }
         ],
         "position": {
-          "x": 820,
-          "y": 874
+          "x": 844,
+          "y": 882
         },
         "id": "dlo-mobeng",
         "showLabels": true,
@@ -1317,7 +1317,7 @@
           {
             "label": "Received Date Time (system)",
             "apiName": "System: ingestion_timestamp()",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ds-mobeng_recv"
           },
@@ -1337,8 +1337,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 1796
+          "x": 68,
+          "y": 1844
         },
         "id": "ds-mobeng",
         "showLabels": true,
@@ -1411,7 +1411,7 @@
           {
             "label": "Consent Captured Date Time",
             "apiName": "ssot__ConsentCaptureddateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpc_cap"
           },
@@ -1425,28 +1425,28 @@
           {
             "label": "Double Consent Capture Date Time",
             "apiName": "ssot__DoubleConsentCapturedateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpc_dbl"
           },
           {
             "label": "Effective From Date",
             "apiName": "ssot__EffectiveFromDate__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpc_from"
           },
           {
             "label": "Effective To Date",
             "apiName": "ssot__EffectiveToDate__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "cpc_to"
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 2178
+          "x": 1620,
+          "y": 2186
         },
         "id": "dmo-cpc",
         "showLabels": true,
@@ -1530,29 +1530,29 @@
           },
           {
             "label": "Consent Captured Date Time",
-            "apiName": "ssot__ConsentCaptureddateTime__c",
-            "type": "Date Time",
+            "apiName": "ssot__ConsentCapturedDateTime__c",
+            "type": "DateTime",
             "keyType": null,
             "fid": "csc_cap"
           },
           {
             "label": "Effective From Date",
             "apiName": "ssot__EffectiveFromDate__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "csc_from"
           },
           {
             "label": "Effective To Date",
             "apiName": "ssot__EffectiveToDate__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "csc_to"
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 2518
+          "x": 1620,
+          "y": 2526
         },
         "id": "dmo-csc",
         "showLabels": true,
@@ -1615,8 +1615,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 2858
+          "x": 1620,
+          "y": 2866
         },
         "id": "dmo-cs",
         "showLabels": true,
@@ -1689,8 +1689,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 3066
+          "x": 1620,
+          "y": 3074
         },
         "id": "dmo-ect",
         "showLabels": true,
@@ -1749,8 +1749,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 3296
+          "x": 1620,
+          "y": 3304
         },
         "id": "dmo-stat",
         "showLabels": true,
@@ -1837,8 +1837,8 @@
           }
         ],
         "position": {
-          "x": 1580,
-          "y": 3482
+          "x": 1620,
+          "y": 3490
         },
         "id": "dmo-dup",
         "showLabels": true,
@@ -1926,7 +1926,7 @@
           {
             "label": "Captured Date Time",
             "apiName": "CapturedDateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dcns_cap"
           },
@@ -1947,14 +1947,14 @@
           {
             "label": "Received Date Time",
             "apiName": "ReceivedDateTime__c",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "dcns_recv"
           }
         ],
         "position": {
-          "x": 820,
-          "y": 1280
+          "x": 844,
+          "y": 1288
         },
         "id": "dlo-consent",
         "showLabels": true,
@@ -2006,7 +2006,7 @@
           {
             "label": "Received Date Time (system)",
             "apiName": "System: ingestion_timestamp()",
-            "type": "Date Time",
+            "type": "DateTime",
             "keyType": null,
             "fid": "ds-consent_recv"
           },
@@ -2019,8 +2019,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 2026
+          "x": 68,
+          "y": 2074
         },
         "id": "ds-consent",
         "showLabels": true,
@@ -2071,8 +2071,8 @@
           }
         ],
         "position": {
-          "x": 2340,
-          "y": 150
+          "x": 2396,
+          "y": 158
         },
         "id": "act-push",
         "showLabels": true,
@@ -2110,7 +2110,7 @@
           {
             "label": "Id",
             "apiName": "Id",
-            "type": "Id",
+            "type": "ID",
             "keyType": "pk",
             "fid": "crm_id",
             "required": true
@@ -2125,28 +2125,28 @@
           {
             "label": "Mobile Phone",
             "apiName": "MobilePhone",
-            "type": "varchar(40)",
+            "type": "Phone",
             "keyType": null,
             "fid": "crm_phone"
           },
           {
             "label": "First Name",
             "apiName": "FirstName",
-            "type": "varchar(40)",
+            "type": "Text",
             "keyType": null,
             "fid": "crm_fn"
           },
           {
             "label": "Last Name",
             "apiName": "LastName",
-            "type": "varchar(80)",
+            "type": "Text",
             "keyType": null,
             "fid": "crm_ln"
           }
         ],
         "position": {
-          "x": 60,
-          "y": 150
+          "x": 68,
+          "y": 158
         },
         "id": "src-crm",
         "showLabels": true,
@@ -2247,8 +2247,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 380
+          "x": 68,
+          "y": 388
         },
         "id": "src-reg",
         "showLabels": true,
@@ -2356,8 +2356,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 720
+          "x": 68,
+          "y": 728
         },
         "id": "src-appev",
         "showLabels": true,
@@ -2436,8 +2436,8 @@
           }
         ],
         "position": {
-          "x": 60,
-          "y": 1038
+          "x": 68,
+          "y": 1046
         },
         "id": "src-pref",
         "showLabels": true,

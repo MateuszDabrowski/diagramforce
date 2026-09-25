@@ -108,8 +108,9 @@ embedded band would drag its members around on an in-app Auto Layout. That is th
 
 A **Tooling response** carries the `301...` id, so it deep-links with `--org-url` alone. A **`.flow-meta.xml`**
 has no id: with `--org` it is looked up (the LATEST version, which is what `sf project retrieve` gave you), and
-without it the card falls back to the Flows list. The script prints which you got - relay that, and relay the
-note if the org is running a DIFFERENT version as Active than the file you converted.
+without it the card falls back to the Flows list. The script prints a note only when it falls back (no id found,
+or the org could not be read) or when the org runs a DIFFERENT version as Active than the file you converted -
+relay any note it prints.
 
 **`--org` also names the references the metadata carries only as ids.** A marketing flow's cards would
 otherwise read as bare identifiers: CMS content keys on Send Email / SMS / WhatsApp / Push / In-App actions,
@@ -196,7 +197,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.4",
+  "appVersion": "1.24.6",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -261,9 +262,9 @@ clients start truncating at. Do NOT hand over a truncated link. Fall back to the
    (or use the **File** tab to open the `.json` / `.dgf` you saved).
 3. The diagram opens as a new tab. No sign-in; nothing leaves the browser.
 
-Rough guide to what fits: a converted Salesforce Flow or a normal architecture diagram fits easily; a
-large Data Cloud field-mapping diagram (hundreds of mapped fields) generally does not. Do not guess -
-run the script and read the exit code.
+Rough guide to what fits: a normal architecture diagram or a small Flow fits; a converted Flow of a few
+dozen elements often does not (one real 40-element flow was ~9,000 characters), and a large Data Cloud
+field-mapping diagram never does. Do not guess - run the script and read the exit code.
 
 If the user later wants it in Google Drive or shared, they can do that from inside the app - your job
 ends at a clean, importable diagram.
@@ -335,10 +336,10 @@ are a second layer of meaning on the same cards, and a plain schema diagram is c
 ```bash
 # OWD - ONE query for every object
 sf data query -o <org> -t --json -q "SELECT QualifiedApiName, InternalSharingModel, ExternalSharingModel \
-   FROM EntityDefinition WHERE QualifiedApiName IN ('Account','Contact','Case')" > owd.json
+   FROM EntityDefinition WHERE QualifiedApiName IN ('Account','Contact','Opportunity')" > owd.json
 
 # Record counts - ONE REST call for every object
-sf api request rest "/services/data/v67.0/limits/recordCount?sObjects=Account,Contact,Case" -o <org> > vol.json
+sf api request rest "/services/data/v67.0/limits/recordCount?sObjects=Account,Contact,Opportunity" -o <org> > vol.json
 
 node scripts/org-to-selection.mjs fields.csv --max-fields 25 --owd owd.json --volume vol.json \
   --title "Sales Core" > selection.json
@@ -381,11 +382,16 @@ identity and its schema: the properties panel, the table view and the CSV export
 (Private)" or a fake `OWD` field corrupts a round-trip that has to stay lossless. The badge is a separate
 `df.Pill` cell for exactly that reason - which also means the reader can move, recolour or delete it.
 
-**Data Cloud** works the same way - pass the DMO catalogue instead, and remember to paginate:
+**Data Cloud** works the same way with DMO definitions instead of the CSV. Fetch ONE GET per DMO you want: the
+list endpoint is paged with no page token (on an SDO, `?limit=200` returned 200 of 1162 DMOs and missed both of
+these), and the script merges any number of files:
 ```bash
-sf api request rest "/services/data/v67.0/ssot/data-model-objects?limit=200" -o <org> > dmos.json
-node scripts/org-to-selection.mjs dmos.json --only ssot__Individual__dlm,ssot__ContactPointEmail__dlm
+sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm" -o <org> > ind.json
+sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__ContactPointEmail__dlm" -o <org> > cpe.json
+node scripts/org-to-selection.mjs ind.json cpe.json --max-fields 25 > selection.json
 ```
+A DMO definition carries **no relationships** (no `ReferenceTo`), so the ERD comes out with none: add the ones the
+user cares about by hand, following the spec's Data Model section, and say that you did.
 
 ### Data Cloud field mappings → a `datamapping` diagram
 
@@ -394,6 +400,8 @@ The Connect API (`/ssot/data-model-object-mappings`) returns the same pairs but 
 detail, and is GET-by-name - so the retrieve is the one to use.
 
 ```bash
+# a retrieve must run inside a Salesforce project folder - make a throwaway one if the user has none
+sf project generate -n df-pull && cd df-pull
 sf project retrieve start -o <org> -m "ObjectSourceTargetMap:*"
 node scripts/mappings-to-diagramforce.mjs force-app/main/default/objectSourceTargetMaps \
   --only Contact_Home --org <org> --title "Contact_Home mappings" > diagram.json
@@ -513,9 +521,33 @@ which of the two they are looking at.
 **The user can paste either shape straight into the app** (Load -> Paste, which has its own Data Graph
 card) - say so rather than making them round-trip through a file.
 
-### One retrieve, three diagrams
+### Salesforce ROLE HIERARCHY
 
-All three org importers now read what `sf project retrieve` writes, so a single pull covers the release:
+One `UserRole` query becomes an `org` diagram: a card per role, top-down from the top roles, siblings in
+alphabetical order as Setup lists them. The `Users` subquery puts the ACTIVE holder on each card - the holder's
+name, "N users" when several share the role, or a dashed "Vacant" card when nobody holds it. Portal roles
+(`PortalType` Partner / CustomerPortal) are skipped by default: an org creates three per portal account.
+
+```bash
+# fetches with the CLI's own auth - a read-only SELECT
+node scripts/roles-to-diagramforce.mjs --org <org> roles.json
+# or from a saved query result
+sf data query --query "SELECT Id, Name, DeveloperName, ParentRoleId, PortalType, (SELECT Name FROM Users WHERE IsActive = true) FROM UserRole" --json -o <org> > q.json
+node scripts/roles-to-diagramforce.mjs q.json roles.json
+node scripts/validate-diagram.mjs roles.json
+```
+
+**A whole org is WIDE** - the SDO's 68 internal roles draw about 14,000px across, because a top-down chart is as wide
+as its leaves. When the script says so, offer one branch: `--root <DeveloperName>` (or the role's Name or Id)
+draws that role and everything under it. `--include-portal` keeps portal roles; `--title` names the diagram.
+Without the `Users` subquery the cards carry roles only - no holders and no vacancies - and the script says so.
+**The user can paste the query result straight into the app** (Load -> Paste has a Role hierarchy card with the
+same portal checkbox) - say so rather than making them round-trip through a file.
+
+### One retrieve, two importers
+
+The Flow and mapping importers both read what `sf project retrieve` writes, so a single pull covers both
+(inside a project folder, as above):
 
 ```bash
 sf project retrieve start -o <org> -m "Flow:*" -m "ObjectSourceTargetMap:*"
@@ -542,31 +574,6 @@ mapping links, authored from the spec's `datamapping` section and Data 360 guida
 
 **Example 3**
 Input: "Here's the Tooling API JSON for our Case routing flow - diagram it." *(response pasted)*
-Output: run `scripts/flow-to-diagramforce.mjs` on it, validate the result, hand over the file plus the
-paste steps, and pass on any converter warning (e.g. a Custom Error element shown as an Action card).
-
-## Staying in sync (for maintainers)
-
-These files are **verbatim copies** of the app's, snapshotted at the version in the spec's "Spec
-snapshot" marker. `npm run package:skill` only ZIPS this folder - it does not copy - so re-copy them
-from the repo on each Diagramforce release. `dev/tests/skill-sync.test.js` fails if any drifts:
-
-| Bundled copy | Source in the app |
-|---|---|
-| `references/DIAGRAM_JSON_SPEC.md` | `DIAGRAM_JSON_SPEC.md` |
-| `scripts/diagram-schema.js` | `js/persistence/diagram-schema.js` |
-| `scripts/diagram-palette.js` | `js/persistence/diagram-palette.js` |
-| `scripts/flow-convert.js` | `js/persistence/flow-convert.js` |
-| `scripts/mapping-convert.js` | `js/persistence/mapping-convert.js` |
-| `scripts/datagraph-convert.js` | `js/persistence/datagraph-convert.js` |
-| `scripts/flow-layout.js` | `js/canvas/flow-layout.js` |
-
-Keeping the schema current is what stops the validator drifting from the renderer - it is the guard: a
-shape the copy doesn't know is flagged rather than silently accepted. The three `*-convert.js` files are
-the conversions themselves, shared so a diagram built here and one built in the app are byte-identical.
-`diagram-palette.js` carries the colour rule every converter obeys - every colour it hands out clears
-WCAG's 3:1 non-text floor against BOTH canvas backgrounds (#FAFAFA light, #1A1A1A dark), because a
-diagram travels as a share URL into whichever theme its reader runs. `flow-layout.js` matters less
-often (only the computed-layout path uses it) but should track the app so converted flows keep looking
-like Flow Builder. `flow-to-diagramforce.mjs` reads its `appVersion` straight from the bundled spec, so
-re-syncing the spec is enough to stamp the right version.
+Output: run `scripts/flow-to-diagramforce.mjs` on it, validate the result, then run `make-share-url.mjs`: hand
+over the `#diagram=` link if it fits, otherwise the file plus the Load steps, and pass on any converter warning
+(e.g. a Custom Error element shown as an Action card).

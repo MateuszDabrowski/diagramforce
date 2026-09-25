@@ -221,7 +221,17 @@ function resolveReferences(diagram, alias) {
     queries: (keys.size ? 1 : 0) + (subs.size ? 1 : 0) + (chans.size ? 1 : 0) + (segs.size ? 1 : 0) + (users.size ? 1 : 0) };
 }
 
-const { diagram, stats } = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion, orgUrl, flowId, expandStages });
+// The converter THROWS a message meant for a person (a managed-package flow whose Metadata is null, say). Print
+// that, not a stack trace: the reader is an agent relaying it, and seven lines of node internals bury the one
+// line that says what to do.
+let converted;
+try {
+  converted = convertFlowMetadata(raw, { fullName, computeFlowLayout, appVersion, orgUrl, flowId, expandStages });
+} catch (e) {
+  console.error(e?.message || String(e));
+  process.exit(1);
+}
+const { diagram, stats } = converted;
 const refs = resolveReferences(diagram, orgAlias);
 const json = JSON.stringify(diagram, null, 2);
 if (outPath) writeFileSync(outPath, json); else console.log(json);

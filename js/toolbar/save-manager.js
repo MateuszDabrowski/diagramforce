@@ -1,9 +1,9 @@
 // Save & Export manager (CLEANUP S4) — the quick Save modal + the full Save Manager (browser saves, Drive copies, export selection) + uniqueSaveName/wireSelectAll. Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.24.4';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.4';
-import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.4';
-import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.24.4';
-import { btn, tctx } from './context.js?v=1.24.4';
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.24.6';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.6';
+import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.6';
+import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.24.6';
+import { btn, tctx } from './context.js?v=1.24.6';
 
 function uniqueSaveName(baseName, dateSuffix, existingNames) {
   // Strip trailing date if it already matches today's suffix
@@ -384,9 +384,18 @@ export function showSaveManagerModal() {
   // exports from the stored graph (any tab); image + CSV need the live canvas, so they switch to that tab first
   // (closing the manager). While a flow animates on the active diagram, only GIF captures it (static formats are
   // hidden, mirroring the old image overlay); a GIF mid-encode hides the image formats entirely.
+  // CSV is offered where a table view has a CSV: Data Model (schema), Data Mapping (lineage) and Flow (element
+  // sections, 2026-09-24). One predicate and one dispatcher for the row menu, Export Selected and its loop, so a
+  // type gained here is gained everywhere. Each builds from the graph, so the table need not be open.
+  const HAS_CSV = new Set(['datamodel', 'datamapping', 'flow']);
+  const exportActiveCsv = (type) => {
+    if (type === 'datamapping') tctx.modules.tableView?.exportMappingCsv?.();
+    else if (type === 'flow') tctx.modules.tableView?.exportFlowCsv?.();
+    else exportObjectSchemaCsv(tctx.modules.graph);
+  };
   const openRowExportMenu = (anchor, t) => {
     document.querySelector('.df-rowexport-pop')?.remove();
-    const isData = t.diagramType === 'datamodel' || t.diagramType === 'datamapping';
+    const isData = HAS_CSV.has(t.diagramType);
     const animating = t.isActive && !!document.getElementById('paper')?.classList.contains('df-animate-flow');
     const gifBusy = !!p.isGifEncodingInProgress?.();
     const imageFmts = gifBusy ? []
@@ -426,7 +435,7 @@ export function showSaveManagerModal() {
     pop.querySelectorAll('.df-tab-pop__item').forEach((b) => b.addEventListener('click', () => {
       const fmt = b.dataset.fmt;
       if (fmt === 'json') { closePop(); p.exportSelection({ tabIds: [t.id] }); return; }
-      if (fmt === 'csv') { toTabThen(() => { if (t.diagramType === 'datamapping') tctx.modules.tableView?.exportMappingCsv?.(); else exportObjectSchemaCsv(tctx.modules.graph); }); return; }
+      if (fmt === 'csv') { toTabThen(() => exportActiveCsv(t.diagramType)); return; }
       toTabThen(() => exportImage(fmt));   // image formats
     }));
   };
@@ -456,14 +465,14 @@ export function showSaveManagerModal() {
   };
   const exportSelectedSequential = async (selTabs, fmt) => {
     const isCsv = fmt === 'csv';
-    const targets = isCsv ? selTabs.filter((t) => t.diagramType === 'datamodel' || t.diagramType === 'datamapping') : selTabs;
+    const targets = isCsv ? selTabs.filter((t) => HAS_CSV.has(t.diagramType)) : selTabs;
     if (!targets.length) return;
     if (targets.length > 1) showToast(`Exporting ${targets.length} diagrams - allow multiple downloads if your browser asks.`, 'info');
     for (const t of targets) {
       if (!t.isActive) tctx.modules.tabs.switchTab?.(t.id);
       await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));   // let the switched diagram render
       if (isCsv) {
-        if (t.diagramType === 'datamapping') tctx.modules.tableView?.exportMappingCsv?.(); else exportObjectSchemaCsv(tctx.modules.graph);
+        exportActiveCsv(t.diagramType);
       } else {
         const transparent = fmt.endsWith('-t'); const base = fmt.replace('-t', '');
         if (base === 'png') p.exportPNG(transparent);
@@ -476,7 +485,7 @@ export function showSaveManagerModal() {
   const openSelectedExportMenu = (anchor, selTabs) => {
     if (!selTabs.length) return;
     document.querySelector('.df-rowexport-pop')?.remove();
-    const anyData = selTabs.some((t) => t.diagramType === 'datamodel' || t.diagramType === 'datamapping');
+    const anyData = selTabs.some((t) => HAS_CSV.has(t.diagramType));
     const imageFmts = [['png', 'PNG'], ['png-t', 'PNG (transparent)'], ['webp', 'WEBP'], ['webp-t', 'WEBP (transparent)'], ['svg', 'SVG'], ['svg-t', 'SVG (transparent)']];
     const item = (fmt, label) => `<button class="df-tab-pop__item df-tab-pop__item--fmt" data-fmt="${fmt}">${fmtGlyphSel(fmt)}<span>Export as ${label}</span></button>`;
     const pop = document.createElement('div');

@@ -1,15 +1,16 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.24.4';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.24.4';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.24.4';
-import { localISODate } from './gantt-scale.js?v=1.24.4';
-import { sanitizeCssColor } from './util.js?v=1.24.4';
+import { getIconDataUri } from './icons.js?v=1.24.6';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.24.6';
+import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.24.6';
+import { localISODate } from './gantt-scale.js?v=1.24.6';
+import { sanitizeCssColor } from './util.js?v=1.24.6';
+import { SEQ_ROLE_ACCENT, BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from './persistence/diagram-schema.js?v=1.24.6';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.24.4';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.24.4';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.24.6';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.24.6';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -442,13 +443,9 @@ export const ORG_CATEGORIES = [
 // Role-based accent colors (match Mulesoft-style sequence diagrams).
 // Actor uses the same neutral grey as Participant/generic by default — users
 // change it explicitly via the property panel if they want role-styled shapes.
-const SEQ_ACCENT = {
-  generic:     '#8A9099', // neutral grey
-  salesforce:  '#2E844A', // Salesforce green
-  api:         '#1D73C9', // API / system blue
-  external:    '#F6B355', // external / partner amber
-  actor:       '#8A9099', // neutral grey — matches participant default
-};
+// Role -> accent. One table with the loader and the validator (diagram-schema.js), which apply `participantRole` to
+// a participant authored in JSON.
+const SEQ_ACCENT = SEQ_ROLE_ACCENT;
 
 export const SEQUENCE_CATEGORIES = [
   {
@@ -907,22 +904,15 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
       // #4FAE7B at 2.62:1 - which is why an intermediate event went nearly invisible in a light-theme export while
       // the end event beside it (red, 3.87:1) stayed crisp. Both moved to the palette entry at the SAME HUE
       // (amber 75->78, green 156->150) so the type is still recognisable at a glance; end-red already passed and
-      // is untouched. Keep this block and the Type select in js/properties/renderers-process.js identical - they
-      // are the two entry points to one look, and only one of them runs when a user switches an existing event.
+      // is untouched. The look lives in ONE table, BPMN_EVENT_STYLE (diagram-schema.js), which this stencil, the
+      // Type select in js/properties/renderers-process.js and the loader (for events authored in JSON) all read.
       //
       // The pale BODY fills stay as they are. A wash inside a ring is not a mark against the canvas (the ring is),
       // and it is the same construction the Zone presets use via hexToRgba(accent, 0.05) - a 1.07:1 tint there is
       // the design, not a defect.
-      if (eventType === 'end') {
-        attrs.body = { fill: '#F9E3E5', stroke: '#DA4E55', strokeWidth: 4 };
-        attrs.icon = { fill: '#DA4E55' };
-      } else if (eventType === 'intermediate') {
-        attrs.body = { fill: '#FDF1DC', stroke: '#A06F03', strokeWidth: 1.5 };
-        attrs.innerRing = { stroke: '#A06F03', strokeWidth: 1.5 };
-        attrs.icon = { fill: '#A06F03' };
-      } else {
-        attrs.body = { fill: '#DCF1E2', stroke: '#008B46', strokeWidth: 1.5 };
-        attrs.icon = { fill: '#008B46' };
+      for (const [path, v] of Object.entries(BPMN_EVENT_STYLE[eventType] || BPMN_EVENT_STYLE.start)) {
+        const [a, b] = path.split('/');
+        (attrs[a] ||= {})[b] = v;
       }
       return new joint.shapes.sf.BpmnEvent({ position, attrs, eventType });
     }
@@ -935,16 +925,10 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
 
     case 'sf.BpmnGateway': {
       const gatewayType = component.gatewayType || 'exclusive';
-      const markers = {
-        exclusive: '\u00D7',   // ×
-        parallel:  '+',
-        inclusive: '\u25CB',   // ○
-        event:    '\u25C7',   // ◇
-      };
       return new joint.shapes.sf.BpmnGateway({
         position,
         attrs: {
-          marker: { text: markers[gatewayType] || '\u00D7' },
+          marker: { text: BPMN_GATEWAY_GLYPH[gatewayType] || BPMN_GATEWAY_GLYPH.exclusive },
           label: { text: label || '' },
         },
         gatewayType,
