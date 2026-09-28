@@ -6,14 +6,14 @@
 // (written into sctx), the field-helper re-exports (so components/canvas/properties/field-editor import them from
 // shapes.js unchanged), and the register() orchestrator.
 
-import { sctx } from './shapes/context.js?v=1.24.9';
-import { registerCore } from './shapes/core.js?v=1.24.9';
-import { registerBpmnFlow } from './shapes/bpmn-flow.js?v=1.24.9';
-import { registerDataObject } from './shapes/data-object.js?v=1.24.9';
-import { registerGantt } from './shapes/gantt.js?v=1.24.9';
-import { registerOrg } from './shapes/org.js?v=1.24.9';
-import { registerTaskSequence } from './shapes/task-sequence.js?v=1.24.9';
-import { registerFlow } from './shapes/flow.js?v=1.24.9';
+import { sctx } from './shapes/context.js?v=1.24.10';
+import { registerCore } from './shapes/core.js?v=1.24.10';
+import { registerBpmnFlow } from './shapes/bpmn-flow.js?v=1.24.10';
+import { registerDataObject } from './shapes/data-object.js?v=1.24.10';
+import { registerGantt } from './shapes/gantt.js?v=1.24.10';
+import { registerOrg } from './shapes/org.js?v=1.24.10';
+import { registerTaskSequence } from './shapes/task-sequence.js?v=1.24.10';
+import { registerFlow } from './shapes/flow.js?v=1.24.10';
 
 // Data Cloud mapping mode / undo batcher / auto-fit getters — wired from app.js, written into the shapes runtime
 // context (sctx) so the DataObject registrar reads them via sctx.*. The field helpers live in shapes/fields.js;
@@ -22,7 +22,7 @@ import { registerFlow } from './shapes/flow.js?v=1.24.9';
 export function setMappingModeGetter(fn) { sctx.mappingModeGetter = fn; }
 export function setDataObjectHistoryBatcher(fn) { sctx.dataObjectHistoryBatcher = fn; }
 export function setAutoFitGetter(fn) { sctx.autoFitGetter = fn; }
-export { newFid, ensureFieldFids, getVisibleDataObjectFields } from './shapes/fields.js?v=1.24.9';
+export { newFid, ensureFieldFids, getVisibleDataObjectFields } from './shapes/fields.js?v=1.24.10';
 
 // Register every custom shape + view. registerCore MUST run first (its first define creates the joint.shapes.sf /
 // joint.shapes.df namespaces that every later View attachment reads).

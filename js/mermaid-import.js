@@ -11,15 +11,15 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.24.9';
-import { ER_MARKER_D } from './er-markers.js?v=1.24.9';
-import { showError, showToast } from './feedback.js?v=1.24.9';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.9';
+import { createElementFromComponent } from './components.js?v=1.24.10';
+import { ER_MARKER_D } from './er-markers.js?v=1.24.10';
+import { showError, showToast } from './feedback.js?v=1.24.10';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.24.10';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.24.9';
-import { noteError } from './diagnostics.js?v=1.24.9';
+  from './gantt-layout.js?v=1.24.10';
+import { noteError } from './diagnostics.js?v=1.24.10';
 
 let modules = {};
 

@@ -1,8 +1,8 @@
 // Change Review (CLEANUP S4) — the picker + banner + Apply-as-Highlights orchestration over util.diffGraphs and the canvas review-overlay. Reads tctx.modules inside function bodies; drive-history calls reviewAgainstRevision (slice->slice).
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.9';
-import { storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.9';
-import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.24.9';
-import { tctx } from './context.js?v=1.24.9';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.10';
+import { storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.10';
+import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.24.10';
+import { tctx } from './context.js?v=1.24.10';
 
 function currentGraphJSON() {
   return tctx.modules.graph ? tctx.modules.graph.toJSON() : { cells: [] };
