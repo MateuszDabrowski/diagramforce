@@ -3,34 +3,34 @@
 // notice stays. Licensed under the EUPL 1.2.
 // Initializes all modules in order. JointJS is a global (vendored script tag, assets/vendor/joint.min.js).
 
-import * as theme       from './theme.js?v=1.24.8';
-import * as icons       from './icons.js?v=1.24.8';
-import { getAllStencilSvgs } from './components.js?v=1.24.8';
-import * as shapes      from './shapes.js?v=1.24.8';
-import * as canvas      from './canvas.js?v=1.24.8';
-import * as stencil     from './stencil.js?v=1.24.8';
-import * as selection   from './selection.js?v=1.24.8';
-import * as history     from './history.js?v=1.24.8';
-import * as clipboard   from './clipboard.js?v=1.24.8';
-import * as templates    from './templates.js?v=1.24.8';
-import * as keyboard    from './keyboard.js?v=1.24.8';
-import * as toolbar     from './toolbar.js?v=1.24.8';
-import * as properties  from './properties.js?v=1.24.8';
-import * as persistence from './persistence.js?v=1.24.8';
-import * as tabs        from './tabs.js?v=1.24.8';
-import * as mermaidImport from './mermaid-import.js?v=1.24.8';
-import * as tableView    from './table-view.js?v=1.24.8';
-import * as walkthrough  from './walkthrough.js?v=1.24.8';
-import * as present      from './present.js?v=1.24.8';
-import * as whatsNew     from './whats-new.js?v=1.24.8';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.8';
-import * as singleWindow from './tabs/single-window.js?v=1.24.8';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.8';
-import * as externalImport from './persistence/external-import.js?v=1.24.8';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.24.8';
-import { seedDefaultPalette } from './brand-palette.js?v=1.24.8';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.8';   // external-import timeout fallback
-import { installErrorCapture } from './diagnostics.js?v=1.24.8';
+import * as theme       from './theme.js?v=1.24.9';
+import * as icons       from './icons.js?v=1.24.9';
+import { getAllStencilSvgs } from './components.js?v=1.24.9';
+import * as shapes      from './shapes.js?v=1.24.9';
+import * as canvas      from './canvas.js?v=1.24.9';
+import * as stencil     from './stencil.js?v=1.24.9';
+import * as selection   from './selection.js?v=1.24.9';
+import * as history     from './history.js?v=1.24.9';
+import * as clipboard   from './clipboard.js?v=1.24.9';
+import * as templates    from './templates.js?v=1.24.9';
+import * as keyboard    from './keyboard.js?v=1.24.9';
+import * as toolbar     from './toolbar.js?v=1.24.9';
+import * as properties  from './properties.js?v=1.24.9';
+import * as persistence from './persistence.js?v=1.24.9';
+import * as tabs        from './tabs.js?v=1.24.9';
+import * as mermaidImport from './mermaid-import.js?v=1.24.9';
+import * as tableView    from './table-view.js?v=1.24.9';
+import * as walkthrough  from './walkthrough.js?v=1.24.9';
+import * as present      from './present.js?v=1.24.9';
+import * as whatsNew     from './whats-new.js?v=1.24.9';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.9';
+import * as singleWindow from './tabs/single-window.js?v=1.24.9';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.9';
+import * as externalImport from './persistence/external-import.js?v=1.24.9';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.24.9';
+import { seedDefaultPalette } from './brand-palette.js?v=1.24.9';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.9';   // external-import timeout fallback
+import { installErrorCapture } from './diagnostics.js?v=1.24.9';
 
 // Record uncaught errors, unhandled rejections and console errors in memory for Help > Copy diagnostics. First
 // statement after the imports, so every later failure is caught. Nothing is sent anywhere (js/diagnostics.js).

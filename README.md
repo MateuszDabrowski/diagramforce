@@ -161,10 +161,17 @@ Diagramforce is licensed under the [European Union Public Licence 1.2](LICENSE),
 - You can change it, and share it, changed or not.
 - A shared copy, changed or not, keeps its copyright and licence notices intact. Those notices are the credit to me.
 - A shared copy comes with its source code and stays under the EUPL 1.2. That includes a changed copy that others use online. Merged into a larger work, it may instead use a licence the EUPL lists as compatible, such as the GPL.
-- An unchanged copy may keep the Diagramforce name and the MD logo. A changed copy must say that it is changed, and when, as the EUPL requires. It must not present itself as the original Diagramforce, or Diagramforce as someone else's work.
+- A changed copy must say that it is changed, and when, as the EUPL requires.
+- The Diagramforce name and the MD logo are not licensed under the EUPL. See [Name and logo](#name-and-logo).
 - The diagrams you make are yours. The licence covers the software only.
 
 This summary only explains what I mean by the licence. The text in [LICENSE](LICENSE) is what applies.
+
+### Name and logo
+
+The EUPL covers the Diagramforce software. It does not cover the Diagramforce name or the MD logo, including the logo images in `assets/` (`logo.png`, `favicon.png`, `icon-192.png`, `icon-512.png`, `MD-square-700x700.png`, `og-image.png` and `drive-icons/app-*.png`). The MD logo was designed by [Marek Jagusiak](https://jagusiak.eu).
+
+An unchanged copy may keep the name and the logo. A changed copy must use its own name and logo, say that it is changed and when, and must not present itself as the original Diagramforce, or Diagramforce as someone else's work.
 
 ### Third-party components
 
