@@ -155,7 +155,25 @@ Tested in Chrome, Vivaldi, and Safari. Service worker requires a Service-Worker-
 
 ## License
 
-This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Diagramforce is licensed under the [European Union Public Licence 1.2](LICENSE), the EUPL 1.2. In short: any use that keeps the credit to me is fine, commercial use included.
+
+- You can use it for free, at work too.
+- You can change it, and share it, changed or not.
+- A shared copy, changed or not, keeps its copyright and licence notices intact. Those notices are the credit to me.
+- A shared copy comes with its source code and stays under the EUPL 1.2. That includes a changed copy that others use online. Merged into a larger work, it may instead use a licence the EUPL lists as compatible, such as the GPL.
+- An unchanged copy may keep the Diagramforce name and the MD logo. A changed copy must say that it is changed, and when, as the EUPL requires. It must not present itself as the original Diagramforce, or Diagramforce as someone else's work.
+- The diagrams you make are yours. The licence covers the software only.
+
+This summary only explains what I mean by the licence. The text in [LICENSE](LICENSE) is what applies.
+
+### Third-party components
+
+These ship in `assets/` under their own licences, not the EUPL:
+
+- [JointJS](https://www.jointjs.com/) 4.0.4 (`assets/vendor/joint.min.js`) - Mozilla Public License 2.0.
+- [Salesforce Lightning Design System](https://www.lightningdesignsystem.com/) icons 2.29.1 (`assets/icons/`) - © Salesforce, Inc., [Creative Commons Attribution-NoDerivatives 4.0](https://creativecommons.org/licenses/by-nd/4.0/).
+- [pako](https://github.com/nodeca/pako) 2.1.0 (`assets/vendor/pako.min.js`) - MIT and Zlib.
+- [gifenc](https://github.com/mattdesl/gifenc) 1.0.3 (`assets/vendor/gifenc.esm.js`) - MIT.
 
 ## Author
 

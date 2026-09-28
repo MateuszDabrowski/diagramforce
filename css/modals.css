@@ -1987,7 +1987,11 @@
 /* ── About modal license ────────────────────────────── */
 .df-about__meta--license {
   /* No extra margin-top: the symmetric .df-about__meta padding already spaces it evenly (item 6 - the old 4px
-     pushed the license row further down than the rhythm above it). */
+     pushed the license row further down than the rhythm above it). Two stacked lines: the copyright + licence
+     link, then the plain-language credit rule under it. */
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
 }
 
 .df-about__license-text {

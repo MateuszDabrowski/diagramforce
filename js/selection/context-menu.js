@@ -6,11 +6,11 @@
 // action-provider, style, capture) live here now; selection.js re-exports their setters + copySelectionAsPng
 // so app.js / keyboard.js wiring is unchanged.
 
-import * as clipboard from '../clipboard.js?v=1.24.7';
-import * as history from '../history.js?v=1.24.7';
-import { wireMenuDismiss } from '../menu.js?v=1.24.7';
-import { saveSelectionAsTemplate } from '../templates.js?v=1.24.7';
-import { noteError } from '../diagnostics.js?v=1.24.7';
+import * as clipboard from '../clipboard.js?v=1.24.8';
+import * as history from '../history.js?v=1.24.8';
+import { wireMenuDismiss } from '../menu.js?v=1.24.8';
+import { saveSelectionAsTemplate } from '../templates.js?v=1.24.8';
+import { noteError } from '../diagnostics.js?v=1.24.8';
 
 // ── Injected selection context (wired by selection.init → initContextMenu). Read at CALL time; the
 // selectedIds Set is shared BY REFERENCE with selection.js so the menu sees the live selection. ──
