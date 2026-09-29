@@ -1,28 +1,28 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.10';
-import { tbctx } from './tabs/context.js?v=1.24.10';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.10';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.10';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.10';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.10';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.11';
+import { tbctx } from './tabs/context.js?v=1.24.11';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.11';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.11';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.11';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.11';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.10';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.10';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.10';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.10';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.10';
-import { wireMenuDismiss } from './menu.js?v=1.24.10';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.10';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.10';
-import { getPalette } from './brand-palette.js?v=1.24.10';
-import { getAllIcons } from './icons.js?v=1.24.10';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.10';
-import { noteError } from './diagnostics.js?v=1.24.10';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.11';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.11';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.11';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.11';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.11';
+import { wireMenuDismiss } from './menu.js?v=1.24.11';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.11';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.11';
+import { getPalette } from './brand-palette.js?v=1.24.11';
+import { getAllIcons } from './icons.js?v=1.24.11';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.11';
+import { noteError } from './diagnostics.js?v=1.24.11';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

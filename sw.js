@@ -12,7 +12,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.24.10';
+const CACHE_VERSION = '1.24.11';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -42,6 +42,7 @@ const PRECACHE_URLS = [
   // eager ES imports (no dynamic import() anywhere), so all are boot-critical:
   // omitting any one reintroduces the silent offline-crash this list prevents.
   `./js/a11y.js?v=${CACHE_VERSION}`,
+  `./js/theme-boot.js?v=${CACHE_VERSION}`,   // classic <head> script, not in app.js's import graph
   `./js/app.js?v=${CACHE_VERSION}`,
   `./js/brand-palette.js?v=${CACHE_VERSION}`,
   `./js/canvas.js?v=${CACHE_VERSION}`,

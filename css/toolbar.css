@@ -465,10 +465,14 @@
   height: 18px;
 }
 
-[data-theme="dark"] .df-icon-sun { display: none; }
-[data-theme="dark"] .df-icon-moon { display: inline; }
-[data-theme="light"] .df-icon-sun { display: inline; }
-[data-theme="light"] .df-icon-moon { display: none; }
+/* The icon shows the CHOICE (js/theme.js): system = half-filled ring, light = sun, dark = moon. Before the choice
+   attribute exists (theme-boot.js failed to load) it falls back to the resolved theme. */
+.df-icon-sun, .df-icon-moon, .df-icon-system { display: none; }
+[data-theme-choice="system"] .df-icon-system,
+[data-theme-choice="light"] .df-icon-sun,
+[data-theme-choice="dark"] .df-icon-moon,
+:root:not([data-theme-choice])[data-theme="light"] .df-icon-sun,
+:root:not([data-theme-choice])[data-theme="dark"] .df-icon-moon { display: inline; }
 
 /* Zoom percentage: a button that resets zoom to 100% on click (v1.19.0). Reads as plain text until hovered,
    then lights up with the SAME height / radius / hover as the icon-only toolbar buttons (just wider for the

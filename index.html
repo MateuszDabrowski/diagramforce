@@ -43,17 +43,21 @@
   <link rel="apple-touch-icon" href="assets/favicon.png">
   <link rel="manifest" href="manifest.json">
 
+  <!-- Theme before first paint: classic + render-blocking on purpose, and before the stylesheets so it does not
+       wait for them. Inline would be blocked by the CSP above. See js/theme-boot.js. -->
+  <script data-cfasync="false" src="js/theme-boot.js?v=1.24.11"></script>
+
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.24.10">
-  <link rel="stylesheet" href="css/theme.css?v=1.24.10">
-  <link rel="stylesheet" href="css/layout.css?v=1.24.10">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.24.10">
-  <link rel="stylesheet" href="css/stencil.css?v=1.24.10">
-  <link rel="stylesheet" href="css/properties.css?v=1.24.10">
-  <link rel="stylesheet" href="css/tabs.css?v=1.24.10">
-  <link rel="stylesheet" href="css/canvas.css?v=1.24.10">
-  <link rel="stylesheet" href="css/modals.css?v=1.24.10">
+  <link rel="stylesheet" href="css/variables.css?v=1.24.11">
+  <link rel="stylesheet" href="css/theme.css?v=1.24.11">
+  <link rel="stylesheet" href="css/layout.css?v=1.24.11">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.24.11">
+  <link rel="stylesheet" href="css/stencil.css?v=1.24.11">
+  <link rel="stylesheet" href="css/properties.css?v=1.24.11">
+  <link rel="stylesheet" href="css/tabs.css?v=1.24.11">
+  <link rel="stylesheet" href="css/canvas.css?v=1.24.11">
+  <link rel="stylesheet" href="css/modals.css?v=1.24.11">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -425,12 +429,13 @@
             </button>
           </div>
         </div>
-        <button id="btn-theme" class="df-toolbar__button df-toolbar__button--icon-only" title="Toggle theme" aria-label="Toggle theme">
+        <button id="btn-theme" class="df-toolbar__button df-toolbar__button--icon-only" title="Switch theme" aria-label="Switch between dark and light mode">
           <svg class="df-toolbar__icon df-toolbar__icon--theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <!-- moon (dark mode indicator) -->
             <path class="df-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
             <!-- sun (light mode indicator) -->
             <g class="df-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
+            <g class="df-icon-system"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></g>
           </svg>
         </button>
         <button id="btn-toggle-stencil" class="df-toolbar__button df-toolbar__button--icon-only df-toolbar__button--active" title="Toggle stencil panel" aria-label="Toggle stencil panel">
@@ -495,8 +500,9 @@
             <svg class="df-toolbar__menu-icon df-toolbar__icon--theme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path class="df-icon-moon" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
               <g class="df-icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>
+            <g class="df-icon-system"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></g>
             </svg>
-            Toggle Theme
+            <span data-theme-label>Theme: System</span>
           </button>
           <button class="df-toolbar__menu-item" data-action="walkthrough">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/><text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text></svg>
@@ -793,8 +799,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.24.10"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.24.10"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.24.10"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.24.11"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.24.11"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.24.11"></script>
 </body>
 </html>

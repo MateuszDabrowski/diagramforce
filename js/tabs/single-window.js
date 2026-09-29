@@ -18,8 +18,8 @@
 // Also the switch the domain-move bridge needs: it writes the migrated session itself and then reloads, and the
 // reload's pagehide flush used to write the blank new-origin session straight over it (audit P0-2).
 
-import { buildModal } from '../feedback.js?v=1.24.10';
-import { noteError } from '../diagnostics.js?v=1.24.10';
+import { buildModal } from '../feedback.js?v=1.24.11';
+import { noteError } from '../diagnostics.js?v=1.24.11';
 
 export const OWNER_KEY = 'df.sessionOwner';
 const HANDOFF_PREFIX = 'handoff:';

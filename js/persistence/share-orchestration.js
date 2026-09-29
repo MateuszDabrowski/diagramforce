@@ -5,19 +5,19 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.10';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.10';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.10';
-import { escHtml, formatBytes } from '../util.js?v=1.24.10';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.10';
-import { pctx } from './context.js?v=1.24.10';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.10';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.10';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.10';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.10';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.10';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.10';
-import { noteError } from '../diagnostics.js?v=1.24.10';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.11';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.11';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.11';
+import { escHtml, formatBytes } from '../util.js?v=1.24.11';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.11';
+import { pctx } from './context.js?v=1.24.11';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.11';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.11';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.11';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.11';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.11';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.11';
+import { noteError } from '../diagnostics.js?v=1.24.11';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
