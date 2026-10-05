@@ -164,6 +164,13 @@ export function healDecision(status, { imported = false, sharedInEdit = false, r
 
 /** Drive v3 `errors[].reason` values that come with a 403 but do NOT mean the file is gone or out of reach - retry
  *  later instead. https://developers.google.com/drive/api/guides/handle-errors */
+/** Has the user LOST ACCESS to a file (as opposed to a passing failure)? A 404, or a 403 whose Drive reason is not a
+ *  transient one - the same line healDecision draws. 5xx, 429, a 401 and a reason-less 403 are not access loss. Pure. */
+export function sourceAccessLost(status, reason = null) {
+  if (status === 404) return true;
+  return status === 403 && !!reason && !TRANSIENT_403_REASONS.has(reason);
+}
+
 export const TRANSIENT_403_REASONS = new Set([
   'rateLimitExceeded', 'userRateLimitExceeded', 'dailyLimitExceeded', 'sharingRateLimitExceeded',
   'storageQuotaExceeded', 'quotaExceeded', 'teamDriveFileLimitExceeded', 'numChildrenInNonRootLimitExceeded',
@@ -353,23 +360,28 @@ export function tabShareImpactsOthers(role) {
 }
 
 /**
- * Phase B delete-protection. In Phase B a tab's s.fileId can point at a file the user does NOT own (a Collab/
- * received-editable share edited directly, or a team Shared-Drive file). Close & Delete must NEVER trash that file -
- * only the user's own private My-Drive backup mirror + the local tab link. We trash the master ONLY when ownership is
- * DEFINITE (ownedByMe === true) and the tab isn't a shared-in editable; a null/unknown probe fails CLOSED (skip the
- * master), because trashing a teammate's file is unrecoverable for them. Pure; unit-tested.
+ * What "Delete" may do to a Drive file. A tab's s.fileId can point at a file the user does NOT own (a Collab/
+ * received-editable share edited directly, or a team Shared-Drive file). Pure; unit-tested.
+ *  - FOREIGN (edited directly, `ownedByMe === false`, or an invite Drive left `ownedByMe` unset on): never trash the
+ *    master (unrecoverable for its owner); trash only your own backup mirror and drop the link → outcome 'unlinked'.
+ *  - YOURS (`ownedByMe === true`, or a Shared-Drive file whose `capabilities.canTrash` is true - Google leaves
+ *    `ownedByMe` unset on Shared-Drive items): trash it and its backup → 'trashed'.
+ *  - Anything else (the probe failed, or a Shared-Drive file you may not trash): touch NOTHING → 'failed'. This used
+ *    to drop the link and trash the backup while the master stayed, and callers reported "moved to trash"
+ *    (drive review 2026-10-05, C4).
  *   @param ownedByMe   true | false | null(unknown) - from the Drive ownership probe
  *   @param isSharedInEdit  the tab edits a foreign shared file directly (Phase B Collab/Shared-Drive)
  *   @param hasBackup   a kind:'mydrive-backup' copy exists for this tab
- *   @returns { trashMaster, trashBackup, unlink }
+ *   @param sharedWithMe  the probe saw a `sharingUser` (an explicit invite)
+ *   @param driveId     the file's Shared Drive (null in My Drive)
+ *   @param canTrash    true | false | null - the probe's `capabilities.canTrash`
+ *   @returns { trashMaster, trashBackup, unlink, outcome }
  */
-export function sharedMasterDeleteDecision({ ownedByMe = null, isSharedInEdit = false, hasBackup = false } = {}) {
-  const foreign = isSharedInEdit || ownedByMe === false;
-  return {
-    trashMaster: !foreign && ownedByMe === true,   // only a file you DEFINITELY own (null probe → fail closed)
-    trashBackup: !!hasBackup,                        // your private mirror is always yours to remove
-    unlink: true,                                    // always drop the local tab link
-  };
+export function sharedMasterDeleteDecision({ ownedByMe = null, isSharedInEdit = false, hasBackup = false, sharedWithMe = false, driveId = null, canTrash = null } = {}) {
+  const foreign = isSharedInEdit || ownedByMe === false || (ownedByMe == null && sharedWithMe && !driveId);
+  if (foreign) return { trashMaster: false, trashBackup: !!hasBackup, unlink: true, outcome: 'unlinked' };
+  if (ownedByMe === true || (!!driveId && canTrash === true)) return { trashMaster: true, trashBackup: !!hasBackup, unlink: true, outcome: 'trashed' };
+  return { trashMaster: false, trashBackup: false, unlink: false, outcome: 'failed' };
 }
 
 /**
@@ -440,6 +452,7 @@ export const DRIVE_TAB_FIELDS = [
   ['driveSharedInEdit', null],
   ['driveOutgoingGrants', 0],
   ['driveLocalOnly', false],   // 1.24.1: a copy the user opened to LOOK at (an older Drive version) - never auto-synced
+  ['driveViewEdited', false],  // 1.24.12: a master-less VIEW share the user really EDITED - only then may a sweep mint its copy
 ];
 
 /** A plain object of `o`'s Drive linkage fields with each default applied — the `o.x || default` semantics every

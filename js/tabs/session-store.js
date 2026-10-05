@@ -4,14 +4,14 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.24.11';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.11';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.11';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.11';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.24.11';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.11';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.11';
-import { noteError } from '../diagnostics.js?v=1.24.11';
+import { tbctx } from './context.js?v=1.24.12';
+import { showNewDiagramModal } from './new-diagram-modal.js?v=1.24.12';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.24.12';
+import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.24.12';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.24.12';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.24.12';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.24.12';
+import { noteError } from '../diagnostics.js?v=1.24.12';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -577,9 +577,15 @@ function noteContentEdit() {
   // where they would overwrite the real file with them (see loadTabGraph).
   if (tab && tab.loadFailed) return;
   const firstRealEdit = !!tab && !tab.dirty && !canvasModule.isLoadingJSON?.();
+  // A master-less view share not yet marked edited forks on THIS edit even when the tab already reads dirty: a reload
+  // restores a never-saved view as dirty (restore's `!lastSavedAt && cells`), which hid its first edit and skipped the
+  // "(changed)" rename (drive review B10, 1.24.12). The marker (driveViewEdited) makes it fire once.
+  const src = tab && tab.driveSharedSource;
+  const unforkedView = !!src && !!src.fileId && !tab.driveFileId && src.canEdit !== true && !tab.driveViewEdited
+    && !canvasModule.isLoadingJSON?.();
   markDirty();
   // Mode C: a VIEW (Copy) share diverges into the user's own copy on its first edit → rename to "(changed)".
-  if (firstRealEdit) maybeForkViewShareOnEdit(tab);
+  if (firstRealEdit || unforkedView) maybeForkViewShareOnEdit(tab);
   // Drive autosave — only on REAL edits (markDirty's same isLoadingJSON gate), so a
   // tab switch / open / restore doesn't trigger a Drive write.
   if (!canvasModule.isLoadingJSON?.()) persistenceModule.notifyDriveChange?.();

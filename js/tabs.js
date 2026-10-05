@@ -1,28 +1,28 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.11';
-import { tbctx } from './tabs/context.js?v=1.24.11';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.11';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.11';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.11';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.11';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.12';
+import { tbctx } from './tabs/context.js?v=1.24.12';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.12';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.12';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.12';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.12';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.11';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.11';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.11';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.11';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.11';
-import { wireMenuDismiss } from './menu.js?v=1.24.11';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.11';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.11';
-import { getPalette } from './brand-palette.js?v=1.24.11';
-import { getAllIcons } from './icons.js?v=1.24.11';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.11';
-import { noteError } from './diagnostics.js?v=1.24.11';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.12';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.12';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.12';
+import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.12';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.12';
+import { wireMenuDismiss } from './menu.js?v=1.24.12';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.12';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.12';
+import { getPalette } from './brand-palette.js?v=1.24.12';
+import { getAllIcons } from './icons.js?v=1.24.12';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.12';
+import { noteError } from './diagnostics.js?v=1.24.12';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -31,7 +31,7 @@ let tabListEl;
 // shared-out copies plus whether it has an editable / view-only upstream source. Cheap to recompute, so
 // persistTabDrive can re-render the tab bar ONLY when this flips, never on a routine Drive save.
 const tabShareSignature = (t) =>
-  `${(t.driveCopies || []).filter(Boolean).length}|${t.driveSharedSource ? (t.driveSharedSource.canEdit === true ? 'e' : 'v') : ''}|${t.driveSharedInEdit ? 'die' : ''}|${t.driveDriveId ? 'sd' : ''}|${t.driveOutgoingGrants || 0}`;
+  `${(t.driveCopies || []).filter(Boolean).length}|${t.driveSharedSource ? (t.driveSharedSource.canEdit === true ? 'e' : 'v') + (t.driveSharedSource.unreachableAt ? 'x' : '') : ''}|${t.driveSharedInEdit ? 'die' : ''}|${t.driveDriveId ? 'sd' : ''}|${t.driveOutgoingGrants || 0}`;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
@@ -50,7 +50,8 @@ function buildShareGlyph(tab) {
   // (#share_mobile reads at the same visual weight as the others at 12px - the plain #share's exit arrow read off.)
   const ICON = Object.assign(Object.create(null), { out: '#share_mobile', in: '#share_link', both: '#socialshare' });
   const glyph = document.createElementNS(SVG_NS, 'svg');
-  glyph.setAttribute('class', `df-tab__shared df-tab__shared--${kind}`);
+  const lost = !!(tab.driveSharedSource && tab.driveSharedSource.unreachableAt);   // the original was unshared or deleted
+  glyph.setAttribute('class', `df-tab__shared df-tab__shared--${kind}${lost ? ' df-tab__shared--lost' : ''}`);
   glyph.setAttribute('width', '12');
   glyph.setAttribute('height', '12');
   glyph.setAttribute('aria-hidden', 'true');   // decorative; the share status is also in the tab's aria-label
@@ -58,7 +59,9 @@ function buildShareGlyph(tab) {
   const src = tab.driveSharedSource;
   const sharedBy = src && src.sharedBy ? ` Shared by ${src.sharedBy}.` : '';
   const n = role === 'shared-out' ? (tab.driveCopies || []).filter(c => c && c.kind !== 'mydrive-backup').length : 0;
-  const tip = kind === 'out'
+  const tip = lost
+    ? `The original this diagram came from is no longer available to your Google account - it was unshared or deleted.${sharedBy} Your diagram and your own copy are untouched; Refresh is off.`
+    : kind === 'out'
     ? `You shared this diagram out to ${n} editable Google Drive cop${n === 1 ? 'y' : 'ies'}. Your edits push out to them; you keep the master, so your save wins (you resolve any conflict).`
     : kind === 'in'
       ? `A view-only file shared to you.${sharedBy} Your edits stay in your own copy - use Refresh to pull the owner's latest. Their save wins.`
@@ -209,6 +212,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     t.driveSharedInEdit = meta.driveSharedInEdit || null;   // Phase B: fileId IS a directly-edited shared file (drives the glyph + chip)
     t.driveOutgoingGrants = meta.driveOutgoingGrants || 0;   // direct view/edit invites on the master → "shared out" glyph
     t.driveLocalOnly = !!meta.driveLocalOnly;   // a look-only copy (an older version) - never auto-synced
+    t.driveViewEdited = !!meta.driveViewEdited;   // a master-less view share the user edited (the sweep's Mode C guard)
     scheduleSaveTabs();   // debounced: a sign-in sweep sets this for every tab in quick succession
     // Only re-render the tab bar when the share state actually flipped (a new copy shared, a source
     // gained edit rights), NOT on every routine Drive save — so the glyph appears live without flicker.
@@ -280,7 +284,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     // Single-group bundles tag nothing per-diagram — fall back to the lone group.
     const soleGroup = groupMetas.length === 1 ? nameToId.get(groupMetas[0].name) : null;
     for (const d of diagrams) {
-      const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false });
+      const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false, driveMeta: d.driveMeta || null });
       const t = tabs.find(x => x.id === id);
       if (t) t.groupId = (d.group && nameToId.get(d.group)) || soleGroup || null;
     }
@@ -485,6 +489,17 @@ export function cloneToMappingTab() {
   return id;
 }
 
+/** Close a tab whose diagram was just deleted from Drive elsewhere (the library's Delete): no re-archive, and its
+ *  browser archive goes too - the same as the tab menu's Close and Delete. Left open and unlinked, the next sweep
+ *  re-created it under a new id (drive review C3). */
+export function closeDeletedTab(id) {
+  const t = tabs.find(x => x.id === id);
+  if (!t) return;
+  t.dirty = false;
+  if (t.browserSaveName) deleteBrowserArchive(t.browserSaveName);
+  doCloseTab(id, { archive: false });
+}
+
 export function closeTab(id) {
   const tab = tabs.find(t => t.id === id);
   if (!tab) return;
@@ -522,8 +537,11 @@ function doCloseTab(id, { archive = true } = {}) {
     // false conflict against the user's own save (audit 2026-09-23). persistTabDrive routes to it while pending.
     const closed = tabs.find(t => t.id === id);
     if (drivePending && closed && closed.browserSaveName) {
-      closingArchives.set(id, closed.browserSaveName);
-      Promise.resolve(drivePending).finally(() => closingArchives.delete(id));
+      const archiveName = closed.browserSaveName;
+      closingArchives.set(id, archiveName);
+      Promise.resolve(drivePending)
+        .then((r) => { if (r === 'written' || r === 'uptodate') markArchiveDriveClean(archiveName); })
+        .finally(() => closingArchives.delete(id));
     }
   }
 
@@ -573,6 +591,19 @@ function updateClosingArchive(id, meta) {
   } catch (e) { noteError('tabs:archive-drive-meta', e); /* best-effort: the archive still holds the diagram itself */ }
 }
 
+/** The close's Drive save landed: Drive now holds this archive's content, so eviction may shed it (C1). */
+function markArchiveDriveClean(name) {
+  try {
+    const key = 'sfdiag::save::' + name;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (!d.driveFileId || d.driveClean) return;
+    d.driveClean = true;
+    localStorage.setItem(key, JSON.stringify(d));
+  } catch (e) { noteError('tabs:archive-drive-meta', e); /* stays not-clean: never evicted, which is the safe side */ }
+}
+
 // A collision-safe browser-archive name: "Name YYYY-MM-DD", then "Name 2 YYYY-MM-DD" … so two different
 // diagrams never overwrite each other's archive (the no-clobber rule from the Save Manager review).
 function uniqueArchiveName(base, existing) {
@@ -612,7 +643,10 @@ function archiveTabToBrowser(id) {
       name, timestamp: Date.now(), version: 1, appVersion: APP_VERSION,
       diagramType: tab.diagramType, graph: compactGraphForSave(graphJSON), viewport: getTabViewport(id),
       group: grp ? { name: grp.name, icon: grp.icon || null, color: grp.color || null } : null,   // #7: reopen back into its group
-      driveFileId: tab.driveFileId || null,   // present → redundant (reloadable from Drive) → eviction-eligible
+      driveFileId: tab.driveFileId || null,
+      // Drive holds exactly this content → the archive is redundant → eviction-eligible (C1). A dirty close turns
+      // true when its Drive save lands (doCloseTab).
+      driveClean: !!(tab.driveFileId && persistenceModule.tabDriveClean?.(id)),
       driveSharedSource: tab.driveSharedSource || null,   // so a CLOSED shared file still reads as shared (item 5)
       driveSharedInEdit: tab.driveSharedInEdit || null,   // Phase B: a CLOSED directly-edited shared file still reads as shared
       // Item 1.3: also stash the rest of the Drive linkage so LOADING this archive re-marks it "In My Drive" and
@@ -1476,8 +1510,11 @@ function openTabGroupMenu(anchorEl, tab) {
           okLabel: 'Move to trash', cancelLabel: 'Cancel', tone: 'danger',
         });
         if (!ok) return;
-        if (await persistenceModule.deleteDiagramFromDrive?.(tab.driveFileId)) {
-          showToast('Moved to Google Drive trash ✓', 'info');
+        // 'unlinked' = someone else's file: it stays in their Drive (deleteDiagramFromDrive said so) and your side
+        // goes. 'failed' changed nothing, so the tab and its archive stay.
+        const outcome = await persistenceModule.deleteDiagramFromDrive?.(tab.driveFileId);
+        if (outcome === 'trashed' || outcome === 'unlinked') {
+          if (outcome === 'trashed') showToast('Moved to Google Drive trash ✓', 'info');
           const t = tabs.find(x => x.id === tab.id);
           if (t) {
             t.dirty = false;          // already confirmed → don't re-prompt the unsaved-changes guard

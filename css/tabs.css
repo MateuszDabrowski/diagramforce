@@ -1205,6 +1205,8 @@
    12px box it reads visually heavier than the lighter #share_mobile / #share_link - drop it a touch so all three
    glyphs carry the same visual weight next to the diagram-type icon. */
 .df-tab__shared--both { width: 11px; height: 11px; }
+/* The original this tab came from is no longer reachable (unshared / deleted): the glyph stays, dimmed - its tooltip says why. */
+.df-tab__shared--lost { opacity: 0.4; }
 
 /* A collapsed group's lingering active tab, condensed to icon-only: the label + close fold away so the group reads
    as collapsed while the active tab stays clickable. The name is in the title tooltip; switching tabs removes it

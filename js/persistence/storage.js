@@ -7,11 +7,11 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.11';
-import { pctx } from './context.js?v=1.24.11';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.11';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.11';
-import { noteError } from '../diagnostics.js?v=1.24.11';
+import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.24.12';
+import { pctx } from './context.js?v=1.24.12';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.12';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.24.12';
+import { noteError } from '../diagnostics.js?v=1.24.12';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -181,9 +181,12 @@ export const STORAGE_WARNING_BYTES = 4_000_000;
 
 /**
  * Quota-pressure relief valve (v1.17.0). Evict the OLDEST-by-modified browser archives that are **Drive-backed**
- * — i.e. redundant, because the same diagram is also in the user's Google Drive and can be reloaded — until the
+ * — i.e. redundant, because the same content is also in the user's Google Drive and can be reloaded — until the
  * footprint drops under `targetBytes`. Stops early if no redundant archives remain.
  *
+ * Redundant means `driveClean: true` (1.24.12), not merely a `driveFileId`: a tab closed dirty while the token had
+ * lapsed, during a conflict pause or a Drive 5xx has a Drive file that lacks its last edits, and those edits live
+ * ONLY in this archive (drive review 2026-10-05, C1). An archive from an older version (no flag) is kept.
  * NEVER touches a **browser-only** archive (no `driveFileId`): that archive is the diagram's ONLY copy, so
  * evicting it would be permanent data loss. When only those remain over the line the caller falls back to the
  * backup reminder instead. Returns the number evicted.
@@ -199,9 +202,9 @@ export function evictRedundantArchives(targetBytes = STORAGE_WARNING_BYTES) {
     if (!key?.startsWith(NAMED_SAVE_PREFIX)) continue;
     try {
       const data = JSON.parse(localStorage.getItem(key));
-      // Redundant = also in the user's Drive (has a driveFileId) → reloadable, so safe to shed. A browser-only
-      // archive has no driveFileId and is NEVER a candidate (it would be permanent data loss).
-      if (data && data.driveFileId) candidates.push({ key, ts: data.timestamp || 0 });
+      // Redundant = Drive holds exactly this content (driveClean) → reloadable, so safe to shed. A browser-only
+      // archive, or one holding edits Drive never got, is NEVER a candidate (it would be permanent data loss).
+      if (data && data.driveFileId && data.driveClean === true) candidates.push({ key, ts: data.timestamp || 0 });
     } catch (e) { noteError('storage:corrupt-save', e); /* skip corrupt entry */ }
   }
   candidates.sort((a, b) => a.ts - b.ts);   // oldest first

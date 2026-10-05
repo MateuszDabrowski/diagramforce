@@ -4,11 +4,11 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.24.11';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.11';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.11';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.11';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.11';
+import { tbctx } from './context.js?v=1.24.12';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.12';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.12';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.12';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.12';
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;
@@ -84,8 +84,8 @@ export function showCloseConfirmModal(tabId, tabName) {
     close();
     const t = tabs.find(x => x.id === tabId);
     if (t?.driveFileId) {
-      const deleted = await persistenceModule.deleteDiagramFromDrive?.(t.driveFileId);
-      if (!deleted) { showToast('Nothing was deleted - the tab stays open. Sign in to Google Drive and try again.', 'info'); return; }
+      const outcome = await persistenceModule.deleteDiagramFromDrive?.(t.driveFileId);
+      if (outcome !== 'trashed' && outcome !== 'unlinked') { showToast('Nothing was deleted - the tab stays open.', 'info'); return; }
     }
     if (t) {
       if (t.browserSaveName) deleteBrowserArchive(t.browserSaveName);
@@ -356,26 +356,26 @@ export function showCloseTabsModal() {
     // Drive with no Diagramforce context to find and delete it (CR, prod - mirrors the single-tab close dialog).
     const failedDrive = new Set();
     for (const t of driveTabs) {
-      let deleted = false;
-      try { deleted = await persistenceModule.deleteDiagramFromDrive(t.driveFileId); }
+      let outcome = 'failed';
+      try { outcome = await persistenceModule.deleteDiagramFromDrive(t.driveFileId); }
       catch (e) { console.warn('Diagramforce: Drive delete failed', t.id, e); }
-      if (!deleted) failedDrive.add(t.id);
+      if (outcome !== 'trashed' && outcome !== 'unlinked') failedDrive.add(t.id);
     }
     // Drive-only rows: trash each; a failure keeps nothing to close (no tab) - it's just reported.
     let driveOnlyFailed = 0;
     for (const fid of driveOnly) {
-      let deleted = false;
-      try { deleted = await persistenceModule.deleteDiagramFromDrive(fid); }
+      let outcome = 'failed';
+      try { outcome = await persistenceModule.deleteDiagramFromDrive(fid); }
       catch (e) { console.warn('Diagramforce: Drive delete failed', fid, e); }
-      if (deleted) persistenceModule.forgetArchivesForDriveFile?.(fid);   // archives pointing at a trashed file drop their chip
-      else driveOnlyFailed++;
+      if (outcome === 'trashed') persistenceModule.forgetArchivesForDriveFile?.(fid);   // archives pointing at a trashed file drop their chip
+      else if (outcome !== 'unlinked') driveOnlyFailed++;
     }
     const closableIds = tabIds.filter(id => !failedDrive.has(id));
     // Remove the existing browser archive of every DELETABLE open tab (synced or not), then the standalone archives.
     for (const id of closableIds) { const t = tabs.find(x => x.id === id); if (t?.browserSaveName) deleteBrowserArchive(t.browserSaveName); }
     for (const s of saveItems) { persistenceModule.deleteNamedSave?.(s.key); forgetBrowserSaveName(s.name); }
     const failedCount = failedDrive.size + driveOnlyFailed;
-    if (failedCount) showToast(`${failedCount} diagram${failedCount === 1 ? '' : 's'} couldn't be deleted from Google Drive - sign in and try again${failedDrive.size ? ` (${failedDrive.size === 1 ? 'its tab stays' : 'their tabs stay'} open)` : ''}.`, 'info');
+    if (failedCount) showToast(`${failedCount} diagram${failedCount === 1 ? '' : 's'} couldn't be deleted from Google Drive - nothing was changed for ${failedCount === 1 ? 'it' : 'them'}${failedDrive.size ? ` (${failedDrive.size === 1 ? 'its tab stays' : 'their tabs stay'} open)` : ''}.`, 'info');
     // Close the deletable open tabs WITHOUT re-archiving (we're deleting their browser copy).
     if (closableIds.length) performMultiClose(closableIds, { noArchiveIds: new Set(closableIds) });
   });

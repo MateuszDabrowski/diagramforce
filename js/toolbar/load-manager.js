@@ -1,11 +1,12 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.11';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.11';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.11';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.11';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.11';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.11';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.11';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.12';
+import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.12';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.12';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.12';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.12';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.12';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.12';
+import { noteError } from '../diagnostics.js?v=1.24.12';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -351,14 +352,23 @@ function renderDriveLoadPane({ pane, footer, close }) {
   };
 
   const confirmDelete = async (ids, oneName) => {
+    // Open tabs on these files close with the delete (C3): left open, a tab is unlinked and re-created on the next sync.
+    const tabsApi = tctx.modules.tabs;
+    const holders = new Map(ids.map((id) => [id, (tabsApi.getAllTabs() || []).filter((t) => t.driveFileId === id).map((t) => t.id)]));
+    const openN = [...holders.values()].reduce((sum, a) => sum + a.length, 0);
     const ok = await confirmModal({
       title: ids.length === 1 ? 'Delete from Google Drive?' : `Delete ${ids.length} diagrams?`,
-      message: `${ids.length === 1 ? `"${(oneName || '').replace(/\.dgf$/i, '')}" moves` : `${ids.length} diagrams move`} to Drive trash, recoverable for 30 days. Copies you shared out are not affected.`,
+      message: `${ids.length === 1 ? `"${(oneName || '').replace(/\.dgf$/i, '')}" moves` : `${ids.length} diagrams move`} to Drive trash, recoverable for 30 days. Copies you shared out are not affected.${openN ? ` ${openN === 1 ? 'Its open tab closes' : `${openN} open tabs close`} too.` : ''}`,
       okLabel: 'Move to trash', cancelLabel: 'Cancel', tone: 'danger',
     });
     if (!ok) return;
     let n = 0;
-    for (const id of ids) if (await p.deleteDiagramFromDrive(id)) { p.forgetArchivesForDriveFile?.(id); n++; }
+    // Only a real trash counts: a shared file stays with its owner ('unlinked'), and 'failed' changed nothing.
+    for (const id of ids) {
+      if (await p.deleteDiagramFromDrive(id) !== 'trashed') continue;
+      p.forgetArchivesForDriveFile?.(id); n++;
+      for (const tid of holders.get(id) || []) tabsApi.closeDeletedTab?.(tid);
+    }
     if (n) showToast(`Moved ${n} diagram${n === 1 ? '' : 's'} to Drive trash ✓`, 'info');
     render();
   };
@@ -371,8 +381,13 @@ function renderDriveLoadPane({ pane, footer, close }) {
     if (!p.isSignedIn?.()) { renderDriveSignIn(bodyBox, 'Sign in to Google Drive to see your saved diagrams.', render); return; }
     let files;
     try { files = await p.listMyDiagrams(); }
-    catch {
-      bodyBox.innerHTML = `<p style="padding:18px;text-align:center;color:var(--text-secondary)">Could not load your Drive diagrams. <button class="df-modal__btn df-drive-library__retry">Retry</button></p>`;
+    catch (e) {
+      // Say WHY and keep it for Help > Copy diagnostics: a bare "Could not load" (2026-10-05: Google answered every
+      // listing with a 500 for many minutes, then recovered) left nothing to diagnose from. The reason is Drive's own
+      // "<status> <message>", so a Google-side outage reads as one.
+      noteError('drive:library', e);
+      const why = String(e?.message || '').slice(0, 200);
+      bodyBox.innerHTML = `<p style="padding:18px;text-align:center;color:var(--text-secondary)">Could not load your Drive diagrams.${why ? `<br><span class="df-drive-library__why" style="font-size:var(--font-size-xs)">Google Drive said: ${escHtml(why)}</span><br>` : ' '}<button class="df-modal__btn df-drive-library__retry">Retry</button></p>`;
       bodyBox.querySelector('.df-drive-library__retry')?.addEventListener('click', render);
       return;
     }
@@ -433,7 +448,8 @@ function renderDriveLoadPane({ pane, footer, close }) {
       refresh();
     });
     checks.forEach(c => c.addEventListener('change', refresh));
-    bodyBox.querySelectorAll('.df-drive-library__open').forEach(btn => btn.addEventListener('click', async () => { if (await p.openDriveDiagram(btn.dataset.id, btn.dataset.name, btn.dataset.shared !== '1', { knownCanEdit: btn.dataset.canEdit === '1', driveId: btn.dataset.driveId || null, sharedFrom: btn.dataset.sharedFrom || null, sharedEdit: btn.dataset.sharedEdit || null })) close(); }));
+    // Disabled while it opens: a second click opened the same file in a second tab (C2).
+    bodyBox.querySelectorAll('.df-drive-library__open').forEach(btn => btn.addEventListener('click', async () => { if (btn.disabled) return; btn.disabled = true; if (await p.openDriveDiagram(btn.dataset.id, btn.dataset.name, btn.dataset.shared !== '1', { knownCanEdit: btn.dataset.canEdit === '1', driveId: btn.dataset.driveId || null, sharedFrom: btn.dataset.sharedFrom || null, sharedEdit: btn.dataset.sharedEdit || null })) close(); else btn.disabled = false; }));
     // Clone a shared file into the user's own Drive as an editable copy, then close (it opens as a new tab) (item 2).
     bodyBox.querySelectorAll('.df-drive-library__clone').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;

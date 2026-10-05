@@ -21,12 +21,12 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.11';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.11';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.24.11';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.11';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.11';
-import { noteError } from './diagnostics.js?v=1.24.11';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.12';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.12';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.24.12';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.12';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.12';
+import { noteError } from './diagnostics.js?v=1.24.12';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -106,13 +106,14 @@ function writeDeletedTombstones(list) {
   try { localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.isArray(list) ? list : [])); } catch (e) { noteError('templates:save-tombstones', e); /* private mode / full */ }
 }
 
-/** Debounced push of the current library + tombstones to Drive after a local add / delete / import. Best-effort. */
+/** Debounced sync after a local add / delete / import. A full pull-merge-push, never a blind push: pushing this
+ *  device's library alone overwrote templates another device had added since (drive review A9). Best-effort. */
 function scheduleDrivePush() {
   if (!isDriveConnected?.()) return;
   if (_drivePushTimer) clearTimeout(_drivePushTimer);
   _drivePushTimer = setTimeout(() => {
     _drivePushTimer = null;
-    try { pushTemplates(getTemplates(), getDeletedTombstones()); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
+    syncTemplatesWithDrive().catch((e) => noteError('templates:drive-push', e));
   }, 1500);
 }
 
@@ -120,12 +121,21 @@ function scheduleDrivePush() {
  *  made on another device that would remove templates still present here are surfaced in a confirmation overlay
  *  first (Remove vs Keep/resurrect). Called on Drive connect (remote-store) + once on boot when signed in.
  *  Safe to call when not connected (no-ops). */
-export async function syncTemplatesWithDrive() {
+let _syncInFlight = null;
+export function syncTemplatesWithDrive() {
+  // One at a time: a connect sync and an edit's debounced sync would otherwise pull, merge and push concurrently.
+  if (_syncInFlight) return _syncInFlight.then(() => syncTemplatesWithDrive());
+  _syncInFlight = syncTemplatesOnce().finally(() => { _syncInFlight = null; });
+  return _syncInFlight;
+}
+async function syncTemplatesOnce() {
   if (!isDriveConnected?.()) return;
   let remote = null;
-  try { remote = await pullTemplates(); } catch { remote = null; }
+  // Unreadable Drive → touch nothing: seeding from here over a file we could not read overwrote other devices'
+  // templates (drive review C5). The next connect or edit tries again.
+  try { remote = await pullTemplates(); } catch (e) { noteError('templates:drive-pull', e); return; }
   if (remote == null) {
-    // No remote file yet (or unreadable) → seed Drive from this device's library + tombstones.
+    // No remote file yet → seed Drive from this device's library + tombstones.
     try { await pushTemplates(getTemplates(), getDeletedTombstones()); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
     return;
   }
