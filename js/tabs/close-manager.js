@@ -4,11 +4,13 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.24.12';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.12';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.12';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.12';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.12';
+import { tbctx } from './context.js?v=1.24.13';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.13';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.13';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.13';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.13';
+import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.24.13';
+import { noteError } from '../diagnostics.js?v=1.24.13';
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;
@@ -271,12 +273,21 @@ export function showCloseTabsModal() {
     }
     let files = [];
     try { files = (await persistenceModule.listMyDiagrams?.()) || []; }
-    catch { driveBox.innerHTML = ''; return; }   // listing failed - hide rather than mislead
+    catch (e) {
+      // Say so, with Drive's reason and a retry: hiding the section read as "nothing in your Drive" (drive review C12).
+      noteError('drive:close-delete-list', e);
+      driveBox.innerHTML = splitTable('Closed (on Google Drive)', '·',
+        `<div style="padding:18px;color:var(--text-secondary)"><p class="df-close-tabs__drive-error" style="margin:0 0 10px">Could not list your Google Drive diagrams. ${escHtml(String(e?.message || '').slice(0, 200))}</p>
+          <button type="button" class="df-modal__btn df-close-tabs__drive-retry">Try again</button></div>`);
+      bindSplitHeads(driveBox);
+      driveBox.querySelector('.df-close-tabs__drive-retry')?.addEventListener('click', () => populateDrive());
+      return;
+    }
     const openIds = new Set(tabs.map(t => t.driveFileId).filter(Boolean));
     // Own files only, minus ones open as a tab (their OPEN row already deletes the master). Provenance stamps
     // (dfBackupOf / dfEditShareOf / dfSharedFrom) become a plain-language suffix - the "which of these is safe
     // to delete?" context Drive's own UI can't give.
-    const rows = files.filter(f => f && f.ownedByMe !== false && !openIds.has(f.id)).map(f => {
+    const rows = files.filter(f => f && !listedFileNotOwned(f) && !openIds.has(f.id)).map(f => {   // C10 rule
       const ap = f.appProperties || {};
       const kind = ap.dfBackupOf ? 'backup of a shared file' : ap.dfEditShareOf ? 'copy shared with someone' : ap.dfSharedFrom ? 'your copy of a shared file' : '';
       const rel = f.modifiedTime ? formatRelativeTime(new Date(f.modifiedTime).getTime()) : '';

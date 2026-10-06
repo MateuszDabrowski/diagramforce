@@ -1070,6 +1070,8 @@
 .df-share__create-row .df-share__create { margin-left: auto; flex-shrink: 0; }
 .df-share__create-note { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.35; }
 .df-share__create-note[hidden] { display: none; }
+/* Someone else's file, edited directly: why the Drive link controls are locked (drive review B6). */
+.df-share__owner-only { margin: 6px 0 0; font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.35; }
 /* Current-sharing status section, moved BELOW both Google Drive sharing controls (item 7.1) and set apart. */
 .df-share__status-section { margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--border-color); }
 .df-share__pill { display: inline-flex; padding: 2px; gap: 2px;

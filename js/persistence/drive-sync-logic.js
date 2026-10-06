@@ -225,6 +225,15 @@ export function isRecognizedDgfMaster(meta, dgfMime) {
  *    just because a metadata read hiccuped).
  * Pure so the branch is unit-tested without a live Drive.
  */
+/** Is a Drive LISTING row someone else's file? `ownedByMe === false`, or unset with a `sharingUser` (Drive leaves
+ *  `ownedByMe` unset right after an invite, gotcha 11.39). A Shared-Drive item (`driveId`) is never "shared with you"
+ *  here: its `ownedByMe` is always unset and it is classified by `driveId`. The library used `ownedByMe !== false`, so
+ *  a fresh invite sat under "Your Google Drive" with Delete enabled and opened as your own (drive review C10). Pure. */
+export function listedFileNotOwned(f) {
+  if (!f) return false;
+  return f.ownedByMe === false || (f.ownedByMe == null && !!f.sharingUser && !f.driveId);
+}
+
 export function importedFileRole({ assumeOwned = false, ownedByMe = null, sharedWithMe = false } = {}) {
   if (assumeOwned) return 'master';
   // ownedByMe===false is the primary signal. But Drive can OMIT ownedByMe on a freshly-granted invite (null), which
@@ -247,18 +256,6 @@ export function sharedSourcePushDecision({ canEdit = false, moved = false } = {}
   if (!canEdit) return 'skip-readonly';
   if (moved) return 'flag-conflict';
   return 'push';
-}
-
-/**
- * The Save Manager "Shared File" chip state for a tab opened from a shared source:
- *  - canEdit unknown/false → 'view'     (no check; your edits save to My Drive only)
- *  - conflict              → 'conflict' (no check; the source changed - Refresh to reconcile)
- *  - else                  → 'synced'   (check; your edits also save back to the source)
- */
-export function sharedChipState({ canEdit = false, conflict = false } = {}) {
-  if (!canEdit) return 'view';
-  if (conflict) return 'conflict';
-  return 'synced';
 }
 
 /**
@@ -464,11 +461,13 @@ export function serializeDriveFields(o) {
   return out;
 }
 
-/** The Drive identity of a tab/archive: the upstream shared-source fileId if it's a file shared TO you, else your
- *  own My-Drive master fileId. Two browser archives with the SAME identity mirror the SAME Drive file. */
+/** The Drive identity of a tab/archive: its OWN file (master, fork or directly edited share) if it has one, else
+ *  the shared source it views. Two browser archives with the SAME identity mirror the SAME Drive file. The source
+ *  used to win, so an edited fork and a later untouched view of the same original shared one identity, and closing
+ *  the view overwrote the fork's archive (drive review B5). */
 export function driveIdentityOf(o) {
   if (!o) return null;
-  return (o.driveSharedSource && o.driveSharedSource.fileId) || o.driveFileId || null;
+  return o.driveFileId || (o.driveSharedSource && o.driveSharedSource.fileId) || null;
 }
 
 /** Collapse a shared-in diagram's TWO Drive files to ONE Load-list row. Opening a view/edit share mints the

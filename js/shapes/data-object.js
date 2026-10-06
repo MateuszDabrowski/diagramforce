@@ -1,10 +1,10 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.24.12';
-import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.24.12';
-import { portGroups } from './ports.js?v=1.24.12';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.24.12';
+import { sctx } from './context.js?v=1.24.13';
+import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.24.13';
+import { portGroups } from './ports.js?v=1.24.13';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.24.13';
 
 export function registerDataObject() {
   // --- DataObject ---

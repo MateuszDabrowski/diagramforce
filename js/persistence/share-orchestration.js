@@ -5,19 +5,19 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.12';
-import { diagramEmbedsImages } from '../image-component.js?v=1.24.12';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.12';
-import { escHtml, formatBytes } from '../util.js?v=1.24.12';
-import { sharePillHtml } from '../storage-ui.js?v=1.24.12';
-import { pctx } from './context.js?v=1.24.12';
-import { compactGraphForSave } from './json-pipeline.js?v=1.24.12';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.24.12';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.12';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.12';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.12';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.12';
-import { noteError } from '../diagnostics.js?v=1.24.12';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.24.13';
+import { diagramEmbedsImages } from '../image-component.js?v=1.24.13';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.13';
+import { escHtml, formatBytes } from '../util.js?v=1.24.13';
+import { sharePillHtml } from '../storage-ui.js?v=1.24.13';
+import { pctx } from './context.js?v=1.24.13';
+import { compactGraphForSave } from './json-pipeline.js?v=1.24.13';   // the export's compaction, for Copy JSON
+import { buildSingleDiagram } from './storage.js?v=1.24.13';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.24.13';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.24.13';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.24.13';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.13';
+import { noteError } from '../diagnostics.js?v=1.24.13';
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -742,7 +742,7 @@ function showShareModal(url, opts = {}) {
       }
       for (const c of copies) {
         if (c.kind === 'mydrive-backup') continue;   // private mirror - never a "share"
-        const row = { kind: 'copy', fileId: c.fileId, who: c.label, conflict: c.conflict, shareUrl: c.shareUrl };
+        const row = { kind: 'copy', fileId: c.fileId, who: c.label, conflict: c.conflict, writeBlocked: c.writeBlocked, shareUrl: c.shareUrl };
         (c.kind === 'shared-drive' ? sharedDrive : edit).push(row);
       }
       const rowHtml = (r) => {
@@ -758,9 +758,11 @@ function showShareModal(url, opts = {}) {
             <button type="button" class="df-modal__btn df-share__copy-remove" data-revoke title="Revoke this invite - the recipient loses access to your diagram. Your file is not affected and you can re-share any time.">Revoke</button>
           </div>`;
         return `
-          <div class="df-share__copy-row${r.conflict ? ' is-conflict' : ''}" data-file="${escHtml(r.fileId)}">
+          <div class="df-share__copy-row${r.conflict || r.writeBlocked ? ' is-conflict' : ''}" data-file="${escHtml(r.fileId)}">
             <span class="df-share__copy-label df-share__copy-who">${escHtml(r.who)}</span>
-            <span class="df-share__copy-status" title="${r.conflict ? 'The recipient changed this copy. Resolve it before your next save so you do not overwrite their work.' : 'Your saves keep flowing to this shared copy, so the recipient always has your latest.'}">${r.conflict ? 'edited by recipient' : 'in sync'}</span>
+            ${r.writeBlocked && !r.conflict
+              ? '<span class="df-share__copy-status" title="Google Drive no longer lets you save to this copy (for example, your access was changed to view or comment), so your latest does not reach it. Ask for edit access back, or Revoke it.">can\'t update</span>'
+              : `<span class="df-share__copy-status" title="${r.conflict ? 'The recipient changed this copy. Resolve it before your next save so you do not overwrite their work.' : 'Your saves keep flowing to this shared copy, so the recipient always has your latest.'}">${r.conflict ? 'edited by recipient' : 'in sync'}</span>`}
             ${r.conflict
               ? '<button type="button" class="df-modal__btn df-share__copy-resolve" data-resolve>Resolve</button>'
               : '<button type="button" class="df-modal__btn df-modal__btn--amber-outline df-share__copy-copy" data-copylink>Copy link</button>'}
@@ -894,6 +896,17 @@ function showShareModal(url, opts = {}) {
       try { await navigator.clipboard.writeText(msg); showToast('Invite text copied ✓', 'success'); }
       catch { showError('Clipboard blocked - copy the link field instead.'); }
     });
+
+    // Someone else's file, edited directly (B6): every Drive link action would act on the OWNER's file in your name.
+    const ownerOnly = activeShareStatus ? activeShareStatus() : null;
+    if (createBtn && ownerOnly && ownerOnly.ownerOnlySharing) {
+      createBtn.disabled = true;
+      body.querySelectorAll('.df-share__pill-opt, .df-share__access-opt').forEach((o) => { o.disabled = true; });
+      const lock = document.createElement('p');
+      lock.className = 'df-share__owner-only';
+      lock.textContent = ownerOnly.ownerOnlyMessage;
+      createBtn.insertAdjacentElement('afterend', lock);
+    }
 
     createBtn.addEventListener('click', async () => {
       const scope = scopeOf();

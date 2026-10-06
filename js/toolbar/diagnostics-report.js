@@ -3,12 +3,12 @@
 // It carries COUNTS and states, never content: no diagram names, file ids, account emails or cell data. The user
 // sees the whole text before copying, and nothing is sent anywhere by the app (limits/security.md, "Data
 // privacy"). Recorded failures come from js/diagnostics.js; their messages can name a diagram, which the dialog says.
-import { buildModal, showToast } from '../feedback.js?v=1.24.12';
-import { formatBytes } from '../util.js?v=1.24.12';
-import { recentErrors } from '../diagnostics.js?v=1.24.12';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.24.12';
-import { getStorageBreakdown, NAMED_SAVE_PREFIX } from '../persistence/storage.js?v=1.24.12';
-import { tctx } from './context.js?v=1.24.12';
+import { buildModal, showToast } from '../feedback.js?v=1.24.13';
+import { formatBytes } from '../util.js?v=1.24.13';
+import { recentErrors } from '../diagnostics.js?v=1.24.13';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.24.13';
+import { getStorageBreakdown, NAMED_SAVE_PREFIX } from '../persistence/storage.js?v=1.24.13';
+import { tctx } from './context.js?v=1.24.13';
 
 const safe = (fn, fallback = 'unavailable') => { try { const v = fn(); return v ?? fallback; } catch { return fallback; } };
 const time = (ms) => new Date(ms).toISOString().slice(11, 19);

@@ -1,8 +1,8 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.24.12';
-import { cloneCellsForInsert } from './clone-cells.js?v=1.24.12';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.12';
+import * as history from './history.js?v=1.24.13';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.24.13';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.13';
 
 const reslotGanttClones = (clones) => reslotInsertedGanttBars(graph, clones);   // see gantt-layout.js
 

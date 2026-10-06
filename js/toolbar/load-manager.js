@@ -1,12 +1,12 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.12';
-import { dedupeSharedInWorkingCopies } from '../persistence/drive-sync-logic.js?v=1.24.12';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.12';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.12';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.12';
-import { showSaveManagerModal } from './save-manager.js?v=1.24.12';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.12';
-import { noteError } from '../diagnostics.js?v=1.24.12';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.24.13';
+import { dedupeSharedInWorkingCopies, listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.24.13';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.13';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.24.13';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.13';
+import { showSaveManagerModal } from './save-manager.js?v=1.24.13';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.24.13';
+import { noteError } from '../diagnostics.js?v=1.24.13';
 
 function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -301,7 +301,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
     // collapsed it + hid the original). It gets the shared-in treatment (Shared File chip + Copy/Collab pill) but,
     // being yours, keeps the plain Load button.
     const workingCopy = f._sharedInWorkingCopy;
-    const notOwned = f.ownedByMe === false;
+    const notOwned = listedFileNotOwned(f);   // incl. a fresh invite with ownedByMe unset (C10)
     // canEdit drives the Copy/Collab pill: for a working copy it's the SHARE's access (view=Copy, edit=Collab), NOT
     // your ownership of the copy; for a real not-owned file it's your write capability on it.
     const canEdit = workingCopy ? workingCopy.canEdit : !!(f.capabilities && f.capabilities.canEdit);
@@ -411,8 +411,8 @@ function renderDriveLoadPane({ pane, footer, close }) {
     // list - you can open them but not delete them (only the owner can). When there are no shared files, it's just
     // the single list as before (no redundant "Your Google Drive" header).
     // A working-copy-of-a-share is OWNED but belongs under "Shared with you" (it IS a shared-in diagram).
-    const mine = files.filter(f => f.ownedByMe !== false && !f._sharedInWorkingCopy);
-    const shared = files.filter(f => f.ownedByMe === false || f._sharedInWorkingCopy);
+    const mine = files.filter(f => !listedFileNotOwned(f) && !f._sharedInWorkingCopy);
+    const shared = files.filter(f => listedFileNotOwned(f) || f._sharedInWorkingCopy);
     // Item 2: each section is its OWN bordered, collapsible TABLE (like Load Browser's groups) - a header band with
     // a chevron + count capping its own rows - not two soft sub-sections sharing one box. Uncollapsed by default.
     const groupTable = (label, files) =>

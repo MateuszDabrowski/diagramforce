@@ -1,8 +1,8 @@
 // Cloud-sync control (CLEANUP S4) — the Drive sync icon + state-aware dropdown (sign-in status row / sync-now / history / auto-sync toggle / disconnect / about). Connecting is the status-row "Sign in" button (signIn), NOT a menu item. Reads tctx.modules; imports btn+setupDropdown (context) + showDriveHistoryModal (drive-history) - one-way slice edges. init calls setupSyncControl.
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.12';
-import { formatRelativeTime } from '../util.js?v=1.24.12';
-import { btn, setupDropdown, tctx } from './context.js?v=1.24.12';
-import { showDriveHistoryModal } from './drive-history.js?v=1.24.12';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.13';
+import { formatRelativeTime } from '../util.js?v=1.24.13';
+import { btn, setupDropdown, tctx } from './context.js?v=1.24.13';
+import { showDriveHistoryModal } from './drive-history.js?v=1.24.13';
 
 // One icon (left of Share Link) + a state-aware dropdown menu. The Drive icon is
 // colour + glyph coded by sync state via the SLDS sync family; the time text shows
@@ -10,6 +10,7 @@ import { showDriveHistoryModal } from './drive-history.js?v=1.24.12';
 // Short state explainer for the sync menu's first row (shown in every state). In the error
 // state the row also becomes the reconnect button (see setupSyncControl).
 function syncStatusText(st, connected = false) {
+  if (st.lookOnly) return 'An older version, opened to look at. It is not saved to Google Drive.';
   const rel = st.lastSavedAt ? formatRelativeTime(st.lastSavedAt) : null;
   switch (st.state) {
     case 'saving':   return 'Saving to Google Drive…';
@@ -87,7 +88,8 @@ export function setupSyncControl() {
     if (statusText) statusText.textContent = syncStatusText(st, connected);
     if (statusBtn) {
       let label = '', tone = '';
-      if (isError || !connected) { label = 'Sign in'; tone = 'error'; }
+      if (st.lookOnly && connected) { label = 'Save as new'; tone = 'sync'; }   // the explicit save (C9)
+      else if (isError || !connected) { label = 'Sign in'; tone = 'error'; }
       else if (isConflict) { label = 'Review'; tone = 'conflict'; }
       else if (isRefresh) { label = 'Refresh'; tone = 'refresh'; }
       else if (st.state !== 'saving') { label = 'Sync now'; tone = 'sync'; }
@@ -166,7 +168,8 @@ export function setupSyncControl() {
   statusBtn?.addEventListener('click', () => {
     closeMenu();
     const st = p.getDriveStatus?.() || { state: 'off' };
-    if (st.state === 'conflict') p.resolveActiveConflict?.();
+    if (st.lookOnly && p.isDriveConnected?.()) p.saveToDrive?.();   // an explicit save makes it a normal diagram (C9)
+    else if (st.state === 'conflict') p.resolveActiveConflict?.();
     else if (st.state === 'refresh') p.reopenLatestFromDrive?.();
     else if (st.state === 'error' || !p.isDriveConnected?.()) p.signIn?.();
     else p.syncNow?.();   // connected + manual

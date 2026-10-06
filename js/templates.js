@@ -21,12 +21,12 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.12';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.12';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.24.12';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.12';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.12';
-import { noteError } from './diagnostics.js?v=1.24.12';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.24.13';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.24.13';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.24.13';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.24.13';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.24.13';
+import { noteError } from './diagnostics.js?v=1.24.13';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -128,7 +128,7 @@ export function syncTemplatesWithDrive() {
   _syncInFlight = syncTemplatesOnce().finally(() => { _syncInFlight = null; });
   return _syncInFlight;
 }
-async function syncTemplatesOnce() {
+async function syncTemplatesOnce({ retry = true } = {}) {
   if (!isDriveConnected?.()) return;
   let remote = null;
   // Unreadable Drive → touch nothing: seeding from here over a file we could not read overwrote other devices'
@@ -166,8 +166,11 @@ async function syncTemplatesOnce() {
 
   try { writeTemplates(res.templates); writeDeletedTombstones(res.deleted); notifyChange(); }
   catch (e) { noteError('templates:save-merged', e); /* storage full → keep remote in Drive, local unchanged */ }
-  // Push the merged result so other devices converge (deduped if identical to what we pulled).
-  try { await pushTemplates(res.templates, res.deleted); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
+  // Push the merged result so other devices converge (deduped if identical to what we pulled). 'moved' = another
+  // device saved since our pull: merge again with its change instead of writing over it (drive review A9).
+  let pushed = null;
+  try { pushed = await pushTemplates(res.templates, res.deleted); } catch (e) { noteError('templates:drive-push', e); /* best-effort */ }
+  if (pushed === 'moved' && retry) await syncTemplatesOnce({ retry: false });
 }
 
 /** Boot hook: if a Drive token is already valid this session, opportunistically sync (no sign-in popup). */

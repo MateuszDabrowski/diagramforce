@@ -1,10 +1,10 @@
 // Drive version history (CLEANUP S4) — lists the active synced diagram Drive revisions (View / Restore / Pin / eye-preview / Review). Reads tctx.modules; imports renderDriveSignIn (context) + reviewAgainstRevision (review) - one-way slice edges. sync-control calls showDriveHistoryModal.
-import { buildModal, confirmModal } from '../feedback.js?v=1.24.12';
-import { storageRowHtml } from '../storage-ui.js?v=1.24.12';
-import { renderTemplateThumbnail } from '../templates.js?v=1.24.12';
-import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.24.12';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.12';
-import { reviewAgainstRevision } from './review.js?v=1.24.12';
+import { buildModal, confirmModal } from '../feedback.js?v=1.24.13';
+import { storageRowHtml } from '../storage-ui.js?v=1.24.13';
+import { renderTemplateThumbnail } from '../templates.js?v=1.24.13';
+import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.24.13';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.24.13';
+import { reviewAgainstRevision } from './review.js?v=1.24.13';
 
 // Version history for the active synced diagram — list its Drive revisions newest-first with View / Restore
 // / Pin. Mirrors the library modal's loading/empty/error scaffold. Restore is non-destructive (the current
@@ -12,6 +12,9 @@ import { reviewAgainstRevision } from './review.js?v=1.24.12';
 export function showDriveHistoryModal() {
   const p = tctx.modules.persistence;
   if (!p.isDriveConfigured?.()) return;
+  // Shape counts per revision id for this panel: a revision never changes, and every Pin re-render re-downloaded up
+  // to 12 revision bodies just to count shapes again (drive review C11).
+  const shapeCounts = new Map();
   document.querySelector('.df-drive-history-modal')?.remove();
 
   const { body, footer, close } = buildModal({
@@ -24,7 +27,7 @@ export function showDriveHistoryModal() {
       <ul class="df-history__legend">
         <li><strong>Open</strong> opens that version as an editable copy in a new tab - your current diagram stays untouched.</li>
         <li><strong>Restore</strong> brings it back as the current version (your current version stays in this list).</li>
-        <li><strong>Pin</strong> keeps a version safe from Drive's automatic cleanup (about 30 days for unpinned ones).</li>
+        <li><strong>Pin</strong> keeps a version safe from Drive's automatic cleanup, which removes unpinned versions after about 30 days, and sooner on a file with many versions.</li>
       </ul>
       <p class="df-drive-save-modal__hint" style="margin-top:6px">The most recent version is always kept, whether pinned or not.</p>
       <div class="df-drive-history__body"><p style="padding:18px;text-align:center;color:var(--text-secondary)">Loading…</p></div>`,
@@ -158,9 +161,13 @@ export function showDriveHistoryModal() {
     const fillWorker = async () => {
       while (qi < myRevs.length) {
         const r = myRevs[qi++];
-        let rev; try { rev = await p.readRevision?.(r.id); } catch { continue; }
+        if (!shapeCounts.has(r.id)) {
+          let rev; try { rev = await p.readRevision?.(r.id); } catch { continue; }
+          if (rev?.graph?.cells) shapeCounts.set(r.id, countDiagramShapes(rev.graph.cells));
+        }
+        const n = shapeCounts.get(r.id);
         const el = bodyBox.querySelector(`.df-history__rowwrap[data-rev="${CSS.escape(r.id)}"] .df-history__count`);
-        if (el && !el.textContent && rev?.graph?.cells) { const n = countDiagramShapes(rev.graph.cells); el.textContent = ` · ${n} shape${n === 1 ? '' : 's'}`; }
+        if (el && !el.textContent && n != null) el.textContent = ` · ${n} shape${n === 1 ? '' : 's'}`;
       }
     };
     Promise.all([fillWorker(), fillWorker(), fillWorker()]).catch(() => {});

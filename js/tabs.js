@@ -1,28 +1,28 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.12';
-import { tbctx } from './tabs/context.js?v=1.24.12';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.12';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.12';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.12';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.12';
+import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.24.13';
+import { tbctx } from './tabs/context.js?v=1.24.13';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.24.13';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.13';
+import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.24.13';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.24.13';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.12';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.12';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.12';
-import { tabShareRole, shareGlyphKind, archiveDedupName, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.12';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.12';
-import { wireMenuDismiss } from './menu.js?v=1.24.12';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.12';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.12';
-import { getPalette } from './brand-palette.js?v=1.24.12';
-import { getAllIcons } from './icons.js?v=1.24.12';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.12';
-import { noteError } from './diagnostics.js?v=1.24.12';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.24.13';
+import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.24.13';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.24.13';
+import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.24.13';
+import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.24.13';
+import { wireMenuDismiss } from './menu.js?v=1.24.13';
+import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.24.13';
+import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.24.13';
+import { getPalette } from './brand-palette.js?v=1.24.13';
+import { getAllIcons } from './icons.js?v=1.24.13';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.24.13';
+import { noteError } from './diagnostics.js?v=1.24.13';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -31,7 +31,9 @@ let tabListEl;
 // shared-out copies plus whether it has an editable / view-only upstream source. Cheap to recompute, so
 // persistTabDrive can re-render the tab bar ONLY when this flips, never on a routine Drive save.
 const tabShareSignature = (t) =>
-  `${(t.driveCopies || []).filter(Boolean).length}|${t.driveSharedSource ? (t.driveSharedSource.canEdit === true ? 'e' : 'v') + (t.driveSharedSource.unreachableAt ? 'x' : '') : ''}|${t.driveSharedInEdit ? 'die' : ''}|${t.driveDriveId ? 'sd' : ''}|${t.driveOutgoingGrants || 0}`;
+  `${(t.driveCopies || []).filter(Boolean).length}|${t.driveSharedSource ? (t.driveSharedSource.canEdit === true ? 'e' : 'v') + (t.driveSharedSource.unreachableAt ? 'x' : '') : ''}|${t.driveSharedInEdit ? 'die' : ''}|${t.driveDriveId ? 'sd' : ''}|${t.driveOutgoingGrants || 0}|${t.driveFileId ? 'f' : ''}`;
+// (Whether the tab has its OWN file is part of the role - a forked view reads as yours - so it is in the signature:
+// without it a fork kept the "shared with you" glyph until something else re-rendered the bar. Drive review B14.)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
@@ -634,7 +636,7 @@ function archiveTabToBrowser(id) {
     // Reuse this tab's own archive in place (no-clobber), else dedup by Drive identity so re-loading the SAME Drive
     // diagram (a shared file arrives with no browserSaveName) REPLACES its archive instead of piling up dated
     // duplicates (#4). Both reuse paths skip a name another OPEN tab already claims. See archiveDedupName.
-    const driveKey = (tab.driveSharedSource && tab.driveSharedSource.fileId) || tab.driveFileId || null;
+    const driveKey = driveIdentityOf(tab);
     const otherOpenSaveNames = tabs.filter(t => t.id !== id).map(t => t.browserSaveName);
     const dd = archiveDedupName({ browserSaveName: tab.browserSaveName, driveKey, saves, otherOpenSaveNames });
     name = dd.reuse || uniqueArchiveName(tab.name, existing);
