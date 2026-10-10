@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.24.13';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.24.13';
-import { durationDays } from '../gantt-scale.js?v=1.24.13';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.24.13';
+import { keyImpliesRequired } from '../field-model.js?v=1.25.2';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.25.2';
+import { durationDays } from '../gantt-scale.js?v=1.25.2';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.25.2';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -692,13 +692,16 @@ function flowFieldPivot(writeRows, labelOf) {
 }
 
 // F3: one row per decision OUTCOME, joined to the outbound connector whose label matches it, resolved
-// to the TARGET element's name. Only df.FlowDecision - df.FlowEinsteinDecision is an actionCalls shape
-// with no outcome rows.
+// to the TARGET element's name. Every card the `decisions` collection produces: Decision plus the Winter '27
+// Split by Date / Split by Field Value variants, which carry the same outcome rows (before 1.25.0 they
+// imported as plain Decisions, so leaving them out would drop them from this table). df.FlowEinsteinDecision
+// is an actionCalls shape with no outcome rows.
+const FLOW_DECISION_TYPES = new Set(['df.FlowDecision', 'df.FlowSplitByDate', 'df.FlowSplitByFieldValue']);
 function flowDecisionRows(graph, labelOf) {
   const rows = [];
   let outcomeCount = 0, decisionCount = 0;
   for (const el of graph.getElements()) {
-    if (el.get('type') !== 'df.FlowDecision') continue;
+    if (!FLOW_DECISION_TYPES.has(el.get('type'))) continue;
     decisionCount++;
     const decision = displayName(el), apiName = el.get('apiName') || '';
     const byLabel = new Map();

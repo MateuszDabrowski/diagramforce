@@ -694,13 +694,12 @@ const waitRows = (el) => rows(el.waitEvents, (ev) => ({
 // A TABLE, not a switch, so adding a mapping is one row and the whole vocabulary is readable at a glance.
 // Matched against `actionType` first, then `actionName` (some orgs carry the discriminator only in the name).
 //
-// Deliberately ABSENT: df.FlowSendToFlow, df.FlowSendToData360, df.FlowEinsteinDecision and
-// df.FlowDetermineCrmRecord. Those four shapes exist in the stencil for hand-drawing, but FLOW_ELEMENTS
-// gives them the SAME metadata source as their plain siblings (`subflows` for Send to a Flow, `actionCalls`
-// for the other three) - the metadata carries no field that separates them. Guessing an actionType string
-// would silently MISLABEL real elements, which is worse than the generic card, so they stay unmapped until
-// a real flow supplies the discriminator. df.FlowExit is different: FLOW_ELEMENTS documents its trigger
-// (REMOVE_FROM_FLOW), so it is mapped below.
+// Every key below is a string read from REAL org metadata, never inferred from a label. Guessing one would
+// silently MISLABEL real elements, which is worse than the generic card. Until 2026-10-06 four shapes stayed
+// unmapped for that reason, and three keys here were guesses that never matched a real flow
+// (createCampaignMember, REMOVE_FROM_FLOW, GENERATE_AI_AGENT_RESPONSE). A Winter '27 capture flow on Madrid SDO
+// supplied the real strings: the marketing actions below, einsteinDecidePath and determineCrmRecordForIndv. Send to
+// a Flow is told apart by its `subflows` elementSubtype instead (see SUBFLOW_SUBTYPE).
 const ACTION_CLASS = Object.assign(Object.create(null), {
   sendEmailMessage: ['df.FlowSendEmail', (el) => ({ template: contentKey(actionParam(el, 'contentId')) })],
   // Classic CRM email actions - the pre-Marketing-Cloud-Next vocabulary, and by far the most common in
@@ -712,10 +711,23 @@ const ACTION_CLASS = Object.assign(Object.create(null), {
   sendMobileAppMessage: ['df.FlowSendMobileApp', (el) => ({ template: contentKey(actionParam(el, 'contentId')) })],
   sendMobileInAppMessage: ['df.FlowSendMobileInApp', (el) => ({ template: contentKey(actionParam(el, 'contentId')) })],
   forwardToBotOrAgent: ['df.FlowForwardToBot', (el) => ({ actionName: el.actionName })],
-  GENERATE_AI_AGENT_RESPONSE: ['df.FlowRunAgent', (el) => ({ actionName: el.actionName })],
-  createCampaignMember: ['df.FlowCreateCampaignMember', (el) => ({ actionName: el.actionName, object: 'CampaignMember' })],
+  // Run Agent: the actionName is the AGENT's API name, which is the useful thing to show.
+  generateAiAgentResponse: ['df.FlowRunAgent', (el) => ({ actionName: el.actionName })],
+  // Flow Builder's palette says "Create Campaign Member"; the action underneath is addToCampaign.
+  addToCampaign: ['df.FlowCreateCampaignMember', (el) => ({ actionName: el.actionName, object: 'CampaignMember' })],
   createTask: ['df.FlowCreateTask', (el) => ({ actionName: el.actionName })],
-  REMOVE_FROM_FLOW: ['df.FlowExit', () => ({})],
+  notifyUser: ['df.FlowNotifyUser', (el) => ({ actionName: el.actionName })],
+  assignToUser: ['df.FlowAssignToUser', (el) => ({ actionName: el.actionName })],
+  assignToQueue: ['df.FlowAssignToQueue', (el) => ({ actionName: el.actionName })],
+  notifyAssignedUser: ['df.FlowNotifyAssignedUser', (el) => ({ actionName: el.actionName })],
+  exitIndividualsFromFlow: ['df.FlowExit', () => ({})],
+  cdpSendToActivation: ['df.FlowSendToData360', (el) => ({ activation: actionParam(el, 'cdpActivation') })],
+  // Both branch: their paths arrive as `actionCallPaths` (the edge model below reads them).
+  einsteinDecidePath: ['df.FlowEinsteinDecision', (el) => ({ actionName: el.actionName })],
+  determineCrmRecordForIndv: ['df.FlowDetermineCrmRecord', (el) => ({ actionName: el.actionName })],
+  // Winter '27 gives Apex its own palette entry and the standard:apex glyph on the canvas card. The actionName is
+  // the invocable class (or class.method), which is what a reader looks for.
+  apex: ['df.FlowApex', (el) => ({ actionName: el.actionName })],
 });
 function actionType(el) {
   const hit = ACTION_CLASS[String(el.actionType || '')] || ACTION_CLASS[String(el.actionName || '')];
@@ -920,6 +932,29 @@ function resourceRows(md, choiceIdx) {
 // Flow Builder's Loop panel renders iterationOrder as a sentence, not the raw enum.
 const ITERATION_ORDER = Object.assign(Object.create(null), { Asc: 'First item to last item', Desc: 'Last item to first item' });
 const WAIT_SUBTYPE = Object.assign(Object.create(null), { WaitDuration: 'df.FlowWait', WaitUntilDate: 'df.FlowWaitUntilDate', WaitUntilTime: 'df.FlowWaitUntilDate', WaitUntilEvent: 'df.FlowWaitUntilEvent' });
+// Element variants Flow Builder lists as their own palette entries but saves into a shared collection, told apart
+// only by `elementSubtype`. Read from Winter '27 capture flows on Madrid SDO (2026-10-06). A wait with NO subtype
+// is the original Wait (Pause) element, which Flow Builder now calls "Wait for Conditions": every subtype-less
+// wait in that org's 378 flows waits on conditions. An UNKNOWN subtype falls back to the base card and names
+// itself in the warnings, the collectionProcessors rule.
+const DECISION_SUBTYPE = Object.assign(Object.create(null), { SplitPathByDate: 'df.FlowSplitByDate', SplitPathByField: 'df.FlowSplitByFieldValue' });
+const SUBFLOW_SUBTYPE = Object.assign(Object.create(null), { SendToFlow: 'df.FlowSendToFlow' });
+const EXPERIMENT_SUBTYPE = Object.assign(Object.create(null), { PersonalizedPaths: 'df.FlowPersonalizePaths' });
+/** A collection's card class from its elementSubtype: the mapped class, or the base class with a warning. */
+const bySubtype = (map, base, collection, noSubtype = base) => (e, warn) => {
+  const sub = String(e.elementSubtype || '');
+  if (!sub) return noSubtype;
+  if (map[sub]) return map[sub];
+  warn?.(`${collection} subtype "${sub}" has no dedicated shape - drawn as ${base.replace('df.Flow', '')}`);
+  return base;
+};
+/** An experiment's branches. The Metadata API calls them `paths` (FlowExperiment.paths). Before 1.25.0 this
+ *  converter read `experimentPaths`, a name no real flow carries, so every Path Experiment drew as a dead end. */
+const experimentBranches = (e) => asList(e.paths);
+const experimentRows = (e) => [
+  ...experimentBranches(e).map((p) => ({ label: p.label || p.name, value: p.percentage != null ? `${p.percentage}%` : '' })),
+  ...(e.duration != null && e.durationUnit ? [{ label: 'Runs for', value: `${e.duration} ${e.durationUnit}` }] : []),
+].filter((r) => r.label && r.value);
 // collectionProcessors: an explicit subtype map. A substring test for "Sort" used to decide this, so every
 // non-Sort subtype (RecommendationMap included) was silently relabelled "Collection Filter" - a wrong card,
 // not a missing one. Anything unmapped now falls back to Filter AND names itself in the warnings.
@@ -961,9 +996,9 @@ const COLLECTIONS = [
         { label: 'Exit conditions', value: stageExitText(e) }]
       : stageStepRows(e),
   })],
-  ['subflows', () => 'df.FlowSubflow', (e) => ({ flowName: e.flowName, details: subflowRows(e) })],
+  ['subflows', bySubtype(SUBFLOW_SUBTYPE, 'df.FlowSubflow', 'subflows'), (e) => ({ flowName: e.flowName, details: subflowRows(e) })],
   ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${pickValue(a.value)}`).join('; ') || null })],
-  ['decisions', () => 'df.FlowDecision', (e) => ({ outcomes: (e.rules || []).map((r) => r.label || r.name).concat(e.defaultConnectorLabel ? [e.defaultConnectorLabel] : []).join(', ') || null, details: outcomeRows(e) })],
+  ['decisions', bySubtype(DECISION_SUBTYPE, 'df.FlowDecision', 'decisions'), (e) => ({ outcomes: (e.rules || []).map((r) => r.label || r.name).concat(e.defaultConnectorLabel ? [e.defaultConnectorLabel] : []).join(', ') || null, details: outcomeRows(e) })],
   ['loops', () => 'df.FlowLoop', (e) => ({
     collectionReference: e.collectionReference,
     details: [
@@ -984,14 +1019,15 @@ const COLLECTIONS = [
   ['recordUpdates', () => 'df.FlowUpdateRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
   ['recordDeletes', () => 'df.FlowDeleteRecords', (e) => ({ object: e.object, filters: summarizeFilters(e.filters, e.filterLogic), details: inputRows(e) })],
   ['recordRollbacks', () => 'df.FlowRollback', () => ({})],
-  ['experiments', () => 'df.FlowPathExperiment', (e) => ({ outcomes: (e.experimentPaths || []).map((p) => p.name).join(', ') || null })],
+  ['experiments', bySubtype(EXPERIMENT_SUBTYPE, 'df.FlowPathExperiment', 'experiments'),
+    (e) => ({ outcomes: experimentBranches(e).map((p) => p.label || p.name).join(', ') || null, details: experimentRows(e) })],
   ['collectionProcessors', (e, warn) => {
     const sub = String(e.elementSubtype || e.collectionProcessorType || '');
     const cls = COLLECTION_PROCESSOR_SUBTYPE[sub];
     if (!cls && sub) warn(`collectionProcessor subtype "${sub}" has no dedicated shape - drawn as Collection Filter`);
     return cls || 'df.FlowCollectionFilter';
   }, (e) => ({ collectionReference: e.collectionReference, conditions: summarizeConditions(e.conditions, e.conditionLogic), details: collectionRows(e) })],
-  ['waits', (e) => WAIT_SUBTYPE[e.elementSubtype] || 'df.FlowWait',
+  ['waits', bySubtype(WAIT_SUBTYPE, 'df.FlowWait', 'waits', 'df.FlowWaitForConditions'),
     (e) => ({ waitEvents: (e.waitEvents || []).map((ev) => waitEventLabel(ev, e.name)).filter(Boolean).join(', ') || null, details: waitRows(e) })],
   ['actionCalls', (e) => actionType(e)[0], (e) => ({ ...actionType(e)[1], details: actionParamRows(e) })],
   // Elements with no dedicated shape yet. They are listed EXPLICITLY (rather than left to the catch-all
@@ -1006,6 +1042,11 @@ const COLLECTIONS = [
 ];
 // Keys handled above - the catch-all scan skips these.
 const HANDLED_KEYS = new Set(COLLECTIONS.map(([k]) => k));
+// Read by convert() itself rather than drawn from the table above, so the catch-all must not draw them as Action
+// cards. `ends` (v68+): explicit End elements, folded into the synthesised Ends - see `endIds`. `groups` (Winter
+// '27): named containers with no runtime effect, drawn as zones after layout - see "Group zones".
+HANDLED_KEYS.add('ends');
+HANDLED_KEYS.add('groups');
 // A connector can live under any of these; used both to route edges and to RECOGNISE an unknown collection
 // as a set of flow ELEMENTS (rather than resources like `variables` / `choices`, which carry none).
 const CONNECTOR_KEYS = ['connector', 'connectors', 'faultConnector', 'defaultConnector', 'nextValueConnector', 'noMoreValuesConnector'];
@@ -1048,9 +1089,19 @@ function convert(input, opts = {}) {
     coords.set(id, { x: Number(el?.locationX) || 0, y: Number(el?.locationY) || 0 });
     return true;
   };
+  // Explicit End elements (API v68+, `ends`). The same flow read at v67 has no `ends` and a NULL connector where
+  // v68 points at END_ELEMENT_1. A connector to an End is therefore treated exactly like that null connector: it
+  // gets its own synthesised End under its source, so both API versions draw the same diagram, and one shared
+  // END_ELEMENT does not pull every finishing branch into a single node.
+  const endIds = new Set(asList(md.ends).map((e) => e?.name).filter(Boolean));
   const addEdge = (source, target, connector, label, kind) => {
     if (!connector?.targetReference && !target) return;
     const styleKind = kind || (connector?.isGoTo ? 'goto' : 'regular');
+    if (!target && endIds.has(connector.targetReference)) {
+      const endKind = styleKind === 'fault' ? 'fault' : 'regular';   // a Go To that lands on an End is just a finish
+      edges.push({ source, target: null, kind: endKind, layoutKind: endKind, label: label || null, needsEnd: true });
+      return;
+    }
     // A faultConnector can ALSO be a Go To (isGoTo) - real flows point many faults at one shared error
     // screen that way. Paint it as a fault (red) but keep it OUT of the spanning tree like any Go To:
     // as a fault LATERAL the shared screen would be ranked beside whichever element referenced it first
@@ -1116,6 +1167,7 @@ function convert(input, opts = {}) {
   const expandStages = !!opts.expandStages;
   const stepIds = new Set();   // the expanded step cards - excluded from the metadata-coordinate test below
   const bands = [];            // { id, label, memberIds } - drawn AFTER layout, from where the cards landed
+  const groupOf = new Map();   // element name -> the Group it sits in (FlowNode.group, API v68+)
   // Flow-wide context for the extractors, which otherwise only see their own element.
   const convertCtx = { choiceIdx: buildChoiceIndex(md), expandStages };
   // Serialised ONCE and only when it is asked for: stepOutputsRead scans the whole flow per background step,
@@ -1176,6 +1228,7 @@ function convert(input, opts = {}) {
     for (const el of md[key] || []) {
       if (!el?.name) { warnings.push(`${key} entry without a name - skipped`); continue; }
       if (!addNode(el.name, typeOf(el, warn), el.label || el.name, fieldsOf(el, convertCtx), el)) continue;
+      if (el.group) groupOf.set(el.name, String(el.group));
       // Where this element's outgoing connectors leave from. Identical to the element for everything except an
       // EXPANDED stage, whose continuation hangs off its last step.
       const outFrom = (key === 'orchestratedStages' && expandStages) ? expandStage(el) : el.name;
@@ -1201,12 +1254,24 @@ function convert(input, opts = {}) {
         addEdge(el.name, null, el.nextValueConnector, 'For Each', el.nextValueConnector?.isGoTo ? 'goto' : 'loopNext');
         addEdge(el.name, null, el.noMoreValuesConnector, 'After Last', el.noMoreValuesConnector?.isGoTo ? 'goto' : 'loopExit');
       } else if (key === 'experiments') {
-        // A Path Experiment branches exactly like a decision. Its paths were read for the CARD summary but
-        // never for EDGES, so every experiment drew as a dead end and its whole downstream vanished.
-        for (const p of el.experimentPaths || []) {
-          if (p.connector) addEdge(el.name, null, p.connector, p.name || p.label);
-          else addDeadBranch(el.name, p.name || p.label);
+        // A Path Experiment (and Personalize Paths) branches exactly like a decision, through `paths`. The label is
+        // what Flow Builder prints on the branch; the API name is the fallback.
+        for (const p of experimentBranches(el)) {
+          if (p.connector) addEdge(el.name, null, p.connector, p.label || p.name);
+          else addDeadBranch(el.name, p.label || p.name);
         }
+      } else if (key === 'actionCalls' && asList(el.actionCallPaths).length) {
+        // A BRANCHING action (Determine CRM Record for Individual, Einstein Decision): one path per outcome, named
+        // by `pathName`. The element's own `connector` also exists and, in the captured flow, pointed where the
+        // paths merge. It is drawn only when it leads somewhere no path already goes, so three labelled branches
+        // into one element do not gain a fourth unlabelled copy.
+        const paths = asList(el.actionCallPaths);
+        for (const p of paths) {
+          if (p.connector) addEdge(el.name, null, p.connector, p.pathName || p.name);
+          else addDeadBranch(el.name, p.pathName || p.name);
+        }
+        const pathTargets = new Set(paths.map((p) => p.connector?.targetReference).filter(Boolean));
+        if (el.connector?.targetReference && !pathTargets.has(el.connector.targetReference)) addEdge(el.name, null, el.connector);
       } else {
         addEdge(outFrom, null, el.connector);
         // Legacy `steps` carry a `connectors` ARRAY rather than a single `connector`.
@@ -1458,35 +1523,91 @@ function convert(input, opts = {}) {
   // and resizes with them - and the app's auto-layout writes element positions directly, so re-running it
   // inside the app would drag every band's members around by their band. A plain rectangle behind the cards
   // survives a re-layout; a parent does not.
-  for (const b of bands) {
-    const members = b.memberIds.map((id) => cells.find((c) => c.id === id)).filter((c) => c?.position && c?.size);
-    if (!members.length) continue;
-    const x0 = Math.min(...members.map((c) => c.position.x));
-    const y0 = Math.min(...members.map((c) => c.position.y));
-    const x1 = Math.max(...members.map((c) => c.position.x + c.size.width));
-    const y1 = Math.max(...members.map((c) => c.position.y + c.size.height));
-    cells.push({
-      id: b.id,
-      type: 'sf.Zone',
-      position: { x: x0 - BAND_PAD_X, y: y0 - BAND_PAD_TOP },
-      size: { width: (x1 - x0) + BAND_PAD_X * 2, height: (y1 - y0) + BAND_PAD_TOP + BAND_PAD_BOTTOM },
-      z: 0,
-      attrs: {
-        body: {
-          width: 'calc(w)', height: 'calc(h)', rx: 8, ry: 8,
-          fill: BAND_FILL, stroke: BAND_BLUE, strokeWidth: 1, strokeDasharray: '8 4',
-        },
-        label: {
-          x: 10, y: 16, textAnchor: 'start', textVerticalAnchor: 'middle',
-          fontSize: 11, fontFamily: 'system-ui, -apple-system, sans-serif',
-          // The LABEL is theme-driven, unlike the outline: it sits on the canvas background rather than on the
-          // band's own 5% tint, so the app's own muted-text token is both correct and automatically readable
-          // in either theme.
-          fill: 'var(--text-muted)', fontWeight: '600', text: b.label,
-          textWrap: { width: 'calc(w - 24)', maxLineCount: 1, ellipsis: true },
-        },
+  const zoneCell = (id, label, box, z) => ({
+    id,
+    type: 'sf.Zone',
+    position: { x: box.x0, y: box.y0 },
+    size: { width: box.x1 - box.x0, height: box.y1 - box.y0 },
+    z,
+    attrs: {
+      body: {
+        width: 'calc(w)', height: 'calc(h)', rx: 8, ry: 8,
+        fill: BAND_FILL, stroke: BAND_BLUE, strokeWidth: 1, strokeDasharray: '8 4',
       },
-    });
+      label: {
+        x: 10, y: 16, textAnchor: 'start', textVerticalAnchor: 'middle',
+        fontSize: 11, fontFamily: 'system-ui, -apple-system, sans-serif',
+        // The LABEL is theme-driven, unlike the outline: it sits on the canvas background rather than on the
+        // band's own 5% tint, so the app's own muted-text token is both correct and automatically readable
+        // in either theme.
+        fill: 'var(--text-muted)', fontWeight: '600', text: label,
+        textWrap: { width: 'calc(w - 24)', maxLineCount: 1, ellipsis: true },
+      },
+    },
+  });
+  /** The padded box around some cards (and any zones already drawn inside them). */
+  const zoneBox = (cards, innerBoxes = []) => {
+    const boxes = [...cards.map((c) => ({ x0: c.position.x, y0: c.position.y, x1: c.position.x + c.size.width, y1: c.position.y + c.size.height })), ...innerBoxes];
+    if (!boxes.length) return null;
+    return {
+      x0: Math.min(...boxes.map((b) => b.x0)) - BAND_PAD_X,
+      y0: Math.min(...boxes.map((b) => b.y0)) - BAND_PAD_TOP,
+      x1: Math.max(...boxes.map((b) => b.x1)) + BAND_PAD_X,
+      y1: Math.max(...boxes.map((b) => b.y1)) + BAND_PAD_BOTTOM,
+    };
+  };
+  const cardById = new Map(cells.filter((c) => c.position && c.size).map((c) => [c.id, c]));
+  for (const b of bands) {
+    const box = zoneBox(b.memberIds.map((id) => cardById.get(id)).filter(Boolean));
+    if (box) cells.push(zoneCell(b.id, b.label, box, 0));
+  }
+
+  // ── Group zones (Winter '27, API v68) ──────────────────────────────────────
+  // A Flow Builder Group (Metadata API `FlowNodeGroup`) is a named container with no runtime effect and no
+  // connectors. Membership lives on the MEMBERS: each element's `group` field names its group (`FlowNode.group`),
+  // and a group carries the same field, so groups nest. Drawn like a stage band - a dashed zone behind the cards,
+  // from where the layout put them - with a nested group's zone inside its parent's. Built from the documented
+  // schema before any org could save a Group: a group that no element names is not drawn and says so, so a
+  // misreading costs the container and never an element.
+  const groupDefs = new Map(asList(md.groups).filter((g) => g?.name).map((g) => [String(g.name), g]));
+  let groupsDrawn = 0;
+  if (groupDefs.size) {
+    const childGroups = new Map();
+    const memberIds = new Map();
+    const push = (map, k, v) => { if (!map.has(k)) map.set(k, []); map.get(k).push(v); };
+    for (const g of groupDefs.values()) if (g.group && groupDefs.has(String(g.group))) push(childGroups, String(g.group), String(g.name));
+    for (const [id, name] of groupOf) push(memberIds, name, id);
+    const drawGroup = (name, depth, seen) => {
+      if (seen.has(name)) return { box: null, members: new Set() };   // a cycle in the metadata - draw it once
+      seen.add(name);
+      const inner = (childGroups.get(name) || []).map((child) => drawGroup(child, depth + 1, seen));
+      const members = new Set([...(memberIds.get(name) || []), ...inner.flatMap((i) => [...i.members])]);
+      const cards = (memberIds.get(name) || []).map((id) => cardById.get(id)).filter(Boolean);
+      const box = zoneBox(cards, inner.map((i) => i.box).filter(Boolean));
+      const g = groupDefs.get(name);
+      if (!box) {
+        warnings.push(`Group "${g.label || name}" has no elements that name it - not drawn`);
+        return { box: null, members };
+      }
+      cells.push(zoneCell(`__group_${name}`, `Group: ${g.label || name}`, box, depth));
+      groupsDrawn++;
+      // The zone is a bounding box, so on a wide branch it can take in cards that are not in the group. Say so
+      // rather than let the drawing claim them.
+      const strays = cells.filter((c) => String(c.type).startsWith('df.Flow') && !members.has(c.id) && c.position && c.size
+        && c.position.x < box.x1 && c.position.x + c.size.width > box.x0 && c.position.y < box.y1 && c.position.y + c.size.height > box.y0);
+      if (strays.length) warnings.push(`Group "${g.label || name}": its zone also covers ${strays.length} element(s) outside the group`);
+      return { box, members };
+    };
+    const seen = new Set();
+    for (const name of groupDefs.keys()) {
+      const parent = groupDefs.get(name).group;
+      if (!parent || !groupDefs.has(String(parent))) drawGroup(name, 0, seen);
+    }
+    // Members that name a group the flow does not define.
+    const orphans = [...groupOf].filter(([, name]) => !groupDefs.has(name));
+    if (orphans.length) warnings.push(`${orphans.length} element(s) name a Group the flow does not define - drawn without it`);
+  } else if (groupOf.size) {
+    warnings.push(`${groupOf.size} element(s) name a Group the flow does not define - drawn without it`);
   }
 
   // ── Links ──
@@ -1756,6 +1877,7 @@ function convert(input, opts = {}) {
     ends: endN,
     steps: stepIds.size,
     bands: bands.length,
+    groups: groupsDrawn,
     layoutMode,
     warnings,
   };

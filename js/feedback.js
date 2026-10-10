@@ -49,7 +49,9 @@ function positionToastContainer() {
  *
  * @param {string} message  Plain text to display.
  * @param {'success'|'info'|'warning'|'error'} [kind='info']  Visual variant.
- * @param {object} [opts]   { duration?: number — ms before auto-dismiss }
+ * @param {object} [opts]   { duration?: number — ms before auto-dismiss,
+ *                            action?: { label, onClick } — one button after the message (1.25.2),
+ *                            sticky?: true — no auto-dismiss; a close button instead (1.25.2) }
  * @returns {Function}      Dismiss handle. Also exposes `.update(message)` which
  *                          rewrites the toast text in place (used by long-running
  *                          operations like GIF export to show frame N/M progress
@@ -93,7 +95,36 @@ export function showToast(message, kind = 'info', opts = {}) {
     setTimeout(() => toast.remove(), 220);
   };
   toast.addEventListener('click', dismiss);
-  dismissTimer = setTimeout(dismiss, duration);
+  // A STICKY toast (1.25.2) waits for the user: an actionable hint that closed itself after 12 s was gone before the
+  // owner could use it in the live check. No timer (setTimeout(fn, Infinity) would fire at once), and a visible close
+  // button, so the way out is not only "click anywhere on it".
+  const sticky = opts.sticky === true;
+  if (!sticky) dismissTimer = setTimeout(dismiss, duration);
+  // An ACTION toast (1.25.2, the B4 link-open hint): one button after the message. The toast still dismisses on any
+  // click; the button runs its action as well. Its message wraps, since a hint with a button is a sentence, not a status.
+  if (opts.action && opts.action.label) {
+    toast.classList.add('df-toast--action');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'df-toast__action';
+    btn.textContent = String(opts.action.label);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismiss();
+      try { opts.action.onClick?.(); } catch (err) { console.error('Diagramforce: toast action failed:', err); }
+    });
+    toast.appendChild(btn);
+  }
+  if (sticky) {
+    toast.classList.add('df-toast--sticky');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'df-toast__close';
+    close.setAttribute('aria-label', 'Close');
+    close.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+    close.addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    toast.appendChild(close);
+  }
 
   // Gap 27 (v1.12.0) — live message update for long-running operations.
   // Attaching as a property on the dismiss function (which is itself a

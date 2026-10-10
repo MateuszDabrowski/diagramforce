@@ -1,6 +1,7 @@
 [data-theme="dark"] {
   --color-primary: var(--brand-red);
   --brand-amber-strong: var(--brand-amber);   /* dark mode: the base amber is legible on the dark surface */
+  --brand-amber-line: var(--brand-amber);     /* dark mode: thin Gantt lines take the brand amber too (variables.css) */
 
   /* Cloud-sync status — lighter stops for contrast on the dark toolbar (see variables.css). */
   --sync-error: #F09595;

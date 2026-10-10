@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.24.13';
-import { showToast, showError } from '../feedback.js?v=1.24.13';
-import { sanitizeFilenamePart } from '../util.js?v=1.24.13';
-import { pctx } from './context.js?v=1.24.13';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.2';
+import { showToast, showError } from '../feedback.js?v=1.25.2';
+import { sanitizeFilenamePart } from '../util.js?v=1.25.2';
+import { pctx } from './context.js?v=1.25.2';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -200,6 +200,109 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
   });
 }
 
+// The standalone SVG of the whole diagram: cropped to its content (labels included) plus 32 px, at MODEL scale,
+// with the sprites inlined, foreignObjects turned into SVG text, CSS variables resolved and line styles baked.
+// Shared by the SVG and raster exports and by renderImage(). `svgFile` marks the .svg FILE output: it gets an
+// explicit xmlns and, when opaque, the canvas colour as a full-bleed rect (the raster path paints its background on
+// the canvas instead, and never had the xmlns attribute). Throws on an empty diagram with a message the callers show
+// as is.
+function buildStandaloneSvg(transparent, { svgFile = false } = {}) {
+  const { paper } = pctx;
+  // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
+  // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
+  // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
+  const contentBBox = contentAreaWithLabels(paper);
+  if (!contentBBox || contentBBox.width === 0) throw new Error('Diagram is empty - nothing to export.');
+  const padding = 32;
+  const exportW = contentBBox.width + padding * 2;
+  const exportH = contentBBox.height + padding * 2;
+
+  const svgClone = paper.svg.cloneNode(true);
+  if (svgFile) svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  svgClone.setAttribute('width', exportW);
+  svgClone.setAttribute('height', exportH);
+  svgClone.setAttribute('viewBox', `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`);
+
+  // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
+  // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
+  svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
+  // Hide grid pattern and port circles for clean export
+  svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
+
+  // Inline the SLDS icon sprites so they render in the exported SVG
+  const spritesContainer = document.getElementById('slds-icons');
+  if (spritesContainer) {
+    const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defsEl.innerHTML = spritesContainer.innerHTML;
+    svgClone.insertBefore(defsEl, svgClone.firstChild);
+  }
+
+  // Opaque SVG variant bakes in the canvas background as a full-bleed rect behind everything.
+  if (svgFile && !transparent) {
+    const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-canvas')?.trim() || '#1A1A1A';
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', contentBBox.x - padding);
+    bg.setAttribute('y', contentBBox.y - padding);
+    bg.setAttribute('width', exportW);
+    bg.setAttribute('height', exportH);
+    bg.setAttribute('fill', bgColor);
+    svgClone.insertBefore(bg, svgClone.firstChild);
+  }
+
+  // Replace foreignObject elements with SVG text — HTML inside SVG Blob URLs
+  // is blocked by browsers during Image rendering (security restriction)
+  replaceForeignObjects(svgClone);
+  // Resolve CSS custom properties — standalone SVG images can't access page CSS vars
+  resolveCssVars(svgClone);
+  // Bake the runtime overlay-based dashing into the standalone SVG.
+  // For transparent export we fall back to inline stroke-dasharray on
+  // the line; non-transparent uses the bg-coloured overlay technique to
+  // avoid leaking the pattern into open-stroke markers in Safari.
+  applyLineStyleInline(svgClone, transparent);
+
+  return { svgStr: new XMLSerializer().serializeToString(svgClone), exportW, exportH };
+}
+
+// Rasterize the standalone SVG to a PNG / WEBP blob. Resolves { blob, width, height, scale }; rejects with a message
+// the callers show as is. Never downloads and never toasts, so renderImage() can reuse it silently.
+function rasterBlob(transparent, format) {
+  const mimeType = format === 'webp' ? 'image/webp' : 'image/png';
+  const fmtLabel = format.toUpperCase();
+  return new Promise((resolve, reject) => {
+    const { svgStr, exportW, exportH } = buildStandaloneSvg(transparent);
+    const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
+    const fail = (msg) => { URL.revokeObjectURL(svgUrl); reject(new Error(msg)); };
+    const img = new Image();
+    img.onload = () => {
+      // 2× for retina sharpness, but clamped so a large diagram never overflows the canvas size limit and exports
+      // blank/clipped. Below 1× the raster is downscaled; the callers warn (SVG keeps full fidelity).
+      const scale = clampExportScale(exportW, exportH, 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(exportW * scale);
+      canvas.height = Math.round(exportH * scale);
+      const ctx = canvas.getContext('2d');
+      // No context (the canvas is past this browser's size limit) and no blob both used to end in silence.
+      if (!ctx) { fail(`${fmtLabel} export failed: the diagram is too large for this browser. Use SVG export instead.`); return; }
+      try {
+        if (!transparent) {
+          const theme = document.documentElement.getAttribute('data-theme');
+          ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, exportW, exportH);
+      } catch (err) { fail(`${fmtLabel} export failed: ${err.message}`); return; }
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(svgUrl);
+        if (blob) resolve({ blob, width: canvas.width, height: canvas.height, scale });
+        else reject(new Error(`${fmtLabel} export failed: the browser could not encode the image. Try SVG export instead.`));
+      }, mimeType);
+    };
+    img.onerror = () => fail(`${fmtLabel} export failed. Try saving as JSON instead.`);
+    img.src = svgUrl;
+  });
+}
+
 /**
  * Export the diagram as a standalone, scalable .svg. Reuses the same standalone-SVG pipeline as the raster
  * export (foreignObject→text, CSS-var resolution, line-style inlining, SLDS sprite inlining) but downloads the
@@ -207,172 +310,64 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
  * to bake in the canvas background.
  */
 export function exportSVG(transparent = true) {
-  const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
+  const { triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   try {
-    // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
-    // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
-    // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
-    const contentBBox = contentAreaWithLabels(paper);
-    if (!contentBBox || contentBBox.width === 0) {
-      showError('Diagram is empty - nothing to export.');
-      return;
-    }
-    const padding = 32;
-    const exportW = contentBBox.width + padding * 2;
-    const exportH = contentBBox.height + padding * 2;
-
-    const svgClone = paper.svg.cloneNode(true);
-    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svgClone.setAttribute('width', exportW);
-    svgClone.setAttribute('height', exportH);
-    svgClone.setAttribute('viewBox', `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`);
-
-    // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
-    // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
-    svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
-    svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
-
-    const spritesContainer = document.getElementById('slds-icons');
-    if (spritesContainer) {
-      const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      defsEl.innerHTML = spritesContainer.innerHTML;
-      svgClone.insertBefore(defsEl, svgClone.firstChild);
-    }
-
-    // Opaque variant bakes in the canvas background as a full-bleed rect behind everything.
-    if (!transparent) {
-      const bgColor = getComputedStyle(document.body).getPropertyValue('--bg-canvas')?.trim() || '#1A1A1A';
-      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      bg.setAttribute('x', contentBBox.x - padding);
-      bg.setAttribute('y', contentBBox.y - padding);
-      bg.setAttribute('width', exportW);
-      bg.setAttribute('height', exportH);
-      bg.setAttribute('fill', bgColor);
-      svgClone.insertBefore(bg, svgClone.firstChild);
-    }
-
-    replaceForeignObjects(svgClone);
-    resolveCssVars(svgClone);
-    applyLineStyleInline(svgClone, transparent);
-
-    const svgStr = new XMLSerializer().serializeToString(svgClone);
+    const { svgStr } = buildStandaloneSvg(transparent, { svgFile: true });
     const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
     const safeName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
     triggerDownload(url, `df_${safeName}_${dateSuffix()}.svg`);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     showToast('SVG exported ✓', 'success');
   } catch (err) {
-    showError('SVG export failed: ' + (err.message || 'unknown error'));
+    showError(/empty/.test(err.message || '') ? err.message : 'SVG export failed: ' + (err.message || 'unknown error'));
   }
 }
 
 function exportRaster(transparent, format) {
-  const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
-  const mimeType = format === 'webp' ? 'image/webp' : 'image/png';
+  const { triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   const ext = format === 'webp' ? 'webp' : 'png';
   const fmtLabel = format.toUpperCase();
-  try {
-    // LOCAL (model) coords: the clone below strips the pan/zoom transform, so the viewBox must be model-space.
-    // getContentBBox (CLIENT coords) only matched at 100% zoom unpanned - any other view state mis-cropped the
-    // export and CUT edge content, most visibly connectors (routed stubs/markers reach furthest) (CR).
-    const contentBBox = contentAreaWithLabels(paper);
-    if (!contentBBox || contentBBox.width === 0) {
-      showError('Diagram is empty - nothing to export.');
-      return;
-    }
-
-    const padding = 32;
-    const exportW = contentBBox.width + padding * 2;
-    const exportH = contentBBox.height + padding * 2;
-
-    // Clone the paper SVG element and adjust for export
-    const svgEl = paper.svg;
-    const svgClone = svgEl.cloneNode(true);
-    svgClone.setAttribute('width', exportW);
-    svgClone.setAttribute('height', exportH);
-    svgClone.setAttribute('viewBox',
-      `${contentBBox.x - padding} ${contentBBox.y - padding} ${exportW} ${exportH}`
-    );
-
-    // Remove the viewport transform (scale+translate used for pan/zoom)
-    // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
-    // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
-    svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
-
-    // Hide grid pattern and port circles for clean export
-    svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
-
-    // Inline the SLDS icon sprites so they render in the exported SVG
-    const spritesContainer = document.getElementById('slds-icons');
-    if (spritesContainer) {
-      const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      defsEl.innerHTML = spritesContainer.innerHTML;
-      svgClone.insertBefore(defsEl, svgClone.firstChild);
-    }
-
-    // Replace foreignObject elements with SVG text — HTML inside SVG Blob URLs
-    // is blocked by browsers during Image rendering (security restriction)
-    replaceForeignObjects(svgClone);
-
-    // Resolve CSS custom properties — standalone SVG images can't access page CSS vars
-    resolveCssVars(svgClone);
-
-    // Bake the runtime overlay-based dashing into the standalone SVG.
-    // For transparent export we fall back to inline stroke-dasharray on
-    // the line; non-transparent uses the bg-coloured overlay technique to
-    // avoid leaking the pattern into open-stroke markers in Safari.
-    applyLineStyleInline(svgClone, transparent);
-
-    const svgStr = new XMLSerializer().serializeToString(svgClone);
-    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-
-    const img = new Image();
-    img.onload = () => {
-      // 2× for retina sharpness, but clamped so a large diagram never overflows the canvas size limit and exports
-      // blank/clipped. If the clamp pushes us below 1×, warn (the raster is downscaled; SVG keeps full fidelity).
-      const scale = clampExportScale(exportW, exportH, 2);
-      if (scale < 1) showToast(`Diagram is large - ${fmtLabel} exported at ${Math.round(scale * 100)}% scale. Use SVG export for full resolution.`, 'info');
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(exportW * scale);
-      canvas.height = Math.round(exportH * scale);
-      const ctx = canvas.getContext('2d');
-      // No context (the canvas is past this browser's size limit) and no blob both used to end in silence.
-      if (!ctx) { URL.revokeObjectURL(svgUrl); showError(`${fmtLabel} export failed: the diagram is too large for this browser. Use SVG export instead.`); return; }
-
-      try {
-        if (!transparent) {
-          const theme = document.documentElement.getAttribute('data-theme');
-          ctx.fillStyle = theme === 'dark' ? '#1A1A1A' : '#FAFAFA';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0, exportW, exportH);
-      } catch (err) { URL.revokeObjectURL(svgUrl); showError(`${fmtLabel} export failed: ${err.message}`); return; }
-
-      canvas.toBlob(blob => {
-        const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
-        if (blob) {
-          triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
-          showToast(`${fmtLabel} downloaded ✓`, 'success');
-        } else {
-          showError(`${fmtLabel} export failed: the browser could not encode the image. Try SVG export instead.`);
-        }
-        URL.revokeObjectURL(svgUrl);
-      }, mimeType);
-    };
-
-    img.onerror = () => {
-      showError(`${fmtLabel} export failed. Try saving as JSON instead.`);
-      URL.revokeObjectURL(svgUrl);
-    };
-
-    img.src = svgUrl;
-  } catch (err) {
-    showError(`${fmtLabel} export failed: ` + err.message);
-    console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
+  let pending;
+  try { pending = rasterBlob(transparent, format); }
+  catch (err) {   // buildStandaloneSvg throws synchronously (empty diagram, a DOM failure)
+    showError(/empty/.test(err.message || '') ? err.message : `${fmtLabel} export failed: ` + err.message);
+    if (!/empty/.test(err.message || '')) console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
+    return;
   }
+  pending.then(({ blob, scale }) => {
+    if (scale < 1) showToast(`Diagram is large - ${fmtLabel} exported at ${Math.round(scale * 100)}% scale. Use SVG export for full resolution.`, 'info');
+    const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
+    triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
+    showToast(`${fmtLabel} downloaded ✓`, 'success');
+  }, (err) => showError(err.message));
+}
+
+/**
+ * Render the ACTIVE diagram to an image and return it instead of downloading it - the external render request
+ * (external-import.js, `type:'render'`) and the skill's render-diagram.mjs CLI use this. Waits for the paper to
+ * finish rendering and for web fonts, then runs the same pipeline as the Save menu exports. No toasts.
+ * @param {{format?: 'png'|'svg'|'webp', transparent?: boolean}} [opts]
+ * @returns {Promise<{format: string, mime: string, dataUrl: string, width: number, height: number}>}
+ */
+export async function renderImage({ format = 'png', transparent = false } = {}) {
+  const fmt = ['png', 'svg', 'webp'].includes(format) ? format : 'png';
+  pctx.paper.updateViews?.();             // the paper renders asynchronously; flush every pending view first
+  if (document.fonts?.ready) await document.fonts.ready;
+  let blob, width, height;
+  if (fmt === 'svg') {
+    const { svgStr, exportW, exportH } = buildStandaloneSvg(transparent, { svgFile: true });
+    blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    width = Math.round(exportW); height = Math.round(exportH);
+  } else {
+    ({ blob, width, height } = await rasterBlob(transparent, fmt));
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('could not encode the image'));
+    reader.readAsDataURL(blob);
+  });
+  return { format: fmt, mime: blob.type, dataUrl, width, height };
 }
 
 /**

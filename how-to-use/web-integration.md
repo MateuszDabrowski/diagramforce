@@ -140,10 +140,28 @@ with other libraries that use `postMessage`, such as Google sign-in).
 |---|---|---|
 | Diagramforce -> your app | `{ source:'diagramforce', type:'ready', v:1 }` | Diagramforce is listening; send the diagram now |
 | Your app -> Diagramforce | `{ source:'diagramforce', type:'import', v:1, json:'<string>' }` | The diagram JSON to open (as a **string**) |
+| Your app -> Diagramforce | `{ source:'diagramforce', type:'render', v:1, id, json:'<string>', format:'png'\|'svg'\|'webp', transparent:false }` | Open the diagram AND send its image back (below) |
+| Diagramforce -> your app | `{ source:'diagramforce', type:'rendered', v:1, id, format, mime, dataUrl, width, height }` | The image, as a `data:` URL |
+| Diagramforce -> your app | `{ source:'diagramforce', type:'render-error', v:1, id, error }` | Why there is no image |
 
 - Send `json` as a **string** (`JSON.stringify(diagram)`), not a live object.
 - Always pass Diagramforce's origin as the `targetOrigin` when you `postMessage` (the snippet does),
   so the payload is only delivered to Diagramforce.
+
+### Get an image back (render)
+
+Send `type:'render'` instead of `type:'import'` and Diagramforce opens the diagram as usual, then replies with
+the same image its **Save > Export** menu makes: PNG and WEBP at 2x, or a standalone SVG. `format` defaults to
+`png`; `transparent:true` drops the background; the colours follow the theme Diagramforce is showing. `id` is
+yours to match replies to requests. Your page must be served over `http(s)`, and the diagram needs an
+`appVersion` (a file without one would wait on a compatibility prompt, so it is refused at once instead).
+
+For pipelines with no web page at all - Claude Code, a terminal, CI - the Diagramforce skill ships
+`render-diagram.mjs`, which does exactly this with a local headless browser and writes the file:
+
+```bash
+node scripts/render-diagram.mjs diagram.json --out diagram.png
+```
 
 ---
 
@@ -165,7 +183,9 @@ with other libraries that use `postMessage`, such as Google sign-in).
   safe because only the window that opened the tab can message it, and every imported diagram is
   sanitised (cell cap, and stripping of event handlers, script URIs, and prototype-pollution keys) -
   the same treatment a pasted file or a shared-link diagram gets. Diagramforce never sends any of your
-  or the user's data back; its only outbound message is the contentless "ready" ping.
+  or the user's data back: the "ready" ping is contentless, and a render reply carries only the image of
+  the diagram your page itself sent. It goes to your page's origin only, and only if the tab that diagram
+  opened is still the one on screen when the image is taken.
 
 ---
 

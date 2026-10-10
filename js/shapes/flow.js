@@ -2,7 +2,7 @@
 // by shapes.js register() AFTER registerCore() (which creates the joint.shapes.df namespace these attach to).
 //
 // ONE declarative table (FLOW_ELEMENTS) drives BOTH surfaces so the roster can never drift:
-//   - this leaf's joint.dia.Element.define() loop (the 34 shape classes)
+//   - this leaf's joint.dia.Element.define() loop (the 45 shape classes)
 //   - FLOW_CATEGORIES + createElementFromComponent in components.js (imports FLOW_ELEMENTS from here)
 // The three parity registries (ALLOWED_CELL_TYPES in persistence/diagram-schema.js, TYPE_LABELS + DEFAULT_SIZES
 // in properties/type-meta.js) MUST list every 'df.Flow<cls>' as LITERAL lines — the registry-sync test parses
@@ -19,8 +19,8 @@
 // NB per-kind keys avoid JointJS built-in cell attributes (source/target/vertices/router) — `transformTarget`,
 // not `target`, so a change-listener never misfires on a link's endpoint change (caught in S1 e2e).
 
-import { portGroups, portItems } from './ports.js?v=1.24.13';
-import { getIconDataUri } from '../icons.js?v=1.24.13';
+import { portGroups, portItems } from './ports.js?v=1.25.2';
+import { getIconDataUri } from '../icons.js?v=1.25.2';
 
 // Uniform card size for every element (decision #8/S1: "Uniform default size for all classes"). MUST equal the
 // DEFAULT_SIZES entries in properties/type-meta.js or "Auto Size" snaps to a different box.
@@ -56,22 +56,28 @@ export const FLOW_ELEMENTS = [
   // ── Interaction (navy) ───────────────────────────────────────────────────
   { cls: 'Screen',               label: 'Screen',                           icon: 'screen',               accent: C.screen,      meta: 'screens',            fields: ['components'] },                                       // Screen uses its own bright blue (measured)
   { cls: 'Action',               label: 'Action',                           icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName', 'actionType'] },
+  { cls: 'Apex',                 label: 'Apex Action',                      icon: 'apex',                 accent: C.interaction, meta: 'actionCalls (apex)', fields: ['actionName'] },  // own palette entry + standard:apex since Winter '27 (captured 2026-10-06)
   { cls: 'Subflow',              label: 'Subflow',                          icon: 'flow',                 accent: C.interaction, meta: 'subflows',           fields: ['flowName'] },
-  { cls: 'SendToFlow',           label: 'Send to a Flow',                   icon: 'sales_cadence',        accent: C.interaction, meta: 'subflows',           fields: ['flowName'] },
+  { cls: 'SendToFlow',           label: 'Send to a Flow',                   icon: 'sales_cadence',        accent: C.interaction, meta: 'subflows (SendToFlow)', fields: ['flowName'] },
   // The messaging sends reference CMS/Marketing CONTENT: the primary field is labelled per channel in Flow Builder
   // (Email / SMS / Message / Push Notification Message / In-App Message) via `fieldLabels`, over a shared `template`
   // key. Send to Data 360 references an ACTIVATION definition (not content) → its own `activation` key.
   { cls: 'SendEmail',            label: 'Send Email Message',               icon: 'email',                accent: C.interaction, meta: 'actionCalls',        fields: ['template'], fieldLabels: { template: 'Email' } },
   { cls: 'SendSms',              label: 'Send SMS Message',                 icon: 'sms',                  accent: C.interaction, meta: 'actionCalls',        fields: ['template'], fieldLabels: { template: 'SMS' } },
   { cls: 'SendWhatsApp',         label: 'Send WhatsApp Message',            icon: 'whatsapp',             accent: C.interaction, meta: 'actionCalls',        fields: ['template'], fieldLabels: { template: 'Message' } },   // Flow Builder labels it 'Message' (owner-confirmed; help doc says 'WhatsApp')
-  { cls: 'SendToData360',        label: 'Send to Data 360 Activation',      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['activation'] },                                       // references an API activation definition, not message content
+  { cls: 'SendToData360',        label: 'Send to Data 360 Activation',      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (cdpSendToActivation)', fields: ['activation'] },                                       // references an API activation definition, not message content
   { cls: 'SendMobileApp',        label: 'Send Mobile App Message',          icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['template'], fieldLabels: { template: 'Push Notification Message' } },
   { cls: 'SendMobileInApp',      label: 'Send Mobile In-App Message',       icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['template'], fieldLabels: { template: 'In-App Message' } },  // best-match icon (same action family)
   { cls: 'ForwardToBot',         label: 'Forward to Bot or Agent',          icon: 'bot',                  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName'] },
-  { cls: 'RunAgent',             label: 'Run Agent',                        icon: 'agent_astro',          accent: C.interaction, meta: 'actionCalls (GENERATE_AI_AGENT_RESPONSE)', fields: ['actionName'] },
-  { cls: 'CreateCampaignMember', label: 'Create Campaign Member',           icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName', 'object'] },
-  { cls: 'CreateTask',           label: 'Create Task',                      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls',        fields: ['actionName'] },
-  { cls: 'Exit',                 label: 'Exit from a Flow',                 icon: 'outcome',              accent: C.interaction, meta: '(UI-only, REMOVE_FROM_FLOW)', fields: [] },
+  { cls: 'RunAgent',             label: 'Run Agent',                        icon: 'agent_astro',          accent: C.interaction, meta: 'actionCalls (generateAiAgentResponse)', fields: ['actionName'] },
+  { cls: 'CreateCampaignMember', label: 'Create Campaign Member',           icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (addToCampaign)', fields: ['actionName', 'object'] },
+  { cls: 'CreateTask',           label: 'Create Task',                      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (createTask)', fields: ['actionName'] },
+  // Marketing completion actions (Winter '27 palette, captured 2026-10-06): the same navy action chip as Create Task.
+  { cls: 'NotifyUser',           label: 'Notify User',                      icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (notifyUser)', fields: ['actionName'] },
+  { cls: 'AssignToUser',         label: 'Assign to User',                   icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (assignToUser)', fields: ['actionName'] },
+  { cls: 'AssignToQueue',        label: 'Assign to Queue',                  icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (assignToQueue)', fields: ['actionName'] },
+  { cls: 'NotifyAssignedUser',   label: 'Notify Assigned User',             icon: 'custom_notification',  accent: C.interaction, meta: 'actionCalls (notifyAssignedUser)', fields: ['actionName'] },
+  { cls: 'Exit',                 label: 'Exit from a Flow',                 icon: 'outcome',              accent: C.interaction, meta: 'actionCalls (exitIndividualsFromFlow)', fields: [] },
   // Orchestrator / ApprovalWorkflow. Filed under Interaction because a stage is a container of HUMAN steps
   // (stepApproval / stepInteractive) - it belongs with Screen and Action, not with Decision and Loop. There is
   // still deliberately no df.FlowStageStep sibling, but no longer because a step does not deserve a card: the
@@ -82,16 +88,21 @@ export const FLOW_ELEMENTS = [
   // ── Logic (orange) ───────────────────────────────────────────────────────
   { cls: 'Assignment',           label: 'Assignment',                       icon: 'assignment',           accent: C.logic,       meta: 'assignments',        fields: ['assignmentItems'] },
   { cls: 'Decision',             label: 'Decision',                         icon: 'decision',             accent: C.logic,       meta: 'decisions',          fields: ['outcomes'] },
+  // Decision variants (Winter '27): own palette entries and icons, `decisions` with an elementSubtype.
+  { cls: 'SplitByDate',          label: 'Split by Date',                    icon: 'event',                accent: C.logic,       meta: 'decisions (SplitPathByDate)', fields: ['outcomes'] },
+  { cls: 'SplitByFieldValue',    label: 'Split by Field Value',             icon: 'textbox',              accent: C.logic,       meta: 'decisions (SplitPathByField)', fields: ['outcomes'] },
   { cls: 'Loop',                 label: 'Loop',                             icon: 'loop',                 accent: C.logic,       meta: 'loops',              fields: ['collectionReference'] },
   { cls: 'Transform',            label: 'Transform',                        icon: 'data_mapping',         accent: C.logic,       meta: 'transforms',         fields: ['transformTarget'] },
   { cls: 'PathExperiment',       label: 'Path Experiment',                  icon: 'path_experiment',      accent: C.logic,       meta: 'experiments',        fields: ['outcomes'] },
+  { cls: 'PersonalizePaths',     label: 'Personalize Paths',                icon: 'aggregate',            accent: C.logic,       meta: 'experiments (PersonalizedPaths)', fields: ['outcomes'] },
   { cls: 'CollectionSort',       label: 'Collection Sort',                  icon: 'sort',                 accent: C.logic,       meta: 'collectionProcessors', fields: ['collectionReference'] },
   { cls: 'CollectionFilter',     label: 'Collection Filter',                icon: 'filter',               accent: C.logic,       meta: 'collectionProcessors', fields: ['collectionReference', 'conditions'] },
   { cls: 'Wait',                 label: 'Wait for Amount of Time',          icon: 'today',                accent: C.logic,       meta: 'waits',              fields: ['waitEvents'] },
   { cls: 'WaitUntilDate',        label: 'Wait Until Date',                  icon: 'today',                accent: C.logic,       meta: 'waits',              fields: ['waitEvents'] },
   { cls: 'WaitUntilEvent',       label: 'Wait Until Event',                 icon: 'today',                accent: C.logic,       meta: 'waits',              fields: ['waitEvents'] },
-  { cls: 'EinsteinDecision',     label: 'Einstein Decision',                icon: 'story',                accent: C.logic,       meta: 'actionCalls',        fields: ['actionName'] },
-  { cls: 'DetermineCrmRecord',   label: 'Determine CRM Record for Individual', icon: 'record',            accent: C.logic,       meta: 'actionCalls',        fields: ['actionName'] },
+  { cls: 'WaitForConditions',    label: 'Wait for Conditions',              icon: 'today',                accent: C.logic,       meta: 'waits (no elementSubtype)', fields: ['waitEvents'] },  // the original Wait (Pause) element, renamed
+  { cls: 'EinsteinDecision',     label: 'Einstein Decision',                icon: 'story',                accent: C.logic,       meta: 'actionCalls (einsteinDecidePath)', fields: ['actionName'] },
+  { cls: 'DetermineCrmRecord',   label: 'Determine CRM Record for Individual', icon: 'record',            accent: C.logic,       meta: 'actionCalls (determineCrmRecordForIndv)', fields: ['actionName'] },
   // ── Data (pink) ──────────────────────────────────────────────────────────
   { cls: 'GetRecords',           label: 'Get Records',                      icon: 'record_lookup',        accent: C.data,        meta: 'recordLookups',      fields: ['object', 'filters'] },
   { cls: 'CreateRecords',        label: 'Create Records',                   icon: 'record_create',        accent: C.data,        meta: 'recordCreates',      fields: ['object'] },

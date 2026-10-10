@@ -15,14 +15,14 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.24.13';
-import { pctx } from './context.js?v=1.24.13';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.24.13';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.24.13';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.24.13';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.24.13';
-import { noteError } from '../diagnostics.js?v=1.24.13';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.24.13';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.25.2';
+import { pctx } from './context.js?v=1.25.2';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.25.2';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.25.2';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.25.2';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.25.2';
+import { noteError } from '../diagnostics.js?v=1.25.2';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.25.2';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -153,13 +153,25 @@ function getToken({ prompt = '', force = false } = {}) {
   // overlapping call took them over and the FIRST promise never settled - whatever awaited it (a save, a share) hung
   // for good (audit 2026-09-23). Overlapping callers now share the request in flight.
   if (_tokenInFlight) return _tokenInFlight;
-  const req = requestToken({ prompt });
+  const req = requestToken({ prompt: connectPrompt(prompt) });
   _tokenInFlight = req;
   const clear = () => { if (_tokenInFlight === req) _tokenInFlight = null; };
   req.then(clear, clear);
   return req;
 }
 let _tokenInFlight = null;
+
+/** Let the user CHOOSE the account on a connect, not on a re-auth. With `prompt: ''` Google signs straight into the
+ *  browser's only signed-in Google account, so after Disconnect there was no way to pick a different one (reported
+ *  twice, 2026-10-06). With no account on record - the first connect, or the one after Disconnect, which clears it -
+ *  Google is asked for its chooser. The hourly re-auth has an account on record and stays one click. A login hint
+ *  (a Drive "Open with" launch) already names the account, and 'none' / 'consent' callers keep what they asked for. */
+function connectPrompt(prompt) {
+  if (prompt !== '' || _loginHint) return prompt;
+  let onRecord = true;   // storage unavailable (private mode): keep today's behaviour rather than a chooser every hour
+  try { onRecord = !!localStorage.getItem(LS.account); } catch { /* private mode */ }
+  return onRecord ? prompt : 'select_account';
+}
 
 function requestToken({ prompt = '' } = {}) {
   const { clientId } = googleConfig();
@@ -2023,8 +2035,61 @@ export async function openFromDrive({ title, sharedFirst, fileId = null } = {}) 
 }
 
 function loadPickedFile(doc, token) {
+  const view = cleanViewTabOf(doc.id);
+  if (view != null) return promotePickedView(view, doc.id, doc.name, token);
   if (focusTabWithFile(doc.id, doc.name)) return Promise.resolve(true);
   return importDriveFileById(doc.id, doc.name, token);
+}
+
+/** The open tab showing this file as an UNEDITED view (Mode C: no master of its own, nothing unsaved), or null. */
+function cleanViewTabOf(fileId) {
+  const id = tabWithFile(fileId);
+  if (id == null) return null;
+  const s = tabState(id);
+  if (s.fileId || !s.sharedSource || s.sharedSource.fileId !== fileId) return null;
+  const tab = (pctx.getAllTabs?.() || []).find((t) => t && t.id === id);
+  return tab && !tab.dirty ? id : null;
+}
+
+/** A pick of a file that is open here only as a clean view. Picking is what grants the app the file under drive.file,
+ *  so when this account can EDIT it, the view becomes the original in place: fresh content, its head as the baseline,
+ *  direct edit (Mode B). Only switching to the tab (drive review C2) left that grant unused, which is how an invited
+ *  editor of a PUBLIC diagram stayed on a view (B4, live 2026-10-06). A view-only pick just records canEdit. A view
+ *  with unsaved edits never gets here (cleanViewTabOf): its edits fork on save, and replacing it would lose them. */
+async function promotePickedView(tabId, fileId, name, token) {
+  pctx.activateTab?.(tabId);
+  const label = String(name || 'This diagram').replace(/\.dgf$/i, '');
+  let meta = null;
+  try { meta = await fileOwnership(fileId, token); } catch { meta = null; }
+  const s = tabState(tabId);
+  const stillView = () => activeTabId() === tabId && cleanViewTabOf(fileId) === tabId;
+  if (!meta || meta.ownedByMe === true || meta.canEdit !== true || !stillView()) {
+    if (meta && typeof meta.canEdit === 'boolean' && s.sharedSource?.fileId === fileId && s.sharedSource.canEdit !== meta.canEdit) {
+      s.sharedSource = { ...s.sharedSource, canEdit: meta.canEdit }; persistState(tabId, s); notify();   // replace: glyph re-renders
+    }
+    showToast(meta && meta.canEdit === false
+      ? `You can view "${label}" but not edit it - your edits go to your own copy.`
+      : `"${label}" is already open - switched to its tab.`, 'info');
+    return true;
+  }
+  // Baseline BEFORE the content, as importDriveFileById does.
+  let baseHead = null;
+  try { baseHead = (await remoteMeta(fileId, token)).headRevisionId || null; } catch { baseHead = null; }
+  let data;
+  try {
+    const res = await fetch(`${API}/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error(await readErr(res));
+    data = JSON.parse(await res.text());
+  } catch (e) { showError(`Could not read "${label}" from Google Drive: ${e.message}`); return false; }
+  if (!data || !data.graph || !data.type) { showError(`"${label}" isn't a Diagramforce diagram.`); return false; }
+  pctx.sanitizeGraphJSON(data.graph);
+  const ok = await pctx.checkVersionWarning(data.av || null, data.name || label, data);
+  if (!ok || !stillView() || !pctx.onReplaceActive) return false;
+  pctx.onReplaceActive(data.name || label, pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode);
+  setDirectEditMaster(tabId, tabState(tabId), fileId, meta.sharedBy, baseHead, dataHash(data));
+  _pickHintDismiss?.(); _pickHintDismiss = null;   // the hint has done its job, however the pick was reached
+  showToast(`You can now edit "${label}" - your changes save to the original ✓`, 'success');
+  return true;
 }
 
 /** One metadata probe for a just-opened file: ownership (own-master vs Shared File model), writer capability
@@ -3202,14 +3267,22 @@ export async function loadDriveRef(fileId) {
   // so your OWN public diagram opened as someone else's (its first edit then minted a second "X.dgf", B2), and an
   // editable one lost its edit rights and its write-back baseline (B4). A file this account cannot see (drive.file
   // 404s anything not opened through the app) falls through to the anonymous read.
+  let hiddenFromApp = false;
   if (tokenValid()) {
     let probe = null;
     try { probe = await fileOwnership(fileId, _accessToken); } catch { probe = null; }
     if (probe) { await importDriveFileById(fileId, 'Diagram', _accessToken, { assumeOwned: probe.ownedByMe === true }); return true; }
+    hiddenFromApp = true;
   }
   try {
     const data = await fetchPublicGraph(fileId);
     if (!(await adoptSharedDiagram(data, fileId))) throw new Error('not a Diagramforce diagram');
+    // Signed in, yet Drive would not show this account the file, and the PUBLIC read opened it as a view. Under
+    // drive.file that is every public file this account never picked - including one it was INVITED TO EDIT, which
+    // then forks every edit to a copy and never reaches the original (drive review B4, live 2026-10-06). Only a Picker
+    // pick grants the app the file, and the private-share path offers one (showNoDirectAccessModal) while this path,
+    // reached first, did not. Say so once, with the pick one click away; loadPickedFile then promotes this view.
+    if (hiddenFromApp) showEditViaPickerHint(fileId, data.name);
     return true;
   } catch {
     if (!isDriveConfigured()) {
@@ -3314,6 +3387,16 @@ function showNoDirectAccessModal(fileId = null) {
     close();
     openFromDrive({ sharedFirst: true, fileId, title: "Open your shared diagram - look under 'Shared with me'" });
   });
+}
+
+// Sticky (owner call 2026-10-08): it stays until its button or its close is clicked - at 12 s it was gone before the
+// owner could use it. A pick through Load > Google Drive closes it too (promotePickedView), since it has done its job.
+let _pickHintDismiss = null;
+function showEditViaPickerHint(fileId, name) {
+  const label = String(name || 'This diagram').replace(/\.dgf$/i, '');
+  _pickHintDismiss?.();
+  _pickHintDismiss = showToast(`"${label}" opened as a view. If you were invited to edit it, pick it in Google Drive once to edit the original.`,
+    'info', { sticky: true, action: { label: 'Pick in Google Drive', onClick: () => openFromDrive({ sharedFirst: true, fileId, title: `Pick "${label}" to edit the original` }) } });
 }
 
 /** Authenticated read of a file the signed-in user can access (private share / app-created). */

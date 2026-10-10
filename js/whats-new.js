@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.24.13';
-import { buildModal } from './feedback.js?v=1.24.13';
+import { compareSemver } from './util.js?v=1.25.2';
+import { buildModal } from './feedback.js?v=1.25.2';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,23 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.25.0 - Winter '27 Flow elements and the skill's image render lead, then the three features that shipped in
+  // 1.24.x PATCHES and so were never announced (the overlay fires on major/minor only): role hierarchy import and
+  // Flow CSV export (1.24.5), Replace current tab (1.24.7). Owner calls at the cut (2026-10-06): fixes stay out
+  // (the Drive review, the Path Experiment import); the 1.24.11 system theme stays out because a new user sees it
+  // straight away; one-click add and Copy diagnostics (1.24.3) stay out as chrome, the 1.24.0 rule.
+  {
+    version: '1.25.0',
+    title: "What's new in Diagramforce",
+    intro: "Flows saved in Salesforce's Winter '27 release draw with their new elements, the Claude skill turns diagrams into images, and three features that arrived quietly in the 1.24 updates.",
+    highlights: [
+      { icon: 'flow', text: '<strong>Winter \'27 Flow elements.</strong> Split by Date, Split by Field Value, Personalize Paths, Wait for Conditions, Apex Action and the Notify and Assign actions have their own cards, with the icons Flow Builder uses. Groups import as labelled zones around their elements.' },
+      { icon: 'image', text: '<strong>Diagrams to images, no clicks.</strong> The Claude skill can now save a diagram as a PNG or SVG from Claude Code or a terminal, exactly as Save &rsaquo; Export makes it, ready for your documentation.' },
+      { icon: 'org_chart', text: '<strong>Role hierarchy to an Org Chart.</strong> Run one UserRole query with the Salesforce CLI and paste the result into Load. You get a card per role, showing who holds it, how many people share it, or that it is vacant.' },
+      { icon: 'replace', text: '<strong>Replace the open diagram.</strong> Tick Replace current tab in Load, or right-click a tab and choose Replace with JSON, to swap a diagram in place instead of opening a new tab.' },
+      { icon: 'table', text: '<strong>Export a Flow as CSV.</strong> Save &rsaquo; Export as CSV writes a Flow diagram\'s table - every element, the fields the flow writes and each decision outcome - straight to a spreadsheet, without opening the Table view.' },
+    ],
+  },
   // 1.24.0 — covers EVERYTHING since 1.23.0: the 1.23.1 / 1.23.2 patches (never announced - the overlay fires on
   // major/minor only) plus the 1.23.3-1.23.7 dev builds that were bumped but never tagged, so every user-facing
   // "since" reference says 1.24.0 (never tagged, but 1.23.7 DID reach prod on 2026-09-13, deployed straight from the

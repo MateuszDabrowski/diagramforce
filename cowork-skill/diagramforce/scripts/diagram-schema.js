@@ -23,7 +23,9 @@ export const BRACKET_PATHS = table({
 });
 export const BRACKET_LABEL_X = table({ right: 0, left: 18 });
 // `external` was #F6B355 (1.75:1 on the light canvas); the palette's amber clears 3:1 on both.
-export const SEQ_ROLE_ACCENT = table({ generic: '#8A9099', salesforce: '#2E844A', api: '#1D73C9', external: '#A06F03', actor: '#8A9099' });
+// `external` is the brand amber #F6B355 (owner call 2026-10-08): the role colour fills only the participant's ACCENT
+// BAR, a shape, and shapes keep the brand amber; the Mermaid import already used it, so the stencil now matches.
+export const SEQ_ROLE_ACCENT = table({ generic: '#8A9099', salesforce: '#2E844A', api: '#1D73C9', external: '#F6B355', actor: '#8A9099' });
 export const BPMN_EVENT_STYLE = table({
   start:        { 'body/fill': '#DCF1E2', 'body/stroke': '#008B46', 'body/strokeWidth': 1.5, 'innerRing/stroke': 'none', 'icon/fill': '#008B46' },
   intermediate: { 'body/fill': '#FDF1DC', 'body/stroke': '#A06F03', 'body/strokeWidth': 1.5, 'innerRing/stroke': '#A06F03', 'innerRing/strokeWidth': 1.5, 'icon/fill': '#A06F03' },
@@ -142,9 +144,11 @@ export const ALLOWED_CELL_TYPES = new Set([
   'df.FlowSendToFlow', 'df.FlowSendEmail', 'df.FlowSendSms', 'df.FlowSendWhatsApp',
   'df.FlowSendToData360', 'df.FlowSendMobileApp', 'df.FlowSendMobileInApp', 'df.FlowForwardToBot',
   'df.FlowRunAgent', 'df.FlowCreateCampaignMember', 'df.FlowCreateTask', 'df.FlowExit',
+  'df.FlowApex', 'df.FlowNotifyUser', 'df.FlowAssignToUser', 'df.FlowAssignToQueue', 'df.FlowNotifyAssignedUser',
   'df.FlowAssignment', 'df.FlowDecision', 'df.FlowLoop', 'df.FlowTransform', 'df.FlowPathExperiment',
+  'df.FlowSplitByDate', 'df.FlowSplitByFieldValue', 'df.FlowPersonalizePaths',
   'df.FlowCollectionSort', 'df.FlowCollectionFilter',
-  'df.FlowWait', 'df.FlowWaitUntilDate', 'df.FlowWaitUntilEvent',
+  'df.FlowWait', 'df.FlowWaitUntilDate', 'df.FlowWaitUntilEvent', 'df.FlowWaitForConditions',
   'df.FlowEinsteinDecision', 'df.FlowDetermineCrmRecord',
   'df.FlowGetRecords', 'df.FlowCreateRecords', 'df.FlowUpdateRecords', 'df.FlowDeleteRecords',
   'df.FlowRollback',

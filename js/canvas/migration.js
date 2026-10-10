@@ -2,17 +2,17 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.24.13';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.24.13';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.24.13';
-import { applyMappingLinkStyle } from './link-styles.js?v=1.24.13';
-import { nodeContrastText } from '../util.js?v=1.24.13';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.24.13';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.24.13';
-import { getIconDataUri } from '../icons.js?v=1.24.13';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.24.13';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.24.13';
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.24.13';
+import { cctx } from './context.js?v=1.25.2';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.25.2';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.25.2';
+import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.25.2';
+import { nodeContrastText } from '../util.js?v=1.25.2';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.25.2';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.25.2';
+import { getIconDataUri } from '../icons.js?v=1.25.2';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.25.2';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.2';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.25.2';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -137,7 +137,7 @@ export function migrateLinks() {
     // e.g. LLM JSON) gets the full slate-arrow style + sfManhattan router on load, so authoring needs only
     // the kind + endpoints (+ optional depType/lag). Idempotent — a fully-styled saved dep is left alone.
     if (link.prop('linkKind') === 'ganttDep') {
-      const stroke = '#F6B355';   // brand amber — heal a legacy slate dep to the new colour too
+      const stroke = GANTT_DEP_STROKE;   // the line amber (a theme variable) - heals a legacy slate or #F6B355 dep too
       const sm = link.attr('line/sourceMarker');
       const tm = link.attr('line/targetMarker');
       // Heal the colour + the "one" tick source marker (item 2 — older deps had a plain stub source).
@@ -155,9 +155,12 @@ export function migrateLinks() {
         link.prop('source/connectionPoint', { name: 'anchor' });
         link.prop('target/connectionPoint', { name: 'anchor' });
       }
-      // Render BELOW the bars (z 1900 = Z_GANTT_DEP) so a crossing tucks behind them; heal legacy deps saved in the
-      // link tier (3000+). The load guard suppresses the z-tier listeners, so this set sticks.
-      if ((link.get('z') ?? 0) >= 3000) link.set('z', 1900);
+      // Render BELOW the bars and ABOVE the timeline (z 1900 = Z_GANTT_DEP, timeline 1000) so a crossing tucks behind a
+      // bar and the line still shows. Any other z is healed, not only the legacy link tier (3000+): a dep authored
+      // minimally in JSON (the spec's Gantt example, LLM output) arrives with NO z, sorted under the timeline's opaque
+      // body, and drew invisibly (found 2026-10-08 rendering that example). A dep's z is not user-editable (z-tiers.js
+      // skips ganttDep). The load guard suppresses the z-tier listeners, so this set sticks.
+      if (link.get('z') !== 1900) link.set('z', 1900);
     }
 
     // Flow connector: re-apply the connector style on load so the "None" stub ends bridge the sfConnectionPoint

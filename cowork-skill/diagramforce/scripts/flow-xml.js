@@ -22,10 +22,14 @@ export const XML_ARRAY_KEYS = new Set([
   'screens', 'decisions', 'assignments', 'loops', 'subflows', 'transforms', 'waits', 'actionCalls',
   'recordLookups', 'recordCreates', 'recordUpdates', 'recordDeletes', 'recordRollbacks',
   'orchestratedStages', 'collectionProcessors', 'experiments', 'customErrors', 'apexPluginCalls', 'steps',
+  // Winter '27 (API v68): explicit End elements, Group containers, Data Lookups.
+  'ends', 'groups', 'dataLookups',
   // resources (not drawn, but must not collapse into scalars either)
   'variables', 'constants', 'formulas', 'textTemplates', 'choices', 'dynamicChoiceSets', 'stages',
   // repeated children the converter reads
-  'rules', 'conditions', 'filters', 'fields', 'waitEvents', 'stageSteps', 'experimentPaths',
+  // `paths` is FlowExperiment's branch list (an earlier `experimentPaths` here was never a real key);
+  // `actionCallPaths` is a branching action's (Determine CRM Record, Einstein Decision).
+  'rules', 'conditions', 'filters', 'fields', 'waitEvents', 'stageSteps', 'paths', 'actionCallPaths',
   'scheduledPaths', 'inputParameters', 'outputParameters', 'assignmentItems', 'inputAssignments',
   'outputAssignments',
   'customErrorMessages', 'connectors', 'processMetadataValues', 'assignees',

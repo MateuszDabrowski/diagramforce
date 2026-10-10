@@ -3,34 +3,34 @@
 // notice stays. Licensed under the EUPL 1.2.
 // Initializes all modules in order. JointJS is a global (vendored script tag, assets/vendor/joint.min.js).
 
-import * as theme       from './theme.js?v=1.24.13';
-import * as icons       from './icons.js?v=1.24.13';
-import { getAllStencilSvgs } from './components.js?v=1.24.13';
-import * as shapes      from './shapes.js?v=1.24.13';
-import * as canvas      from './canvas.js?v=1.24.13';
-import * as stencil     from './stencil.js?v=1.24.13';
-import * as selection   from './selection.js?v=1.24.13';
-import * as history     from './history.js?v=1.24.13';
-import * as clipboard   from './clipboard.js?v=1.24.13';
-import * as templates    from './templates.js?v=1.24.13';
-import * as keyboard    from './keyboard.js?v=1.24.13';
-import * as toolbar     from './toolbar.js?v=1.24.13';
-import * as properties  from './properties.js?v=1.24.13';
-import * as persistence from './persistence.js?v=1.24.13';
-import * as tabs        from './tabs.js?v=1.24.13';
-import * as mermaidImport from './mermaid-import.js?v=1.24.13';
-import * as tableView    from './table-view.js?v=1.24.13';
-import * as walkthrough  from './walkthrough.js?v=1.24.13';
-import * as present      from './present.js?v=1.24.13';
-import * as whatsNew     from './whats-new.js?v=1.24.13';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.24.13';
-import * as singleWindow from './tabs/single-window.js?v=1.24.13';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.24.13';
-import * as externalImport from './persistence/external-import.js?v=1.24.13';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.24.13';
-import { seedDefaultPalette } from './brand-palette.js?v=1.24.13';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.24.13';   // external-import timeout fallback
-import { installErrorCapture } from './diagnostics.js?v=1.24.13';
+import * as theme       from './theme.js?v=1.25.2';
+import * as icons       from './icons.js?v=1.25.2';
+import { getAllStencilSvgs } from './components.js?v=1.25.2';
+import * as shapes      from './shapes.js?v=1.25.2';
+import * as canvas      from './canvas.js?v=1.25.2';
+import * as stencil     from './stencil.js?v=1.25.2';
+import * as selection   from './selection.js?v=1.25.2';
+import * as history     from './history.js?v=1.25.2';
+import * as clipboard   from './clipboard.js?v=1.25.2';
+import * as templates    from './templates.js?v=1.25.2';
+import * as keyboard    from './keyboard.js?v=1.25.2';
+import * as toolbar     from './toolbar.js?v=1.25.2';
+import * as properties  from './properties.js?v=1.25.2';
+import * as persistence from './persistence.js?v=1.25.2';
+import * as tabs        from './tabs.js?v=1.25.2';
+import * as mermaidImport from './mermaid-import.js?v=1.25.2';
+import * as tableView    from './table-view.js?v=1.25.2';
+import * as walkthrough  from './walkthrough.js?v=1.25.2';
+import * as present      from './present.js?v=1.25.2';
+import * as whatsNew     from './whats-new.js?v=1.25.2';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.25.2';
+import * as singleWindow from './tabs/single-window.js?v=1.25.2';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.25.2';
+import * as externalImport from './persistence/external-import.js?v=1.25.2';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.25.2';
+import { seedDefaultPalette } from './brand-palette.js?v=1.25.2';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.25.2';   // external-import timeout fallback
+import { installErrorCapture } from './diagnostics.js?v=1.25.2';
 
 // Record uncaught errors, unhandled rejections and console errors in memory for Help > Copy diagnostics. First
 // statement after the imports, so every later failure is caught. Nothing is sent anywhere (js/diagnostics.js).
@@ -260,6 +260,27 @@ async function main() {
       onImportJSON: (json) => {
         if (present.isPresenting()) present.exit();   // show the tab it opens (Present hides the tab bar)
         return persistence.loadJSONText(json, undefined, { singleDiagramOnly: true });
+      },
+      // Headless render (skill's render-diagram.mjs, or any opener that wants an image back): the same import, then
+      // the Save-menu export of the tab it opened. The image may only ever show the requester's own diagram, so
+      // the import must have opened a NEW tab, and that tab must still be on screen once the image is taken.
+      onRender: async (json, opts) => {
+        if (present.isPresenting()) present.exit();
+        // No one can answer the compatibility dialog of a headless render, so refuse up front what would open it:
+        // no appVersion, or an older MAJOR (versioning.js classifyVersionDiff). Any 1.x loads as usual.
+        let saved = null;
+        try { saved = JSON.parse(json)?.appVersion || null; } catch { /* loadJSONText reports the parse error */ }
+        if (!saved) throw new Error(`the diagram has no appVersion - add "appVersion": "${persistence.APP_VERSION}"`);
+        if (Number(String(saved).split('.')[0]) < Number(persistence.APP_VERSION.split('.')[0])) {
+          throw new Error(`the diagram was saved by Diagramforce ${saved}, a major version behind ${persistence.APP_VERSION} - open it in the app first`);
+        }
+        const before = new Set(tabs.getAllTabs().map((t) => t.id));
+        const ok = await persistence.loadJSONText(json, undefined, { singleDiagramOnly: true });
+        const opened = tabs.getActiveTabId();
+        if (!ok || !opened || before.has(opened)) throw new Error('Diagramforce could not open this diagram (validate it with validate-diagram.mjs)');
+        const img = await persistence.renderImage(opts);
+        if (tabs.getActiveTabId() !== opened) throw new Error('the active tab changed while rendering - try again');
+        return img;
       },
       onTimeout: () => {   // nothing arrived (opened directly / opener never posted) — re-offer the
         // normal flow, but don't stack over a modal or a tab the user opened meanwhile.

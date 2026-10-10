@@ -7,6 +7,11 @@
      amber-outline buttons, convert buttons, the format-glyph wire, Skip-tour) use this darker amber in LIGHT
      mode; theme.css swaps it back to --brand-amber in DARK. Single source for what were 7 private --_amber vars. */
   --brand-amber-strong: #D4911F;
+  /* Canvas LINE amber (1.25.2, owner call 2026-10-08): the brand hue at the brand saturation, darkened only until a
+     thin line reaches 3:1 on the LIGHT canvas (#F6B355 is 1.75:1 there). Thin Gantt lines and small glyphs only - the
+     dashed milestone lines, the dependency links, the summary-row diamonds; shapes keep --brand-amber. theme.css swaps
+     it back to --brand-amber in DARK, where the base amber reads at 9.53:1. */
+  --brand-amber-line: #D17E0B;
   --brand-green: #27AE60;   /* Success / confirmation accent (e.g. "Copied!" feedback) */
   --brand-primary: var(--brand-blue);   /* the primary brand hue, theme-stable (does NOT flip like --color-primary) — used for focus rings / brand hovers */
 

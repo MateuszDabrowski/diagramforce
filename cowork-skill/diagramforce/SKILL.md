@@ -146,7 +146,8 @@ the validator proves the diagram LOADS, while the warnings are where the convert
 not represent faithfully. An element type it has no dedicated shape for still gets drawn (as a generic
 Action card, so the graph stays connected and nothing pointing at it breaks) and named in a warning -
 **Custom Error** is the one you will meet most. (Orchestrator/approval **stages** used to warn here; they
-have had a real `df.FlowStage` card since 1.21.2, with each step's kind and assignee in its details.) Other warnings
+have had a real `df.FlowStage` card since 1.21.2, with each step's kind and assignee in its details.) A Winter '27
+**Group** draws as a dashed zone around its elements; a Group no element names warns instead. Other warnings
 flag a flow with no entry point, connectors pointing at deleted elements, and metadata whose canvas
 coordinates were missing or incomplete.
 
@@ -197,7 +198,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -268,6 +269,29 @@ field-mapping diagram never does. Do not guess - run the script and read the exi
 
 If the user later wants it in Google Drive or shared, they can do that from inside the app - your job
 ends at a clean, importable diagram.
+
+### 6. When they need an image file (documentation, a pipeline)
+
+If the user wants a PNG / SVG to put into documentation rather than a diagram to open, render it on their machine:
+
+```bash
+node scripts/render-diagram.mjs your-diagram.json --out docs/your-diagram.png
+```
+
+It validates the file, opens Diagramforce in a local headless browser and writes exactly what the app's Save >
+Export makes (PNG and WEBP at 2x, or SVG with `--out x.svg`). Several inputs render in one run (`--out <folder>`).
+Options: `--theme light|dark` (default light), `--transparent`, `--app <url>` for a local or pinned Diagramforce,
+`--browser <path>`. The JSON never leaves the machine; only the app's static files are fetched.
+
+- It needs a Chromium-family browser (Chrome, Edge, Chromium, Brave, Vivaldi), or `npx playwright install
+  chromium-headless-shell`; Safari and Firefox cannot be driven this way. Exit code 2
+  with "no Chromium-family browser found" means none is installed - say so, and deliver the link or file instead.
+- A warning that the browser was retried "without its sandbox" is expected on newer Ubuntu with a downloaded
+  Chromium (and as root in a container); the image is still right. Mention it only if the user asks.
+- It works where your scripts run on the user's machine (Claude Code, a terminal, CI). It does **not** work in a
+  cloud chat sandbox, which has no browser: there, deliver the link or file as in step 5.
+- Look at the image before you put it in a document: the validator proves the diagram loads, the image shows
+  whether it reads well.
 
 ## From a live Salesforce org (CLI)
 

@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.24.13** — matches the app's current `appVersion`; set `"appVersion": "1.24.13"` in generated files.
+> **Spec snapshot: v1.25.2** — matches the app's current `appVersion`; set `"appVersion": "1.25.2"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -34,6 +34,10 @@
   }
 }
 ```
+
+> **Bare graph.** A file that is only a JointJS graph, `{ "cells": [ ... ] }` (what `graph.toJSON()` returns), also
+> opens. Without the envelope it has no `appVersion`, so it opens behind the compatibility warning; write the
+> envelope above.
 
 > **File extension (v1.17.0).** Diagramforce has its own extension **`.dgf`** (used mainly for Google
 > Drive, so Drive can offer "Open with Diagramforce") — but the **content is exactly this JSON envelope,
@@ -44,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.24.13"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
+| `appVersion` | string | Yes | Semver string, currently `"1.25.2"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
@@ -59,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.13", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.13" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.2", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.2" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -93,10 +97,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.24.13", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.2", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.24.13" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.2" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -111,7 +115,8 @@
 > **Opening this JSON programmatically.** Another web app can open a diagram straight into Diagramforce
 > in a new tab (no backend, no URL size limit) with an **"Open in Diagramforce"** button — it hands this
 > exact JSON envelope over via `window.postMessage`. See **[how-to-use/web-integration.md](how-to-use/web-integration.md)** for the
-> copy-paste snippet and step-by-step guide.
+> copy-paste snippet and step-by-step guide. The same channel can send the **image** back (`type:'render'`), and
+> the Diagramforce skill's `render-diagram.mjs` uses it to turn this JSON into a PNG / SVG file from a terminal or CI.
 
 ## Diagram Types
 
@@ -1250,34 +1255,43 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 | `type` | Card label | Flow metadata element | Per-kind fields (free text) |
 |---|---|---|---|
 | `df.FlowStart` | Start | `start` | `processType`, `triggerType`, `object`, `filters`, `configuration` |
-| `df.FlowEnd` | End | *(UI-only; no metadata element)* | *(none)* |
+| `df.FlowEnd` | End | *(UI-only before API v68; v68 saves `ends`, and the converter still draws one End per finishing branch)* | *(none)* |
 | `df.FlowScreen` | Screen | `screens` | `components` |
 | `df.FlowAction` | Action | `actionCalls` | `actionName`, `actionType` |
+| `df.FlowApex` | Apex Action | `actionCalls` (`apex`) | `actionName` |
 | `df.FlowSubflow` | Subflow | `subflows` | `flowName` |
-| `df.FlowSendToFlow` | Send to a Flow | `subflows` | `flowName` |
+| `df.FlowSendToFlow` | Send to a Flow | `subflows` (elementSubtype `SendToFlow`) | `flowName` |
 | `df.FlowSendEmail` | Send Email Message | `actionCalls` | `template` (panel label "Email") |
 | `df.FlowSendSms` | Send SMS Message | `actionCalls` | `template` (panel label "SMS") |
 | `df.FlowSendWhatsApp` | Send WhatsApp Message | `actionCalls` | `template` (panel label "Message") |
-| `df.FlowSendToData360` | Send to Data 360 Activation | `actionCalls` | `activation` |
+| `df.FlowSendToData360` | Send to Data 360 Activation | `actionCalls` (`cdpSendToActivation`) | `activation` |
 | `df.FlowSendMobileApp` | Send Mobile App Message | `actionCalls` | `template` (panel label "Push Notification Message") |
 | `df.FlowSendMobileInApp` | Send Mobile In-App Message | `actionCalls` | `template` (panel label "In-App Message") |
 | `df.FlowForwardToBot` | Forward to Bot or Agent | `actionCalls` | `actionName` |
-| `df.FlowRunAgent` | Run Agent | `actionCalls` (GENERATE_AI_AGENT_RESPONSE) | `actionName` |
-| `df.FlowCreateCampaignMember` | Create Campaign Member | `actionCalls` | `actionName`, `object` |
-| `df.FlowCreateTask` | Create Task | `actionCalls` | `actionName` |
-| `df.FlowExit` | Exit from a Flow | *(UI-only; REMOVE_FROM_FLOW)* | *(none)* |
+| `df.FlowRunAgent` | Run Agent | `actionCalls` (`generateAiAgentResponse`) | `actionName` |
+| `df.FlowCreateCampaignMember` | Create Campaign Member | `actionCalls` (`addToCampaign`) | `actionName`, `object` |
+| `df.FlowCreateTask` | Create Task | `actionCalls` (`createTask`) | `actionName` |
+| `df.FlowNotifyUser` | Notify User | `actionCalls` (`notifyUser`) | `actionName` |
+| `df.FlowAssignToUser` | Assign to User | `actionCalls` (`assignToUser`) | `actionName` |
+| `df.FlowAssignToQueue` | Assign to Queue | `actionCalls` (`assignToQueue`) | `actionName` |
+| `df.FlowNotifyAssignedUser` | Notify Assigned User | `actionCalls` (`notifyAssignedUser`) | `actionName` |
+| `df.FlowExit` | Exit from a Flow | `actionCalls` (`exitIndividualsFromFlow`) | *(none)* |
 | `df.FlowAssignment` | Assignment | `assignments` | `assignmentItems` |
 | `df.FlowDecision` | Decision | `decisions` | `outcomes` |
+| `df.FlowSplitByDate` | Split by Date | `decisions` (elementSubtype `SplitPathByDate`) | `outcomes` |
+| `df.FlowSplitByFieldValue` | Split by Field Value | `decisions` (elementSubtype `SplitPathByField`) | `outcomes` |
 | `df.FlowLoop` | Loop | `loops` | `collectionReference` |
 | `df.FlowTransform` | Transform | `transforms` | `transformTarget` |
 | `df.FlowPathExperiment` | Path Experiment | `experiments` | `outcomes` |
+| `df.FlowPersonalizePaths` | Personalize Paths | `experiments` (elementSubtype `PersonalizedPaths`) | `outcomes` |
 | `df.FlowCollectionSort` | Collection Sort | `collectionProcessors` (Sort) | `collectionReference` |
 | `df.FlowCollectionFilter` | Collection Filter | `collectionProcessors` (Filter) | `collectionReference`, `conditions` |
-| `df.FlowWait` | Wait for Amount of Time | `waits` | `waitEvents` |
-| `df.FlowWaitUntilDate` | Wait Until Date | `waits` | `waitEvents` |
-| `df.FlowWaitUntilEvent` | Wait Until Event | `waits` | `waitEvents` |
-| `df.FlowEinsteinDecision` | Einstein Decision | `actionCalls` | `actionName` |
-| `df.FlowDetermineCrmRecord` | Determine CRM Record for Individual | `actionCalls` | `actionName` |
+| `df.FlowWait` | Wait for Amount of Time | `waits` (elementSubtype `WaitDuration`) | `waitEvents` |
+| `df.FlowWaitUntilDate` | Wait Until Date | `waits` (`WaitUntilDate` / `WaitUntilTime`) | `waitEvents` |
+| `df.FlowWaitUntilEvent` | Wait Until Event | `waits` (`WaitUntilEvent`) | `waitEvents` |
+| `df.FlowWaitForConditions` | Wait for Conditions | `waits` (no elementSubtype: the original Wait element) | `waitEvents` |
+| `df.FlowEinsteinDecision` | Einstein Decision | `actionCalls` (`einsteinDecidePath`) | `actionName` |
+| `df.FlowDetermineCrmRecord` | Determine CRM Record for Individual | `actionCalls` (`determineCrmRecordForIndv`; branches in `actionCallPaths`) | `actionName` |
 | `df.FlowGetRecords` | Get Records | `recordLookups` | `object`, `filters` |
 | `df.FlowCreateRecords` | Create Records | `recordCreates` | `object` |
 | `df.FlowUpdateRecords` | Update Records | `recordUpdates` | `object`, `filters` |
@@ -1291,6 +1305,11 @@ The caption is set via `attrs.label.text`. Since v1.14.0 the label **stays horiz
 > API counterpart, and the flow-metadata converter never emits one: an empty decision outcome in a real org means
 > "do nothing and continue", not "undefined", so inventing an element there would misrepresent the org. Put its
 > description in the card's `name` ("Approval step - TBD"); it takes no per-kind fields.
+
+> **Winter '27 palette entries with no class of their own.** "Update Triggering Record" and "Update Related
+> Records" are presets of Update Records: Salesforce saves them as plain `recordUpdates`, so draw them as
+> `df.FlowUpdateRecords`. Flow Builder's **Group** (a named, collapsible container) has no card of its own: draw an
+> `sf.Zone` labelled "Group: <name>" behind its elements, a nested group's zone inside its parent's.
 
 > **Field-key note.** Where a real 1:1 Metadata API field exists the key IS that field name (`triggerType`, `object`, `filters`, `actionName`, `actionType`, `flowName`, `waitEvents`, `assignmentItems`, `collectionReference`, `conditions`). The rest are pragmatic summary keys (`components`, `outcomes`, `transformTarget`, `template`, `activation`, `configuration`) - a short human summary, not the raw metadata. The messaging sends store their content reference in `template` (the panel labels it per channel: Email / SMS / Message / Push Notification Message / In-App Message); Send to Data 360 uses `activation` (an API-activation reference, not message content). Start carries a free-text `configuration` (arbitrary setup notes - schedule cadence, entry conditions, etc.). `processType` is a Flow-level field parked on the Start card for convenience. (The Transform summary key is `transformTarget`, not `target`, to avoid colliding with a link's built-in `target` endpoint.)
 
@@ -1543,7 +1562,7 @@ Only the **accent bar** is tinted by the role colour; the header border, underli
 | `generic` | `#8A9099` |
 | `salesforce` | `#2E844A` |
 | `api` | `#1D73C9` |
-| `external` | `#A06F03` |
+| `external` | `#F6B355` (the brand amber; a filled bar, so it is not held to the 3:1 line floor) |
 
 ```json
 {
@@ -1851,7 +1870,7 @@ Individual DMO has no email or phone field - contact points are their own object
 
 ```json
 {
-  "version": 1, "appVersion": "1.24.13", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.25.2", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
     {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
@@ -1924,7 +1943,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -1957,7 +1976,7 @@ row), so the Table view reports it as a field-level `1:Many`.
 
 ```json
 {
-  "version": 1, "appVersion": "1.24.13", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "version": 1, "appVersion": "1.25.2", "title": "Account-Contact ERD", "diagramType": "datamodel",
   "graph": { "cells": [
     {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
     {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
@@ -1978,7 +1997,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2008,7 +2027,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2041,7 +2060,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2084,7 +2103,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2133,7 +2152,7 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.24.13",
+  "appVersion": "1.25.2",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {

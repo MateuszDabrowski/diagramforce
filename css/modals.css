@@ -510,6 +510,32 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.df-toast--action .df-toast__message { white-space: normal; }
+.df-toast__action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.df-toast__action:hover { background: var(--bg-hover, rgba(127,127,127,.08)); }
+.df-toast__action:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 1px; }
+.df-toast__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.df-toast__close:hover { background: var(--bg-hover, rgba(127,127,127,.08)); color: var(--text-primary); }
+.df-toast__close:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 1px; }
 .df-toast--success .df-toast__icon { color: var(--brand-green); }
 .df-toast--info    .df-toast__icon { color: var(--brand-blue); }
 .df-toast--warning .df-toast__icon { color: var(--brand-amber); }

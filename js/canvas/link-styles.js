@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.24.13';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.24.13';
-import { ER_MARKER_D } from '../er-markers.js?v=1.24.13';
+import { cctx } from './context.js?v=1.25.2';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.25.2';
+import { ER_MARKER_D } from '../er-markers.js?v=1.25.2';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -324,8 +324,12 @@ export function applyRelationshipLinkStyle(link) {
 // A Gantt dependency link (Phase 3): a brand-amber arrow INTO the successor bar. Clear markers first (attrs
 // merge). The target arrow carries NO explicit fill/stroke so it auto-inherits the line colour + auto-trims the
 // line (CLAUDE.md "Link Markers").
+// The line amber as a THEME VARIABLE (variables.css --brand-amber-line): #D17E0B on the light canvas, the brand
+// #F6B355 on dark. Exports resolve it against the theme they are made in (image-export.js resolveVars). Exported so
+// the load-time heal (migration.js) compares against the same value; a dep's colour is not user-editable.
+export const GANTT_DEP_STROKE = 'var(--brand-amber-line, #F6B355)';
 export function applyGanttDepLinkStyle(link) {
-  const stroke = '#F6B355';   // brand amber
+  const stroke = GANTT_DEP_STROKE;
   link.removeAttr('line/sourceMarker');
   link.removeAttr('line/targetMarker');
   link.attr('line/stroke', stroke);

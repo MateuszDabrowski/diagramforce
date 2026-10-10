@@ -1,7 +1,7 @@
 // Gantt-chart shapes (GanttTask/Milestone/Marker/Timeline/Group) (CLEANUP S3). registerGantt() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttRowLayout, ganttSummaryLaneH, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.24.13';
+import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttRowLayout, ganttSummaryLaneH, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.25.2';
 
 export function registerGantt() {
   // --- GanttTask ---
@@ -759,7 +759,7 @@ export function registerGantt() {
               if (ganttTimelineFor(e) !== model) continue;
               const mx = dateToLocalX(model, t === 'sf.GanttMilestone' ? e.get('milestoneDate') : e.get('markerDate'));
               if (!inGrid(mx)) continue;
-              if (t === 'sf.GanttMilestone') colGroup.appendChild(mkGlyph(`M ${mx} ${my - 6} L ${mx + 6} ${my} L ${mx} ${my + 6} L ${mx - 6} ${my} Z`, 'var(--brand-amber, #F6B355)'));
+              if (t === 'sf.GanttMilestone') colGroup.appendChild(mkGlyph(`M ${mx} ${my - 6} L ${mx + 6} ${my} L ${mx} ${my + 6} L ${mx - 6} ${my} Z`, 'var(--brand-amber-line, #F6B355)'));
               else colGroup.appendChild(mkGlyph(`M ${mx - 6} ${my + 6} L ${mx + 6} ${my + 6} L ${mx} ${my - 6} Z`, 'var(--brand-red, #DA4E55)'));
               const lbl = e.attr('label/text');
               if (lbl) colGroup.appendChild(mkText(mx, my + 14, lbl, '9', '500', 'var(--text-secondary)'));   // issue 10: lane label
@@ -894,7 +894,7 @@ export function registerGantt() {
         for (const e of graph.getElements()) {
           const t = e.get('type');
           if (t === 'sf.GanttMarker') { if (ganttTimelineFor(e) === model) evtLine(dateToLocalX(model, e.get('markerDate')), 'var(--brand-red, #DA4E55)', '2 3'); }
-          else if (t === 'sf.GanttMilestone') { if (ganttTimelineFor(e) === model) evtLine(dateToLocalX(model, e.get('milestoneDate')), 'var(--brand-amber, #F6B355)', '2 3'); }
+          else if (t === 'sf.GanttMilestone') { if (ganttTimelineFor(e) === model) evtLine(dateToLocalX(model, e.get('milestoneDate')), 'var(--brand-amber-line, #F6B355)', '2 3'); }
         }
       }
     },

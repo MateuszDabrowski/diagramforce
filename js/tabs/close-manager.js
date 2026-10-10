@@ -4,13 +4,13 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.24.13';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.24.13';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.24.13';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.24.13';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.24.13';
-import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.24.13';
-import { noteError } from '../diagnostics.js?v=1.24.13';
+import { tbctx } from './context.js?v=1.25.2';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.25.2';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.25.2';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.25.2';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.25.2';
+import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.25.2';
+import { noteError } from '../diagnostics.js?v=1.25.2';
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;
