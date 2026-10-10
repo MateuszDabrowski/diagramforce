@@ -198,7 +198,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.2",
+  "appVersion": "1.25.3",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -292,6 +292,9 @@ Options: `--theme light|dark` (default light), `--transparent`, `--app <url>` fo
   cloud chat sandbox, which has no browser: there, deliver the link or file as in step 5.
 - Look at the image before you put it in a document: the validator proves the diagram loads, the image shows
   whether it reads well.
+- A line `⚠ ... drawn at 0.59x` means the diagram is wider or taller than a browser canvas allows (8192 px), so
+  the PNG is shrunk and small text may not read. Render to `.svg` instead, or draw less: a role chart takes
+  `--root`, an ERD or mapping a smaller selection.
 
 ## From a live Salesforce org (CLI)
 
@@ -410,12 +413,18 @@ identity and its schema: the properties panel, the table view and the CSV export
 list endpoint is paged with no page token (on an SDO, `?limit=200` returned 200 of 1162 DMOs and missed both of
 these), and the script merges any number of files:
 ```bash
-sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm" -o <org> > ind.json
-sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__ContactPointEmail__dlm" -o <org> > cpe.json
-node scripts/org-to-selection.mjs ind.json cpe.json --max-fields 25 > selection.json
+D=/services/data/v67.0/ssot/data-model-objects
+sf api request rest "$D/ssot__Individual__dlm" -o <org> > ind.json
+sf api request rest "$D/ssot__Individual__dlm/relationships?limit=500" -o <org> > ind-rel.json
+sf api request rest "$D/ssot__ContactPointEmail__dlm" -o <org> > cpe.json
+sf api request rest "$D/ssot__ContactPointEmail__dlm/relationships?limit=500" -o <org> > cpe-rel.json
+node scripts/org-to-selection.mjs ind.json ind-rel.json cpe.json cpe-rel.json --max-fields 25 > selection.json
 ```
-A DMO definition carries **no relationships** (no `ReferenceTo`), so the ERD comes out with none: add the ones the
-user cares about by hand, following the spec's Data Model section, and say that you did.
+A DMO definition carries **no relationships**, so fetch each DMO's `/relationships` too and pass both files; the
+script tells them apart by content. Without them the ERD comes out with no relationships, and the script says so.
+Keep `limit=500`: that endpoint's `nextPageUrl` points back at the page it came from, and the default page is 20
+(Account alone has 331 on an SDO). The script warns when a file holds fewer rows than its `totalSize`. One-to-one
+relationships are counted and not drawn: the ERD has only a many-to-one marker.
 
 ### Data Cloud field mappings → a `datamapping` diagram
 

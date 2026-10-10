@@ -31,7 +31,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { buildDiagram, parseMappingXml, fromConnectPayload, looksLikeMappingJson, fieldCatalogue,
-  normaliseCategory, entityRelationships, streamLineage } from './mapping-convert.js';
+  normaliseCategory, entityRelationships, entityFieldTypes, streamLineage } from './mapping-convert.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
@@ -153,13 +153,30 @@ if (isMain) {
   };
   const orgAlias = val('--org');
   if (orgAlias) {
-    for (const entity of ['DataModelObject', 'DataLakeObject']) {
-      try {
-        const out = execFileSync('sf',
-          ['api', 'request', 'rest', `/services/data/v64.0/ssot/metadata?entityType=${entity}`, '-o', orgAlias],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 * 1024 * 1024 });
-        takeMeta(JSON.parse(out));
-      } catch { console.error(`  note: could not fetch ${entity} categories from ${orgAlias} - cards stay uncategorised`); }
+    // EVERY data space, not just the default. `/ssot/metadata` answers for one space at a time, and a mapping into
+    // a second space's DMOs (`bu2_Individual__dlm` in BU_2 on the Madrid SDO) drew uncategorised, untyped and
+    // unrelated: 5 of 10 DMO cards on a Contact_Home canvas (found verifying the skill, 1.25.3). The param is
+    // `dataspace` with the space's NAME - `dataSpace` is ignored and the prefix (`bu2`) matches nothing.
+    let spaces = [null];
+    try {
+      const out = execFileSync('sf', ['api', 'request', 'rest', '/services/data/v64.0/ssot/data-spaces', '-o', orgAlias],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 8 * 1024 * 1024 });
+      const named = (JSON.parse(out).dataSpaces || []).map((d) => d?.name).filter((n) => n && n !== 'default');
+      spaces = [null, ...named];
+    } catch { /* no data-space list: the default space alone, as before */ }
+    for (const space of spaces) {
+      for (const entity of ['DataModelObject', 'DataLakeObject']) {
+        const q = `entityType=${entity}${space ? `&dataspace=${encodeURIComponent(space)}` : ''}`;
+        try {
+          const out = execFileSync('sf',
+            ['api', 'request', 'rest', `/services/data/v64.0/ssot/metadata?${q}`, '-o', orgAlias],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 * 1024 * 1024 });
+          takeMeta(JSON.parse(out));
+        } catch {
+          console.error(`  note: could not fetch ${entity} metadata${space ? ` for data space ${space}` : ''} from ${orgAlias}`
+            + ' - those cards stay uncategorised and untyped');
+        }
+      }
     }
   }
   const catFile = val('--categories');
@@ -171,6 +188,8 @@ if (isMain) {
   }
 
   const relationships = entityRelationships(metaPayloads);
+  // The same payload states each DLO / DMO field's type; without it every row read "Text".
+  const fieldTypes = entityFieldTypes(metaPayloads);
 
   // SOURCE LANE FROM ORG FACT. Without a stream payload the lane is assembled by NAME-MATCHING: the ingest
   // map's sourceObjectName is the stream's name, so the "source" the lane shows is really the stream, and the
@@ -209,7 +228,7 @@ if (isMain) {
   }
   const streams = streamPayloads ? streamLineage(streamPayloads) : null;
 
-  try { ({ diagram, stats } = buildDiagram(maps, { title: val('--title'), catalogue, categories, relationships, streams })); }
+  try { ({ diagram, stats } = buildDiagram(maps, { title: val('--title'), catalogue, categories, relationships, streams, fieldTypes })); }
   catch (e) { die(`${e.message} Check the path, and --only if you used it.`); }
   const cap = Number(val('--max-cells')) || 2000;
   if (stats.cells > cap) {
@@ -225,6 +244,7 @@ if (isMain) {
   stats.formulaChains ? ` · ${stats.formulaChains} formula chain(s) drawn between rows of one Formulas card - a formula reading another formula's output` : ''}${
   stats.formulaChainUnresolved ? ` · ${stats.formulaChainUnresolved} formulaField reference(s) NOT drawn - they name a derived field with no formula row on this canvas` : ''}${
   stats.categorised ? `\n  ${stats.categorised} card(s) categorised from the org` : ''}${
+  stats.typed ? ` · ${stats.typed} field row(s) typed from the org` : ''}${
   stats.filtered ? ` · ${stats.filtered} filtered` : ''}${
   stats.dmoRels ? `\n  ${stats.dmoRels} DMO-to-DMO relationship(s) drawn from the org's declared model`
     + `${stats.dmoRelsOffCanvas ? ` · ${stats.dmoRelsOffCanvas} more declared but not drawn - one end is not a card on this canvas` : ''}`

@@ -189,6 +189,29 @@ export function entityRelationships(json) {
   return [...out.values()];
 }
 
+/** Field types out of `/ssot/metadata` payloads (DataModelObject and/or DataLakeObject; one, or an array). Keyed
+ *  `entity \u0000 field`, lower-cased. The same payload `--org` already fetches for categories and relationships
+ *  states every field's `businessType`, yet every card row was typed "Text" - LastModifiedDate and BirthDate
+ *  included - while the official mapping templates carry DateTime / Email / Phone / Number (found verifying the
+ *  skill CLI-only against the Madrid SDO, 1.25.3). A businessType with no app equivalent is left out, so its row
+ *  keeps the "Text" default rather than a guess. */
+const BUSINESS_TYPE = Object.assign(Object.create(null), {
+  TEXT: 'Text', DATE_TIME: 'DateTime', DATE: 'Date', NUMBER: 'Number', PERCENT: 'Percent', BOOLEAN: 'Boolean',
+  PHONE: 'Phone', EMAIL: 'Email', URL: 'URL', CURRENCY: 'Currency',
+});
+export function entityFieldTypes(json) {
+  const out = new Map();
+  for (const payload of (Array.isArray(json) ? json : [json])) {
+    for (const e of (payload?.metadata || [])) {
+      for (const f of (e?.fields || [])) {
+        const t = BUSINESS_TYPE[String(f?.businessType || f?.type || '').toUpperCase()];
+        if (e?.name && f?.name && t) out.set(`${e.name}\u0000${f.name}`.toLowerCase(), t);
+      }
+    }
+  }
+  return out;
+}
+
 /** The org's source -> stream -> DLO chain out of `/ssot/data-streams` (one page or an array of pages - the
  *  caller follows `nextPageUrl`; the endpoint's offset paging is 1-indexed and SKIPS, so ONLY that chain is
  *  complete - see limits/gotchas-testing.md). Keyed by the DLO name lower-cased, because the DLO card is the
@@ -461,7 +484,7 @@ export function buildDiagram(maps, opts = {}) {
   // ALREADY-normalised app values (Profile / Engagement / Other - see normaliseCategory); a card with no entry
   // OMITS the key entirely, exactly as the official templates do for Source and Data Stream cards.
   const catByName = new Map(Object.entries(opts.categories || {}).map(([k, v]) => [String(k).toLowerCase(), v]));
-  let categorised = 0;
+  let categorised = 0, typed = 0;
 
   const ZONE_GAP = 56;
   const bandOf = new Map();
@@ -482,9 +505,14 @@ export function buildDiagram(maps, opts = {}) {
     members.forEach((o, i) => {
       // A `detail` row (the stream's org-stated source) gets an EMPTY type: "Text" would claim the row is a
       // field of the schema, and the blank type column is what gives the full-width label room to render.
-      const fields = [...o.fields.values()].map((f) => ({
-        label: f.label, apiName: f.apiName, type: f.detail ? '' : 'Text', keyType: null, fid: fid(o.name, f.apiName),
-      }));
+      // The org's type when the caller supplied one (CLI --org / --categories, via entityFieldTypes); the Source
+      // and Formulas cards are not in /ssot/metadata, so they keep the "Text" default.
+      const fields = [...o.fields.values()].map((f) => {
+        const org = f.detail ? null : opts.fieldTypes?.get(`${o.name}\u0000${f.apiName}`.toLowerCase());
+        if (org) typed++;
+        return { label: f.label, apiName: f.apiName, type: f.detail ? '' : (org || 'Text'), keyType: null,
+          fid: fid(o.name, f.apiName) };
+      });
       const cat = catByName.get(String(o.name).toLowerCase()) || null;
       if (cat) categorised++;
       const cell = {
@@ -709,7 +737,7 @@ export function buildDiagram(maps, opts = {}) {
       formulaChainUnresolved: rels.filter((r) => r.mappingType === 'Formula')
         .reduce((n, r) => n + (r.chainUnresolved || 0), 0),
       filtered: rels.filter((r) => r.filtered).length,
-      unmapped, prunedUpstream, categorised,
+      unmapped, prunedUpstream, categorised, typed,
       // Source-lane lineage - meaningful only when `opts.streams` was supplied (fact mode); all zero without.
       // The wrapper's report is REQUIRED to say which mode named the lane, and these are what it says it with.
       // `streamSources` counts the org-stated source FACTS found - they render as details rows on the stream

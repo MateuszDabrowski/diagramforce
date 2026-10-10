@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.2';
-import { showToast, showError } from '../feedback.js?v=1.25.2';
-import { sanitizeFilenamePart } from '../util.js?v=1.25.2';
-import { pctx } from './context.js?v=1.25.2';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.3';
+import { showToast, showError } from '../feedback.js?v=1.25.3';
+import { sanitizeFilenamePart } from '../util.js?v=1.25.3';
+import { pctx } from './context.js?v=1.25.3';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -607,6 +607,12 @@ function replaceForeignObjects(svgRoot) {
     if (marks.includes('strong') || marks.includes('b') || marks.includes('code')) mult *= 1.05;
     return mult;
   };
+  // MEASURED widths (1.25.3). The live cell wraps with the browser's real metrics, and a table sizes its rows from
+  // that wrap; the per-character guess below wrapped differently, so exported text spilled into the next row and an
+  // unbreakable value (an API name) ran past its cell. Found rendering a converted flow's facts table with the skill
+  // CLI. A canvas measures in the cell's own font; the guess remains only where no canvas exists.
+  const measureCtx = (() => { try { return document.createElement('canvas').getContext('2d'); } catch { return null; } })();
+  const CODE_FONT = MARK_TO_TSPAN.code['font-family'];
 
   // Walk a foreignObject's HTML subtree, returning an ordered array of
   // text runs. Each run carries the markdown marks active on it (e.g.
@@ -647,6 +653,15 @@ function replaceForeignObjects(svgRoot) {
     const lineHeight = 1.3;
     const charWidth = fontSize * 0.52;
     const maxChars = Math.max(4, Math.floor(w / charWidth));
+    // Width of a token, in the same units as the line limit: px when measured, character cells otherwise.
+    const limit = measureCtx ? w : maxChars;
+    const widthOf = (text, marks) => {
+      if (!measureCtx) return text.length * charWidthMultiplier(marks);
+      const bold = marks.includes('strong') || marks.includes('b');
+      const italic = marks.includes('em') || marks.includes('i');
+      measureCtx.font = `${italic ? 'italic ' : ''}${bold ? 'bold' : fontWeight} ${fontSize}px ${marks.includes('code') ? CODE_FONT : fontFamily}`;
+      return measureCtx.measureText(text).width;
+    };
 
     // Tokenize the HTML into formatted runs.
     const runs = [];
@@ -659,7 +674,7 @@ function replaceForeignObjects(svgRoot) {
     let lineWidth = 0;
     const pushSegment = (text, marks) => {
       if (!text) return;
-      const segWidth = text.length * charWidthMultiplier(marks);
+      const segWidth = widthOf(text, marks);
       const lastLine = lines[lines.length - 1];
       lineWidth += segWidth;
       // Merge with previous segment if same marks (avoid tspan fragmentation
@@ -684,13 +699,28 @@ function replaceForeignObjects(svgRoot) {
         // Split on whitespace boundaries, keeping spaces.
         const tokens = part.split(/(\s+)/).filter(t => t.length > 0);
         for (const tok of tokens) {
-          const tokWidth = tok.length * charWidthMultiplier(run.marks);
+          const tokWidth = widthOf(tok, run.marks);
           // If the token overflows the current line and the line isn't empty,
           // wrap. Whitespace tokens at line-start are swallowed.
           const onlyWhitespace = /^\s+$/.test(tok);
-          if (lineWidth > 0 && lineWidth + tokWidth > maxChars) {
+          if (lineWidth > 0 && lineWidth + tokWidth > limit) {
             breakLine();
             if (onlyWhitespace) continue;
+          }
+          // A single token wider than the whole line (an API name, a URL) is split by character, as the cell's
+          // `word-break: break-word` splits it live - otherwise it ran past the cell on one line.
+          if (!onlyWhitespace && tokWidth > limit) {
+            let chunk = '';
+            for (const ch of tok) {
+              if (chunk && lineWidth + widthOf(chunk + ch, run.marks) > limit) {
+                pushSegment(chunk, run.marks);
+                breakLine();
+                chunk = '';
+              }
+              chunk += ch;
+            }
+            pushSegment(chunk, run.marks);
+            continue;
           }
           pushSegment(tok, run.marks);
         }

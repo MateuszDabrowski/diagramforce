@@ -14,6 +14,10 @@
 //        WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact')" > fields.csv
 //   Data Cloud DMOs (JSON), ONE GET per DMO - the list endpoint is paged with no page token:
 //     sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm" -o <org> > ind.json
+//   ...plus that DMO's relationships, which the definition does not carry (limit=500: the endpoint's
+//   nextPageUrl points back at the page it came from, so one big page is the only complete read):
+//     sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm/relationships?limit=500" \
+//        -o <org> > ind-rel.json
 //
 // Format is auto-detected: JSON holding a DMO definition (the single-object response, or the list's
 // `dataModelObject` array) is Data Cloud, and several such files merge by name; anything else is the CSV.
@@ -165,7 +169,7 @@ function fromFieldDefinition(rows) {
     byObj.get(obj).push({
       label: r.Label || api, apiName: api, type: api === 'Id' ? 'ID' : dt, keyType,
       ...(String(r.IsNillable).toLowerCase() === 'false' ? { required: true } : {}),
-      ...(target ? { _refTo: target } : {}),
+      ...(target ? { _refs: [{ obj: target, field: 'Id' }] } : {}),
     });
   }
   return [...byObj].map(([name, fields]) => ({ name, label: name, fields }));
@@ -181,25 +185,59 @@ export function dmoList(json) {
   return json.name && Array.isArray(json.fields) ? [json] : [];
 }
 
+/** The relationships of `/ssot/data-model-objects/<name>/relationships` - one page, or an array of pages. A DMO
+ *  DEFINITION carries no relationship at all, so before 1.25.3 every Data Cloud ERD came out with none and the
+ *  skill told the agent to draw them by hand. The org has them: 47 for Contact Point Email on the Madrid SDO,
+ *  145 for Individual, each naming its source and target object AND field. */
+export function dmoRelationships(json) {
+  if (Array.isArray(json)) return json.flatMap(dmoRelationships);
+  if (!json || typeof json !== 'object' || !Array.isArray(json.relationships)) return [];
+  return json.relationships.filter((r) => r?.sourceObject?.name && r?.targetObject?.name
+    && r?.sourceField?.name && r?.targetField?.name);
+}
+
 function fromDataCloud(json) {
-  return dmoList(json).map((o) => ({
+  // Each MANY-TO-ONE relationship is a foreign key on its SOURCE field. A field can carry several: `ssot__PartyId__c`
+  // points at Individual AND Account. The same pair arrives more than once under different relationship names
+  // (`..._N_1` and `..._N_1_1645552383231`), so refs are keyed by target. ONE-TO-ONE rows (11 of 464 on the Madrid
+  // SDO, all into UnifiedLink / IdentityLink DMOs) are left out: the drawer has only a many-to-one marker, and a
+  // 1:1 drawn as N:1 states a cardinality the org does not have.
+  const refs = new Map();
+  let oneToOne = 0;
+  for (const r of dmoRelationships(json)) {
+    if (r.cardinality && r.cardinality !== 'ManyToOne') { oneToOne++; continue; }
+    const key = `${r.sourceObject.name}.${r.sourceField.name}`.toLowerCase();
+    if (!refs.has(key)) refs.set(key, new Map());
+    refs.get(key).set(`${r.targetObject.name}.${r.targetField.name}`.toLowerCase(),
+      { obj: r.targetObject.name, field: r.targetField.name });
+  }
+  const objects = dmoList(json).map((o) => ({
     name: o.name, label: o.label || o.name,
     // PROFILE / ENGAGEMENT / OTHER is the DMO's own category and is exactly the datamodel card's vocabulary.
     category: o.category && o.category !== 'UNASSIGNED'
       ? o.category[0] + o.category.slice(1).toLowerCase() : undefined,
-    fields: (o.fields || []).map((f) => ({
-      label: f.label || f.name, apiName: f.name, type: f.type,
-      // A DMO has no ReferenceTo; `ssot__Id__c` is the key and `...Id__c` names a foreign key by convention.
-      keyType: /(^|_)Id__c$/i.test(f.name) && /^ssot__Id__c$/i.test(f.name) ? 'pk'
-        : /Id__c$/i.test(f.name) ? 'fk' : null,
-    })),
+    fields: (o.fields || []).map((f) => {
+      const out = refs.get(`${o.name}.${f.name}`.toLowerCase());
+      return {
+        label: f.label || f.name, apiName: f.name, type: f.type,
+        // `ssot__Id__c` is the key and `...Id__c` names a foreign key by convention - except `KQ_...Id__c`, the
+        // Text KEY QUALIFIER beside an id (`KQ_PartyId__c` qualifies `ssot__PartyId__c`). Counted as keys they took
+        // the fk budget alphabetically, ahead of the `ssot__PartyId__c` that carries the relationship.
+        keyType: /^ssot__Id__c$/i.test(f.name) ? 'pk'
+          : out || (/Id__c$/i.test(f.name) && !/^KQ_/i.test(f.name)) ? 'fk' : null,
+        ...(out ? { _refs: [...out.values()] } : {}),
+      };
+    }),
   }));
+  objects.oneToOne = oneToOne;
+  return objects;
 }
 
 export function buildSelection(input, opts = {}) {
   let objects = typeof input === 'string'
     ? fromFieldDefinition(parseCsv(input))
     : fromDataCloud(input);
+  const oneToOne = objects.oneToOne || 0;   // read before --only filters, which returns a plain array
 
   if (opts.only?.length) {
     const want = new Set(opts.only.map((s) => s.toLowerCase()));
@@ -212,13 +250,15 @@ export function buildSelection(input, opts = {}) {
   let droppedRels = 0;
   for (const o of objects) {
     for (const f of o.fields) {
-      if (!f._refTo) continue;
-      // Only draw a relationship whose TARGET is on the canvas. Anything else is a dangling stub.
-      if (inSel.has(String(f._refTo).toLowerCase())) {
-        relationships.push({ from: `${o.name}.${f.apiName}`, to: `${f._refTo}.Id` });
-      } else droppedRels++;
+      for (const ref of f._refs || []) {
+        // Only draw a relationship whose TARGET is on the canvas. Anything else is a dangling stub.
+        if (inSel.has(String(ref.obj).toLowerCase())) {
+          relationships.push({ from: `${o.name}.${f.apiName}`, to: `${ref.obj}.${ref.field}` });
+        } else droppedRels++;
+      }
     }
   }
+  const drawsHere = (f) => (f._refs || []).some((ref) => inSel.has(String(ref.obj).toLowerCase()));
 
   // WHICH plain fields survive was arbitrary - source order, which for FieldDefinition means the system audit
   // columns come first. A four-object Sales Core draft led every card with `Deleted (IsDeleted)` and
@@ -278,9 +318,12 @@ export function buildSelection(input, opts = {}) {
       // one-third fk budget. Measured on a 4-object Sales+Service selection: 84 lookups, of which only 19 point
       // into the selection. Ranking them together let the 65 useless ones crowd out the 19 that are the entire
       // point of an ERD, and the 25-field cap cost 10 of the 20 relationships. Splitting the rank keeps them.
-      if (f.keyType === 'fk' && f._refTo && inSel.has(String(f._refTo).toLowerCase())) return [2, 0];
+      if (f.keyType === 'fk' && drawsHere(f)) return [2, 0];
       if (f.keyType) return [3, 0];                          // a key, but one that draws no line here
       if (SYSTEM_FIELD.test(f.apiName) || SYSTEM_FLAG.test(f.apiName)) return [8, 0];   // plumbing, last
+      // A DMO's `KQ_` key qualifiers are plumbing too: Account carries seven, and as `__c` fields they ranked as
+      // this org's own additions and took 7 of a 25-field card.
+      if (/^KQ_/i.test(f.apiName)) return [8, 0];
       const p = priority.get(String(f.apiName).toLowerCase());
       if (p !== undefined) return [4, p];                    // on this object's standard layout, in ITS order
       if (/__c$/i.test(f.apiName)) return [5, 0];            // this org's own additions
@@ -377,7 +420,7 @@ export function buildSelection(input, opts = {}) {
 
   objects.forEach((o, i) => {
     o.headerColor = o.headerColor || PALETTE[i % PALETTE.length];
-    o.fields.forEach((f) => delete f._refTo);
+    o.fields.forEach((f) => delete f._refs);
     delete o._pinned;   // internal marker - never reaches the emitted selection
   });
 
@@ -397,7 +440,7 @@ export function buildSelection(input, opts = {}) {
       objects: objects.length,
       fields: objects.reduce((n, o) => n + o.fields.length, 0),
       relationships: kept.length,
-      droppedRels, prunedFields, lostToPruning, pinnedFields, missingFields,
+      droppedRels, oneToOne, prunedFields, lostToPruning, pinnedFields, missingFields,
       annotatedSharing, annotatedRecords, unmatched,
     },
   };
@@ -456,24 +499,32 @@ if (isMain) {
   const VALUED = new Set(['--only', '--max-fields', '--fields', '--owd', '--volume', '--title']);
   const files = args.filter((a, i) => !a.startsWith('--') && !VALUED.has(args[i - 1]));
   const val = (flag) => { const i = args.indexOf(flag); return i > -1 ? args[i + 1] : null; };
-  if (!files.length) die('usage: node scripts/org-to-selection.mjs <fields.csv | dmo.json [dmo2.json ...]> [--only A,B] [--keys-only]'
+  if (!files.length) die('usage: node scripts/org-to-selection.mjs <fields.csv | dmo.json [dmo-rel.json dmo2.json ...]> [--only A,B] [--keys-only]'
     + ' [--max-fields N|all] [--fields Obj.Field,Obj.Other] [--owd owd.json] [--volume counts.json] [--title T]');
   // A DMO file is JSON (the list response or one object's definition); anything else is the FieldDefinition CSV.
   // The Salesforce CLI prints warnings before JSON, so find the payload rather than trusting position.
-  const dmoDocs = [], csv = [];
+  const dmoDocs = [], relDocs = [], csv = [];
+  let truncated = 0;
   for (const file of files) {
     let raw;
     try { raw = readFileSync(file, 'utf8'); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
     const i = raw.indexOf('{');
     let doc = null;
     if (i > -1) { try { doc = JSON.parse(raw.slice(i)); } catch { doc = null; } }
-    if (doc && dmoList(doc).length) dmoDocs.push(doc); else csv.push(raw);
+    if (doc && dmoList(doc).length) dmoDocs.push(doc);
+    else if (doc && Array.isArray(doc.relationships)) {
+      relDocs.push(doc);
+      // The endpoint pages with a nextPageUrl that points back at the same page, so a short page is lost data.
+      if (Number(doc.totalSize) > doc.relationships.length) truncated++;
+    } else csv.push(raw);
   }
   if (csv.length && dmoDocs.length) die('Mix of a FieldDefinition CSV and DMO JSON - pass one kind at a time.');
+  if (relDocs.length && !dmoDocs.length) die('A DMO relationships file needs the DMO definitions beside it - pass both.');
   if (csv.length > 1) die('One FieldDefinition CSV at a time - name every object in its query\'s IN list instead.');
   // Several DMO files merge into one catalogue; the same DMO fetched twice counts once.
   const input = csv.length ? csv[0]
-    : { dataModelObject: [...new Map(dmoDocs.flatMap(dmoList).map((o) => [o.name, o])).values()] };
+    : { dataModelObject: [...new Map(dmoDocs.flatMap(dmoList).map((o) => [o.name, o])).values()],
+      relationships: relDocs.flatMap(dmoRelationships) };
 
   /** Read an annotation payload straight from the CLI. Sliced from the first `{` or `[` for the same reason the
    *  DMO catalogue is: `sf` prints its update banner before the JSON on some versions. */
@@ -507,7 +558,11 @@ if (isMain) {
     // --only FILTERS the input, it cannot add to it: a FieldDefinition CSV holds only the objects its query named.
     + `${stats.droppedRels ? `\n  ${stats.droppedRels} relationship(s) point outside the selection and were dropped (${typeof input === 'string'
       ? 'add those objects to the FieldDefinition query\'s IN list and re-export to keep them'
-      : 'add those objects with --only to keep them'})` : ''}`
+      : 'fetch those DMOs and their /relationships too, to keep them'})` : ''}`
+    + `${stats.oneToOne ? `\n  ${stats.oneToOne} one-to-one relationship(s) not drawn - the ERD marks only many-to-one` : ''}`
+    + `${typeof input !== 'string' && !relDocs.length ? '\n  NO RELATIONSHIPS: a DMO definition carries none - also pass each DMO\'s'
+      + ' /relationships?limit=500 response to draw them' : ''}`
+    + `${truncated ? `\n  ${truncated} relationships file(s) hold fewer rows than their totalSize - re-fetch with a larger limit` : ''}`
     + `${stats.annotatedSharing ? `\n  sharing model on ${stats.annotatedSharing} object(s)` : ''}`
     + `${stats.annotatedRecords ? `\n  record count on ${stats.annotatedRecords} object(s)` : ''}`
     + `${stats.unmatched?.length ? `\n  NOT ANNOTATED: ${stats.unmatched.join(', ')}`

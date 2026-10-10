@@ -287,6 +287,22 @@ const HELP = `Render Diagramforce JSON to an image with a local headless browser
   --browser <path>        a Chrome / Edge / Chromium / Brave / Vivaldi binary (default: found automatically)
   --timeout <seconds>     per diagram, default 60`;
 
+/** The raster's scale against the diagram's own size, from the cells' bounding box. A browser canvas is capped at
+ *  8192 px a side, so the app's 2x export shrinks a big diagram: a 68-role whole-org chart came out 8192 px wide for
+ *  a 13974 px SVG, its text unreadable, and nothing said so (found verifying the skill, 1.25.3). The box ignores
+ *  link routes and the export margin, so it overstates the size slightly and errs towards warning. SVG is never
+ *  capped: Infinity. */
+export function rasterScale(job, img) {
+  if (/\.svg$/i.test(job.out)) return Infinity;
+  let cells = [];
+  try { cells = JSON.parse(job.text)?.graph?.cells || []; } catch { return Infinity; }
+  const boxes = cells.filter((c) => c?.position && c?.size);
+  if (!boxes.length) return Infinity;
+  const w = Math.max(...boxes.map((c) => c.position.x + c.size.width)) - Math.min(...boxes.map((c) => c.position.x));
+  const h = Math.max(...boxes.map((c) => c.position.y + c.size.height)) - Math.min(...boxes.map((c) => c.position.y));
+  return Math.min(w > 0 ? img.width / w : Infinity, h > 0 ? img.height / h : Infinity);
+}
+
 async function main() {
   let opts;
   try { opts = parseArgs(process.argv.slice(2)); } catch (e) { console.error(`✗ ${e.message}\n\n${HELP}`); process.exit(2); }
@@ -329,6 +345,11 @@ async function main() {
           writeFileSync(job.out, dataUrlToBuffer(img.dataUrl));
           const kb = Math.round(statSync(job.out).size / 1024);
           console.log(`✓ ${job.out}  ${img.width} x ${img.height}  ${kb} KB  ${Date.now() - t0} ms`);
+          const scale = rasterScale(job, img);
+          if (scale < 1) {
+            console.log(`⚠ ${job.out}: drawn at ${scale.toFixed(2)}x - past the 8192 px canvas cap, so small text may not`
+              + ' read. Render to .svg for full size, or draw less (a role chart takes --root).');
+          }
         } catch (e) { console.log(`✗ ${job.input}: ${e.message}`); failed++; }
       }
     } finally { await cdp.close(); }

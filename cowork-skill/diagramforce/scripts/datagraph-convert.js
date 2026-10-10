@@ -78,8 +78,11 @@ function fromDefinition(doc) {
       apiName: f.sourceFieldName || f.name,
       label: f.sourceFieldLabel || humaniseDmo(f.sourceFieldName || f.name),
       type: f.dataType || 'Text',
-      // `isDGRootKeyField` is the graph's own primary key; `isKeyColumn` is a join key on a related object.
-      keyType: f.isDGRootKeyField ? 'pk' : (f.isKeyColumn ? 'fk' : null),
+      // `isKeyColumn` is the object's OWN key, not a join key: on the Madrid SDO's three graphs it sits on exactly
+      // one field of each of the 17 objects (`ssot__Id__c`, or `SourceRecordId__c` on a unified link), and
+      // `isDGRootKeyField` was set on none. Read as fk before 1.25.3, so every card showed its own Id as FK and
+      // no card showed a PK. The fk is the JOIN field, marked below from `path[]`.
+      keyType: f.isDGRootKeyField || f.isKeyColumn ? 'pk' : null,
     })),
     // `path[]` names the JOIN this related object hangs off - the parent field and the child field. The preview
     // payload cannot know this, which is why the edge label is definition-only.
@@ -91,6 +94,20 @@ function fromDefinition(doc) {
     children: arr(o.relatedObjects).map(node),
   });
   const root = node(doc.sourceObject || doc);
+  // The join field on each side is a foreign key unless it is that object's own key: an engagement's
+  // `ssot__IndividualId__c` is fk, the Individual's `ssot__Id__c` it joins to stays pk.
+  const markJoin = (parent) => {
+    for (const child of parent.children) {
+      const fk = (n, api) => {
+        const f = api && n.fields.find((x) => x.apiName === api);
+        if (f && f.keyType !== 'pk') f.keyType = 'fk';
+      };
+      fk(parent, child.join?.parent);
+      fk(child, child.join?.child);
+      markJoin(child);
+    }
+  };
+  markJoin(root);
   return { root, name: doc.label || doc.name || root.label, kind: 'definition', meta: doc };
 }
 
@@ -285,9 +302,17 @@ export function buildDataGraphDiagram(parsed, { appVersion = '1.22.0', title = n
       // The join, when the payload named it. This is the one thing a definition knows that a preview cannot,
       // and it is what turns "these two are related" into "related HOW" - which is the question a reader of a
       // data graph actually has.
+      // Placed in the empty row gap ABOVE the child card, starting at its left edge - not at the path's midpoint.
+      // Siblings share one trunk 32px left of their cards, so the midpoint landed on the trunk and the label
+      // (200-280px of text in a 140px column gap) covered the child's first rows (Madrid SDO ProfileRT, found
+      // verifying the skill, 1.25.3). The app re-centres label text on load (migrateLinks), so the x offset is
+      // half the estimated width (~6px a character at 10px semibold) and the label's left end meets the card.
       ...(join?.parent && join?.child
-        ? { labels: [{ position: { distance: 0.5, offset: 0 },
-            attrs: { text: { text: `${join.parent} = ${join.child}`, fontSize: 10, fill: accent } } }] }
+        ? (() => {
+          const text = `${join.parent} = ${join.child}`;
+          return { labels: [{ position: { distance: 1, offset: { x: Math.round(text.length * 3) + 6, y: -26 } },
+            attrs: { text: { text, fontSize: 10, fill: accent } } }] };
+        })()
         : {}),
       source: { id: `dg-obj-${p}`, port: 'er-right', magnet: 'circle' },
       target: { id: `dg-obj-${i}`, port: 'er-left', magnet: 'circle' },

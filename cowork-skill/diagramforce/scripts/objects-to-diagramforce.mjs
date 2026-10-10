@@ -119,6 +119,7 @@ const owdColor = (v) => (/^ControlledBy/i.test(String(v)) ? INHERIT_COLOR : (OWD
 // and because the strip is right-aligned to the card edge, one wrong width shifts every pill beside it. Same
 // discipline the card height above already applies, and the reason both are stated rather than guessed.
 const PILL_H = 22, PILL_FS = 12, PILL_GAP = 8, PILL_LIFT = 6;
+const SELF_LOOP_CLEAR = 34;   // a top self-loop rises ~32px above its card (measured on the render CLI's output)
 const pillWidth = (txt) =>
   Math.max(PILL_H, Math.round(String(txt).length * PILL_FS * 0.62) + Math.round(PILL_H * 0.55));
 
@@ -184,6 +185,9 @@ const TYPE_MAP = {
   email: 'Email', phone: 'Phone', url: 'URL', percent: 'Percent', double: 'Number', int: 'Number',
   integer: 'Number', number: 'Number', picklist: 'Picklist', multipicklist: 'Multi-Picklist',
   multiselectpicklist: 'Multi-Picklist', autonumber: 'Auto Number', formula: 'Formula',
+  // Lookups FieldDefinition names by their own words: a hierarchy (Account.ParentId), a record type, an external or
+  // indirect lookup all point at another record.
+  hierarchy: 'Lookup', recordtype: 'Lookup', externallookup: 'Lookup', indirectlookup: 'Lookup',
 };
 const normType = (t) => {
   if (!t) return 'Text';
@@ -191,7 +195,14 @@ const normType = (t) => {
   // `Lookup(Account)` / `Master-Detail(Account)` arrive straight from FieldDefinition.DataType.
   const m = raw.match(/^(Lookup|Master-Detail)\s*\(/i);
   if (m) return m[1].toLowerCase() === 'lookup' ? 'Lookup' : 'Master-Detail';
-  return TYPE_MAP[raw.toLowerCase().replace(/[\s-]/g, '')] || TYPE_MAP[raw.toLowerCase()] || 'Text';
+  // FieldDefinition.DataType also carries the SIZE and options - `Number(18, 0)`, `Currency(16, 2)`, `URL(255)`,
+  // `Long Text Area(32000)`, `Text(255) (External ID)`, `Formula (Percent)`, `Picklist (Multi-Select)`, `Date/Time`.
+  // Matched whole, every one of those fell through to Text: a Sales Core ERD of the Madrid SDO labelled Amount,
+  // Annual Revenue, Employees and every date-time field "Text" (found verifying the skill, 1.25.3).
+  if (/^formula\b/i.test(raw)) return 'Formula';
+  if (/^picklist\s*\(\s*multi-select\s*\)/i.test(raw)) return 'Multi-Picklist';
+  const bare = raw.replace(/\s*\(.*$/, '').toLowerCase().replace(/[\s\-/]/g, '');
+  return TYPE_MAP[bare] || TYPE_MAP[raw.toLowerCase().replace(/[\s-]/g, '')] || TYPE_MAP[raw.toLowerCase()] || 'Text';
 };
 
 // Read the version from the bundled spec's "Spec snapshot: vX" marker rather than hardcoding it, the way
@@ -254,6 +265,34 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     cells.push(cell);
   });
 
+  // ── Self-relationships, counted BEFORE layout ──────────────────────────────
+  // A card carrying a badge strip (OWD / volume) in the gap ABOVE it takes its first self-loop on the BOTTOM edge
+  // instead of the top: a top loop runs under the strip, which is drawn above relationships, so the badge hid the
+  // loop's crow's foot (Account, Case and Contact in a Sales Core ERD of the Madrid SDO, found verifying the skill,
+  // 1.25.3). A second self-relationship still needs the top edge, so its strip is lifted clear of that loop - and
+  // the lifted strip then sits where the card ABOVE drops its own bottom loop. The layout needs to know which
+  // cards those are, so they are counted here with the same skip rules the relationship pass applies below.
+  // Cards without badges keep the original top-first order and spacing, byte for byte.
+  const parseRef = (s) => {
+    const dot = String(s || '').lastIndexOf('.');
+    return dot < 0 ? [s, null] : [s.slice(0, dot), s.slice(dot + 1)];
+  };
+  const badged = new Set(objects.filter((o) => o.sharing?.internal || Number.isFinite(o.records))
+    .map((o) => byName.get(o.name)?.cell.id));
+  const selfTotal = new Map();
+  (spec.relationships || []).forEach((r) => {
+    const [fromObj, fromField] = parseRef(r.from);
+    const [toObj, toField] = parseRef(r.to);
+    const a = byName.get(fromObj);
+    if (!a || fromObj !== toObj || !a.fieldsByApi.get(fromField) || !a.fieldsByApi.get(toField)) return;
+    selfTotal.set(a.cell.id, (selfTotal.get(a.cell.id) || 0) + 1);
+  });
+  // Badged cards whose second self-relationship takes the top edge.
+  const topLoop = new Set([...badged].filter((id) => (selfTotal.get(id) || 0) >= 2));
+  // Extra room above such a card: its loop rises ~32px, the strip goes above that, and the card above may drop a
+  // bottom loop ~32px into the same gap. 80px held two loops but not two loops plus a 22px strip.
+  const gapAbove = (o) => (topLoop.has(byName.get(o.name).cell.id) ? SELF_LOOP_CLEAR : 0);
+
   // ── Layout: zone-aware columns ─────────────────────────────────────────────
   // Objects in the same zone stack in one column, so a zone is a clean vertical band and its box never has to
   // enclose scattered cards. Ungrouped objects follow in their own columns. Same reasoning as the mermaid
@@ -278,7 +317,7 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   // the height. Order is preserved - the selection order is the reader's, and re-sorting cards to pack them
   // tighter would scramble it.
   if (loose.length) {
-    const h = (o) => byName.get(o.name).cell.size.height + ROW_GAP;
+    const h = (o) => byName.get(o.name).cell.size.height + ROW_GAP + gapAbove(o);
     // Fill k columns in order, starting a new one once the current has had its share of the total height.
     // Order is preserved - the selection order is the reader's, and re-sorting cards to pack them tighter would
     // scramble it - so this balances by height WITHIN the given order rather than bin-packing freely.
@@ -341,6 +380,7 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     const top = y;
     col.members.forEach((o) => {
       const { cell } = byName.get(o.name);
+      y += gapAbove(o);
       cell.position = { x: x + (inZone ? ZONE_PAD : 0), y };
       y += cell.size.height + ROW_GAP;
     });
@@ -443,7 +483,8 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     if (self) {
       const n = selfCount.get(a.cell.id) || 0;
       selfCount.set(a.cell.id, n + 1);
-      const edge = n % 2 === 0 ? 'top' : 'bottom';
+      const first = badged.has(a.cell.id) ? 'bottom' : 'top';
+      const edge = n % 2 === 0 ? first : (first === 'top' ? 'bottom' : 'top');
       sPort = tPort = `port-${edge}`;
     } else {
       const side = dx > 0 ? 'right' : 'left';
@@ -521,7 +562,9 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     const widths = strip.map(([, t]) => pillWidth(t));
     const total = widths.reduce((a, b) => a + b, 0) + PILL_GAP * (strip.length - 1);
     let px = cell.position.x + cell.size.width - total;
-    const py = cell.position.y - PILL_H - PILL_LIFT;
+    // A card whose second self-relationship had to take the top edge: lift the strip clear of that loop, which
+    // the router draws about 32px above the card.
+    const py = cell.position.y - PILL_H - PILL_LIFT - (topLoop.has(cell.id) ? SELF_LOOP_CLEAR : 0);
     // Keyed off the OBJECT index, not a running badge counter, so `owd-3` always belongs to `obj-3` even when
     // the object before it had no annotation at all.
     strip.forEach(([kind, text, fill], k) => {

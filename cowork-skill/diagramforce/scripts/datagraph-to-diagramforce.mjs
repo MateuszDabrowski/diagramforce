@@ -15,8 +15,21 @@ const die = (m) => { console.error(m); process.exit(1); };
  *  access token is ever read, printed or written by this script. */
 function fetchFromOrg(alias, name, apiVersion) {
   const path = `/services/data/${apiVersion}/ssot/data-graphs/${encodeURIComponent(name)}`;
-  const body = execFileSync('sf', ['api', 'request', 'rest', path, '-o', alias],
-    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  // stderr is PIPED, not inherited: an inherited stderr printed the CLI's "update available" banner into this
+  // script's report. On a failure Node puts the captured stderr into the error message, so nothing is lost.
+  let body;
+  try {
+    body = execFileSync('sf', ['api', 'request', 'rest', path, '-o', alias],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024 });
+  } catch (e) {
+    // `sf api request rest` writes the API's own error to STDOUT (`[{"errorCode":"NOT_FOUND",...}]`), so the
+    // thrown message held only the banner and the reason was lost. Prefer the API's words, then sf's stderr.
+    let api = null;
+    try { api = [].concat(JSON.parse(e.stdout || ''))[0]; } catch { /* not JSON */ }
+    const why = api?.message ? `${api.errorCode || 'error'}: ${api.message}`
+      : String(e.stderr || '').split('\n').filter((l) => l.trim() && !/update available/i.test(l)).join(' ').trim();
+    throw new Error(`${path} - ${why || e.message}`);
+  }
   return JSON.parse(body);
 }
 
