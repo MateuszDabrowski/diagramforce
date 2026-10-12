@@ -45,7 +45,7 @@ export const cctx = {
 // the cctx forward-refs are optional-chained at call sites, so a missed wiring is a
 // silent no-op. assertCctxWired() surfaces it (app.js calls it once at init; an E2E
 // asserts []). isLoadingJSON is a boolean (starts `false`, which is non-null → passes).
-// Dynamic extras added by register* hooks (freqClockUri, getMappingMode, refitAllParents,
+// Dynamic extras added by register* hooks (freqClockUri, getMappingMode, getDiagramType, refitAllParents,
 // fitToCells, syncFrequencyLabel) are intentionally NOT asserted — only the declared contract.
 const REQUIRED_CCTX_KEYS = Object.keys(cctx);
 export function assertCctxWired() {

@@ -7,9 +7,9 @@
 // getMappingMode, scheduleCrossingBumpRecompute) via cctx; imports the style
 // constant/helpers from link-styles.js. Uses the `joint` GLOBAL (never an import).
 
-import { cctx } from './context.js?v=1.25.3';
-import { MAPPING_LINK_COLOR, isObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.25.3';
-import { beginRoutePass, endRoutePass } from './router.js?v=1.25.3';
+import { cctx } from './context.js?v=1.25.4';
+import { MAPPING_LINK_COLOR, isObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.25.4';
+import { beginRoutePass, endRoutePass, separateForeignRuns } from './router.js?v=1.25.4';
 
 // Synchronously re-run the router on every link in the active graph. Used by
 // the toolbar so toggling connector grouping applies instantly. LinkView.update()
@@ -31,6 +31,7 @@ export function rerouteAllLinks() {
       const lv = paper.findViewByModel(l);
       lv?.update?.();
     });
+    separateForeignRuns(graph, paper);   // inside the pass: the re-routes reuse its obstacle snapshot
   } finally {
     endRoutePass();
   }

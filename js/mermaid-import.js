@@ -11,15 +11,16 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.25.3';
-import { ER_MARKER_D } from './er-markers.js?v=1.25.3';
-import { showError, showToast } from './feedback.js?v=1.25.3';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.25.3';
+import { createElementFromComponent } from './components.js?v=1.25.4';
+import { ER_MARKER_D } from './er-markers.js?v=1.25.4';
+import { showError, showToast } from './feedback.js?v=1.25.4';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.25.4';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.25.3';
-import { noteError } from './diagnostics.js?v=1.25.3';
+  from './gantt-layout.js?v=1.25.4';
+import { noteError } from './diagnostics.js?v=1.25.4';
+import { portExitBlocked } from './canvas/router.js?v=1.25.4';
 
 let modules = {};
 
@@ -281,8 +282,30 @@ export function pickFacingPorts(link, src, tgt, direction) {
       if (dx >= 0) { srcPort = 'port-right'; tgtPort = 'port-left'; }
       else         { srcPort = 'port-left';  tgtPort = 'port-right'; }
     }
+    // Leave a side whose exit a THIRD card blocks (2026-10-12). Facing was read from the two boxes alone, so after
+    // Auto Layout stacked Agentforce 18 px under Marketing Cloud Next, Data Cloud -> Agentforce took Agentforce's top
+    // port, and the router, its first turn inside that card, drew the link straight through it - on the canvas it
+    // read as "Marketing Cloud Next -> Agentforce". A blocked end moves to its open side facing the other end; an end
+    // with no open side keeps the facing port.
+    const graph = src.graph;
+    if (graph) {
+      srcPort = openSide(graph, src, srcPort, tgt, dx, dy);
+      tgtPort = openSide(graph, tgt, tgtPort, src, -dx, -dy);
+    }
   }
   return { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort };
+}
+
+/** `port` when its exit is open, else this cell's open perpendicular side nearer the other end (dx, dy point from
+ *  this cell to it), else `port` unchanged. */
+function openSide(graph, cell, port, other, dx, dy) {
+  const side = port.replace('port-', '');
+  if (!portExitBlocked(graph, cell, side, [other])) return port;
+  const order = (side === 'top' || side === 'bottom')
+    ? (dx >= 0 ? ['right', 'left'] : ['left', 'right'])
+    : (dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
+  const open = order.find((s) => cell.getPort?.(`port-${s}`) && !portExitBlocked(graph, cell, s, [other]));
+  return open ? `port-${open}` : port;
 }
 
 /**

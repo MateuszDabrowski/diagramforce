@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.25.3** — matches the app's current `appVersion`; set `"appVersion": "1.25.3"` in generated files.
+> **Spec snapshot: v1.25.4** — matches the app's current `appVersion`; set `"appVersion": "1.25.4"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
@@ -25,7 +25,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +48,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.25.3"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
+| `appVersion` | string | Yes | Semver string, currently `"1.25.4"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
@@ -63,8 +63,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.3", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.3" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.4", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.4" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -97,10 +97,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.3", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.4", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.3" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.4" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -206,8 +206,9 @@ duplicate ids, a wrong `diagramType`) plus these type-specific traps: a one-side
 frame without being embedded, a duplicate Gantt `order`, an OrgPerson missing top-level `personName`, a stale
 DataObject field-port `<fid>`, a `port-left`/`port-right` on a DataObject, an ER relationship with a marker on one end
 or none, links with no `router` outside a Flow, and a descriptive prop (`headerColor`, `eventType`, ...) that
-contradicts authored attrs. The rest still fail quietly, so this section stays your guide. Each rule is
-`✗ wrong → ✓ right`.
+contradicts authored attrs. It also warns on layout slips that load fine but read badly (see
+[Layout rules](#layout-rules-what-a-reader-notices)). The rest still fail quietly, so this section stays your guide.
+Each rule is `✗ wrong → ✓ right`.
 
 **`architecture`**
 - ✗ `type: "sf.Link"` to connect two shapes → ✓ `type: "standard.Link"` with `source`/`target` `{id, port}`. `sf.Link` is a standalone clickable-URL pill ELEMENT (a `url`-prop node with no ports), not a connector.
@@ -1870,7 +1871,7 @@ Individual DMO has no email or phone field - contact points are their own object
 
 ```json
 {
-  "version": 1, "appVersion": "1.25.3", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.25.4", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
     {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
@@ -1943,7 +1944,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -1976,7 +1977,7 @@ row), so the Table view reports it as a field-level `1:Many`.
 
 ```json
 {
-  "version": 1, "appVersion": "1.25.3", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "version": 1, "appVersion": "1.25.4", "title": "Account-Contact ERD", "diagramType": "datamodel",
   "graph": { "cells": [
     {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
     {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
@@ -1997,7 +1998,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2027,7 +2028,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2060,16 +2061,16 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
     "cells": [
       { "id": "start", "type": "sf.BpmnEvent", "eventType": "start", "position": { "x": 40, "y": 224 }, "size": { "width": 48, "height": 48 }, "attrs": { "label": { "text": "Request" } } },
       { "id": "t1", "type": "sf.BpmnTask", "position": { "x": 130, "y": 214 }, "size": { "width": 140, "height": 68 }, "attrs": { "label": { "text": "1. Review request" } } },
-      { "id": "anno", "type": "sf.Annotation", "position": { "x": 150, "y": 96 }, "size": { "width": 120, "height": 90 }, "bracketSide": "right", "attrs": { "label": { "text": "SLA: 2 business days" } } },
+      { "id": "anno", "type": "sf.Annotation", "position": { "x": 140, "y": 96 }, "size": { "width": 120, "height": 90 }, "bracketSide": "right", "attrs": { "label": { "text": "SLA: 2 business days" } } },
 
-      { "id": "gw1", "type": "sf.BpmnGateway", "gatewayType": "exclusive", "position": { "x": 330, "y": 222 }, "size": { "width": 52, "height": 52 }, "attrs": { "marker": { "text": "×" }, "label": { "text": "Approved?" } } },
+      { "id": "gw1", "type": "sf.BpmnGateway", "gatewayType": "exclusive", "position": { "x": 330, "y": 222 }, "size": { "width": 52, "height": 52 }, "attrs": { "marker": { "text": "×" }, "label": { "text": "Approved?", "y": -10, "textVerticalAnchor": "bottom" } } },
 
       { "id": "gw2", "type": "sf.BpmnGateway", "gatewayType": "parallel", "position": { "x": 450, "y": 222 }, "size": { "width": 52, "height": 52 }, "attrs": { "marker": { "text": "+" } } },
       { "id": "t2", "type": "sf.BpmnTask", "position": { "x": 560, "y": 120 }, "size": { "width": 150, "height": 68 }, "attrs": { "label": { "text": "2. Provision access" } } },
@@ -2078,7 +2079,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
       { "id": "done", "type": "sf.BpmnEvent", "eventType": "end", "position": { "x": 880, "y": 224 }, "size": { "width": 48, "height": 48 }, "attrs": { "body": { "fill": "#F9E3E5", "stroke": "#DA4E55", "strokeWidth": 4 }, "icon": { "fill": "#DA4E55" }, "label": { "text": "Granted" } } },
 
       { "id": "t4", "type": "sf.BpmnTask", "position": { "x": 430, "y": 380 }, "size": { "width": 150, "height": 68 }, "attrs": { "label": { "text": "Send rejection notice" } } },
-      { "id": "rej", "type": "sf.BpmnEvent", "eventType": "end", "position": { "x": 640, "y": 392 }, "size": { "width": 48, "height": 48 }, "attrs": { "body": { "fill": "#F9E3E5", "stroke": "#DA4E55", "strokeWidth": 4 }, "icon": { "fill": "#DA4E55" }, "label": { "text": "Rejected" } } },
+      { "id": "rej", "type": "sf.BpmnEvent", "eventType": "end", "position": { "x": 640, "y": 390 }, "size": { "width": 48, "height": 48 }, "attrs": { "body": { "fill": "#F9E3E5", "stroke": "#DA4E55", "strokeWidth": 4 }, "icon": { "fill": "#DA4E55" }, "label": { "text": "Rejected" } } },
 
       { "id": "a1", "type": "standard.Link", "source": { "id": "anno", "port": "port-bottom" }, "target": { "id": "t1", "port": "port-top" }, "lineStyle": "2 4", "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
       { "id": "f1", "type": "standard.Link", "source": { "id": "start", "port": "port-right" }, "target": { "id": "t1", "port": "port-left" }, "router": { "name": "sfManhattan" }, "connector": { "name": "rounded", "args": { "radius": 8 } } },
@@ -2103,7 +2104,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2152,7 +2153,7 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
@@ -2193,8 +2194,35 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
   (and keep children ≥ 48px below the 40px header, i.e. `container.y + 88`). This is also what the in-app
   auto-size produces, so a 48px frame is already at its resting size and won't shift on the first edit.
 - **Zones:** Place zones first (z=0) and size them to encompass their child elements with the same 48px padding.
-- **Links:** The `sfManhattan` router auto-routes orthogonal paths. You rarely need `vertices` — only add them for specific waypoint control.
+- **Links:** The `sfManhattan` router auto-routes orthogonal paths. Leave `vertices` out: a vertex is a fixed
+  waypoint the router never re-checks, so it stays put when a card is dragged. Fix a bad route with spacing (see
+  *Layout rules* below), not with vertices.
 - **Port selection:** Use `port-right`/`port-left` for horizontal flows, `port-top`/`port-bottom` for vertical flows. The router handles the rest.
+
+### Layout rules: what a reader notices
+
+These come from diagrams that validated clean yet needed hand fixes before going into a document. The validator
+warns on the first five (on rule 5, only for a link with `vertices`). The last three need you to look at a render.
+
+1. **A gateway or event label goes on a side no link uses.** The default is below the shape
+   (`y: calc(h + 10)`), so a link leaving `port-bottom` is drawn through the text. Above is
+   `"label": { "text": "…", "y": -10, "textVerticalAnchor": "bottom" }`. Right is
+   `{ "x": "calc(w + 10)", "y": "calc(0.5 * h)", "textAnchor": "start", "textVerticalAnchor": "middle" }`.
+2. **Leave 64 px between a shape and the row it fans out into, and never less than 48.** The router turns 32 px
+   out of a port. Given 64 px it draws one trunk and a shared bus by itself. At 24-36 px the branches tangle, and a
+   shared vertex does not fix that.
+3. **Cards joined by facing ports share a centre on the cross axis.** Any offset of 2 px or more draws a step or
+   a slant. An event beside a task sits at `event.y = task.y + task.height / 2 - event.height / 2`. A link
+   between lanes joins two cards in the same column, so it is one straight vertical line.
+4. **One column grid for the whole canvas, frames included.** Cards in a row share a `y` (or a centre, when
+   their heights differ). Neighbours that miss a shared edge by 5-15 px read as a slip.
+5. **A frame owns its internal links too.** A link whose two ends sit in one Zone, Container or Pool gets
+   `parent: "<frame-id>"` and goes in that frame's `embeds[]`. The app does the same once either end is dragged.
+   It matters most for a link with `vertices`: moving the frame otherwise leaves its bends behind.
+6. **Order a row of targets by where their links come from**, so links from one source do not cross each other.
+7. **Spread a lane's cards evenly across the pool width**, not packed to one side.
+8. **Put a link label on a stretch no other line runs through.** The default midpoint is often a crossing. On load
+   the app moves a label off cards and other labels, but not off other lines.
 
 ### Capture: put cards INSIDE a frame, don't just draw one behind them
 

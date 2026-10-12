@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.25.3';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.3';
+import { cctx } from './context.js?v=1.25.4';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.4';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -27,6 +27,12 @@ const SNAP_STRAIGHT = 4; // collapse a near-collinear orthogonal link to DEAD-ST
 // Slice 2 router extraction; the const stayed behind, leaving this an undefined
 // cross-module reference — relocating it here closes that gap.)
 const CHANNEL_HEIGHT = 16;
+// Shared trunk and bus (2026-10-12, the owner's pick "B"). On these types the links leaving one port share one trunk
+// and one bus and branch at their targets, instead of each taking its own CHANNEL_HEIGHT lane - the staircase the
+// owner rejected on Auto Layout output, and the opposite of the shared-vertex fix a skill user made by hand. Flow
+// keeps its lanes: decision outcomes are separate labelled branches, and a shared bus there measured worse (labels
+// drifted off their decisions, a branch ran past cards). The other types are unchanged until someone measures them.
+const SHARED_BUS_TYPES = new Set(['architecture', 'process']);
 
 // ── Per-reroute-pass cache (P1) ──────────────────────────────────────────────
 // rerouteAllLinks (link-runtime.js) re-routes EVERY link per animation frame while an element is dragged.
@@ -53,11 +59,33 @@ const FRAME_TYPES = new Set([
   'sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop', 'sf.Task',
   'sf.SequenceParticipant', 'sf.SequenceActor',
 ]);
+/** True when a side port's exit is blocked by a THIRD card: the router's first turn (STUB out from the side's middle)
+ *  lands inside another obstacle's PAD-padded box. orthoRoute then has no clear candidate and falls back to its
+ *  least-overlap route, a line straight through that card. Mirrors the router's obstacle set: pass-through types, the
+ *  cell, the `ignore` cells (normally the link's other end) and every ancestor of either do not block. */
+export function portExitBlocked(graph, cell, side, ignore = []) {
+  const bb = cell.getBBox();
+  const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+  const p = side === 'top' ? { x: cx, y: bb.y - STUB } : side === 'bottom' ? { x: cx, y: bb.y + bb.height + STUB }
+    : side === 'left' ? { x: bb.x - STUB, y: cy } : { x: bb.x + bb.width + STUB, y: cy };
+  const skip = new Set();
+  for (const c of [cell, ...ignore]) {
+    for (let a = c, seen = 0; a && seen < 64; a = a.getParentCell?.(), seen++) skip.add(a.id);
+  }
+  return graph.getElements().some((el) => {
+    if (skip.has(el.id) || OBSTACLE_SKIP_TYPES.has(el.get('type'))) return false;
+    const b = el.getBBox();
+    return p.x > b.x - PAD && p.x < b.x + b.width + PAD && p.y > b.y - PAD && p.y < b.y + b.height + PAD;
+  });
+}
+
 let _routePass = null;   // { graph, boxes: [{id, box}], portEnds: Map<"cellId::portId", [{link,end}]> } | null
 
 /** Open a reroute pass: snapshot the obstacle bboxes + the portId→ends index for `gr` once, so every link
  *  routed until endRoutePass() reuses them instead of recomputing. Idempotent-ish: a second call re-snapshots. */
 export function beginRoutePass(gr) {
+  _avoidRuns.clear();   // every pass routes plainly first; separateForeignRuns then re-applies what is still needed
+  _passNo++;
   if (!gr) { _routePass = null; return; }
   const boxes = [];
   for (const el of gr.getElements()) {
@@ -167,6 +195,148 @@ function routeOverlap(a, mid, b, obstacles) {
   return total;
 }
 
+// ── Different-looking links never share a line (2026-10-12, the owner's rule) ─────────────────────────────────────
+// Links that LOOK the same (stroke colour + dash) may run on one line: they read as one trunk. Links that look
+// different must not: with the shared bus on, a red dashed link landed on the same vertical as a green solid one -
+// detours around a card all pick the same x, 20 px out - and the dashes hid which line went where. After a batch is
+// routed, separateForeignRuns finds a run two different-looking links share (or run within RUN_TOL of), and re-routes
+// one of them with the other's runs as soft obstacles (orthoRoute's `avoid`). Sharing a port does not exempt a pair:
+// on mixed-hub a dashed and a solid link into one port merged for 73 px, and a solid/dashed pair between the same two
+// cards ran as one line for 341 px. Same-look links are left to merge into one trunk. Only on SHARED_BUS_TYPES:
+// elsewhere the per-link channels already keep lines apart.
+const RUN_TOL = 10;  // different-looking runs closer than this read as one smudged line (8 px apart did, on mixed-hub)
+const RUN_MIN = 6;   // a shared stretch shorter than this is a corner or a crossing, not a shared line
+const _lastRuns = new Map();    // link id -> { pts, runs, look, pass } of the route the router last returned
+let _passNo = 0;                // bumped per reroute pass: a sibling's line is adopted only from the SAME pass
+const _avoidRuns = new Map();   // link id -> runs it must not share a line with (set by separateForeignRuns)
+
+const axisRun = (p, q) => {
+  if (Math.abs(p.y - q.y) < 1 && Math.abs(p.x - q.x) >= 1) return { o: 'H', c: p.y, lo: Math.min(p.x, q.x), hi: Math.max(p.x, q.x) };
+  if (Math.abs(p.x - q.x) < 1 && Math.abs(p.y - q.y) >= 1) return { o: 'V', c: p.x, lo: Math.min(p.y, q.y), hi: Math.max(p.y, q.y) };
+  return null;
+};
+const runsOf = (pts) => { const out = []; for (let i = 0; i + 1 < pts.length; i++) { const r = axisRun(pts[i], pts[i + 1]); if (r) out.push(r); } return out; };
+const sharesLine = (r, q) => r.o === q.o && Math.abs(r.c - q.c) <= RUN_TOL && Math.min(r.hi, q.hi) - Math.max(r.lo, q.lo) > RUN_MIN;
+
+/** True when the polyline `pts` runs along one of `runs` for more than RUN_MIN px. Pure; exported for tests. */
+export function hitsRuns(pts, runs) {
+  for (const r of runsOf(pts)) for (const q of runs) if (sharesLine(r, q)) return true;
+  return false;
+}
+
+/** What a reader sees of a link's line: its stroke colour and dash pattern. */
+function linkLook(link) {
+  const dash = link.get('lineStyle') || link.attr('line/strokeDasharray') || 'none';
+  return `${String(link.attr('line/stroke') || '').toLowerCase()}|${dash}`;
+}
+
+function linksConflict(a, b) {
+  if (!a || !b || a.look === b.look) return false;
+  return a.runs.some((r) => b.runs.some((q) => sharesLine(r, q)));
+}
+
+/** After a batch of routes: re-route links that share a line with a different-looking link. Returns how many moved. */
+export function separateForeignRuns(gr, paper) {
+  if (!gr || !paper || !SHARED_BUS_TYPES.has(cctx.getDiagramType?.())) return 0;
+  const links = gr.getLinks();
+  const ids = new Set(links.map((l) => l.id));
+  for (const id of [..._lastRuns.keys()]) if (!ids.has(id)) { _lastRuns.delete(id); _avoidRuns.delete(id); }
+  // A move can put a link onto a third link's line, so sweep again while anything moved (bounded).
+  let total = 0;
+  for (let sweep = 0; sweep < SEPARATION_SWEEPS; sweep++) {
+    const moved = separationSweep(links, paper);
+    total += moved;
+    if (!moved) break;
+  }
+  return total;
+}
+
+const SEPARATION_SWEEPS = 3;
+
+function separationSweep(links, paper) {
+  // Candidate pairs, bucketed by line so a big diagram is not an all-pairs scan.
+  const buckets = new Map();
+  links.forEach((l, i) => {
+    for (const r of _lastRuns.get(l.id)?.runs || []) {
+      const k = `${r.o}:${Math.round(r.c)}`;
+      if (!buckets.has(k)) buckets.set(k, new Set());
+      buckets.get(k).add(i);
+    }
+  });
+  const pairs = new Set();
+  links.forEach((l, i) => {
+    for (const r of _lastRuns.get(l.id)?.runs || []) {
+      for (let d = -RUN_TOL; d <= RUN_TOL; d++) {
+        for (const j of buckets.get(`${r.o}:${Math.round(r.c) + d}`) || []) if (j > i) pairs.add(i * links.length + j);
+      }
+    }
+  });
+  const reroute = (link) => paper.findViewByModel(link)?.update?.();
+  let moved = 0;
+  for (const key of [...pairs].sort((p, q) => p - q)) {
+    const first = links[Math.floor(key / links.length)], second = links[key % links.length];
+    if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) continue;
+    // Try moving each link of the pair and keep the move that changes its route LEAST. Moving the later link by
+    // default sent two red links 144 px down to a line hugging a container's cards, where moving the green link it
+    // clashed with cost 12 px.
+    let best = null;
+    for (const [mover, keeper] of [[second, first], [first, second]]) {
+      const before = _avoidRuns.get(mover.id), oldPts = _lastRuns.get(mover.id).pts;
+      const trial = (before || []).concat(_lastRuns.get(keeper.id).runs);
+      _avoidRuns.set(mover.id, trial);
+      reroute(mover);
+      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) {
+        const shift = routeShift(oldPts, _lastRuns.get(mover.id).pts);
+        if (!best || shift < best.shift) best = { mover, trial, shift };
+      }
+      if (before) _avoidRuns.set(mover.id, before); else _avoidRuns.delete(mover.id);
+      reroute(mover);
+    }
+    if (best) { _avoidRuns.set(best.mover.id, best.trial); reroute(best.mover); moved++; }
+  }
+  return moved;
+}
+
+/** How far a re-routed polyline strays from the old one: the largest distance from a new point to the old line. */
+function routeShift(oldPts, newPts) {
+  const toSeg = (p, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  };
+  let worst = 0;
+  for (const p of newPts) {
+    let d = Infinity;
+    for (let i = 0; i + 1 < oldPts.length; i++) d = Math.min(d, toSeg(p, oldPts[i], oldPts[i + 1]));
+    worst = Math.max(worst, d === Infinity ? 0 : d);
+  }
+  return worst;
+}
+
+/** A route can reach a port's stub from the CELL side and turn back: a detour line 20 px out (obstacle edge + PAD + 4)
+ *  meets the stub 32 px out, and the line runs 12 px past the arrow and back - the hook beside Agentforce once its link
+ *  left a red link's line. When the point before the stub lies on the stub's line between the visible line end
+ *  (CP_PERP_OFFSET out) and the stub, the stub goes: the line then runs straight into the port. Mutates `route`. */
+export function dropBacktrackingStub(route, dir, atEnd) {
+  if (!dir || route.length < 3) return;
+  const stub = atEnd ? route[route.length - 1] : route[0];
+  const prev = atEnd ? route[route.length - 2] : route[1];
+  const horiz = dir === 'left' || dir === 'right';
+  if (horiz ? Math.abs(prev.y - stub.y) >= 1 : Math.abs(prev.x - stub.x) >= 1) return;   // not on the stub's line
+  const out = (dir === 'right' || dir === 'bottom') ? 1 : -1;   // outward along the axis
+  const k = horiz ? 'x' : 'y';
+  const lineEnd = stub[k] - out * (STUB - CP_PERP_OFFSET);
+  // Keep at least 4 px of line after the trim: between two cards 33 px apart a 1 px end segment turned the arrow
+  // sideways (an arrowhead's direction comes from the last segment).
+  if (out * (prev[k] - lineEnd) >= 4 && out * (stub[k] - prev[k]) > 0) { if (atEnd) route.pop(); else route.shift(); }
+}
+
+/** True when the active diagram routes with the shared trunk and bus (and so wants separateForeignRuns). */
+export function isSharedBusDiagram() { return SHARED_BUS_TYPES.has(cctx.getDiagramType?.()); }
+
+/** Forget remembered routes and avoid-sets, e.g. when a different diagram loads into the paper. */
+export function resetRouteMemory() { _lastRuns.clear(); _avoidRuns.clear(); }
+
 // Try a candidate route; return it if clear, or null.
 export function tryRoute(a, mid, b, obstacles) {
   const pts = [a, ...mid, b];
@@ -175,7 +345,52 @@ export function tryRoute(a, mid, b, obstacles) {
 
 // Build an orthogonal route between two stub points, avoiding obstacles.
 // Returns intermediate waypoints (NOT including a and b themselves).
-export function orthoRoute(a, b, obstacles) {
+// `avoid` (optional): axis runs of OTHER links this route must not share a line with (see separateForeignRuns). They
+// are soft: the search first treats a candidate on one of them as blocked, and only if nothing qualifies does it run
+// again exactly as it would without them - so avoiding a line can never make a route worse than it was.
+export function orthoRoute(a, b, obstacles, avoid = null, prefer = null) {
+  let plain = orthoSearch(a, b, obstacles, null, true);
+  // Trunk unification (shared-bus types): `prefer` holds lines of links that share a port with this one and look the
+  // same. When this route runs PARALLEL to one of them within ADOPT_DIST, take that line instead: two red links into
+  // one port otherwise ran as a rectangle of horizontals 50 px apart, each Z on its own midpoint. Only near-duplicates
+  // merge - adopting any sibling line made fan-out branches ride down a neighbour's drop before splitting off.
+  if (prefer && prefer.length) {
+    const own = runsOf([a, ...plain, b]);
+    const near = prefer.filter((r) => own.some((q) => q.o === r.o && Math.abs(q.c - r.c) <= ADOPT_DIST
+      && Math.min(q.hi, r.hi) - Math.max(q.lo, r.lo) > RUN_MIN));
+    const merged = near.length ? adoptLine(a, b, obstacles, near) : null;
+    if (merged && pathLength(a, merged, b) <= pathLength(a, plain, b)) plain = merged;
+  }
+  if (!avoid || !avoid.length) return plain;
+  // Leave the line only by a route about as short as the plain one. With nothing in the way, a straight link on
+  // another link's line found a U-detour (40 px out and back): the awkward-angle artefact that got Stage E reverted.
+  // A route that stays on course is the same length (Manhattan), so the allowance only rejects detours.
+  const strict = orthoSearch(a, b, obstacles, avoid, false);
+  return strict && pathLength(a, strict, b) <= pathLength(a, plain, b) + DETOUR_ALLOWANCE ? strict : plain;
+}
+
+const ADOPT_DIST = 64;   // a same-looking sibling's line this close (two stubs) is the same corridor: merge onto it
+
+/** A Z through one of `lines` (strictly between a and b, so no longer than the plain route) that is clear. */
+function adoptLine(a, b, obstacles, lines) {
+  for (const r of lines) {
+    const mid = r.o === 'H'
+      ? (r.c > Math.min(a.y, b.y) && r.c < Math.max(a.y, b.y) ? [{ x: a.x, y: r.c }, { x: b.x, y: r.c }] : null)
+      : (r.c > Math.min(a.x, b.x) && r.c < Math.max(a.x, b.x) ? [{ x: r.c, y: a.y }, { x: r.c, y: b.y }] : null);
+    if (mid && pathClear([a, ...mid, b], obstacles) && hitsRuns([a, ...mid, b], [r])) return mid;
+  }
+  return null;
+}
+
+const DETOUR_ALLOWANCE = 24;   // px a route may grow to leave another link's line
+const pathLength = (a, mid, b) => {
+  const pts = [a, ...mid, b];
+  let len = 0;
+  for (let i = 0; i + 1 < pts.length; i++) len += Math.abs(pts[i + 1].x - pts[i].x) + Math.abs(pts[i + 1].y - pts[i].y);
+  return len;
+};
+
+function orthoSearch(a, b, obstacles, avoid, allowFallback) {
   const sameY = Math.abs(a.y - b.y) < 2;
   const sameX = Math.abs(a.x - b.x) < 2;
 
@@ -194,7 +409,13 @@ export function orthoRoute(a, b, obstacles) {
   // measured 1.3 s per link at 500 elements, on every drag frame, for one vertex 10 px off a node (audit 2026-09-23).
   const inside = (p) => obstacles.some((box) => p.x > box.x - PAD && p.x < right(box) + PAD && p.y > box.y - PAD && p.y < bottom(box) + PAD);
   const trapped = inside(a) || inside(b);
-  const consider = (mid) => { pool.push(mid); return !trapped && pathClear([a, ...mid, b], obstacles) ? mid : null; };
+  const clear = (mid) => { const pts = [a, ...mid, b]; return pathClear(pts, obstacles) && !(avoid && hitsRuns(pts, avoid)); };
+  const consider = (mid) => { pool.push(mid); return !trapped && clear(mid) ? mid : null; };
+
+  // Coincident stub tips (within 2 px on both axes): facing ports 63-65 px apart, i.e. two STUBs. Every L and Z below
+  // is skipped as degenerate on BOTH axes, so the search fell through to a detour and drew a U-hook down and back up
+  // one line (2026-10-12, found authoring a skill layout at a 64 px gap). The tips already meet: nothing to route.
+  if (sameX && sameY) return [];
 
   // --- L-shapes (one turn) — skip when degenerate ---
   if (!sameY && !sameX) {
@@ -242,22 +463,20 @@ export function orthoRoute(a, b, obstacles) {
   // these are long obstacle-edge-hugging routes, and picking one as a fallback runs it collinear with other
   // links' detours → a foreign-overlap PILE (the banned trade). A clear detour is still returned immediately.
   for (const dy of yCandidates) {
-    const r = tryRoute(a, [{ x: a.x, y: dy }, { x: b.x, y: dy }], b, obstacles);
-    if (r) return r;
+    const mid = [{ x: a.x, y: dy }, { x: b.x, y: dy }];
+    if (clear(mid)) return mid;
   }
   // Try horizontal detour (go to detourX, cross vertically, return)
   for (const dx of xCandidates) {
-    const r = tryRoute(a, [{ x: dx, y: a.y }, { x: dx, y: b.y }], b, obstacles);
-    if (r) return r;
+    const mid = [{ x: dx, y: a.y }, { x: dx, y: b.y }];
+    if (clear(mid)) return mid;
   }
 
   // --- 5-segment S-route fallback: combine x and y detours ---
   for (const dy of yCandidates) {
     for (const dx of xCandidates) {
-      const r = tryRoute(a,
-        [{ x: dx, y: a.y }, { x: dx, y: dy }, { x: b.x, y: dy }],
-        b, obstacles);
-      if (r) return r;
+      const mid = [{ x: dx, y: a.y }, { x: dx, y: dy }, { x: b.x, y: dy }];
+      if (clear(mid)) return mid;
     }
   }
   }   // !trapped
@@ -265,7 +484,8 @@ export function orthoRoute(a, b, obstacles) {
   // Last resort: nothing is clear. Return the LEAST-overlap short candidate (L/Z) rather than a blind
   // through-node L (D1). The blind L is included as the floor, so this is never worse than the old behaviour;
   // strict `<` keeps the earliest (simplest/shortest) candidate on ties, since the pool is already in
-  // preference order.
+  // preference order. A strict (avoid) search has no fallback of its own: the plain search runs next.
+  if (!allowFallback) return null;
   const blindL = [{ x: b.x, y: a.y }];
   pool.push(blindL);
   let best = blindL, bestOv = Infinity;
@@ -360,6 +580,55 @@ export function registerSfRouter() {
 
   // All link ends touching a physical port (cell id + port id), regardless of
   // whether the link defines that port as its source or target.
+  // The edge a link enters: its target cell's side and that side's coordinate (cards in one column share it).
+  function targetEdgeKey(link) {
+    const t = link.get('target'), tc = t?.id ? link.graph?.getCell(t.id) : null;
+    const side = tc ? getSideForPort(tc, t.port) : null;
+    if (!side) return null;
+    const bb = tc.getBBox();
+    const edge = side === 'left' ? bb.x : side === 'right' ? bb.x + bb.width : side === 'top' ? bb.y : bb.y + bb.height;
+    return { key: `${side}:${Math.round(edge)}:${linkLook(link)}`, cell: tc, side };
+  }
+  // True when a same-looking link entering the same column edge has a crowded (trunk-offset) target port. Pass-only:
+  // one scan per pass builds every column's answer, and outside a pass it would cost a scan per link (quadratic on a
+  // load). Loading a shared-bus diagram runs a full pass for this (migrateNodes).
+  function columnNeedsTargetLead(link) {
+    const gr = link.graph;
+    if (!_routePass || _routePass.graph !== gr) return false;
+    const me = targetEdgeKey(link);
+    if (!me) return false;
+    let cols = _routePass.columnLead;
+    if (!cols) {
+      cols = new Map();
+      for (const l of gr.getLinks()) {
+        const k = targetEdgeKey(l);
+        if (!k) continue;
+        const off = trunkAnchorOffset(l, 'target', k.cell, k.side);
+        if (off != null && Math.abs(off) > 1) cols.set(k.key, true);
+        else if (!cols.has(k.key)) cols.set(k.key, false);
+      }
+      _routePass.columnLead = cols;
+    }
+    return cols.get(me.key) === true;
+  }
+
+  // Lines of the links that share a port with `link` and look the same (orthoRoute's `prefer`, which merges only onto
+  // near-parallel ones). Inside a pass only runs drawn earlier in THAT pass count: right after Auto Layout the memory
+  // still holds routes for the old card positions.
+  function sameLookSiblingRuns(link, srcDef, tgtDef) {
+    const gr = link.graph, look = linkLook(link), out = [];
+    for (const def of [srcDef, tgtDef]) {
+      if (!def?.id || !def.port) continue;
+      for (const e of gatherPortEnds(gr, def.id, def.port)) {
+        if (e.link === link || linkLook(e.link) !== look) continue;
+        const rec = _lastRuns.get(e.link.id);
+        if (!rec || (_routePass && rec.pass !== _passNo)) continue;
+        for (const r of rec.runs) out.push(r);
+      }
+    }
+    return out;
+  }
+
   function gatherPortEnds(gr, cellId, portId) {
     // P1: served from the pass index when one is open for THIS graph (built identically, in gr.getLinks()
     // order, so the returned set + ordering match the scan exactly).
@@ -812,8 +1081,9 @@ export function registerSfRouter() {
       ? getSideForPort(srcCell, srcDef.port) : null;
     const _tSide = cctx.isConnectorGroupingEnabled() && !_isSequenceSelfLoop
       ? getSideForPort(tgtCell, tgtDef.port) : null;
-    const _srcChannel = _sSide ? linkChannelIndex(link, 'source', srcCell, _sSide) : null;
-    const _tgtChannel = _tSide ? linkChannelIndex(link, 'target', tgtCell, _tSide) : null;
+    const _perLinkChannels = !SHARED_BUS_TYPES.has(cctx.getDiagramType?.());
+    const _srcChannel = _perLinkChannels && _sSide ? linkChannelIndex(link, 'source', srcCell, _sSide) : null;
+    const _tgtChannel = _perLinkChannels && _tSide ? linkChannelIndex(link, 'target', tgtCell, _tSide) : null;
 
     // Lead-out gate: ALSO require the perpendicular gap between
     // source and target stubs be large enough for two LEAD_OUTs +
@@ -834,8 +1104,15 @@ export function registerSfRouter() {
     // horizontal-jog artifact at the stub root) OR a channel applies
     // (need a lead waypoint to shift). Single-link ports with no
     // sibling channel still skip the lead-out.
+    // Shared-bus columns: a target lead-out comes from a crowded target port, so ONE link into a column of cards could
+    // turn 24 px off the others' bus (MC Personalization -> Web at x = 1432 while its three siblings, and MC Engagement
+    // -> Direct, turned at 1456: only Web's port carries two arrowhead styles). When any same-looking link into a
+    // column edge takes one, all of them do, and they share one bus. Per fan-out was not enough: a link from another
+    // source into the same column then crossed a branch right at its arrow. (Dropping lead-outs instead moved lines
+    // into frames, where the label resolver - which treats frames as obstacles - could not move a label off a card.)
     const _needSrcLead = _leadOutSafe && ((sOff != null && Math.abs(sOff) > 1) || (_srcChannel != null));
-    const _needTgtLead = _leadOutSafe && ((tOff != null && Math.abs(tOff) > 1) || (_tgtChannel != null));
+    const _needTgtLead = _leadOutSafe && ((tOff != null && Math.abs(tOff) > 1) || (_tgtChannel != null)
+      || (!_perLinkChannels && columnNeedsTargetLead(link)));
     let srcLead = _needSrcLead ? extendPerp(from, srcInfo.dir, LEAD_OUT) : null;
     let tgtLead = _needTgtLead ? extendPerp(to, tgtInfo.dir, LEAD_OUT) : null;
 
@@ -899,12 +1176,17 @@ export function registerSfRouter() {
 
       const orthoStart = srcLead || from;
       const orthoEnd   = tgtLead || to;
-      const mid = orthoRoute(orthoStart, orthoEnd, obstacles);
+      const avoid = _perLinkChannels ? null : _avoidRuns.get(link.id);
+      const prefer = _perLinkChannels ? null : sameLookSiblingRuns(link, srcDef, tgtDef);
+      const mid = orthoRoute(orthoStart, orthoEnd, obstacles, avoid, prefer);
       const route = [from];
       if (srcLead) route.push(srcLead);
       route.push(...mid);
       if (tgtLead) route.push(tgtLead);
       route.push(to);
+      dropBacktrackingStub(route, tgtInfo.dir, true);
+      dropBacktrackingStub(route, srcInfo.dir, false);
+      _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0 });
       return route;
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors

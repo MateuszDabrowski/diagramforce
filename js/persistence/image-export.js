@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.3';
-import { showToast, showError } from '../feedback.js?v=1.25.3';
-import { sanitizeFilenamePart } from '../util.js?v=1.25.3';
-import { pctx } from './context.js?v=1.25.3';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.4';
+import { showToast, showError } from '../feedback.js?v=1.25.4';
+import { sanitizeFilenamePart } from '../util.js?v=1.25.4';
+import { pctx } from './context.js?v=1.25.4';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -730,7 +730,9 @@ function replaceForeignObjects(svgRoot) {
     // Clamp to maxLines (4) when the FO is short, matching the original
     // -webkit-line-clamp:4 visual. For full-height FOs (TextLabel/Note body),
     // compute from height/lineHeight so multi-line notes don't get truncated.
-    const fitLines = Math.max(1, Math.floor(h / (fontSize * lineHeight))) || 1;
+    // +1 px: a Note sizes its body from scrollHeight, an integer that rounds 7 x 14.3 = 100.1 px DOWN to 100, so a
+    // plain floor dropped the last line of a fitted 7-, 8-, 11- or 14-line note to "…" (1.25.3, a skill user's report).
+    const fitLines = Math.max(1, Math.floor((h + 1) / (fontSize * lineHeight))) || 1;
     const maxLines = Math.max(fitLines, 4);
     const visibleLines = lines.slice(0, maxLines);
     if (lines.length > maxLines) {

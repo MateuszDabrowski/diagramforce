@@ -85,7 +85,9 @@
           "obj-dup",
           "obj-dulb",
           "obj-pc",
-          "obj-csct"
+          "obj-csct",
+          "rel-24",
+          "rel-27"
         ],
         "attrs": {
           "body": {
@@ -120,7 +122,8 @@
           "obj-ep",
           "obj-dae",
           "obj-me",
-          "obj-ect"
+          "obj-ect",
+          "rel-21"
         ],
         "attrs": {
           "body": {
@@ -3344,7 +3347,8 @@
               "stroke-dasharray": "none"
             }
           }
-        }
+        },
+        "parent": "z-eng"
       },
       {
         "type": "standard.Link",
@@ -3430,7 +3434,8 @@
               "stroke-dasharray": "none"
             }
           }
-        }
+        },
+        "parent": "z-con"
       },
       {
         "type": "standard.Link",
@@ -3596,7 +3601,8 @@
               "stroke-dasharray": "none"
             }
           }
-        }
+        },
+        "parent": "z-con"
       },
       {
         "type": "standard.Link",

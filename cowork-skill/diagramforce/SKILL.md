@@ -186,7 +186,8 @@ shape lists its `type`, mandatory fields, port definitions, and link rules) rath
 file. Shape `type` strings, field keys, and port ids are exact - the app silently drops a cell whose
 `type` is not a real shape and a link pointing at a missing cell, so a guessed name vanishes on load.
 
-Also read **Common authoring mistakes** for your type (spec, right after "Choosing the right diagram type") and,
+Also read **Common authoring mistakes** for your type (spec, right after "Choosing the right diagram type"), the
+**Layout rules** under Layout Tips (eight rules that separate a diagram that loads from one that reads well) and,
 whenever the diagram has any `sf.Zone` / `sf.Container` / `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` /
 `sf.TaskGroup`, the **Capture** section under Layout Tips. For a `datamodel` also read the port-level note under
 `sf.DataObject` (field-level vs object-level relationships, and which direction to draw them).
@@ -198,7 +199,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.3",
+  "appVersion": "1.25.4",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -217,6 +218,10 @@ Envelope:
   `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` / `sf.TaskGroup` carries `parent: "<frame-id>"` AND its id
   is in the frame's `embeds[]`. Geometry creates nothing: a frame merely drawn behind cards does not group-move
   or auto-size, and the validator warns DECORATIVE. (One exception: a Flow's stage bands - see `--expand-stages`.)
+  A link with both ends in one frame is embedded the same way.
+- **Editing a diagram the user already has? Do not regenerate it.** A file exported from the app carries
+  `timestamp` and `viewport` keys, and may hold layout fixes the user made by hand. Make content changes as text
+  edits to their JSON, leave every `position`, `size` and `vertices` as it is, then validate.
 
 ### 4. Validate - and fix until clean (this is not optional)
 
@@ -235,10 +240,20 @@ loop: **fix every ERROR and every WARNING, re-run until both counts are 0.** Why
   wrong field, a type-specific shape in the wrong diagram type, a frame drawn behind cards it does not own
   (DECORATIVE), a relationship with no cardinality markers, a `port-left` / `port-right` on a DataObject). A
   warning is a defect you can fix; fix it.
+- **Layout warnings** are slips a reader sees: a gateway label drawn through a link, a fan-out too close to its
+  row, a link whose ends are a few pixels off a straight line, neighbouring cards a few pixels off one grid. Each
+  names the cells and the offset. Fix them by moving cards, not by adding vertices.
 
-The validator proves the diagram will **load intact**. It does **not** judge whether the layout
-**reads well** - do a final visual pass in your head (spacing, overlaps, flow direction) before
-handing it over.
+The validator proves the diagram **loads intact** and catches the measurable layout slips. It cannot see the
+drawn routes, so it cannot tell you about crossings or a label sitting on another line. **Render it and look
+before you hand it over** wherever a browser can run (Claude Code, a terminal, CI):
+
+```bash
+node scripts/render-diagram.mjs your-diagram.json --out check.png
+```
+
+Then open `check.png` and check it against the spec's Layout rules. In a cloud chat sandbox there is no browser:
+re-read the Layout rules against your coordinates instead, and say you could not render it.
 
 ### 5. Deliver (a one-click link when it fits, the file otherwise)
 
@@ -270,6 +285,10 @@ field-mapping diagram never does. Do not guess - run the script and read the exi
 If the user later wants it in Google Drive or shared, they can do that from inside the app - your job
 ends at a clean, importable diagram.
 
+Report what you checked, not what you hope. If you rendered it, say so. If the user compares it with an image
+they already have, compare the two before you say they match: an export they made in the app may carry hand
+fixes your JSON does not have.
+
 ### 6. When they need an image file (documentation, a pipeline)
 
 If the user wants a PNG / SVG to put into documentation rather than a diagram to open, render it on their machine:
@@ -295,6 +314,10 @@ Options: `--theme light|dark` (default light), `--transparent`, `--app <url>` fo
 - A line `⚠ ... drawn at 0.59x` means the diagram is wider or taller than a browser canvas allows (8192 px), so
   the PNG is shrunk and small text may not read. Render to `.svg` instead, or draw less: a role chart takes
   `--root`, an ERD or mapping a smaller selection.
+- **For an A4 or Letter document, size the canvas for the page.** A portrait page's text column is about 16 cm
+  (454 pt) wide, so text prints at `font px x 454 / canvas width px` pt. A canvas 1,000-1,250 px wide with body
+  text of 13-15 px has worked in practice (about 5-7 pt on the page). If it comes out wider, lay it out top-down
+  or in rows, cut connectors, or raise the text size (`attrs.label.fontSize`).
 
 ## From a live Salesforce org (CLI)
 

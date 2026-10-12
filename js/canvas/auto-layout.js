@@ -3,15 +3,15 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.25.3';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.3';
+import { cctx } from './context.js?v=1.25.4';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.4';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.25.3';
-import { startBatch, endBatch } from '../history.js?v=1.25.3';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.25.4';
+import { startBatch, endBatch } from '../history.js?v=1.25.4';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.25.3';
-import { flowConnectorType } from './link-styles.js?v=1.25.3';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.3';
+import { computeFlowLayout } from './flow-layout.js?v=1.25.4';
+import { flowConnectorType } from './link-styles.js?v=1.25.4';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.4';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -32,6 +32,12 @@ export function autoLayout(direction, opts = {}) {
     fitContent();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { cctx.fitContent?.(); });
   };
+  // Settle every frame at its resting (content-hug) size BEFORE the units below are measured. fitAfterLayout
+  // re-hugs them anyway, so a frame saved tighter than the 48 px wrap padding (any diagram from before 1.22.4)
+  // grew 32 px per side AFTER it had been placed, into its neighbour. Measured on the stage-c fixtures: the
+  // vertical-lanes Layer 3 zone overlapped Legacy Martech Stack by 32 px and horizontal-lanes' lanes each other by
+  // 16 px, against 0 before 1.22.4 (bisected with the D0 route probe, 2026-10-12).
+  cctx.refitAllParents?.();
   const elements = graph.getElements();
   if (elements.length < 2) { if (elements.length) fitAfterLayout(); return; }
 

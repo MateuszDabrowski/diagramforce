@@ -440,7 +440,164 @@ export function validateDiagram(diagram) {
     }
   }
 
+  frameLinkWarnings(cells, byId, warnings);
+  // Geometry checks run only where the author owns the geometry: a converted Flow keeps Flow Builder's coordinates,
+  // Data Mapping and Gantt positions are computed, and a Sequence lays out on its lifelines.
+  if (['architecture', 'process', 'datamodel', 'org'].includes(type)) layoutWarnings(cells, warnings);
+
   return { errors, warnings };
+}
+
+// A link with vertices that is not embedded in the frame holding both its ends keeps its bends where they are when
+// the frame moves (JointJS translates a frame's EMBEDDED links only - checked on 4.0.4). The app embeds such a link
+// itself the first time either end is dragged (finalizeEmbedding reparents every connected link, using JointJS
+// `Link#reparent`'s rule, mirrored here), so authoring it just matches the app's resting state. Links without
+// vertices are not flagged: they follow their ends wherever the frame goes.
+function frameLinkWarnings(cells, byId, warnings) {
+  const ancestors = (id) => {
+    const out = [];
+    for (let p = byId.get(id)?.parent; typeof p === 'string' && byId.has(p) && !out.includes(p); p = byId.get(p).parent) out.push(p);
+    return out;
+  };
+  const hits = [];
+  for (const c of cells) {
+    if (!isLink(c) || !Array.isArray(c.vertices) || !c.vertices.length) continue;
+    const s = c.source?.id, t = c.target?.id;
+    if (!byId.has(s) || !byId.has(t) || s === t) continue;
+    const sa = ancestors(s), ta = ancestors(t);
+    const want = sa.includes(t) ? t : ta.includes(s) ? s : sa.find((a) => ta.includes(a));
+    if (want && c.parent !== want) hits.push(`"${c.id ?? '?'}" in "${want}"`);
+  }
+  if (hits.length) {
+    warnings.push(`${hits.length} link(s) with vertices are not embedded in the frame that holds both their ends (${listSome(hits)}) - moving the frame moves the cards but leaves these bends behind. Set \`parent\` to that frame on the link AND list the link in the frame's \`embeds[]\`, as the app does once either end is dragged.`);
+  }
+}
+
+const listSome = (items, n = 4) => items.slice(0, n).join(', ') + (items.length > n ? ', …' : '');
+
+// LAYOUT checks (2026-10-12). From real use: four generated diagrams validated with 0 errors and 0 warnings, yet each
+// needed hand fixes before it could go into a document. The checks above prove a diagram LOADS; these flag geometry
+// that loads fine but reads as a mistake. Each fires only in a band no author means (a near miss, not a deliberate
+// offset), and each is ONE grouped warning, like the router check above.
+const SIDE_OF_PORT = Object.assign(Object.create(null), { 'port-top': 'top', 'port-bottom': 'bottom', 'port-left': 'left', 'port-right': 'right' });
+const FRAME_TYPES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
+// Text and badges placed relative to something else, so their edges carry no grid.
+const NOT_CARDS = new Set(['sf.TextLabel', 'sf.Annotation', 'sf.Line', 'df.Pill', 'df.Legend']);
+// The loader recomputes these heights (the Sizing rule, content-sized cards), so an authored centre or bottom edge is
+// not where the card ends up. Only their left and top edges are compared.
+const CONTENT_SIZED = new Set(['sf.DataObject', 'sf.OrgPerson', 'sf.Note', 'df.Table']);
+const NEAR_MISS_MIN = 4;    // unlinked neighbours offset by this little do not read as misaligned
+const FAN_GAP_MIN = 48;     // measured: a 4-way fan-out tangles at 24 px, crowds at 36, draws one trunk + bus at 64
+const NEAR_MISS_MAX = 15;  // an offset up to this reads as a slip; beyond it, as a choice
+
+function layoutWarnings(cells, warnings) {
+  const box = (c) => (c && c.position && c.size && [c.position.x, c.position.y, c.size.width, c.size.height].every(Number.isFinite)
+    ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height, r: c.position.x + c.size.width, b: c.position.y + c.size.height,
+      cx: c.position.x + c.size.width / 2, cy: c.position.y + c.size.height / 2 }
+    : null);
+  const els = new Map();
+  for (const c of cells) if (c && !isLink(c) && typeof c.id === 'string') els.set(c.id, c);
+  const links = cells.filter((c) => isLink(c));
+  const bent = (l) => Array.isArray(l.vertices) && l.vertices.length > 0;
+
+  // 1. A BPMN gateway or event label sits BELOW the shape by default (y: calc(h + 10)), exactly where a link leaving
+  //    port-bottom runs, so the connector is drawn through the text. Same for a label moved above onto a port-top link.
+  const labelHits = [];
+  for (const c of els.values()) {
+    if (c.type !== 'sf.BpmnGateway' && c.type !== 'sf.BpmnEvent') continue;
+    const lab = c.attrs?.label || {};
+    if (typeof lab.text !== 'string' || !lab.text.trim()) continue;
+    if (lab.x != null && lab.x !== 'calc(0.5 * w)') continue;   // moved sideways, clear of top and bottom
+    const h = c.size?.height ?? 48;
+    const side = lab.y == null || (typeof lab.y === 'string' && /h\s*\+/.test(lab.y)) || (typeof lab.y === 'number' && lab.y >= h) ? 'bottom'
+      : (typeof lab.y === 'number' && lab.y < 0) ? 'top' : null;
+    if (!side) continue;
+    const hit = links.find((l) => [l.source, l.target].some((e) => e?.id === c.id && e?.port === `port-${side}`));
+    if (hit) labelHits.push(`"${c.id}" ${side}, link "${hit.id ?? '?'}"`);
+  }
+  if (labelHits.length) {
+    warnings.push(`${labelHits.length} gateway/event label(s) sit on the side a link uses (${listSome(labelHits)}) - the connector is drawn through the text. Put the label on a side no link uses: above is "label": { "y": -10, "textVerticalAnchor": "bottom" }, right is { "x": "calc(w + 10)", "y": "calc(0.5 * h)", "textAnchor": "start", "textVerticalAnchor": "middle" }.`);
+  }
+
+  // 2. Fan-out (or fan-in) through one port into a row that starts too close: the router turns 32 px out of a port
+  //    and needs the arrowhead's room at the far end, so a short gap tangles the branches instead of sharing one
+  //    trunk and bus. A shared vertex does NOT fix it (measured), and a stored vertex rots on the first drag.
+  //    Only branches that enter the FACING port count: one that turns into a side port is not part of the row (a
+  //    hand-drawn fixture's hub sent one branch sideways into a card 40 px above it, and the bus was fine).
+  const fanHits = [];
+  const groups = new Map();
+  const FACING = Object.assign(Object.create(null), { top: 'bottom', bottom: 'top', left: 'right', right: 'left' });
+  for (const l of links) {   // links with vertices count too: the measured shared vertex tangled at 24 and 36 px
+    for (const [near, far] of [[l.source, l.target], [l.target, l.source]]) {
+      if (!SIDE_OF_PORT[near?.port] || !els.has(near.id) || !els.has(far?.id)) continue;
+      if (SIDE_OF_PORT[far.port] !== FACING[SIDE_OF_PORT[near.port]]) continue;
+      const k = near.id + '|' + near.port;
+      if (!groups.has(k)) groups.set(k, new Set());
+      groups.get(k).add(far.id);
+    }
+  }
+  for (const [k, farIds] of groups) {
+    if (farIds.size < 2) continue;
+    const [id, port] = k.split('|');
+    const n = box(els.get(id));
+    if (!n) continue;
+    const side = SIDE_OF_PORT[port];
+    const gaps = [...farIds].map((f) => box(els.get(f))).filter(Boolean).map((f) => (
+      side === 'bottom' ? f.y - n.b : side === 'top' ? n.y - f.b : side === 'right' ? f.x - n.r : n.x - f.r))
+      .filter((g) => g >= 0);
+    if (gaps.length >= 2 && Math.min(...gaps) < FAN_GAP_MIN) fanHits.push(`"${id}" ${port}, ${Math.round(Math.min(...gaps))} px`);
+  }
+  if (fanHits.length) {
+    warnings.push(`${fanHits.length} fan-out(s) leave one port into a row closer than ${FAN_GAP_MIN} px (${listSome(fanHits)}) - the branches tangle instead of sharing one trunk and bus. Leave 64 px between the shape and the row; the router then draws the trunk and bus itself, with no vertices.`);
+  }
+
+  // 3. A link between facing side ports whose ends are offset by 2 px or more but by less than half the smaller card:
+  //    the two cards are visibly meant to line up, and the link draws a small step. The router's 4 px snap does NOT
+  //    save the small offsets: it moves the route, not the ports, so a 2 px offset still draws a visible slant
+  //    (measured on the spec's own process example). Covers an event not centred on its task row and a cross-lane
+  //    link that is not quite vertical.
+  const stepHits = [];
+  for (const l of links) {
+    if (bent(l)) continue;
+    const sp = SIDE_OF_PORT[l.source?.port], tp = SIDE_OF_PORT[l.target?.port];
+    const sc = els.get(l.source?.id), tc = els.get(l.target?.id);
+    if (!sp || !tp || !sc || !tc || CONTENT_SIZED.has(sc.type) || CONTENT_SIZED.has(tc.type)) continue;
+    const s = box(sc), t = box(tc);
+    if (!s || !t) continue;
+    let d = null, lim = 0;
+    if ((sp === 'right' && tp === 'left' && t.x >= s.r) || (sp === 'left' && tp === 'right' && t.r <= s.x)) { d = Math.abs(s.cy - t.cy); lim = Math.min(s.h, t.h) / 2; }
+    else if ((sp === 'bottom' && tp === 'top' && t.y >= s.b) || (sp === 'top' && tp === 'bottom' && t.b <= s.y)) { d = Math.abs(s.cx - t.cx); lim = Math.min(s.w, t.w) / 2; }
+    if (d != null && d > 1 && d < lim) stepHits.push(`"${l.id ?? '?'}" ${Math.round(d)} px`);
+  }
+  if (stepHits.length) {
+    warnings.push(`${stepHits.length} link(s) between facing ports almost line up (${listSome(stepHits)}) - the ends are offset, so each draws a small step (a slant, under 5 px). Give both cards the same centre on that axis (an event beside a task: event.y = task.y + task.height / 2 - event.height / 2).`);
+  }
+
+  // 4. Near-miss grid: two NEIGHBOURING cards in one column (or one row) whose edges and centres all miss each other
+  //    by 5-15 px (4 px or less does not read as misaligned). Neighbours only: a reader compares a
+  //    card with the next one, not with a card three columns away (a hand-drawn fixture flagged an 8 px offset
+  //    across 900 px with a column of cards between). Cards inside frames count - the grid is the canvas's.
+  const cards = [...els.values()].filter((c) => !FRAME_TYPES.has(c.type) && !NOT_CARDS.has(c.type)).map((c) => ({ c, b: box(c) })).filter((o) => o.b);
+  const gridHits = [];
+  const miss = (ds) => { const m = Math.min(...ds); return m > NEAR_MISS_MIN && m <= NEAR_MISS_MAX ? m : null; };
+  const between = (a, b, axis) => cards.some(({ b: o }) => (axis === 'x'
+    ? o.y >= Math.min(a.b, b.b) && o.b <= Math.max(a.y, b.y) && o.r > Math.min(a.x, b.x) && o.x < Math.max(a.r, b.r)
+    : o.x >= Math.min(a.r, b.r) && o.r <= Math.max(a.x, b.x) && o.b > Math.min(a.y, b.y) && o.y < Math.max(a.b, b.b)));
+  for (let i = 0; i < cards.length; i++) {
+    for (let j = i + 1; j < cards.length; j++) {
+      const A = cards[i], B = cards[j], a = A.b, b = B.b;
+      const ox = Math.min(a.r, b.r) - Math.max(a.x, b.x), oy = Math.min(a.b, b.b) - Math.max(a.y, b.y);
+      if (ox > 0 && oy > 0) continue;   // overlapping cards are a different problem
+      const fixedH = CONTENT_SIZED.has(A.c.type) || CONTENT_SIZED.has(B.c.type);
+      let m = null, what = '';
+      if (ox >= Math.min(a.w, b.w) / 2) { m = miss([Math.abs(a.x - b.x), Math.abs(a.cx - b.cx), Math.abs(a.r - b.r)]); what = 'x'; }
+      else if (oy >= Math.min(a.h, b.h) / 2) { m = miss(fixedH ? [Math.abs(a.y - b.y)] : [Math.abs(a.y - b.y), Math.abs(a.cy - b.cy), Math.abs(a.b - b.b)]); what = 'y'; }
+      if (m != null && !between(a, b, what)) gridHits.push(`"${A.c.id}"/"${B.c.id}" ${what} ${Math.round(m)} px`);
+    }
+  }
+  if (gridHits.length) {
+    warnings.push(`${gridHits.length} pair(s) of neighbouring cards almost line up (${listSome(gridHits)}) - an offset of ${NEAR_MISS_MIN + 1}-${NEAR_MISS_MAX} px reads as a slip, not a choice. Put cards on one column grid shared across the canvas (frames included), and give every card in a row the same y (or the same centre, for cards of different heights).`);
+  }
 }
 
 /** Validate a single diagram OR a `diagramforce-export` bundle (validates each `diagrams[]` entry). Returns an array

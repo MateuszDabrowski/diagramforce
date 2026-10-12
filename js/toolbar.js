@@ -1,32 +1,32 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.25.3';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.25.3';
-import { resizeDataObjectToFit } from './components.js?v=1.25.3';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.25.3';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.25.3';
+import { diagramEmbedsImages } from './image-component.js?v=1.25.4';
+import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.25.4';
+import { resizeDataObjectToFit } from './components.js?v=1.25.4';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible } from './canvas.js?v=1.25.4';
+import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.25.4';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.25.3';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.25.3';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.25.3';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.25.3';
-import { renderTemplateThumbnail } from './templates.js?v=1.25.3';
-import { showWhatsNewNow } from './whats-new.js?v=1.25.3';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.25.3';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.25.3';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.25.3';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.25.3';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.25.3';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.25.3';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.25.3';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.25.3';
+import { pctx } from './persistence/context.js?v=1.25.4';
+import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.25.4';
+import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.25.4';
+import { exportObjectSchemaCsv } from './data-export.js?v=1.25.4';
+import { renderTemplateThumbnail } from './templates.js?v=1.25.4';
+import { showWhatsNewNow } from './whats-new.js?v=1.25.4';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.25.4';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.25.4';
+import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.25.4';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.25.4';
+import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.25.4';
+import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.25.4';
+import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.25.4';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.25.4';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.25.3';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.25.3';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.25.3';
-import { noteError } from './diagnostics.js?v=1.25.3';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.25.4';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.25.4';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.25.4';
+import { noteError } from './diagnostics.js?v=1.25.4';
 
 let modules = {};
 export function init(_modules) {
@@ -393,6 +393,9 @@ export function init(_modules) {
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
         modules.canvas.autoLayout(direction, { align: 'barycenter' });
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        // Route the final pass NOW (shared bus, separation, trunk merging) so the labels below are placed on the
+        // routes that will stay - otherwise two merged "Morphes into" labels landed on the same spot. Inside the batch.
+        try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }
         // Outcome labels ("Yes", "No, notify owner") describe the PIPE, not the target - so unlike datamodel
         // below, collision-only: a label moves off its route midpoint ONLY if it collides, and then to the
         // nearest clear point on its own path. Measured on a two-gateway BPMN fixture: two outcome labels
@@ -422,6 +425,7 @@ export function init(_modules) {
         // (0 label-label, 0 label-card) moving ONLY the colliding label, 8-99px to the nearest clear spot.
         modules.canvas.autoLayout(direction, opts);
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }   // final routes first: see the process branch
         try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch (e) { noteError('layout:labels', e); }
       }
     }, () => { try { modules.canvas.fitContent(); } catch {} });   // re-fit on undo/redo so the camera follows the layout
