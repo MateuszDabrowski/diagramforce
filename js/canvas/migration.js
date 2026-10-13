@@ -2,19 +2,19 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.25.4';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.25.4';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.25.4';
-import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.25.4';
-import { nodeContrastText } from '../util.js?v=1.25.4';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.25.4';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.25.4';
-import { getIconDataUri } from '../icons.js?v=1.25.4';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.25.4';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.4';
-import { isSharedBusDiagram } from './router.js?v=1.25.4';
-import { rerouteAllLinks } from './link-runtime.js?v=1.25.4';
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.25.4';
+import { cctx } from './context.js?v=1.25.5';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.25.5';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.25.5';
+import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.25.5';
+import { nodeContrastText } from '../util.js?v=1.25.5';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.25.5';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.25.5';
+import { getIconDataUri } from '../icons.js?v=1.25.5';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.25.5';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.5';
+import { isSharedBusDiagram } from './router.js?v=1.25.5';
+import { rerouteAllLinks } from './link-runtime.js?v=1.25.5';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.25.5';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -778,7 +778,7 @@ export function migrateNodes() {
   alignFlowAnnotationColumn();
   // Shared-bus types: one full reroute pass at load - the column buses and the separation of different-looking links
   // both need every route - BEFORE the labels below are placed on the routes. One synchronous render at load.
-  if (isSharedBusDiagram() && cctx.paper) { cctx.paper.updateViews(); rerouteAllLinks(); }
+  if (isSharedBusDiagram() && cctx.paper) rerouteAllLinks();   // flushes pending view updates first
   // ...and the connector labels, which can only be resolved once the links have a resolved ROUTE. Inside the
   // JSON-loading guard on purpose: history.js skips change:labels while it is set, so this costs no undo entry.
   resolveFlowLabelCollisions(cctx, { seededLabels: appSeededLabels });

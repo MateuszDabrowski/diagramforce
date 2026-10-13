@@ -21,6 +21,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, delimiter, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateFile } from './diagram-schema.js';
+import { checkForUpdate } from './check-update.mjs';
 
 export const DEFAULT_APP = 'https://diagramforce.com/';
 // The version this skill's bundled spec targets (its "Spec snapshot: vX" marker), as the converters read it.
@@ -315,6 +316,9 @@ async function main() {
         + '    npx playwright install chromium-headless-shell\n  or pass --browser <path>.');
     process.exit(2);
   }
+  // Already online for the hosted app, so ask in parallel whether this skill is behind it (never blocks; silent on any
+  // failure). Skipped for a local or pinned --app: the user chose that version on purpose.
+  const update = opts.app === DEFAULT_APP ? checkForUpdate() : Promise.resolve(null);
   let failed = 0;
   const jobs = [];
   for (const input of opts.inputs) {
@@ -354,6 +358,8 @@ async function main() {
       }
     } finally { await cdp.close(); }
   }
+  const found = await update;
+  if (found?.newer) console.log(found.message);
   process.exit(failed ? 1 : 0);
 }
 

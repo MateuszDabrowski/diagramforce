@@ -158,6 +158,16 @@ org authored, rather than retrying or hand-drawing an approximation from the ele
 
 ## Workflow
 
+**Once per conversation, before step 1, check for a newer skill:**
+
+```bash
+node scripts/check-update.mjs
+```
+
+It prints one line and never fails. Relay it to the user only when it starts with `ℹ` (a newer skill is out; the
+line says how to update), then carry on with the task on this version. Say nothing about a `✓` (current) or `·`
+(no network here) line. `render-diagram.mjs` runs the same check and prints the same `ℹ` line when there is one.
+
 ### 1. Pick the diagram type - it decides everything downstream
 
 Choose by the **question the diagram answers**, not by the first shapes that come to mind. The
@@ -199,7 +209,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.4",
+  "appVersion": "1.25.5",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }

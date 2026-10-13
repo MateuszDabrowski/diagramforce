@@ -45,6 +45,27 @@ export const DISTANCE_STEP = 4;      // px between candidate points along a path
 // connected shape". One ring is one pill-height plus a gap: still visibly attached, or not worth doing.
 export const FALLBACK_RINGS = 1;
 export const FALLBACK_STEP = 36;     // one pill height plus a gap
+// How far a twin label may move to share its twin's spot. The shared spots of "Morphes into", "New Route" and "sync"
+// lay 12-97 px away. The only shared stretch of two "Deprecating" links lay 153 and 244 px away, in a crowded corner
+// at a frame border: one pill there named neither line where a reader looks, so those twins stay apart.
+export const TWIN_MAX_MOVE = 120;
+
+// Frames: shapes that hold other cards (router.js and diagram-schema.js keep the same list).
+const FRAME_TYPES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
+
+/** A frame's header band (Container accent, Pool side header) and its title text, in paper coordinates. */
+function frameHeaders(paper, frame) {
+  const view = paper.findViewByModel(frame);
+  if (!view?.el || typeof view.getNodeBBox !== 'function') return [];
+  const out = [];
+  const nodes = [...view.el.querySelectorAll('[joint-selector="accent"], [joint-selector="header"], text')];
+  for (const node of nodes) {
+    if (node.tagName.toLowerCase() === 'text' && !node.textContent.trim()) continue;
+    const r = view.getNodeBBox(node);
+    if (r.width > 0 && r.height > 0) out.push({ x: r.x, y: r.y, w: r.width, h: r.height });
+  }
+  return out;
+}
 
 /**
  * Pure packer. Each item offers an ORDERED list of candidate rects - its own preferences, nearest first - and
@@ -55,8 +76,12 @@ export const FALLBACK_STEP = 36;     // one pill height plus a gap
  * position instead (the first cut sorted top-to-bottom) let a label with 296px of usable path claim its seat
  * before one with a 32px connector and nowhere to go, and the constrained one was then flung 272px sideways.
  *
- * @param {Array<{id, slack, candidates: Array<{key, x, y, w, h}>}>} items
- * @param {Array<{x, y, w, h}>} obstacles - cards; never move, always avoided
+ * An item's `ignore` (a Set of obstacle ids) lets that one label rest on those obstacles: the frames its own link
+ * lives in (see resolveFlowLabelCollisions). Items with the same `twin` key may take EXACTLY the same rect (within
+ * 1 px): twin labels share one spot by design (shareTwinLabels), and a re-run must not push them apart again.
+ *
+ * @param {Array<{id, slack, candidates: Array<{key, x, y, w, h}>, ignore?: Set<string>, twin?: string}>} items
+ * @param {Array<{id?, x, y, w, h}>} obstacles - cards and frames; never move, always avoided unless ignored
  * @returns {{ chosen: Map<string, any>, unresolved: string[] }} chosen maps id -> the winning candidate's `key`
  */
 export function packLabels(items, obstacles = []) {
@@ -72,15 +97,103 @@ export function packLabels(items, obstacles = []) {
   const placed = obstacles.map((o) => ({ ...o, isLabel: false }));
 
   for (const item of order) {
-    const clears = (against) => item.candidates.find((c) => !against.some((p) => hits(c, p)));
+    const blocks = (p, c) => !(p.id != null && item.ignore?.has(p.id))
+      && !(item.twin && p.twin === item.twin && Math.abs(p.x - c.x) <= 1 && Math.abs(p.y - c.y) <= 1 && Math.abs(p.w - c.w) <= 1);
+    const clears = (against) => item.candidates.find((c) => !against.some((p) => blocks(p, c) && hits(c, p)));
     // Prefer a spot clear of everything. Failing that, clear of the other LABELS only: a pill resting on a card
     // is still readable, whereas two pills on one spot means one of them may as well not exist.
     const win = clears(placed) || clears(placed.filter((p) => p.isLabel)) || item.candidates[0];
     if (!clears(placed.filter((p) => p.isLabel))) unresolved.push(item.id);
     chosen.set(item.id, win.key);
-    placed.push({ x: win.x, y: win.y, w: win.w, h: win.h, isLabel: true });
+    placed.push({ x: win.x, y: win.y, w: win.w, h: win.h, isLabel: true, twin: item.twin });
   }
   return { chosen, unresolved };
+}
+
+/** Collinear stretches two polylines share (within 1 px), as axis runs. */
+function sharedRuns(pa, pb) {
+  const runs = (pts) => {
+    const out = [];
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (Math.abs(a.y - b.y) < 1 && Math.abs(a.x - b.x) >= 1) out.push({ o: 'H', c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+      else if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) >= 1) out.push({ o: 'V', c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
+    }
+    return out;
+  };
+  const out = [];
+  for (const r of runs(pa)) for (const q of runs(pb)) {
+    if (r.o !== q.o || Math.abs(r.c - q.c) > 1) continue;
+    const lo = Math.max(r.lo, q.lo), hi = Math.min(r.hi, q.hi);
+    if (hi > lo) out.push({ o: r.o, c: r.c, lo, hi });
+  }
+  return out;
+}
+
+/**
+ * Twin labels: links that look alike merge onto one line (the shared trunk on architecture and process), and when
+ * they carry the SAME text the pack set two identical pills side by side: "Morphes into" twice on 594 px of shared line
+ * in vertical-lanes after Auto Layout, and two "New Route" pills 2 px apart where two green links meet a shared trunk.
+ * Twins get ONE spot on a stretch both links share, at least as long as the pill, so the two pills draw as one: the
+ * keeper's own spot when it lies on that stretch, else the clear point on the stretch nearest to it. Nothing is
+ * removed: each link keeps its label, at a distance along its OWN line, so the two part again when the lines do. A
+ * crossing is not a stretch (the runs must be collinear), and a label off its line (an offset) is left alone.
+ * Mutates `chosen`.
+ */
+function shareTwinLabels(items, chosen, obstacles) {
+  const polyline = (it) => [it.view.sourcePoint, ...(it.view.route || []), it.view.targetPoint].filter(Boolean);
+  const rectOf = (it) => it.rectFor(chosen.get(it.id));
+  const same = (a, b) => Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1 && Math.abs(a.w - b.w) <= 1;
+  // The pill both twins would draw at point `p` of the stretch, or null when their pills would not coincide there.
+  const atPoint = (k, it, p) => {
+    const dk = k.view.getClosestPointLength?.(p), di = it.view.getClosestPointLength?.(p);
+    if (!(dk >= 0) || !(di >= 0)) return null;
+    const rk = k.rectFor({ distance: dk, offset: 0 }), ri = it.rectFor({ distance: di, offset: 0 });
+    return same(rk, ri) ? { dk: Math.round(dk), di: Math.round(di), rect: rk } : null;
+  };
+  const anchor = (x) => x.view.getLabelCoordinates({ ...chosen.get(x.id), offset: 0 });
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) <= TWIN_MAX_MOVE;
+  const keepers = [];
+  for (const it of [...items].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+    const key = chosen.get(it.id);
+    if (!it.text || !key || key.offset) continue;   // any offset, numeric or perpendicular, is off the line
+    let joined = false;
+    for (const k of keepers) {
+      if (k.text !== it.text || k.look !== it.look) continue;
+      // Already on the keeper's spot (a re-run): leave it, or rounding nudges its distance by a pixel every run.
+      if (same(rectOf(it), rectOf(k))) { joined = true; break; }
+      const stretches = sharedRuns(polyline(k), polyline(it)).filter((r) => r.hi - r.lo >= (r.o === 'H' ? it.w : it.h));
+      if (!stretches.length) continue;
+      const here = anchor(k), mine = anchor(it);
+      const onStretch = (p) => stretches.some((r) => (r.o === 'H' ? Math.abs(p.y - r.c) <= 1 && p.x >= r.lo - 1 && p.x <= r.hi + 1
+        : Math.abs(p.x - r.c) <= 1 && p.y >= r.lo - 1 && p.y <= r.hi + 1));
+      // 1. The keeper's spot is on the shared stretch: the twin moves onto it.
+      let spot = onStretch(here) && near(mine, here) ? atPoint(k, it, here) : null;
+      // 2. Else the clear point of the stretch nearest the keeper's spot, clear of cards (its own frames aside) and of
+      //    every other label.
+      if (!spot) {
+        const others = items.filter((o) => o !== k && o !== it && chosen.get(o.id)).map(rectOf);
+        const blocked = (r) => obstacles.some((b) => !(b.id != null && (k.ignore?.has(b.id) || it.ignore?.has(b.id))) && hits(r, b))
+          || others.some((o) => hits(r, o));
+        const pts = [];
+        for (const r of stretches) {
+          const half = (r.o === 'H' ? it.w : it.h) / 2;
+          for (let t = r.lo + half; t <= r.hi - half; t += DISTANCE_STEP) pts.push(r.o === 'H' ? { x: t, y: r.c } : { x: r.c, y: t });
+        }
+        pts.sort((p, q) => Math.hypot(p.x - here.x, p.y - here.y) - Math.hypot(q.x - here.x, q.y - here.y));
+        for (const p of pts) {
+          if (!near(p, here) || !near(p, mine)) continue;
+          const c = atPoint(k, it, p);
+          if (c && !blocked(c.rect)) { spot = c; chosen.set(k.id, { distance: c.dk }); break; }
+        }
+      }
+      if (!spot) continue;
+      chosen.set(it.id, { distance: spot.di });
+      joined = true;
+      break;
+    }
+    if (!joined) keepers.push(it);
+  }
 }
 
 /**
@@ -100,6 +213,18 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
   const { graph, paper } = cctx;
   if (!graph || !paper) return null;
   const elements = graph.getElements();
+  // The frames a link's own ends sit in. Every point of a link inside a zone lies on that zone, so with the zone as an
+  // obstacle no candidate ever cleared: the pack fell back to "clear of other labels only" and dropped card
+  // avoidance, which left "Unified Segments" on the Bloomreach card (vertical-lanes, 2026-10-12). The router already
+  // lets a link pass through its own frames. A frame the link only crosses still blocks: a label there reads as
+  // belonging to it.
+  const ownFrames = (link) => {
+    const ids = new Set();
+    for (const end of [link.get('source'), link.get('target')]) {
+      for (const a of graph.getCell(end?.id)?.getAncestors?.() || []) if (FRAME_TYPES.has(a.get('type'))) ids.add(a.id);
+    }
+    return ids;
+  };
   // `scope` (1.22.0): the resolver was born flow-only and the df.Flow gate kept it from firing on every load
   // of every diagram type. The datamodel Auto Layout now wants the SAME target-centred placement for its join
   // labels (`scope: 'any'`), so the gate is opt-out rather than deleted - the default keeps the load pass and
@@ -214,17 +339,26 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
           x: base.x, y: base.y + dy, w, h });
       }
     }
-    items.push({ id: link.id, slack: len - w, candidates });
+    const text = String(link.labels()[0]?.attrs?.text?.text || link.labels()[0]?.attrs?.label?.text || '').trim();
+    const look = `${String(link.attr('line/stroke') || '').toLowerCase()}|${link.get('lineStyle') || link.attr('line/strokeDasharray') || 'none'}`;
+    // Twins only where a label describes the LINE (collisionOnly: architecture, org, process). A datamodel join label or a
+    // flow branch label describes its TARGET, so five relationships with one join text keep five pills, one per target.
+    const twin = collisionOnly && text ? `${text}\u0000${look}` : undefined;
+    items.push({ id: link.id, slack: len - w, candidates, ignore: ownFrames(link), view, text, look, w, h, rectFor, twin });
   }
   // Mirrors the labelled-count gate above: collision-only mode packs a single label against the cards.
   if (items.length < (collisionOnly ? 1 : 2)) return null;
 
-  const obstacles = elements.map((e) => {
+  const obstacles = [];
+  for (const e of elements) {
     const p = e.position(), s = e.size();
-    return { x: p.x, y: p.y, w: s.width, h: s.height };
-  });
+    obstacles.push({ id: e.id, x: p.x, y: p.y, w: s.width, h: s.height });
+    // A frame's title and header band stay in the way even for the links inside it.
+    if (FRAME_TYPES.has(e.get('type'))) obstacles.push(...frameHeaders(paper, e));
+  }
 
   const { chosen, unresolved } = packLabels(items, obstacles);
+  if (collisionOnly) shareTwinLabels(items, chosen, obstacles);
   let moved = 0;
   for (const [id, key] of chosen) {
     const link = graph.getCell(id);

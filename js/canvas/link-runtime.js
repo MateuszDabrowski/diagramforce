@@ -7,9 +7,9 @@
 // getMappingMode, scheduleCrossingBumpRecompute) via cctx; imports the style
 // constant/helpers from link-styles.js. Uses the `joint` GLOBAL (never an import).
 
-import { cctx } from './context.js?v=1.25.4';
-import { MAPPING_LINK_COLOR, isObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.25.4';
-import { beginRoutePass, endRoutePass, separateForeignRuns } from './router.js?v=1.25.4';
+import { cctx } from './context.js?v=1.25.5';
+import { MAPPING_LINK_COLOR, isObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.25.5';
+import { beginRoutePass, endRoutePass, separateForeignRuns } from './router.js?v=1.25.5';
 
 // Synchronously re-run the router on every link in the active graph. Used by
 // the toolbar so toggling connector grouping applies instantly. LinkView.update()
@@ -22,6 +22,11 @@ import { beginRoutePass, endRoutePass, separateForeignRuns } from './router.js?v
 export function rerouteAllLinks() {
   const { graph, paper } = cctx;
   if (!graph || !paper) return;
+  // Flush pending view updates BEFORE the pass. Moved cards leave their links flagged for an update. Flushed after the
+  // pass (the label resolver flushes first thing), they re-routed each link alone, outside the pass, with no shared bus
+  // or separation: Auto Layout placed its labels on those interim routes, the next frame's pass restored the final
+  // ones, and two labels ended up on one spot (random-6, 2026-10-12).
+  paper.updateViews();
   // P1: bracket the whole batch in ONE reroute pass so the router snapshots obstacle bboxes + the
   // portId→ends index ONCE instead of rebuilding them for every link. endRoutePass MUST run in the
   // `finally` — a leaked pass would feed stale geometry to later single-link reroutes.

@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.25.4';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.4';
+import { cctx } from './context.js?v=1.25.5';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.5';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -85,6 +85,7 @@ let _routePass = null;   // { graph, boxes: [{id, box}], portEnds: Map<"cellId::
  *  routed until endRoutePass() reuses them instead of recomputing. Idempotent-ish: a second call re-snapshots. */
 export function beginRoutePass(gr) {
   _avoidRuns.clear();   // every pass routes plainly first; separateForeignRuns then re-applies what is still needed
+  _noCrossedZ.clear();
   _passNo++;
   if (!gr) { _routePass = null; return; }
   const boxes = [];
@@ -209,6 +210,7 @@ const RUN_MIN = 6;   // a shared stretch shorter than this is a corner or a cros
 const _lastRuns = new Map();    // link id -> { pts, runs, look, pass } of the route the router last returned
 let _passNo = 0;                // bumped per reroute pass: a sibling's line is adopted only from the SAME pass
 const _avoidRuns = new Map();   // link id -> runs it must not share a line with (set by separateForeignRuns)
+const _noCrossedZ = new Set();  // link ids that gave up their crossed-stub Z to a different-looking link (separation)
 
 const axisRun = (p, q) => {
   if (Math.abs(p.y - q.y) < 1 && Math.abs(p.x - q.x) >= 1) return { o: 'H', c: p.y, lo: Math.min(p.x, q.x), hi: Math.max(p.x, q.x) };
@@ -292,7 +294,19 @@ function separationSweep(links, paper) {
       if (before) _avoidRuns.set(mover.id, before); else _avoidRuns.delete(mover.id);
       reroute(mover);
     }
-    if (best) { _avoidRuns.set(best.mover.id, best.trial); reroute(best.mover); moved++; }
+    if (best) { _avoidRuns.set(best.mover.id, best.trial); reroute(best.mover); moved++; continue; }
+    // Neither move clears the pair, and one of them took a crossed-stub Z: two lines through one 48 px gap between
+    // cards have a 16 px clear band, too narrow for either to move 10 px clear (random-1: a blue Z on a dark line for
+    // 28 px). That link gives up its Z for the route it had before, then the other link moves as above.
+    for (const [zLink, other] of [[first, second], [second, first]]) {
+      if (!_lastRuns.get(zLink.id)?.z) continue;
+      _noCrossedZ.add(zLink.id); reroute(zLink);
+      const before = _avoidRuns.get(other.id);
+      _avoidRuns.set(other.id, (before || []).concat(_lastRuns.get(zLink.id).runs)); reroute(other);
+      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) { moved++; break; }
+      if (before) _avoidRuns.set(other.id, before); else _avoidRuns.delete(other.id);
+      _noCrossedZ.delete(zLink.id); reroute(zLink); reroute(other);
+    }
   }
   return moved;
 }
@@ -335,7 +349,12 @@ export function dropBacktrackingStub(route, dir, atEnd) {
 export function isSharedBusDiagram() { return SHARED_BUS_TYPES.has(cctx.getDiagramType?.()); }
 
 /** Forget remembered routes and avoid-sets, e.g. when a different diagram loads into the paper. */
-export function resetRouteMemory() { _lastRuns.clear(); _avoidRuns.clear(); }
+export function resetRouteMemory() { _lastRuns.clear(); _avoidRuns.clear(); _noCrossedZ.clear(); }
+
+/** True when `p` lies strictly inside an obstacle's PAD-padded box: a route starting there is trapped. */
+export function insidePadded(p, obstacles) {
+  return obstacles.some((box) => p.x > box.x - PAD && p.x < right(box) + PAD && p.y > box.y - PAD && p.y < bottom(box) + PAD);
+}
 
 // Try a candidate route; return it if clear, or null.
 export function tryRoute(a, mid, b, obstacles) {
@@ -407,8 +426,7 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
   // axis-aligned and starts (ends) inside that box, so segHitsBox fails ALL of them - the detour and S-route searches
   // below could only burn O(|y|·|x|·E) tests to reach the same fallback. Skipping them returns the identical route:
   // measured 1.3 s per link at 500 elements, on every drag frame, for one vertex 10 px off a node (audit 2026-09-23).
-  const inside = (p) => obstacles.some((box) => p.x > box.x - PAD && p.x < right(box) + PAD && p.y > box.y - PAD && p.y < bottom(box) + PAD);
-  const trapped = inside(a) || inside(b);
+  const trapped = insidePadded(a, obstacles) || insidePadded(b, obstacles);
   const clear = (mid) => { const pts = [a, ...mid, b]; return pathClear(pts, obstacles) && !(avoid && hitsRuns(pts, avoid)); };
   const consider = (mid) => { pool.push(mid); return !trapped && clear(mid) ? mid : null; };
 
@@ -494,6 +512,26 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
     if (ov < bestOv) { bestOv = ov; best = mid; }
   }
   return best;
+}
+
+/** Crossed stubs: facing ports (bottom->top, top->bottom, right->left, left->right) closer than two STUBs put each stub
+ *  tip past the other. orthoRoute tries an L first, which runs along the source tip's line - past the target's tip -
+ *  and climbs back to it: a hook beside the arrow (random-1 l9, Auto Layout cards 48 px apart with a trunk offset).
+ *  The natural route is a Z through the middle of the gap. Both stubs then trim away (dropBacktrackingStub), leaving a
+ *  clean Z between the visible line ends. Returns its two corners, or null when the stubs do not cross, the ends are
+ *  aligned, or the gap leaves under 4 px of line at either end (cards under 40 px apart): there no route draws
+ *  cleanly, and the trim would refuse anyway. Pure + exported for unit tests. */
+export function crossedStubZ(from, to, srcDir, tgtDir) {
+  const v = srcDir === 'bottom' && tgtDir === 'top' ? 1 : srcDir === 'top' && tgtDir === 'bottom' ? -1 : 0;
+  const h = srcDir === 'right' && tgtDir === 'left' ? 1 : srcDir === 'left' && tgtDir === 'right' ? -1 : 0;
+  const s = v || h;
+  if (!s) return null;
+  const k = v ? 'y' : 'x', c = v ? 'x' : 'y';
+  const cross = s * (to[k] - from[k]);   // < 0: each tip lies past the other
+  // The visible line ends sit STUB - CP_PERP_OFFSET inside the tips; each half of the gap between them must hold 4 px.
+  if (cross >= 0 || cross + 2 * (STUB - CP_PERP_OFFSET) < 8 || Math.abs(to[c] - from[c]) < 1) return null;
+  const m = Math.round((from[k] + to[k]) / 2);
+  return v ? [{ x: from.x, y: m }, { x: to.x, y: m }] : [{ x: m, y: from.y }, { x: m, y: to.y }];
 }
 
 // Dead-straight snap. Given the two stub points + their exit directions, if they exit on directly OPPOSING
@@ -1159,6 +1197,11 @@ export function registerSfRouter() {
     // depend on each other's final channel-shifted positions".
     srcLead = applyChannelShift(srcLead, _sSide, _srcChannel, to);
     tgtLead = applyChannelShift(tgtLead, _tSide, _tgtChannel, from);
+    // A lead-out inside another card's padded box traps orthoRoute, whose fallback draws straight through the cards:
+    // a link from the top of a column of cards 48 px apart to its bottom crossed the three between (random-8 l7).
+    // From the stub itself the search goes around the column. So such a lead-out is skipped.
+    if (srcLead && insidePadded(srcLead, obstacles)) srcLead = null;
+    if (tgtLead && insidePadded(tgtLead, obstacles)) tgtLead = null;
 
     try {
       if (vertices.length > 0) {
@@ -1178,7 +1221,11 @@ export function registerSfRouter() {
       const orthoEnd   = tgtLead || to;
       const avoid = _perLinkChannels ? null : _avoidRuns.get(link.id);
       const prefer = _perLinkChannels ? null : sameLookSiblingRuns(link, srcDef, tgtDef);
-      const mid = orthoRoute(orthoStart, orthoEnd, obstacles, avoid, prefer);
+      // Crossed stubs take the mid-gap Z when it is clear (see crossedStubZ); anything else goes to the search.
+      const z = !srcLead && !tgtLead ? crossedStubZ(from, to, srcInfo.dir, tgtInfo.dir) : null;
+      const zPts = z && [from, ...z, to];
+      const mid = z && pathClear(zPts, obstacles) && !(avoid && hitsRuns(zPts, avoid)) && !_noCrossedZ.has(link.id) ? z
+        : orthoRoute(orthoStart, orthoEnd, obstacles, avoid, prefer);
       const route = [from];
       if (srcLead) route.push(srcLead);
       route.push(...mid);
@@ -1186,7 +1233,7 @@ export function registerSfRouter() {
       route.push(to);
       dropBacktrackingStub(route, tgtInfo.dir, true);
       dropBacktrackingStub(route, srcInfo.dir, false);
-      _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0 });
+      _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0, z: mid === z });
       return route;
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors

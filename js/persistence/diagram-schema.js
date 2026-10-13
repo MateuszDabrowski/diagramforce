@@ -488,6 +488,8 @@ const NOT_CARDS = new Set(['sf.TextLabel', 'sf.Annotation', 'sf.Line', 'df.Pill'
 const CONTENT_SIZED = new Set(['sf.DataObject', 'sf.OrgPerson', 'sf.Note', 'df.Table']);
 const NEAR_MISS_MIN = 4;    // unlinked neighbours offset by this little do not read as misaligned
 const FAN_GAP_MIN = 48;     // measured: a 4-way fan-out tangles at 24 px, crowds at 36, draws one trunk + bus at 64
+const PAIR_GAP_MIN = 40;    // one link between offset facing cards: under this it hooks or doubles back (a Z from 40)
+const PAIR_GAP_ALIGNED = 16; // the same cards lined up draw a straight arrow from here; closer, it runs into the card
 const NEAR_MISS_MAX = 15;  // an offset up to this reads as a slip; beyond it, as a choice
 
 function layoutWarnings(cells, warnings) {
@@ -525,6 +527,7 @@ function layoutWarnings(cells, warnings) {
   //    Only branches that enter the FACING port count: one that turns into a side port is not part of the row (a
   //    hand-drawn fixture's hub sent one branch sideways into a card 40 px above it, and the bus was fine).
   const fanHits = [];
+  const fanKeys = new Set();   // ports flagged here: check 3b leaves their links alone
   const groups = new Map();
   const FACING = Object.assign(Object.create(null), { top: 'bottom', bottom: 'top', left: 'right', right: 'left' });
   for (const l of links) {   // links with vertices count too: the measured shared vertex tangled at 24 and 36 px
@@ -545,7 +548,7 @@ function layoutWarnings(cells, warnings) {
     const gaps = [...farIds].map((f) => box(els.get(f))).filter(Boolean).map((f) => (
       side === 'bottom' ? f.y - n.b : side === 'top' ? n.y - f.b : side === 'right' ? f.x - n.r : n.x - f.r))
       .filter((g) => g >= 0);
-    if (gaps.length >= 2 && Math.min(...gaps) < FAN_GAP_MIN) fanHits.push(`"${id}" ${port}, ${Math.round(Math.min(...gaps))} px`);
+    if (gaps.length >= 2 && Math.min(...gaps) < FAN_GAP_MIN) { fanHits.push(`"${id}" ${port}, ${Math.round(Math.min(...gaps))} px`); fanKeys.add(k); }
   }
   if (fanHits.length) {
     warnings.push(`${fanHits.length} fan-out(s) leave one port into a row closer than ${FAN_GAP_MIN} px (${listSome(fanHits)}) - the branches tangle instead of sharing one trunk and bus. Leave 64 px between the shape and the row; the router then draws the trunk and bus itself, with no vertices.`);
@@ -557,6 +560,7 @@ function layoutWarnings(cells, warnings) {
   //    (measured on the spec's own process example). Covers an event not centred on its task row and a cross-lane
   //    link that is not quite vertical.
   const stepHits = [];
+  const pairHits = [];
   for (const l of links) {
     if (bent(l)) continue;
     const sp = SIDE_OF_PORT[l.source?.port], tp = SIDE_OF_PORT[l.target?.port];
@@ -564,13 +568,23 @@ function layoutWarnings(cells, warnings) {
     if (!sp || !tp || !sc || !tc || CONTENT_SIZED.has(sc.type) || CONTENT_SIZED.has(tc.type)) continue;
     const s = box(sc), t = box(tc);
     if (!s || !t) continue;
-    let d = null, lim = 0;
-    if ((sp === 'right' && tp === 'left' && t.x >= s.r) || (sp === 'left' && tp === 'right' && t.r <= s.x)) { d = Math.abs(s.cy - t.cy); lim = Math.min(s.h, t.h) / 2; }
-    else if ((sp === 'bottom' && tp === 'top' && t.y >= s.b) || (sp === 'top' && tp === 'bottom' && t.b <= s.y)) { d = Math.abs(s.cx - t.cx); lim = Math.min(s.w, t.w) / 2; }
-    if (d != null && d > 1 && d < lim) stepHits.push(`"${l.id ?? '?'}" ${Math.round(d)} px`);
+    let d = null, lim = 0, gap = 0;
+    if ((sp === 'right' && tp === 'left' && t.x >= s.r) || (sp === 'left' && tp === 'right' && t.r <= s.x)) { d = Math.abs(s.cy - t.cy); lim = Math.min(s.h, t.h) / 2; gap = sp === 'right' ? t.x - s.r : s.x - t.r; }
+    else if ((sp === 'bottom' && tp === 'top' && t.y >= s.b) || (sp === 'top' && tp === 'bottom' && t.b <= s.y)) { d = Math.abs(s.cx - t.cx); lim = Math.min(s.w, t.w) / 2; gap = sp === 'bottom' ? t.y - s.b : s.y - t.b; }
+    if (d == null) continue;
+    if (d > 1 && d < lim) { stepHits.push(`"${l.id ?? '?'}" ${Math.round(d)} px`); continue; }
+    // 3b. The same facing pair, too close to draw. Each end's line turns 32 px out of its port, so cards under 40 px
+    //     apart with their ends offset get a hook past the arrow or a line doubling back; from 40 px the router draws
+    //     a Z through the gap. Lined up, a straight arrow fits from 16 px. (Small offsets are the step above, whose
+    //     fix, lining the cards up, also fixes this.) Measured on a grid of gaps 8-44 px and offsets 0-40 px.
+    const fanned = fanKeys.has(`${l.source.id}|${l.source.port}`) || fanKeys.has(`${l.target.id}|${l.target.port}`);
+    if (!fanned && gap < (d > 1 ? PAIR_GAP_MIN : PAIR_GAP_ALIGNED)) pairHits.push(`"${l.id ?? '?'}" ${Math.round(gap)} px`);
   }
   if (stepHits.length) {
     warnings.push(`${stepHits.length} link(s) between facing ports almost line up (${listSome(stepHits)}) - the ends are offset, so each draws a small step (a slant, under 5 px). Give both cards the same centre on that axis (an event beside a task: event.y = task.y + task.height / 2 - event.height / 2).`);
+  }
+  if (pairHits.length) {
+    warnings.push(`${pairHits.length} link(s) join facing cards too close to draw a line between them (${listSome(pairHits)}) - the line hooks past its arrow or doubles back. Leave at least ${PAIR_GAP_MIN} px between cards whose ends are offset (${PAIR_GAP_ALIGNED} px when they line up), and 64 px reads best.`);
   }
 
   // 4. Near-miss grid: two NEIGHBOURING cards in one column (or one row) whose edges and centres all miss each other
