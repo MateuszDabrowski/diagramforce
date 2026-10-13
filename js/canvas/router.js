@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.25.5';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.5';
+import { cctx } from './context.js?v=1.25.6';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.6';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -613,7 +613,10 @@ export function registerSfRouter() {
       : link.attr('line/targetMarker');
     let d = (marker && marker.d) ? String(marker.d) : 'none';
     d = d.replace(/\s*,\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    return `${style}|${d}`;
+    // Shared-bus types: one trunk per LOOK (colour + dash), the owner's rule. Keyed on style alone, a blue and a dark
+    // link left one port from one point and shared their first stretch, or the whole line when straight: 71% of the
+    // remaining clash as loaded, 55% after Auto Layout (held-out corpus, 2026-10-13).
+    return isSharedBusDiagram() ? `${linkLook(link)}|${d}` : `${style}|${d}`;
   }
 
   // All link ends touching a physical port (cell id + port id), regardless of
@@ -710,6 +713,36 @@ export function registerSfRouter() {
   // one trunk. Different-signature groups land on distinct points spread
   // across the edge, so each crow's-foot variant / dashed line reads as its
   // own visual trunk anchored at its own spot on the cell border.
+  // The offset a link end draws at along its edge. A crowded port's end takes its group's anchor (trunkAnchorOffset).
+  // On shared-bus types an end alone on its port, facing a port where the link's OTHER end is shifted, takes the same
+  // shift so the link draws straight. Left at the centre, it needed a jog through the gap between the cards, and when
+  // a different-looking line also crossed that gap the jog gave way to a hook beside the arrow (random-8 and random-1,
+  // cards 48 px apart). Only when the shifted point lies on this edge, clear of its rounded corners.
+  const OPPOSITE = Object.assign(Object.create(null), { top: 'bottom', bottom: 'top', left: 'right', right: 'left' });
+  const STRAIGHT_MARGIN = 12;
+  function endAnchorOffset(link, end, cell, side) {
+    const own = trunkAnchorOffset(link, end, cell, side);
+    if (own != null || !side || !isSharedBusDiagram()) return own;
+    const otherEnd = end === 'source' ? 'target' : 'source';
+    const od = link.get(otherEnd);
+    const oc = od?.id ? link.graph?.getCell(od.id) : null;
+    const oSide = oc ? getSideForPort(oc, od.port) : null;
+    if (!oSide || OPPOSITE[side] !== oSide) return null;
+    const oOff = trunkAnchorOffset(link, otherEnd, oc, oSide);
+    if (oOff == null || Math.abs(oOff) <= 1) return null;
+    const bb = cell.getBBox(), ob = oc.getBBox();
+    if (!bb || !ob) return null;
+    // Facing: the other card lies beyond this side.
+    const beyond = side === 'bottom' ? ob.y >= bottom(bb) : side === 'top' ? bottom(ob) <= bb.y
+      : side === 'right' ? ob.x >= right(bb) : ob.x + ob.width <= bb.x;
+    if (!beyond) return null;
+    const vertical = side === 'top' || side === 'bottom';
+    const want = (vertical ? centerX(ob) : centerY(ob)) + oOff;
+    const lo = vertical ? bb.x : bb.y, hi = vertical ? right(bb) : bottom(bb);
+    if (want < lo + STRAIGHT_MARGIN || want > hi - STRAIGHT_MARGIN) return null;
+    return Math.round(want - (vertical ? centerX(bb) : centerY(bb)));
+  }
+
   function trunkAnchorOffset(link, end, cell, side) {
     if (!side || !cell) return null;
     const gr = link.graph;
@@ -1020,8 +1053,8 @@ export function registerSfRouter() {
     if (cctx.isConnectorGroupingEnabled() && !_isSequenceSelfLoop) {
       const sSide = getSideForPort(srcCell, srcDef.port);
       const tSide = getSideForPort(tgtCell, tgtDef.port);
-      sOff = sSide ? trunkAnchorOffset(link, 'source', srcCell, sSide) : null;
-      tOff = tSide ? trunkAnchorOffset(link, 'target', tgtCell, tSide) : null;
+      sOff = sSide ? endAnchorOffset(link, 'source', srcCell, sSide) : null;
+      tOff = tSide ? endAnchorOffset(link, 'target', tgtCell, tSide) : null;
       srcInfo = applyTrunkOffset(srcInfo, sSide, sOff);
       tgtInfo = applyTrunkOffset(tgtInfo, tSide, tOff);
     }
@@ -1264,7 +1297,7 @@ export function registerSfRouter() {
       if (!end?.port) return fallback();
       const side = getSideForPort(cell, end.port);
       if (!side) return fallback();
-      const offset = trunkAnchorOffset(link, type, cell, side);
+      const offset = endAnchorOffset(link, type, cell, side);
       if (offset == null) return fallback();
       const bb = cell.getBBox();
       const cx = centerX(bb);

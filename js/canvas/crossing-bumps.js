@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.25.5';
+import { cctx } from './context.js?v=1.25.6';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -257,11 +257,23 @@ export function getLinkOrthogonalSegments(linkView) {
   const src = linkView.sourcePoint;
   const tgt = linkView.targetPoint;
   if (!src || !tgt) return [];
-  const points = [
-    { x: src.x, y: src.y },
-    ...route.map(p => ({ x: p.x, y: p.y })),
-    { x: tgt.x, y: tgt.y },
-  ];
+  // A straight run is ONE segment however many waypoints it carries. The router leaves collinear points on a line
+  // (stubs, lead-outs, a jog straightened away), and one sat exactly where another line crossed: the crossing read as
+  // a segment end, a T-junction, and lost its hop (random-5 after the 1.25.6 straight-link fix). Duplicates go too.
+  // A run that turns back on itself is kept as two segments: merging it would hide the reversal.
+  const points = [];
+  for (const p of [{ x: src.x, y: src.y }, ...route.map(q => ({ x: q.x, y: q.y })), { x: tgt.x, y: tgt.y }]) {
+    const n = points.length;
+    if (n && Math.abs(p.x - points[n - 1].x) < 0.5 && Math.abs(p.y - points[n - 1].y) < 0.5) continue;
+    if (n >= 2) {
+      const a = points[n - 2], b = points[n - 1];
+      const h = Math.abs(a.y - b.y) < BUMP_ORTHO_TOL && Math.abs(b.y - p.y) < BUMP_ORTHO_TOL;
+      const v = Math.abs(a.x - b.x) < BUMP_ORTHO_TOL && Math.abs(b.x - p.x) < BUMP_ORTHO_TOL;
+      const onward = h ? Math.sign(b.x - a.x) === Math.sign(p.x - b.x) : v ? Math.sign(b.y - a.y) === Math.sign(p.y - b.y) : false;
+      if (onward) { points[n - 1] = p; continue; }
+    }
+    points.push(p);
+  }
   // Stub-zone classification radius. Sized to cover STUB(32) + LEAD_OUT(24)
   // + max channel offset (~24 for 4 bundled siblings) + small slack = 90 px.
   // A segment is "in source stub" only when BOTH endpoints are inside this

@@ -44,8 +44,8 @@ export function liveVersionFrom(swText) {
 
 export function updateMessage(current, latest) {
   return `ℹ A newer Diagramforce skill is available: this one is ${current}, the latest is ${latest}. `
-    + `Download it from ${SITE} (the ? Help menu > Diagram with AI > Download skill), then in claude.ai Settings > Capabilities `
-    + 'remove the old "diagramforce" skill and upload the new file (an upload with the same name fails while the old '
+    + `Download it from ${SITE} (the ? Help menu > Diagram with AI > Download skill), then in the Claude app or on claude.ai open `
+    + 'Settings > Skills, remove the old "diagramforce" skill and upload the new file (an upload with the same name fails while the old '
     + 'one is there). Diagrams made with this version still open fine: the update brings newer guidance and checks.';
 }
 
