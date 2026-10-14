@@ -197,7 +197,7 @@ file. Shape `type` strings, field keys, and port ids are exact - the app silentl
 `type` is not a real shape and a link pointing at a missing cell, so a guessed name vanishes on load.
 
 Also read **Common authoring mistakes** for your type (spec, right after "Choosing the right diagram type"), the
-**Layout rules** under Layout Tips (eight rules that separate a diagram that loads from one that reads well) and,
+**Layout rules** under Layout Tips (ten rules that separate a diagram that loads from one that reads well) and,
 whenever the diagram has any `sf.Zone` / `sf.Container` / `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` /
 `sf.TaskGroup`, the **Capture** section under Layout Tips. For a `datamodel` also read the port-level note under
 `sf.DataObject` (field-level vs object-level relationships, and which direction to draw them).
@@ -209,7 +209,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.6",
+  "appVersion": "1.25.8",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }

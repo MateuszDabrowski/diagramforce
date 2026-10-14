@@ -10,6 +10,8 @@
 //   4th choice:  left
 //   fallback:    bottom (if all four sides are in use, accept the
 //                collision rather than leave the label off-canvas)
+// A label already on a side no link uses stays there (1.25.7): that is the
+// author's choice, from the file or a previous placement.
 //
 // No save schema field — position is recomputed on every link topology change
 // (add/remove, change:source, change:target) plus once at end of JSON load.
@@ -18,7 +20,7 @@
 // Reads the live graph/paper + the load guard via the canvas context (cctx);
 // canvas.js calls initExternalLabelAutoplace() once in init() after the cctx
 // hydration block, and keeps cctx.isLoadingJSON synced in setLoadingJSON().
-import { cctx } from './context.js?v=1.25.6';
+import { cctx } from './context.js?v=1.25.8';
 
 const EXTERNAL_LABEL_SHAPES = new Set([
   'sf.BpmnEvent',
@@ -50,6 +52,31 @@ export function pickLabelSide(usedSides) {
   return 'bottom';
 }
 
+/**
+ * The side a label currently sits on, read loosely from its attrs (the spec lets an author write only the attrs that
+ * differ, e.g. `{ y: -10, textVerticalAnchor: 'bottom' }` for above), or null when it matches none of the four.
+ * Pure, exported for unit testing.
+ */
+export function labelSideOf(label) {
+  const x = label?.x, y = label?.y;
+  const s = (v) => String(v ?? '').replace(/\s+/g, '');
+  if (/^calc\(w\+\d+\)$/.test(s(x))) return 'right';
+  if (typeof x === 'number' && x < 0) return 'left';
+  if (typeof y === 'number' && y < 0) return 'top';
+  if (y == null || /^calc\(h\+\d+\)$/.test(s(y))) return 'bottom';
+  return null;
+}
+
+/**
+ * The side to show a label on: where it already is while no link uses that side, else the first free side by
+ * priority. Keeping a free side respects the author: a skill-written end event with its label to the right (spec
+ * layout rule 1) was moved below on every load, under a note beside it (Arada HLD figure 5, 2026-10-14), because
+ * bottom comes first. Pure, exported for unit testing.
+ */
+export function chooseLabelSide(current, usedSides) {
+  return current && !usedSides.has(current) ? current : pickLabelSide(usedSides);
+}
+
 function computeUsedPortSides(cell) {
   const { graph } = cctx;
   const usedSides = new Set();
@@ -75,9 +102,9 @@ function refreshExternalLabelPosition(cell) {
   if (!cell?.get || !paper) return;
   if (!EXTERNAL_LABEL_SHAPES.has(cell.get('type'))) return;
   const used = computeUsedPortSides(cell);
-  const chosen = pickLabelSide(used);
-  const sideAttrs = LABEL_SIDE_ATTRS[chosen];
   const existing = cell.attr('label') || {};
+  const chosen = chooseLabelSide(labelSideOf(existing), used);
+  const sideAttrs = LABEL_SIDE_ATTRS[chosen];
   // Skip if already correct (avoids redundant attr writes that re-render
   // unnecessarily on every link change for unaffected cells).
   if (existing.x === sideAttrs.x && existing.y === sideAttrs.y

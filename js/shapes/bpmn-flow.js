@@ -1,8 +1,8 @@
 // Process-diagram shapes (BPMN family + Flowchart shapes + Annotation) (CLEANUP S3). registerBpmnFlow() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { ensureMarkdownFO } from './markdown-fo.js?v=1.25.6';
-import { portGroups, portItems } from './ports.js?v=1.25.6';
+import { ensureMarkdownFO } from './markdown-fo.js?v=1.25.8';
+import { portGroups, portItems } from './ports.js?v=1.25.8';
 
 export function registerBpmnFlow() {
   // --- BpmnEvent ---
@@ -316,6 +316,9 @@ export function registerBpmnFlow() {
           fill: 'var(--text-primary)',
           text: 'Pool',
           transform: 'rotate(-90, 15, calc(0.5 * h))',
+          // The title runs along the pool's height. Without a wrap a long one ran past the pool's top and bottom
+          // ("Named Arada IT staff - production" in a 176 px pool, 2026-10-14). Two 12 px lines fill the 30 px band.
+          textWrap: { width: 'calc(h - 16)', maxLineCount: 2, ellipsis: true },
         },
       },
     },

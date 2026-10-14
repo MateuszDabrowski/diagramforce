@@ -3,15 +3,15 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.25.6';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.6';
+import { cctx } from './context.js?v=1.25.8';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.8';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.25.6';
-import { startBatch, endBatch } from '../history.js?v=1.25.6';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.25.8';
+import { startBatch, endBatch } from '../history.js?v=1.25.8';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.25.6';
-import { flowConnectorType } from './link-styles.js?v=1.25.6';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.6';
+import { computeFlowLayout } from './flow-layout.js?v=1.25.8';
+import { flowConnectorType } from './link-styles.js?v=1.25.8';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.8';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -184,6 +184,9 @@ export function autoLayout(direction, opts = {}) {
   const pos = layoutGraphSubset(units, edges, {
     isHorizontal, align, breakCycles: true,
     maxRankExtent: opts.maxRankExtent ?? 1400, rankMedianFactor: opts.rankMedianFactor ?? 2,
+    // `crossGap`: the gap between neighbouring cards of one rank (columns, on a top-down layout). Data models pass
+    // DATAMODEL_COLUMN_GAP; everything else keeps DEFAULT_GAPS.
+    ...(opts.crossGap ? (isHorizontal ? { gapY: opts.crossGap } : { gapX: opts.crossGap }) : {}),
   });
 
   // Apply positions — move parents and let embedded children follow

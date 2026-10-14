@@ -28,6 +28,17 @@
 //  - Iteration order is the determinism contract: `units` order fixes adjacency, component and
 //    layer order. Callers must pass a stable order (JointJS collection order is insertion order).
 
+/**
+ * The gap between neighbouring columns of a data model after Auto Layout (1.25.8). Every field row and side port
+ * turns its link 32 px out (the router's STUB), so at the default 64 px the turns of two neighbouring columns met on
+ * one line, and links of every colour leaving that side ran on it. 128 px gives each column its own lines. Measured
+ * on the three data-model templates and three skill-written figures: different-looking links sharing a line 29367 ->
+ * 16038 px, line on line 10674 -> 5135 px, crossings 91 -> 96, diagrams 9-17% wider. The ERD generator in the skill
+ * and the spec's data-model rule use the same number. This is the CROSS-axis gap: widening the gap ALONG the flow made
+ * routing worse (approaches/auto-layout.md), and that still stands.
+ */
+export const DATAMODEL_COLUMN_GAP = 128;
+
 /** Default gaps mirror the original: the along-axis gap must exceed 2× router STUB (20) + PAD (16) = 56. */
 export const DEFAULT_GAPS = {
   horizontal: { gapX: 80, gapY: 64 },

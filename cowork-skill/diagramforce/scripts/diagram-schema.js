@@ -443,7 +443,7 @@ export function validateDiagram(diagram) {
   frameLinkWarnings(cells, byId, warnings);
   // Geometry checks run only where the author owns the geometry: a converted Flow keeps Flow Builder's coordinates,
   // Data Mapping and Gantt positions are computed, and a Sequence lays out on its lifelines.
-  if (['architecture', 'process', 'datamodel', 'org'].includes(type)) layoutWarnings(cells, warnings);
+  if (['architecture', 'process', 'datamodel', 'org'].includes(type)) layoutWarnings(cells, warnings, type);
 
   return { errors, warnings };
 }
@@ -490,9 +490,13 @@ const NEAR_MISS_MIN = 4;    // unlinked neighbours offset by this little do not 
 const FAN_GAP_MIN = 48;     // measured: a 4-way fan-out tangles at 24 px, crowds at 36, draws one trunk + bus at 64
 const PAIR_GAP_MIN = 40;    // one link between offset facing cards: under this it hooks or doubles back (a Z from 40)
 const PAIR_GAP_ALIGNED = 16; // the same cards lined up draw a straight arrow from here; closer, it runs into the card
+const FRAME_ROOM = 48;      // a link turns 32 px out of its port and keeps 16 px off what is in its way (the app's frame pad)
+const DM_COLUMN_GAP = 128;  // data models: the app's DATAMODEL_COLUMN_GAP (Auto Layout) and the ERD generator's COL_GAP
+// Header bands a line must not run through: a Container's 41 px title bar on top, a Pool's 30 px band on the left.
+const FRAME_BAND = Object.assign(Object.create(null), { 'sf.Container': { top: 41 }, 'sf.BpmnPool': { left: 30 } });
 const NEAR_MISS_MAX = 15;  // an offset up to this reads as a slip; beyond it, as a choice
 
-function layoutWarnings(cells, warnings) {
+function layoutWarnings(cells, warnings, type) {
   const box = (c) => (c && c.position && c.size && [c.position.x, c.position.y, c.size.width, c.size.height].every(Number.isFinite)
     ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height, r: c.position.x + c.size.width, b: c.position.y + c.size.height,
       cx: c.position.x + c.size.width / 2, cy: c.position.y + c.size.height / 2 }
@@ -609,6 +613,60 @@ function layoutWarnings(cells, warnings) {
       if (m != null && !between(a, b, what)) gridHits.push(`"${A.c.id}"/"${B.c.id}" ${what} ${Math.round(m)} px`);
     }
   }
+  // 5. A frame too tight for its own links. A link between two cards of one frame that leaves a card towards the
+  //    frame's edge turns 32 px out of its port and keeps 16 px clear, so a card closer than 48 px to that edge draws
+  //    the line on or past the border (a "No" loop along a pool's bottom edge, cards 28 px above it: Arada HLD
+  //    figure 6, 2026-10-14). The app never re-fits a frame on load, so it renders as authored. A link to a card
+  //    outside the frame crosses the border anyway and is not counted.
+  const frameOf = (c) => {
+    for (let p = els.get(c?.parent), n = 0; p && n < 32; p = els.get(p.parent), n++) if (FRAME_TYPES.has(p.type)) return p;
+    return null;
+  };
+  const roomHits = [];
+  const roomSeen = new Set();
+  for (const l of links) {
+    const sc = els.get(l.source?.id), tc = els.get(l.target?.id);
+    const f = sc && tc ? frameOf(sc) : null;
+    if (!f || frameOf(tc) !== f) continue;
+    const fb = box(f);
+    if (!fb) continue;
+    for (const [c, end] of [[sc, l.source], [tc, l.target]]) {
+      const side = SIDE_OF_PORT[end?.port];
+      const cb = box(c);
+      if (!side || !cb || roomSeen.has(`${c.id}|${side}`)) continue;
+      const band = FRAME_BAND[f.type]?.[side] || 0;
+      const gap = side === 'bottom' ? fb.b - cb.b : side === 'top' ? cb.y - (fb.y + band)
+        : side === 'right' ? fb.r - cb.r : cb.x - (fb.x + band);
+      if (gap >= 0 && gap < FRAME_ROOM) {
+        roomSeen.add(`${c.id}|${side}`);
+        roomHits.push(`"${c.id}" ${side} ${Math.round(gap)} px inside "${f.id}"`);
+      }
+    }
+  }
+  if (roomHits.length) {
+    warnings.push(`${roomHits.length} card side(s) where a link leaves sit too close to their frame's edge (${listSome(roomHits)}) - a link turns 32 px out of its port and keeps 16 px clear, so the line runs on or past the frame's border. Leave ${FRAME_ROOM} px between those cards and the frame's edge (below a Container's title bar, right of a Pool's band).`);
+  }
+
+  // 6. Data models: a link across a gap under 128 px between two columns. Every field row and side port turns its link
+  //    32 px out, so in a narrower gap the turns of both columns land on the same few lines, and links of different
+  //    colours run on one line (the skill-written Arada figures had 80 px; at 64 px the turns coincide). Auto Layout
+  //    and the ERD generator use 128 (1.25.8).
+  if (type === 'datamodel') {
+    const hSide = (port) => (/right/.test(String(port || '')) ? 'right' : /left/.test(String(port || '')) ? 'left' : null);
+    const colHits = [];
+    for (const l of links) {
+      const sc = els.get(l.source?.id), tc = els.get(l.target?.id);
+      if (sc?.type !== 'sf.DataObject' || tc?.type !== 'sf.DataObject') continue;
+      const s = box(sc), t = box(tc), sp = hSide(l.source?.port), tp = hSide(l.target?.port);
+      if (!s || !t || !sp || !tp) continue;
+      const gap = sp === 'right' && tp === 'left' && t.x >= s.r ? t.x - s.r : sp === 'left' && tp === 'right' && t.r <= s.x ? s.x - t.r : null;
+      if (gap != null && gap < DM_COLUMN_GAP) colHits.push(`"${l.id ?? '?'}" ${Math.round(gap)} px`);
+    }
+    if (colHits.length) {
+      warnings.push(`${colHits.length} data-model link(s) cross a gap under ${DM_COLUMN_GAP} px between two columns (${listSome(colHits)}) - a link turns 32 px out of each card's side, so in a narrower gap the links of both columns turn onto the same few lines and different colours share one. Leave ${DM_COLUMN_GAP} px between columns, as Auto Layout and the ERD generator do.`);
+    }
+  }
+
   if (gridHits.length) {
     warnings.push(`${gridHits.length} pair(s) of neighbouring cards almost line up (${listSome(gridHits)}) - an offset of ${NEAR_MISS_MIN + 1}-${NEAR_MISS_MAX} px reads as a slip, not a choice. Put cards on one column grid shared across the canvas (frames included), and give every card in a row the same y (or the same centre, for cards of different heights).`);
   }

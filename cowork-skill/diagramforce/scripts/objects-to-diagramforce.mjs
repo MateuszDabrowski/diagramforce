@@ -73,7 +73,9 @@ const LINK_COLOR = DF_COLORS.blue;
 // 480 wide, measured off the official data model rather than chosen: an ERD card carries `Label (ApiName)`
 // plus a type column, and at 260 (the DATA MAPPING width) every row truncates mid-name.
 const CARD_W = 480, HEADER_H = 44, ROW_H = 22, CARD_PAD = 12;
-const COL_GAP = 120, ROW_GAP = 80;
+// COL_GAP: 128 px between columns, the app's DATAMODEL_COLUMN_GAP (1.25.8). A link turns 32 px out of a field row,
+// so in a gap under 128 the turns of two neighbouring columns crowd onto the same lines.
+const COL_GAP = 128, ROW_GAP = 80;
 const LEFT_MARGIN = 40;
 
 const die = (msg) => { console.error(msg); process.exit(1); };

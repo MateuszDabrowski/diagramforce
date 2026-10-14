@@ -7,8 +7,8 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.25.6';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.6';
+import { cctx } from './context.js?v=1.25.8';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.8';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -31,8 +31,10 @@ const CHANNEL_HEIGHT = 16;
 // and one bus and branch at their targets, instead of each taking its own CHANNEL_HEIGHT lane - the staircase the
 // owner rejected on Auto Layout output, and the opposite of the shared-vertex fix a skill user made by hand. Flow
 // keeps its lanes: decision outcomes are separate labelled branches, and a shared bus there measured worse (labels
-// drifted off their decisions, a branch ran past cards). The other types are unchanged until someone measures them.
-const SHARED_BUS_TYPES = new Set(['architecture', 'process']);
+// drifted off their decisions, a branch ran past cards). Data models joined in 1.25.8, together with 128 px between
+// their columns after Auto Layout (layout-core DATAMODEL_COLUMN_GAP): at 64 px every field row's link turned onto the
+// same line as the next column's. The other types are unchanged until someone measures them.
+const SHARED_BUS_TYPES = new Set(['architecture', 'process', 'datamodel']);
 
 // ── Per-reroute-pass cache (P1) ──────────────────────────────────────────────
 // rerouteAllLinks (link-runtime.js) re-routes EVERY link per animation frame while an element is dragged.
