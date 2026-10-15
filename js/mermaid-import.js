@@ -11,16 +11,16 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.25.8';
-import { ER_MARKER_D } from './er-markers.js?v=1.25.8';
-import { showError, showToast } from './feedback.js?v=1.25.8';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.25.8';
+import { createElementFromComponent } from './components.js?v=1.25.9';
+import { ER_MARKER_D } from './er-markers.js?v=1.25.9';
+import { showError, showToast } from './feedback.js?v=1.25.9';
+import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.25.9';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.25.8';
-import { noteError } from './diagnostics.js?v=1.25.8';
-import { portExitBlocked } from './canvas/router.js?v=1.25.8';
+  from './gantt-layout.js?v=1.25.9';
+import { noteError } from './diagnostics.js?v=1.25.9';
+import { portExitBlocked } from './canvas/router.js?v=1.25.9';
 
 let modules = {};
 
@@ -169,13 +169,21 @@ export function importMermaidText(text, opts = {}) {
   // Auto-layout. `groupOf` bands the cross axis by subgraph so each group's Zone is a clean stripe; without it
   // a group whose members sit at different ranks would need a box spanning the whole diagram, and six such boxes
   // overlap (measured on the reported sample: 6 overlapping pairs out of 15).
-  const direction = parsed.direction || 'horizontal';
+  // An erDiagram lays out like the Data Model Auto Layout (1.25.9): top-down, one rank per depth, 128 px between
+  // columns. hierarchicalLayout steps a fixed 260 px per column, exactly a data-model card's width, so neighbouring
+  // objects touched edge to edge, and its left-to-right ranks met links snapped to top and bottom ports.
+  const isDataModel = parsed.diagramType === 'datamodel';
+  const direction = isDataModel ? 'vertical' : (parsed.direction || 'horizontal');
   const groupOf = new Map();
   for (const g of (parsed.groups || [])) {
     for (const mid of g.memberIds) { const c = byIdForGroups.get(mid); if (c) groupOf.set(c.id, g.key); }
   }
   try {
-    hierarchicalLayout(modules.graph, parsed, direction, groupOf.size ? groupOf : null);
+    if (isDataModel && !groupOf.size) {
+      modules.canvas.autoLayout(direction, { align: 'barycenter', maxRankExtent: 0, crossGap: modules.canvas.DATAMODEL_COLUMN_GAP || 128 });
+    } else {
+      hierarchicalLayout(modules.graph, parsed, direction, groupOf.size ? groupOf : null);
+    }
   } catch (err) {
     console.warn('hierarchicalLayout failed, falling back to canvas.autoLayout:', err);
     try { modules.canvas.autoLayout(direction); } catch (e) { noteError('import:auto-layout', e); }
@@ -190,6 +198,12 @@ export function importMermaidText(text, opts = {}) {
   // router draws clean orthogonal connections into the element borders
   // rather than passing through their centers.
   snapLinksToPorts(modules.graph, direction);
+  // A data model then routes and places its labels as the Auto Layout button does: final routes first (the shared bus
+  // and separation), then the relationship labels on them.
+  if (isDataModel) {
+    try { modules.canvas.rerouteAllLinks?.(); } catch (e) { noteError('import:reroute', e); }
+    try { modules.canvas.resolveConnectorLabels?.(); } catch (e) { noteError('import:labels', e); }
+  }
   requestAnimationFrame(() => {
     try { modules.canvas.fitContent(); } catch {}
   });

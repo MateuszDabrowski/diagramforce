@@ -209,7 +209,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.8",
+  "appVersion": "1.25.9",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
