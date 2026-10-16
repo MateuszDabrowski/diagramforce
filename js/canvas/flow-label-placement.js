@@ -195,6 +195,14 @@ function shareTwinLabels(items, chosen, obstacles) {
   }
 }
 
+/** Label 0's position as `{ distance, offset? }`. JointJS also takes a bare number for the distance (Mermaid imports and
+ *  1.19 saves wrote `position: 0.5`); spread into a candidate key it became `{}`, and the next getLabelCoordinates
+ *  threw "invalid label position distance" mid-load. migrateLinks normalises on load; this covers a graph built live. */
+function labelPosition(link) {
+  const p = link.labels()?.[0]?.position;
+  return typeof p === 'number' ? { distance: p } : p;
+}
+
 /**
  * Measure every flow connector label, resolve collisions along each label's own path, and write the winning
  * `distance` back. No-op on a diagram with no flow cards. Call from the load pass, inside the JSON-loading guard.
@@ -247,7 +255,7 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
 
   const items = [];
   for (const link of labelled) {
-    const pos = link.labels()[0]?.position;
+    const pos = labelPosition(link);
     if (!pos) continue;
     const view = paper.requireView(link);
     const node = view?.findLabelNode?.(0);
@@ -369,7 +377,7 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
   let moved = 0;
   for (const [id, key] of chosen) {
     const link = graph.getCell(id);
-    const pos = link?.labels()?.[0]?.position;
+    const pos = link && labelPosition(link);
     if (!pos) continue;
     const next = key.offset !== undefined ? { distance: key.distance, offset: key.offset }
       : { distance: key.distance, offset: 0 };

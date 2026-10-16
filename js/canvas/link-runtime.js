@@ -7,9 +7,9 @@
 // getMappingMode, scheduleCrossingBumpRecompute) via cctx; imports the style
 // constant/helpers from link-styles.js. Uses the `joint` GLOBAL (never an import).
 
-import { cctx } from './context.js?v=1.26.1';
-import { MAPPING_LINK_COLOR, GANTT_DEP_STROKE, isObjectRelationshipsVisible, setObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.26.1';
-import { beginRoutePass, endRoutePass, separateForeignRuns, endChangeMovesOthers, forgetSeparation, isSharedBusDiagram } from './router.js?v=1.26.1';
+import { cctx } from './context.js?v=1.26.2';
+import { MAPPING_LINK_COLOR, GANTT_DEP_STROKE, isObjectRelationshipsVisible, setObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.26.2';
+import { beginRoutePass, endRoutePass, separateForeignRuns, endChangeMovesOthers, forgetSeparation, isSharedBusDiagram } from './router.js?v=1.26.2';
 
 // Set by the cascade (scheduleReroute), cleared by every pass: when Auto Layout or Re-face has already routed
 // synchronously, the queued frame's pass would repaint the same routes, so it is skipped.

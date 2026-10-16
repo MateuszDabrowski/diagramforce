@@ -12,7 +12,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.26.1';
+const CACHE_VERSION = '1.26.2';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -162,6 +162,8 @@ const PRECACHE_URLS = [
   `./js/tabs/new-diagram-modal.js?v=${CACHE_VERSION}`,
   `./js/tabs/close-manager.js?v=${CACHE_VERSION}`,
   `./js/tabs/device-only.js?v=${CACHE_VERSION}`,
+  `./js/tabs/join-colours.js?v=${CACHE_VERSION}`,
+  `./js/persistence/diagram-palette.js?v=${CACHE_VERSION}`,
   `./js/tabs/session-store.js?v=${CACHE_VERSION}`,
   `./js/tabs/single-window.js?v=${CACHE_VERSION}`,
   `./js/diagnostics.js?v=${CACHE_VERSION}`,

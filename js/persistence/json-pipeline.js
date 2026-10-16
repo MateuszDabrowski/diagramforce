@@ -7,17 +7,17 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.26.1';
-import { normalizeDateSuffix } from '../util.js?v=1.26.1';
-import { escHtml } from '../util.js?v=1.26.1';
-import { showToast, showError } from '../feedback.js?v=1.26.1';
-import { pctx } from './context.js?v=1.26.1';
-import { slimForShare } from '../share-codec.js?v=1.26.1';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.26.2';
+import { normalizeDateSuffix } from '../util.js?v=1.26.2';
+import { escHtml } from '../util.js?v=1.26.2';
+import { showToast, showError } from '../feedback.js?v=1.26.2';
+import { pctx } from './context.js?v=1.26.2';
+import { slimForShare } from '../share-codec.js?v=1.26.2';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.26.1';
-import { widenZonesForJoinLanes } from '../canvas/join-lanes.js?v=1.26.1';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.26.2';
+import { widenZonesForJoinLanes } from '../canvas/join-lanes.js?v=1.26.2';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
@@ -459,7 +459,7 @@ function fitJoinLanes(graph, diagramType) {
 export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly = false } = {}) {
   const { templatesBackupApi, showLoadModal: showLoadModalCallback, onImport: onImportCallback, normalizeDiagramType, graph, canvas: canvasModule } = pctx;
   let data;
-  try { data = JSON.parse(jsonText); }
+  try { data = driveEnvelopeKeys(JSON.parse(jsonText)); }
   catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
 
   const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams'
@@ -674,6 +674,20 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
 }
 
 /**
+ * A Drive file (`.dgf`, remote-store currentDiagramData) names its type and version `type` and `av`; an export names
+ * them `diagramType` and `appVersion`. The File pane, a drop and Paste read only the export keys, so a .dgf downloaded
+ * from Drive and opened here raised the major Compatibility Warning ("unknown (no version)") and opened a data model as
+ * architecture (owner, 2026-10-16). Fill the export keys from the Drive ones on a single-diagram envelope; an export's
+ * own keys win. Returns the same object.
+ */
+export function driveEnvelopeKeys(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !data.graph) return data;
+  if (data.diagramType == null && typeof data.type === 'string') data.diagramType = data.type;
+  if (data.appVersion == null && typeof data.av === 'string') data.appVersion = data.av;
+  return data;
+}
+
+/**
  * The one diagram a parsed document holds, or null. Two shapes qualify: a single-diagram file (`{graph:{cells}}`), and
  * an export bundle carrying exactly one diagram and no templates (loadJSONText opens that one as a tab too). Returns
  * `{ graph, diagramType, name, appVersion }` with `diagramType` as written (undefined when the file names none). Pure:
@@ -708,7 +722,7 @@ export function singleDiagramOf(data) {
 export async function replaceActiveWithJSONText(jsonText) {
   const { normalizeDiagramType, diagramTypeCb, tabNameCb, onReplaceContent } = pctx;
   let data;
-  try { data = JSON.parse(jsonText); }
+  try { data = driveEnvelopeKeys(JSON.parse(jsonText)); }
   catch (err) { showError(`Failed to read the JSON: ${err.message}`); return false; }
   const d = singleDiagramOf(data);
   if (!d) { showError('Replace takes a single diagram. Use Load for a bundle or a templates file.'); return false; }
@@ -745,7 +759,7 @@ export function describePastedJSON(text) {
   const t = (text || '').trim();
   if (!t) return { ok: false, error: 'Empty input.' };
   let data;
-  try { data = JSON.parse(t); }
+  try { data = driveEnvelopeKeys(JSON.parse(t)); }
   catch (err) { return { ok: false, error: `Invalid JSON: ${err.message}` }; }
   const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams' || Array.isArray(data?.diagrams);
   const isTemplates = data?.schema === 'diagramforce-templates' || (Array.isArray(data?.templates) && !data?.graph && !Array.isArray(data?.diagrams));

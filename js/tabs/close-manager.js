@@ -4,13 +4,13 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.26.1';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.1';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.1';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.26.1';
-import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.1';
-import { noteError } from '../diagnostics.js?v=1.26.1';
+import { tbctx } from './context.js?v=1.26.2';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.2';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.2';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.2';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.26.2';
+import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.2';
+import { noteError } from '../diagnostics.js?v=1.26.2';
 
 /** Does closing this tab need the unsaved-changes question? Only when it is dirty AND has something to decide about:
  *  shapes to keep, or a saved copy that Discard keeps and Delete removes. An emptied, never-saved tab used to ask

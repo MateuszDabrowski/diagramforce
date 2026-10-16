@@ -3,17 +3,17 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.26.1';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.1';
-import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.1';
+import { cctx } from './context.js?v=1.26.2';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.2';
+import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.2';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns } from './layout-core.js?v=1.26.1';
-import { startBatch, endBatch } from '../history.js?v=1.26.1';
-import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.1';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns, planHubLayout, DATAMODEL_COLUMN_GAP } from './layout-core.js?v=1.26.2';
+import { startBatch, endBatch } from '../history.js?v=1.26.2';
+import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.2';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.26.1';
-import { flowConnectorType } from './link-styles.js?v=1.26.1';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.1';
+import { computeFlowLayout } from './flow-layout.js?v=1.26.2';
+import { flowConnectorType } from './link-styles.js?v=1.26.2';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.2';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -231,7 +231,15 @@ export function autoLayout(direction, opts = {}) {
   // the cap takes aspect 2.92 → 1.38 and total connector skew 8497 → 3786, and it fires on no other
   // fixture. The plan's original 3× factor was tried and is worse on every metric (1.67 / 5211).
   // gridSingletons: unlinked units pack into a grid after the connected components instead of one column (review H2-7).
-  const pos = layoutGraphSubset(units, edges, {
+  // A data model that is a star (one table joined to many on its key columns) takes the hub layout instead, in either
+  // direction: field joins leave a card sideways, so the joined tables go in columns either side of the hub (owner
+  // decision 2026-10-16, option C). Anything else returns null and keeps the layered layout below, including a data
+  // graph whose relationship links join whole objects (datamodel-autolayout.spec.js).
+  const hubPlan = opts.hub ? planHubLayout(
+    units.map((u) => { const el = graph.getCell(u.id); const p = el?.position() || { x: 0, y: 0 }; return { ...u, x: p.x, y: p.y }; }),
+    hubEdges(links, toLayoutId, unitIdOf), { minGap: opts.crossGap ?? DATAMODEL_COLUMN_GAP, stub: ROUTER_STUB, laneGap: JOIN_LANE_GAP,
+      joinPort: (port) => typeof port === 'string' && /^field-(left|right)-/.test(port) }) : null;
+  const pos = hubPlan || layoutGraphSubset(units, edges, {
     isHorizontal, align, breakCycles: true, gridSingletons: true,
     maxRankExtent: opts.maxRankExtent ?? 1400, rankMedianFactor: opts.rankMedianFactor ?? 2,
     // `crossGap`: the gap between neighbouring cards of one rank (columns, on a top-down layout). Data models pass
@@ -271,6 +279,64 @@ export function autoLayout(direction, opts = {}) {
 
   fitAfterLayout();
   return units.length;
+}
+
+// The edges the hub layout reads: unit ids plus, for an end on the unit's own port, the port name and its offset from
+// the card top (a field row's port sits at its row).
+function hubEdges(links, toLayoutId, unitIdOf) {
+  const out = [];
+  for (const link of links) {
+    const s = link.get('source') || {}, t = link.get('target') || {};
+    const sId = unitIdOf(toLayoutId(s.id)), tId = unitIdOf(toLayoutId(t.id));
+    if (!sId || !tId || sId === tId) continue;
+    const end = (ep, unitId) => {
+      if (ep.id !== unitId || typeof ep.port !== 'string') return {};
+      const y = cctx.graph.getCell(ep.id)?.getPort?.(ep.port)?.args?.y;
+      return { port: ep.port, y: typeof y === 'number' ? y : undefined };
+    };
+    const a = end(s, sId), b = end(t, tId);
+    out.push({ source: sId, target: tId, sourcePort: a.port, targetPort: b.port, sourcePortY: a.y, targetPortY: b.y });
+  }
+  return out;
+}
+
+/**
+ * Data model Auto Layout, after the cards move: turn every field and relationship port on a card's left or right side
+ * to face the card at the other end (owner decision 2026-10-16, option C). A join saved on the right of both cards
+ * wrapped around one of them once Auto Layout put them side by side. Cards that share a column keep a shared side:
+ * where the two ends disagree, both take the side away from the middle of the diagram. Top and bottom ports are left
+ * to snapLinksToPorts. Returns how many links changed. Inside runAutoLayout's position batch, so it undoes with it.
+ */
+export function refaceDataModelPorts() {
+  const { graph } = cctx;
+  const sideOf = (port) => (typeof port !== 'string' ? null
+    : port.startsWith('field-left-') || port === 'er-left' ? 'left'
+    : port.startsWith('field-right-') || port === 'er-right' ? 'right' : null);
+  const turn = (port, side) => (port.startsWith('field-')
+    ? `field-${side}-${port.replace(/^field-(left|right)-/, '')}` : `er-${side}`);
+  const objects = graph.getElements().filter((e) => e.get('type') === 'sf.DataObject');
+  if (!objects.length) return 0;
+  const bb = graph.getCellsBBox(objects);
+  const midX = bb ? bb.x + bb.width / 2 : 0;
+  let changed = 0;
+  for (const link of graph.getLinks()) {
+    const s = link.get('source') || {}, t = link.get('target') || {};
+    const ss = sideOf(s.port), ts = sideOf(t.port);
+    if (!ss || !ts || s.id === t.id) continue;
+    const sc = graph.getCell(s.id), tc = graph.getCell(t.id);
+    if (!sc || !tc) continue;
+    const a = sc.getBBox(), b = tc.getBBox();
+    let want;
+    if (a.x + a.width <= b.x) want = ['right', 'left'];
+    else if (b.x + b.width <= a.x) want = ['left', 'right'];
+    else if (ss !== ts) { const away = (a.x + a.width / 2) < midX ? 'left' : 'right'; want = [away, away]; }
+    else continue;
+    if (want[0] === ss && want[1] === ts) continue;
+    if (want[0] !== ss) link.source({ ...s, port: turn(s.port, want[0]) });
+    if (want[1] !== ts) link.target({ ...t, port: turn(t.port, want[1]) });
+    changed++;
+  }
+  return changed;
 }
 
 // ── Data Mapping Auto Layout ─────────────────────────────────────────

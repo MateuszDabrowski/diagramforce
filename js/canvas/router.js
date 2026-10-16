@@ -7,9 +7,9 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.26.1';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.1';
-import { assignJoinLanes } from './join-lanes.js?v=1.26.1';
+import { cctx } from './context.js?v=1.26.2';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.2';
+import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.2';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -775,10 +775,31 @@ export function registerSfRouter() {
   // cards of one column with both ends on one side runs on its bus's own vertical (join-lanes.js): every such link
   // turned STUB out of its port, so all of them shared one line. Built once per pass or graph revision.
   function joinLaneX(gr, link) {
-    if (cctx.getDiagramType?.() !== 'datamapping') return null;
+    const type = cctx.getDiagramType?.();
+    if (type !== 'datamapping' && type !== 'datamodel') return null;
     const caches = routeCaches(gr);
-    if (!caches.joinLanes) caches.joinLanes = buildJoinLanes(gr);
+    if (!caches.joinLanes) caches.joinLanes = type === 'datamodel' ? buildSideLanes(gr) : buildJoinLanes(gr);
     return caches.joinLanes.get(link.id)?.x ?? null;
+  }
+  // Data models (owner decision 2026-10-16, option C): links beside one column AND links facing across a gap, as buses
+  // anchored on their busiest port (assignSideLanes), so a hub's composite key reads as one line per key column.
+  function buildSideLanes(gr) {
+    const links = [];
+    for (const l of gr.getLinks()) {
+      if (l.get('linkKind') === 'mapping' || l.get('router')?.name !== 'sfManhattan' || (l.get('vertices') || []).length) continue;
+      const s = l.get('source'), t = l.get('target');
+      const sc = s?.id && gr.getCell(s.id), tc = t?.id && gr.getCell(t.id);
+      if (!sc || !tc || sc === tc || !sc.isElement?.() || !tc.isElement?.()) continue;
+      const sb = sc.getBBox(), tb = tc.getBBox();
+      const si = getPortInfo(sc, s.port, sb), ti = getPortInfo(tc, t.port, tb);
+      if (!si || !ti || (si.dir !== 'left' && si.dir !== 'right') || (ti.dir !== 'left' && ti.dir !== 'right')) continue;
+      const sameColumn = Math.max(sb.x, tb.x) < Math.min(right(sb), right(tb));
+      const facing = (si.dir === 'right' && ti.dir === 'left' && right(sb) < tb.x) || (si.dir === 'left' && ti.dir === 'right' && right(tb) < sb.x);
+      if (!(sameColumn && si.dir === ti.dir) && !facing) continue;
+      const end = (cell, def, info, b) => ({ key: `${cell.id}::${def.port}`, edge: info.dir === 'left' ? b.x : right(b), side: info.dir, y: info.stub.y });
+      links.push({ id: l.id, ends: [end(sc, s, si, sb), end(tc, t, ti, tb)] });
+    }
+    return assignSideLanes(links, { stub: STUB });
   }
   function buildJoinLanes(gr) {
     const items = [];

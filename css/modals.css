@@ -560,6 +560,13 @@
   font-weight: 600;
   cursor: pointer;
 }
+.df-toast__action--secondary { font-weight: 400; border-color: transparent; color: var(--text-secondary); }
+/* Two buttons beside the message left it about 80 px on a phone: the message takes the first row there. */
+@media (max-width: 600px) {
+  .df-toast--multi-action { flex-wrap: wrap; }
+  .df-toast--multi-action .df-toast__message { flex: 1 1 calc(100% - 40px); }
+  .df-toast--multi-action .df-toast__action:first-of-type { margin-left: 26px; }
+}
 .df-toast__action:hover { background: var(--bg-hover, rgba(127,127,127,.08)); }
 .df-toast__action:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 1px; }
 .df-toast__close {

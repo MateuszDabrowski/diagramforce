@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.26.1';
-import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.1';
-import { resizeDataObjectToFit } from './components.js?v=1.26.1';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.1';
-import { escHtml, compareSemver } from './util.js?v=1.26.1';
+import { diagramEmbedsImages } from './image-component.js?v=1.26.2';
+import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.2';
+import { resizeDataObjectToFit } from './components.js?v=1.26.2';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.2';
+import { escHtml, compareSemver } from './util.js?v=1.26.2';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.26.1';
-import { showWhatsNewNow } from './whats-new.js?v=1.26.1';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.1';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.1';
-import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.1';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.1';
-import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.1';
-import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.1';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.1';
+import { pctx } from './persistence/context.js?v=1.26.2';
+import { showWhatsNewNow } from './whats-new.js?v=1.26.2';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.2';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.2';
+import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.2';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.2';
+import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.2';
+import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.2';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.2';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.1';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.1';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.1';
-import { noteError } from './diagnostics.js?v=1.26.1';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.2';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.2';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.2';
+import { noteError } from './diagnostics.js?v=1.26.2';
 
 let modules = {};
 export function init(_modules) {
@@ -421,8 +421,11 @@ export function init(_modules) {
         // sub-row still sits column-aligned under the first). M7 stays on for architecture/org, where it was
         // measured and tuned. (b) join labels get the flow-style target-centred placement afterwards -
         // snapLinksToPorts reseeds every label to its route midpoint, which can sit on top of a card.
-        placed = modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0, crossGap: DATAMODEL_COLUMN_GAP }) > 0;
+        // (c) `hub`: a star (one table joined to many) takes the hub layout in either direction, then every side port
+        // turns to face the card at its other end (option C, 2026-10-16; auto-layout.js planHubLayout / refaceDataModelPorts).
+        placed = modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0, crossGap: DATAMODEL_COLUMN_GAP, hub: true }) > 0;
         if (!placed) return;
+        try { modules.canvas.refaceDataModelPorts(); } catch (e) { noteError('layout:reface-ports', e); }
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
         // Data models route on the shared bus since 1.25.8, so they need the final pass before labels too (see the
         // process branch): without it 5 of mcn-consent's 40 lines moved out from under their join labels.

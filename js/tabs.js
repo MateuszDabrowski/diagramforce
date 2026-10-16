@@ -1,28 +1,29 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.1';
-import { tbctx } from './tabs/context.js?v=1.26.1';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.1';
-import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.1';
-import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.1';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.1';
+import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.2';
+import { tbctx } from './tabs/context.js?v=1.26.2';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.2';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.2';
+import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.2';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.2';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { reofferIfStranded };   // re-export: the Load Manager's Google Picker handoff re-offers New Diagram when it ends with no tab
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.1';
-import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.1';
-import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.1';
-import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.1';
-import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.1';
-import { wireMenuDismiss } from './menu.js?v=1.26.1';
-import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.1';
-import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.1';
-import { getPalette } from './brand-palette.js?v=1.26.1';
-import { getAllIcons } from './icons.js?v=1.26.1';
-import { noteError } from './diagnostics.js?v=1.26.1';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.2';
+import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.2';
+import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.2';
+import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.2';
+import { offerJoinColours } from './tabs/join-colours.js?v=1.26.2';
+import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.2';
+import { wireMenuDismiss } from './menu.js?v=1.26.2';
+import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.2';
+import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.2';
+import { getPalette } from './brand-palette.js?v=1.26.2';
+import { getAllIcons } from './icons.js?v=1.26.2';
+import { noteError } from './diagnostics.js?v=1.26.2';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -332,7 +333,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     // diagram is tagged, an untagged one is not in a group (review D1).
     const soleGroup = groupMetas.length === 1 && !diagrams.some(d => d.group) ? nameToId.get(groupMetas[0].name) : null;
     for (const d of diagrams) {
-      const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false, driveMeta: d.driveMeta || null });
+      const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false, driveMeta: d.driveMeta || null, offerColours: false });
       const t = tabs.find(x => x.id === id);
       if (t) t.groupId = (d.group && nameToId.get(d.group)) || soleGroup || null;
     }
@@ -421,7 +422,7 @@ export function newTab(name = 'Draft', diagramType = 'architecture') {
  * Returns the new tab id. Does NOT call saveTabs — the caller
  * persists once it's done (one diagram, or the whole group).
  */
-function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true, driveMeta = null, group = null } = {}) {
+function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true, driveMeta = null, group = null, offerColours = true } = {}) {
   // Back-compat: a pre-v1.15.0 Data Model diagram with mapping mode ON imports as
   // a first-class "Data Mapping" diagram (mapping is now its own type).
   let importType = type;
@@ -471,6 +472,9 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   // (already in Drive); a plain import (paste / JSON / refresh-latest, no fileId) CREATEs its master; an un-forked
   // view share is skipped inside saveTabNow (Mode C). No-op when not connected (the browser session already holds it).
   requestAnimationFrame(() => persistenceModule.saveTabNow?.(id));
+  // Option C step 3: a data model or mapping opened with two or more join fields still grey offers a colour per field.
+  // Not for a clone (the person's own tab) or a group import (a working set coming back, several tabs at once).
+  if (offerColours) requestAnimationFrame(() => { try { offerJoinColours(id); } catch (e) { noteError('tabs:join-colours', e); } });
   return id;
 }
 
@@ -1496,7 +1500,7 @@ function openTabGroupMenu(anchorEl, tab) {
       saveCurrentTabState();   // flush the active tab's live graph so a clone of the ACTIVE tab is current
       const cells = (tab.id === tbctx.activeTabId ? graph.toJSON().cells : getTabGraphJSON(tab.id)?.cells) || [];
       const cloneCells = JSON.parse(JSON.stringify(cells));   // separate graph — never share cell object refs
-      importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode);
+      importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode, { offerColours: false });
       saveTabs();
     }, { iconSvg: CLONE_GLYPH }));
     // Compare — diff the ACTIVE tab against THIS (right-clicked) tab, in place: stay on the open diagram and see

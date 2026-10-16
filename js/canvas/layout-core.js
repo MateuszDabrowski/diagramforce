@@ -1037,3 +1037,125 @@ export function orderLayerColumns(layers = [], edges = []) {
   }
   return out;
 }
+
+/**
+ * Hub layout for a data model (owner decision 2026-10-16, option C). A query that joins one table to many others is a
+ * star, and the layered engine lines the joined tables up in one rank (8192 px wide on a 20-join query), with every
+ * join sharing a few verticals. Here the hub sits in the middle column and the tables it joins split into a left and a
+ * right column, balanced by height; a table joined only through one of those sits one column further out, level with
+ * it. Each gap is wide enough for one lane per hub key column (join-lanes.js assignSideLanes).
+ *
+ * The plan applies only to a star: a hub with at least `minDegree` neighbours, every other unit joined to the hub
+ * (a satellite) or to a satellite (second level), and at least two groups of satellites that do not join each other.
+ * Satellites joined to each other, with the tables beyond them, stay in one column. Anything else returns null and the
+ * caller keeps the layered layout.
+ *
+ * PURE + deterministic. units: [{ id, w, h, x, y }] in a stable order (x, y = the current top-left, for order only).
+ * opts.joinPort: a test every hub-side port name must pass (null: no test).
+ * edges: [{ source, target, sourcePort?, targetPort?, sourcePortY?, targetPortY? }]: a port's Y is its offset from the
+ * card top, used to order the satellites by the hub row they join; its name counts the lanes a gap needs.
+ * Returns Map(id -> { x, y }) of local coordinates, or null.
+ */
+export function planHubLayout(units, edges = [], opts = {}) {
+  const { gapY = 64, minGap = DATAMODEL_COLUMN_GAP, stub = 32, laneGap = 16, clear = 16, minDegree = 4, joinPort = null } = opts;
+  const byId = new Map(units.map((u) => [u.id, u]));
+  const order = new Map(units.map((u, i) => [u.id, i]));
+  const es = edges.filter((e) => e && byId.has(e.source) && byId.has(e.target) && e.source !== e.target);
+  const nb = new Map(units.map((u) => [u.id, new Set()]));
+  for (const e of es) { nb.get(e.source).add(e.target); nb.get(e.target).add(e.source); }
+  let hub = null;
+  for (const u of units) if (!hub || nb.get(u.id).size > nb.get(hub.id).size) hub = u;
+  if (!hub || nb.get(hub.id).size < minDegree) return null;
+  // `joinPort(name)`: every hub end must sit on such a port. Data models pass field ports, so a data graph's
+  // object-level relationship links keep the layered layout, with their join labels above each target card.
+  if (joinPort && es.some((e) => (e.source === hub.id && !joinPort(e.sourcePort)) || (e.target === hub.id && !joinPort(e.targetPort)))) return null;
+  const sats = units.filter((u) => nb.get(hub.id).has(u.id));
+  const satIds = new Set(sats.map((u) => u.id));
+  const seconds = units.filter((u) => u.id !== hub.id && !satIds.has(u.id));
+  for (const u of seconds) if (![...nb.get(u.id)].some((id) => satIds.has(id))) return null;   // unreachable or deeper
+
+  // Groups: satellites and second-level units joined by any edge that does not touch the hub share one column.
+  const parent = new Map(units.map((u) => [u.id, u.id]));
+  const find = (id) => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
+  for (const e of es) if (e.source !== hub.id && e.target !== hub.id) parent.set(find(e.source), find(e.target));
+
+  // A satellite's key: the mean offset of the hub rows it joins, so the tables follow the hub's field order.
+  const hubPortY = (e) => (e.source === hub.id ? e.sourcePortY : e.targetPortY);
+  const key = new Map(sats.map((u) => {
+    const ys = es.filter((e) => (e.source === hub.id && e.target === u.id) || (e.target === hub.id && e.source === u.id))
+      .map(hubPortY).filter((y) => typeof y === 'number');
+    return [u.id, ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : u.y];
+  }));
+  const bySatKey = (a, b) => (key.get(a.id) - key.get(b.id)) || (a.y - b.y) || (a.x - b.x) || (order.get(a.id) - order.get(b.id));
+  const groups = new Map();
+  for (const u of [...sats].sort(bySatKey)) {
+    const r = find(u.id);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(u);
+  }
+  if (groups.size < 2) return null;
+
+  // Sides: each group, in key order, goes to the shorter column (a tie goes right, the reading direction).
+  const side = { left: [], right: [] };
+  const height = { left: 0, right: 0 };
+  for (const g of groups.values()) {
+    const s = height.left < height.right ? 'left' : 'right';
+    for (const u of g) { side[s].push(u); height[s] += (side[s].length > 1 ? gapY : 0) + u.h; }
+  }
+  const sideOf = new Map();
+  for (const s of ['left', 'right']) for (const u of side[s]) sideOf.set(find(u.id), s);
+  const outer = { left: [], right: [] };
+  for (const u of seconds) outer[sideOf.get(find(u.id))].push(u);
+
+  // Gap widths: the lanes a gap needs, one per distinct port on its inner side (a count of links without port names).
+  const gapFor = (inner, outerSet) => {
+    const keys = new Set();
+    let n = 0;
+    for (const e of es) {
+      const at = inner.has(e.source) && outerSet.has(e.target) ? 'source' : inner.has(e.target) && outerSet.has(e.source) ? 'target' : null;
+      if (!at) continue;
+      n++;
+      const p = e[`${at}Port`];
+      keys.add(p ? `${e[at]}::${p}` : `#${n}`);
+    }
+    return Math.max(minGap, 2 * stub + clear + laneGap * Math.max(keys.size - 1, 0));
+  };
+  const ids = (list) => new Set(list.map((u) => u.id));
+  const widthOf = (list) => Math.max(0, ...list.map((u) => u.w));
+  const W = { l2: widthOf(outer.left), l: widthOf(side.left), r: widthOf(side.right), r2: widthOf(outer.right) };
+  const gL2 = outer.left.length ? gapFor(ids(side.left), ids(outer.left)) : 0;
+  const gL = gapFor(new Set([hub.id]), ids(side.left));
+  const gR = gapFor(new Set([hub.id]), ids(side.right));
+  const gR2 = outer.right.length ? gapFor(ids(side.right), ids(outer.right)) : 0;
+  const xL = outer.left.length ? W.l2 + gL2 : 0;
+  const xHub = xL + W.l + gL;
+  const xR = xHub + hub.w + gR;
+  const xR2 = xR + W.r + gR2;
+
+  // Rows: both side columns centred on the taller one, the hub centred on both. Side cards face the hub: a left
+  // column is right-aligned and a right column left-aligned, so every gap is one width.
+  const tall = Math.max(height.left, height.right, hub.h);
+  const pos = new Map();
+  pos.set(hub.id, { x: xHub, y: (tall - hub.h) / 2 });
+  for (const s of ['left', 'right']) {
+    let y = (tall - height[s]) / 2;
+    for (const u of side[s]) {
+      pos.set(u.id, { x: s === 'left' ? xL + W.l - u.w : xR, y });
+      y += u.h + gapY;
+    }
+  }
+  // Second level: level with the highest satellite it joins, pushed down clear of the one above it.
+  for (const s of ['left', 'right']) {
+    const placed = outer[s].map((u) => {
+      const ys = [...nb.get(u.id)].filter((id) => satIds.has(id)).map((id) => pos.get(id).y);
+      return { u, y: Math.min(...ys) };
+    }).sort((a, b) => (a.y - b.y) || (order.get(a.u.id) - order.get(b.u.id)));
+    let floor = -Infinity;
+    for (const { u, y: want } of placed) {
+      const y = Math.max(want, floor);
+      pos.set(u.id, { x: s === 'left' ? W.l2 - u.w : xR2, y });
+      floor = y + u.h + gapY;
+    }
+  }
+  return pos;
+}

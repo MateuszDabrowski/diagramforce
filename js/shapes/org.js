@@ -1,9 +1,9 @@
 // Organisation-diagram shapes (OrgPerson) (CLEANUP S3). registerOrg() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { portGroups, portItems } from './ports.js?v=1.26.1';
-import { renderRaciPills } from './raci.js?v=1.26.1';
-import { textUnits, sliceUnits } from '../util.js?v=1.26.1';
+import { portGroups, portItems } from './ports.js?v=1.26.2';
+import { renderRaciPills } from './raci.js?v=1.26.2';
+import { textUnits, sliceUnits } from '../util.js?v=1.26.2';
 
 export function registerOrg() {
   // --- OrgPerson ---

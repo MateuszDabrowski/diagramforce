@@ -2,22 +2,22 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.26.1';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.1';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.1';
-import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.1';
-import { nodeContrastText } from '../util.js?v=1.26.1';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.1';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.1';
-import { getIconDataUri } from '../icons.js?v=1.26.1';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.1';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.1';
-import { isSharedBusDiagram } from './router.js?v=1.26.1';
-import { rerouteAllLinks } from './link-runtime.js?v=1.26.1';
+import { cctx } from './context.js?v=1.26.2';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.2';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.2';
+import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.2';
+import { nodeContrastText } from '../util.js?v=1.26.2';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.2';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.2';
+import { getIconDataUri } from '../icons.js?v=1.26.2';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.2';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.2';
+import { isSharedBusDiagram } from './router.js?v=1.26.2';
+import { rerouteAllLinks } from './link-runtime.js?v=1.26.2';
 
 // Types whose connector labels are resolved collision-only on load (see the end of migrateNodes).
 const LOAD_LABEL_TYPES = new Set(['architecture', 'process', 'org']);
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.1';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.2';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -81,6 +81,17 @@ export function migrateLinks() {
     }
   }
   for (const link of graph.getLinks()) {
+    // ── A label position written as a bare number → { distance } ──
+    // JointJS reads `position: 0.5` as `{ distance: 0.5 }`, and saves from 1.19 (and every Mermaid import until
+    // 2026-10-16) carry it. The label passes read `position.distance`: the collision pass that runs on open since
+    // 1.25.9 turned 0.5 into `{}` and JointJS threw "invalid label position distance", so an architecture diagram
+    // with such a label could not be opened at all (owner's July "Tet Architecture", 2026-10-16). Same meaning,
+    // inside the load guard: no undo entry, no dirty mark. Before the seeded-label check below, which reads a
+    // `position: 0` as no position.
+    const authored = link.labels() || [];
+    if (authored.some((l) => typeof l?.position === 'number')) {
+      link.labels(authored.map((l) => (typeof l?.position === 'number' ? { ...l, position: { distance: l.position } } : l)));
+    }
     // ── Re-key legacy positional field ports → stable fid ports ──
     // Pre-1.15.0 saves bound a DataObject link to the field's ARRAY INDEX
     // (`field-left-2`); reordering/deleting a field then drifted the link.

@@ -1,11 +1,11 @@
 // Save & Export manager (CLEANUP S4) — the Save Manager (browser saves, Drive copies, export selection). Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.26.1';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.26.1';
-import { DRIVE_CHIP_CHECK, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
-import { countDiagramShapes, escHtml, formatRelativeTime, isViewForkTab, tabInGroup } from '../util.js?v=1.26.1';
-import { tctx } from './context.js?v=1.26.1';
-import { noteError } from '../diagnostics.js?v=1.26.1';
-import { isInSlot } from '../persistence/host-env.js?v=1.26.1';
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.26.2';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.2';
+import { DRIVE_CHIP_CHECK, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.2';
+import { countDiagramShapes, escHtml, formatRelativeTime, isViewForkTab, tabInGroup } from '../util.js?v=1.26.2';
+import { tctx } from './context.js?v=1.26.2';
+import { noteError } from '../diagnostics.js?v=1.26.2';
+import { isInSlot } from '../persistence/host-env.js?v=1.26.2';
 
 export function showSaveManagerModal() {
   const p = tctx.modules.persistence;

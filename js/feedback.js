@@ -131,19 +131,22 @@ export function showToast(message, kind = 'info', opts = {}) {
   // button, so the way out is not only "click anywhere on it".
   const sticky = opts.sticky === true;
   if (!sticky) dismissTimer = setTimeout(dismiss, duration);
-  // An ACTION toast (1.25.2, the B4 link-open hint): one button after the message. The toast still dismisses on any
-  // click; the button runs its action as well.
-  if (opts.action && opts.action.label) {
-    toast.classList.add('df-toast--action');
+  // An ACTION toast (1.25.2, the B4 link-open hint): one button after the message, or several from `opts.actions`
+  // (the join colour prompt's Colour joins / Keep grey). The toast still dismisses on any click; a button runs its
+  // action as well. A `secondary` button is the quieter way out.
+  const actions = (Array.isArray(opts.actions) ? opts.actions : [opts.action]).filter((a) => a && a.label);
+  if (actions.length) toast.classList.add('df-toast--action');
+  if (actions.length > 1) toast.classList.add('df-toast--multi-action');   // on a phone the buttons go under the message
+  for (const action of actions) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'df-toast__action';
-    btn.textContent = String(opts.action.label);
+    btn.className = action.secondary ? 'df-toast__action df-toast__action--secondary' : 'df-toast__action';
+    btn.textContent = String(action.label);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (leaving) return;   // a second Enter on the still-focused button while the toast leaves
       dismiss();
-      try { opts.action.onClick?.(); } catch (err) { console.error('Diagramforce: toast action failed:', err); }
+      try { action.onClick?.(); } catch (err) { console.error('Diagramforce: toast action failed:', err); }
     });
     toast.appendChild(btn);
   }
