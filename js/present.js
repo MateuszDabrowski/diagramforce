@@ -19,7 +19,7 @@
 // window and Escape leaves through keyboard.js. Nothing here is Slot-specific; the reason it fits Slot is
 // that WebKit hosts a full-screen element in a window of its own, which a call's "share a window" picks up
 // with no Slot chrome and no account name around it.
-import { kbd } from './keyboard.js?v=1.26.2';
+import { kbd } from './keyboard.js?v=1.26.3';
 
 let modules = {};
 let presenting = false;

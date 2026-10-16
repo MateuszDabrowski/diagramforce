@@ -3,37 +3,39 @@
 // notice stays. Licensed under the EUPL 1.2.
 // Initializes all modules in order. JointJS is a global (vendored script tag, assets/vendor/joint.min.js).
 
-import * as theme       from './theme.js?v=1.26.2';
-import * as icons       from './icons.js?v=1.26.2';
-import { getAllStencilSvgs } from './components.js?v=1.26.2';
-import * as shapes      from './shapes.js?v=1.26.2';
-import * as canvas      from './canvas.js?v=1.26.2';
-import * as stencil     from './stencil.js?v=1.26.2';
-import * as selection   from './selection.js?v=1.26.2';
-import * as history     from './history.js?v=1.26.2';
-import * as clipboard   from './clipboard.js?v=1.26.2';
-import * as templates    from './templates.js?v=1.26.2';
-import * as keyboard    from './keyboard.js?v=1.26.2';
-import * as toolbar     from './toolbar.js?v=1.26.2';
-import * as properties  from './properties.js?v=1.26.2';
-import * as persistence from './persistence.js?v=1.26.2';
-import * as tabs        from './tabs.js?v=1.26.2';
-import * as mermaidImport from './mermaid-import.js?v=1.26.2';
-import * as tableView    from './table-view.js?v=1.26.2';
-import * as walkthrough  from './walkthrough.js?v=1.26.2';
-import * as present      from './present.js?v=1.26.2';
-import * as whatsNew     from './whats-new.js?v=1.26.2';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.26.2';
-import * as singleWindow from './tabs/single-window.js?v=1.26.2';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.26.2';
-import * as externalImport from './persistence/external-import.js?v=1.26.2';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.26.2';
-import { seedDefaultPalette } from './brand-palette.js?v=1.26.2';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.26.2';   // external-import timeout fallback
-import { installErrorCapture } from './diagnostics.js?v=1.26.2';
-import { holdUpdateReload, isUpdateReloadHeld, releaseLoss, reloadWhenIdle, setUpdateReadyHandler, updateReady } from './update-reload.js?v=1.26.2';
-import { isInSlot } from './persistence/host-env.js?v=1.26.2';
-import { showToast } from './feedback.js?v=1.26.2';
+import * as theme       from './theme.js?v=1.26.3';
+import * as icons       from './icons.js?v=1.26.3';
+import { getAllStencilSvgs } from './components.js?v=1.26.3';
+import * as shapes      from './shapes.js?v=1.26.3';
+import * as canvas      from './canvas.js?v=1.26.3';
+import * as stencil     from './stencil.js?v=1.26.3';
+import * as selection   from './selection.js?v=1.26.3';
+import * as history     from './history.js?v=1.26.3';
+import * as clipboard   from './clipboard.js?v=1.26.3';
+import * as templates    from './templates.js?v=1.26.3';
+import * as keyboard    from './keyboard.js?v=1.26.3';
+import * as toolbar     from './toolbar.js?v=1.26.3';
+import * as properties  from './properties.js?v=1.26.3';
+import * as persistence from './persistence.js?v=1.26.3';
+import * as tabs        from './tabs.js?v=1.26.3';
+import * as mermaidImport from './mermaid-import.js?v=1.26.3';
+import * as tableView    from './table-view.js?v=1.26.3';
+import * as walkthrough  from './walkthrough.js?v=1.26.3';
+import * as present      from './present.js?v=1.26.3';
+import * as whatsNew     from './whats-new.js?v=1.26.3';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.26.3';
+import * as singleWindow from './tabs/single-window.js?v=1.26.3';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.26.3';
+import * as externalImport from './persistence/external-import.js?v=1.26.3';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.26.3';
+import { seedDefaultPalette } from './brand-palette.js?v=1.26.3';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.26.3';   // external-import timeout fallback
+import { installErrorCapture } from './diagnostics.js?v=1.26.3';
+import { holdUpdateReload, isUpdateReloadHeld, releaseLoss, reloadWhenIdle, setUpdateReadyHandler, updateReady } from './update-reload.js?v=1.26.3';
+import { isInSlot } from './persistence/host-env.js?v=1.26.3';
+import { showToast } from './feedback.js?v=1.26.3';
+import { offerAutoLayout } from './toolbar/layout-suggest.js?v=1.26.3';
+import { holdJoinColours } from './tabs/join-colours.js?v=1.26.3';
 
 // Record uncaught errors, unhandled rejections and console errors in memory for Help > Copy diagnostics. First
 // statement after the imports, so every later failure is caught. Nothing is sent anywhere (js/diagnostics.js).
@@ -203,6 +205,19 @@ async function main() {
   // Tab right-click "Compare" diffs the ACTIVE tab against the right-clicked one, in place (toolbar owns the
   // review overlay + banner; tabs just supplies which tab is the baseline).
   tabs.setCompareTabHandler?.(toolbar.compareActiveWithTab);
+  // A file with suggestAutoLayout: true (SQL Studio's rough grid) gets one prompt; accepting runs the menu's Auto
+  // Layout on THAT tab, so a tab switch in between cannot lay out another diagram. The join colour offer for the same
+  // tab waits until this prompt is answered: one question at a time, colours on the chosen layout.
+  persistence.setAutoLayoutSuggestHandler((name) => {
+    const type = tabs.getActiveTabType();
+    if (type === 'gantt' || type === 'sequence') return;   // no Auto Layout to offer (runPrimaryAutoLayout)
+    const tabId = tabs.getActiveTabId();
+    const release = holdJoinColours(tabId);
+    offerAutoLayout(tabId, name, (id) => {
+      if (tabs.getActiveTabId() !== id) tabs.switchTab(id);
+      if (tabs.getActiveTabId() === id) toolbar.runPrimaryAutoLayout();
+    }, { onDismiss: release });
+  });
 
   // An open Data Mapping table edit session vetoes a tab switch until the user
   // resolves it (Save / Discard the unapplied field edits) — see table-view.guardLeave.

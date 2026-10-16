@@ -18,14 +18,14 @@
 //
 // See Documentation/backlog/domain-migration.md + dev/cloudflare/migrate-worker.js.
 
-import { showToast } from '../feedback.js?v=1.26.2';
-import { showDomainMoveNotice } from '../whats-new.js?v=1.26.2';
-import { importTemplatesArray } from '../templates.js?v=1.26.2';
-import { NAMED_SAVE_PREFIX } from './storage.js?v=1.26.2';
-import { haltSessionWrites } from '../tabs/single-window.js?v=1.26.2';
-import { noteError } from '../diagnostics.js?v=1.26.2';
-import { ARCHIVE_DRIVE_FIELDS } from './drive-sync-logic.js?v=1.26.2';
-import { isInSlot } from './host-env.js?v=1.26.2';
+import { showToast } from '../feedback.js?v=1.26.3';
+import { showDomainMoveNotice } from '../whats-new.js?v=1.26.3';
+import { importTemplatesArray } from '../templates.js?v=1.26.3';
+import { NAMED_SAVE_PREFIX } from './storage.js?v=1.26.3';
+import { haltSessionWrites } from '../tabs/single-window.js?v=1.26.3';
+import { noteError } from '../diagnostics.js?v=1.26.3';
+import { ARCHIVE_DRIVE_FIELDS } from './drive-sync-logic.js?v=1.26.3';
+import { isInSlot } from './host-env.js?v=1.26.3';
 
 const NEW_HOST = 'diagramforce.com';
 const OLD_ORIGIN = 'https://diagramforce.mateuszdabrowski.pl';

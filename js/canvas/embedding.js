@@ -12,12 +12,12 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.26.2';
-import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.2';
-import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.2';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.2';
-import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.2';
-import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.2';
+import { cctx } from './context.js?v=1.26.3';
+import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.3';
+import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.3';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.3';
+import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.3';
+import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.3';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded

@@ -4,10 +4,10 @@
 // offers a colour per join field. Accept writes the colours into the diagram as one undo step, the same edit as the
 // Color field, so exports and later edits see one kind of colour. A join the person coloured is never touched.
 
-import { tbctx } from './context.js?v=1.26.2';
-import { showToast } from '../feedback.js?v=1.26.2';
-import { planJoinColours } from '../canvas/join-lanes.js?v=1.26.2';
-import { DF_COLORS, DF_NEUTRAL_LINK } from '../persistence/diagram-palette.js?v=1.26.2';
+import { tbctx } from './context.js?v=1.26.3';
+import { showToast } from '../feedback.js?v=1.26.3';
+import { planJoinColours } from '../canvas/join-lanes.js?v=1.26.3';
+import { DF_COLORS, DF_NEUTRAL_LINK } from '../persistence/diagram-palette.js?v=1.26.3';
 
 // Amber is the mapping link colour (MAPPING_LINK_COLOR), and orange and olive sit next to it, so a join never takes them.
 export const JOIN_PALETTE = [DF_COLORS.blue, DF_COLORS.green, DF_COLORS.purple, DF_COLORS.cyan, DF_COLORS.red, DF_COLORS.indigo, DF_COLORS.teal];
@@ -40,9 +40,28 @@ function planFor(tab) {
   return planJoinColours(greyJoins(graph), JOIN_PALETTE);
 }
 
+// One question at a time (SQL Studio's report, 2026-10-16): a file that also suggests Auto Layout opened with both
+// sticky prompts stacked. While the Auto Layout prompt for a tab is open, its colour offer waits, and it shows once that
+// prompt is answered by any route; the joins are then coloured top to bottom on the layout the person chose.
+const _held = new Map();   // tabId -> { pending } while an earlier prompt for that tab is open
+/** Hold the colour offer for `tabId`; the returned release shows it, if one was due, a frame later. Idempotent. */
+export function holdJoinColours(tabId) {
+  if (!_held.has(tabId)) _held.set(tabId, { pending: false });
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    const h = _held.get(tabId);
+    _held.delete(tabId);
+    if (h?.pending) requestAnimationFrame(() => { try { offerJoinColours(tabId); } catch (e) { console.error('Diagramforce: join colour offer failed:', e); } });
+  };
+}
+
 /** After a diagram opens into the active tab: the prompt, when two or more join fields are still grey. Returns whether
  *  it showed. Every open is a new tab, so declining needs no memory: the prompt cannot come back for this tab. */
 export function offerJoinColours(tabId) {
+  const hold = _held.get(tabId);
+  if (hold) { hold.pending = true; return false; }
   const tab = tbctx.tabs.find((t) => t.id === tabId);
   if (!tab || tbctx.activeTabId !== tabId) return false;
   const plan = planFor(tab);
@@ -58,7 +77,7 @@ export function offerJoinColours(tabId) {
  *  switched tabs since the prompt showed. Resolves to how many joins changed. The Color field's setter loads on
  *  accept: tabs.js must stay importable without JointJS (data-export.test.js imports it in Node). */
 export async function colourJoins(tabId) {
-  const { applyLinkStroke } = await import('../properties/link-props.js?v=1.26.2');
+  const { applyLinkStroke } = await import('../properties/link-props.js?v=1.26.3');
   if (tbctx.activeTabId !== tabId) tbctx.switchTab?.(tabId);
   const tab = tbctx.tabs.find((t) => t.id === tabId);
   if (!tab || tbctx.activeTabId !== tabId) return 0;

@@ -54,7 +54,9 @@ function positionToastContainer() {
  *                            sticky?: true — no auto-dismiss; a close button instead (1.25.2),
  *                            multiline?: true — keep the message's line breaks (1.25.9; every message wraps),
  *                            dismissOnClick?: false — a click on the body does not close it (S8-3),
- *                            onClose?: fn — also run when the close button is clicked (S8-3) }
+ *                            onClose?: fn — also run when the close button is clicked (S8-3),
+ *                            onDismiss?: fn — run once when the toast leaves for ANY reason: a button, the
+ *                              close, a click on its body, its timer (2026-10-16, the join colour offer waits on it) }
  * @returns {Function}      Dismiss handle. Also exposes `.update(message)` which
  *                          rewrites the toast text in place (used by long-running
  *                          operations like GIF export to show frame N/M progress
@@ -104,6 +106,7 @@ export function showToast(message, kind = 'info', opts = {}) {
     if (leaving || !toast.isConnected) return;
     leaving = true;
     clearTimeout(dismissTimer);
+    try { opts.onDismiss?.(); } catch (err) { console.error('Diagramforce: toast dismiss hook failed:', err); }
     toast.classList.remove('df-toast--shown');
     // The 120 ms exit fade (--df-motion-fast, css/modals.css) plays first. The leaving toast is out of the
     // accessibility tree at once (aria-hidden), so it never stands in for a live one. It still takes clicks while it

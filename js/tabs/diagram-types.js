@@ -2,7 +2,8 @@
 // + a pure switch; zero imports. Shared by tabs.js (tab bar / new-diagram picker) and stencil.js (workspace
 // labels), so it lives in a leaf both import without a cycle.
 
-export const DIAGRAM_TYPES = {
+// Prototype-free: stencil.js, tabs.js and the tab modals index it by a diagram type (lookup-tables.test.js).
+export const DIAGRAM_TYPES = Object.assign(Object.create(null), {
   architecture: { label: 'Architecture Diagram', short: 'Architecture' },
   flow:         { label: 'Flow Diagram',          short: 'Flow' },
   process:      { label: 'Process Diagram',      short: 'Process' },
@@ -11,7 +12,7 @@ export const DIAGRAM_TYPES = {
   datamapping:  { label: 'Data Mapping Diagram', short: 'Data Mapping' },
   gantt:        { label: 'Gantt Chart',           short: 'Gantt' },
   org:          { label: 'Org Chart',             short: 'Org Chart' },
-};
+});
 
 /** Inline SVG (viewBox 0 0 16 16, currentColor) for a diagram type's glyph — used both on each tab
  *  and in the "+ Diagram" right-click type menu, so they stay identical. */

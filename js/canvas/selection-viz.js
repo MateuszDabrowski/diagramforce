@@ -12,8 +12,9 @@
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.26.2';
-import { getBumpLayer } from './crossing-bumps.js?v=1.26.2';
+import { cctx } from './context.js?v=1.26.3';
+import { getBumpLayer } from './crossing-bumps.js?v=1.26.3';
+import { linksOnRunAt } from './shared-run.js?v=1.26.3';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)
@@ -221,6 +222,63 @@ const restoreLinkLabels = (linkView) => {
   });
 };
 
+// ── Trunk hover: every connector on the run under the pointer (owner, 2026-10-16) ──
+// On a shared trunk the pointer is over the whole bus, but only the link drawn on top got the halo, so the trunk
+// looked as if it led to one card. The hovered link's COMPANIONS - the links on the same run at the pointer
+// (shared-run.js) - get the same halo, recomputed as the pointer moves along the link: the whole bus on the trunk,
+// one link once the pointer reaches its branch. Hover only: a click still selects the one link on top.
+const _companions = new Set();   // linkViews haloed because they share the hovered link's run under the pointer
+let _hoverView = null;
+let _hoverPoint = null;
+let _hoverFrame = 0;
+const polylineOf = (view) => {
+  const pts = [view?.sourcePoint, ...(view?.route || []), view?.targetPoint].filter(Boolean);
+  return pts.length >= 2 ? pts : null;
+};
+const releaseCompanion = (view) => {
+  _companions.delete(view);
+  const el = view?.el;
+  if (el && (el.classList.contains('selected') || el.matches(':hover'))) return;
+  restoreLinkMarkers(view);
+  restoreLinkBumps(view);
+  restoreLinkLabels(view);
+};
+const updateCompanions = () => {
+  _hoverFrame = 0;
+  const want = new Set();
+  const view = _hoverView;
+  if (view?.model && _hoverPoint && cctx.graph && cctx.paper) {
+    const lines = new Map();
+    for (const link of cctx.graph.getLinks()) {
+      const pl = polylineOf(cctx.paper.findViewByModel(link));
+      if (pl) lines.set(link.id, pl);
+    }
+    for (const id of linksOnRunAt(lines, view.model.id, _hoverPoint)) {
+      const v = cctx.paper.findViewByModel(id);
+      if (v) want.add(v);
+    }
+  }
+  for (const v of [..._companions]) if (!want.has(v)) releaseCompanion(v);
+  for (const v of want) {
+    if (_companions.has(v)) continue;
+    _companions.add(v);
+    tintLinkMarkers(v);
+    tintLinkBumps(v);
+    tintLinkLabels(v);
+  }
+};
+const trackHover = (view, evt) => {
+  _hoverView = view;
+  _hoverPoint = evt && cctx.paper ? cctx.paper.clientToLocalPoint(evt.clientX, evt.clientY) : null;
+  if (!_hoverFrame) _hoverFrame = requestAnimationFrame(updateCompanions);
+};
+const endHover = () => {
+  _hoverView = null;
+  _hoverPoint = null;
+  if (_hoverFrame) { cancelAnimationFrame(_hoverFrame); _hoverFrame = 0; }
+  for (const v of [..._companions]) releaseCompanion(v);
+};
+
 // ── Sweep: restore links that lost focus without a link-level event ──
 // Deferred via queueMicrotask so selection.js's pointerdown handler (registered
 // AFTER canvas.init by app.js) gets to add/remove `.selected` first. Without
@@ -232,7 +290,7 @@ const restoreLinkLabels = (linkView) => {
 const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
   const keepId = keep?.model?.id;
   for (const linkView of [...linkMarkerOriginals.keys()]) {
-    if (linkView === keep) continue;
+    if (linkView === keep || _companions.has(linkView)) continue;   // a trunk companion stays lit while its run is hovered
     const el = linkView?.el;
     if (!el) { linkMarkerOriginals.delete(linkView); continue; }
     const stillFocused = el.classList.contains('selected') || el.matches(':hover');
@@ -245,13 +303,14 @@ const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
   for (const linkId of [..._bumpsTinted]) {
     if (linkId === keepId) continue;
     const view = cctx.paper.findViewByModel(linkId);
+    if (view && _companions.has(view)) continue;
     const stillFocused = view?.el?.classList.contains('selected')
                       || view?.el?.matches(':hover');
     if (!stillFocused) restoreLinkBumps(view || { model: { id: linkId } });
   }
   // …and stale label tints — decoupled from markers (a labelless link is never in this map).
   for (const linkView of [...linkLabelOriginals.keys()]) {
-    if (linkView === keep) continue;
+    if (linkView === keep || _companions.has(linkView)) continue;
     const el = linkView?.el;
     const stillFocused = el && (el.classList.contains('selected') || el.matches(':hover'));
     if (!stillFocused) restoreLinkLabels(linkView);
@@ -263,7 +322,8 @@ export function registerSelectionViz(cctx) {
   const { paper, graph } = cctx;
   cctx.retintCrossingBumps = () => { if (getBumpLayer()) for (const id of _bumpsTinted) paintBumps(id); };
 
-  paper.on('link:mouseenter', (linkView) => {
+  paper.on('link:mouseenter', (linkView, evt) => {
+    trackHover(linkView, evt);
     bringLinkToFront(linkView);
     tintLinkMarkers(linkView);
     tintLinkBumps(linkView);
@@ -276,6 +336,7 @@ export function registerSelectionViz(cctx) {
     sweepStaleMarkerTints(linkView);
   });
   paper.on('link:mouseleave', (linkView) => {
+    if (_hoverView === linkView) endHover();
     // Keep selected links lifted — selection is sustained focus.
     if (linkView?.el?.classList.contains('selected')) return;
     restoreLinkOrder(linkView);
@@ -292,6 +353,8 @@ export function registerSelectionViz(cctx) {
     // Clicking link A deselects link B; sweep restores B's markers/bumps.
     sweepStaleMarkerTints();
   });
+  // JointJS has no link mousemove event: follow the pointer along the hovered link natively, once a frame.
+  paper.el.addEventListener('mousemove', (evt) => { if (_hoverView) trackHover(_hoverView, evt); }, { passive: true });
   paper.on('blank:pointerdown', sweepStaleMarkerTints);
   paper.on('element:pointerdown', sweepStaleMarkerTints);
 

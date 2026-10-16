@@ -12,7 +12,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.26.2';
+const CACHE_VERSION = '1.26.3';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -48,6 +48,7 @@ const PRECACHE_URLS = [
   `./js/canvas/context.js?v=${CACHE_VERSION}`,
   `./js/canvas/focus-state.js?v=${CACHE_VERSION}`,
   `./js/canvas/join-lanes.js?v=${CACHE_VERSION}`,
+  `./js/canvas/shared-run.js?v=${CACHE_VERSION}`,
   `./js/canvas/router.js?v=${CACHE_VERSION}`,
   `./js/canvas/z-tiers.js?v=${CACHE_VERSION}`,
   `./js/canvas/icon-refresh.js?v=${CACHE_VERSION}`,
@@ -163,6 +164,7 @@ const PRECACHE_URLS = [
   `./js/tabs/close-manager.js?v=${CACHE_VERSION}`,
   `./js/tabs/device-only.js?v=${CACHE_VERSION}`,
   `./js/tabs/join-colours.js?v=${CACHE_VERSION}`,
+  `./js/toolbar/layout-suggest.js?v=${CACHE_VERSION}`,
   `./js/persistence/diagram-palette.js?v=${CACHE_VERSION}`,
   `./js/tabs/session-store.js?v=${CACHE_VERSION}`,
   `./js/tabs/single-window.js?v=${CACHE_VERSION}`,

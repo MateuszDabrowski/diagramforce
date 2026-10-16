@@ -26,6 +26,7 @@ export const pctx = {
   activateTab: null,       // (tabId) => void — bring an open tab forward (a Drive file opened again lands on its tab)
   persistTabDrive: null,   // (tabId, {driveFileId, driveSync, driveLastSavedAt, driveImported, driveFolderId, driveDriveId, driveHeadRevisionId, driveCopies}) => void — mirror Drive state into tab meta
   onImport: null,          // (name, type, graphJSON, viewport) => void
+  onSuggestAutoLayout: null,   // (name) => void - a file with suggestAutoLayout: true was just opened into the active tab
   onReplaceActive: null,   // (name, type, graphJSON, viewport, mappingMode) => void — load INTO the active tab in place (refresh)
   onReplaceContent: null,  // (graphJSON, done) => boolean — a user's Replace from the Paste pane: swap the active tab's content as ONE undo step + a real edit
   onImportGroup: null,     // (groupMetas, diagrams) => void  (kind:'group' bundle)

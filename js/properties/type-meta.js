@@ -3,7 +3,8 @@
 // human-readable type names; DEFAULT_SIZES = the per-type fallback size for "Auto Size" / conversions.
 
 // Human-readable display names for shape types
-export const TYPE_LABELS = {
+// Prototype-free: pluralTypeLabel below indexes it by a cell's type (lookup-tables.test.js).
+export const TYPE_LABELS = Object.assign(Object.create(null), {
   'sf.SimpleNode':     'Node',
   'sf.Container':      'Container',
   'sf.TextLabel':      'Text',
@@ -90,10 +91,11 @@ export const TYPE_LABELS = {
   'df.Placeholder':              'Placeholder',
   'df.Legend':              'Legend',
   'df.Table':               'Table',
-};
+});
 
 // Default sizes used by "Auto Size"
-export const DEFAULT_SIZES = {
+// Prototype-free: render-core.js and widgets.js index it by a cell's type (lookup-tables.test.js).
+export const DEFAULT_SIZES = Object.assign(Object.create(null), {
   'sf.SimpleNode':     { width: 180, height: 64 },
   'sf.Container':      { width: 360, height: 240 },
   'sf.Zone':           { width: 400, height: 300 },
@@ -181,4 +183,4 @@ export const DEFAULT_SIZES = {
   'df.FlowRollback':             { width: 210, height: 56 },
   'df.FlowStage':                { width: 210, height: 56 },
   'df.FlowPlaceholder':          { width: 210, height: 56 },
-};
+});
