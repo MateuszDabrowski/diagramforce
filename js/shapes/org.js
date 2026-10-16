@@ -1,7 +1,9 @@
 // Organisation-diagram shapes (OrgPerson) (CLEANUP S3). registerOrg() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { portGroups, portItems } from './ports.js?v=1.25.9';
+import { portGroups, portItems } from './ports.js?v=1.26.1';
+import { renderRaciPills } from './raci.js?v=1.26.1';
+import { textUnits, sliceUnits } from '../util.js?v=1.26.1';
 
 export function registerOrg() {
   // --- OrgPerson ---
@@ -154,7 +156,15 @@ export function registerOrg() {
   joint.shapes.sf.OrgPersonView = joint.dia.ElementView.extend({
     initialize() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
-      this.listenTo(this.model, 'change:personName change:jobTitle change:email change:phone change:role change:stream change:location change:company change:detailOrder change:details change:imageUrl change:iconText change:tags change:raci change:vacant', () => this._updateCard());
+      // _updateCard resizes SILENTLY (it also runs inside render/update, where a real resize re-enters the view). After
+      // a prop edit, announce the new size the way autoSizeCell does, or the selection handles and the parent hug
+      // (both keyed on change:size) keep the old box (K5, 2026-10-15). A bare trigger raises no paper update.
+      this.listenTo(this.model, 'change:personName change:jobTitle change:email change:phone change:role change:stream change:location change:company change:detailOrder change:details change:imageUrl change:iconText change:tags change:raci change:vacant', () => {
+        const m = this.model, before = m.size();
+        this._updateCard();
+        const after = m.size();
+        if (after.width !== before.width || after.height !== before.height) m.trigger('change:size', m, after, {});
+      });
     },
     render() {
       joint.dia.ElementView.prototype.render.apply(this, arguments);
@@ -185,7 +195,6 @@ export function registerOrg() {
       const imageUrl = m.get('imageUrl') || '';
       const iconText = (m.get('iconText') || '').substring(0, 4);
       const hasPhoto = !!imageUrl;
-      const hasCustomAvatar = hasPhoto || !!iconText;
       const tags = Array.isArray(m.get('tags')) ? m.get('tags').filter(Boolean) : [];
       const raci = m.get('raci') || {};
       const vacant = !!m.get('vacant');
@@ -287,17 +296,22 @@ export function registerOrg() {
       // then grows in height to fit. Width is forced to >= 280 below, so wrap against that final width.
       const labelW = 52;   // value column starts at textX + labelW
       const valMaxChars = Math.max(6, Math.floor((Math.max(m.size().width, 280) - textX - 10 - labelW) / 5.5));
+      // A CJK / fullwidth character is a full 10 px em, not 5.5 px, and CJK text has no spaces to wrap at: measure
+      // and hard-break by code point (K10).
+      const WIDE = 10 / 5.5;
+      const units = (s) => textUnits(s, WIDE);
       const wrapValue = (text) => {
         const words = String(text).split(/\s+/).filter(Boolean);
         if (!words.length) return [''];
         const lines = []; let line = '';
         for (let w of words) {
-          while (w.length > valMaxChars) {                       // a single over-long token: hard-break it
+          while (units(w) > valMaxChars) {                       // a single over-long token: hard-break it
             if (line) { lines.push(line); line = ''; }
-            lines.push(w.slice(0, valMaxChars)); w = w.slice(valMaxChars);
+            const head = sliceUnits(w, valMaxChars, WIDE) || Array.from(w)[0];
+            lines.push(head); w = w.slice(head.length);
           }
           const next = line ? line + ' ' + w : w;
-          if (next.length > valMaxChars && line) { lines.push(line); line = w; }
+          if (units(next) > valMaxChars && line) { lines.push(line); line = w; }
           else line = next;
         }
         if (line) lines.push(line);
@@ -472,52 +486,10 @@ export function registerOrg() {
       if (detailLblEl) detailLblEl.style.opacity = vacant ? '0.55' : '1';
 
       // ── RACI pills (top-right) ──────────────────────────────
-      // Each active role is a coloured letter pill with a <title> tooltip
-      // for the full name. Pills only render when their role is set.
+      // Each active role is a coloured letter pill with a <title> tooltip for the full name, right-aligned just
+      // below the accent bar. Pills only render when their role is set.
       const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
-      if (raciGroupEl) {
-        raciGroupEl.innerHTML = '';
-        const RACI_COLORS = Object.assign(Object.create(null), { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' });
-        const RACI_NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
-        const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
-        if (active.length > 0) {
-          const PILL = 16;
-          const GAP = 3;
-          const ns = 'http://www.w3.org/2000/svg';
-          // Right-aligned, sitting just below the accent bar
-          let xPos = width - 10 - active.length * PILL - (active.length - 1) * GAP;
-          const yPos = 10;
-          for (const key of active) {
-            const g = document.createElementNS(ns, 'g');
-            const rect = document.createElementNS(ns, 'rect');
-            rect.setAttribute('x', String(xPos));
-            rect.setAttribute('y', String(yPos));
-            rect.setAttribute('width', String(PILL));
-            rect.setAttribute('height', String(PILL));
-            rect.setAttribute('rx', '4');
-            rect.setAttribute('ry', '4');
-            rect.setAttribute('fill', RACI_COLORS[key]);
-            g.appendChild(rect);
-            const text = document.createElementNS(ns, 'text');
-            text.setAttribute('x', String(xPos + PILL / 2));
-            text.setAttribute('y', String(yPos + PILL / 2 + 0.5));
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('dominant-baseline', 'central');
-            text.setAttribute('fill', '#FFFFFF');
-            text.setAttribute('font-size', '10');
-            text.setAttribute('font-weight', '700');
-            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
-            text.setAttribute('pointer-events', 'none');
-            text.textContent = key;
-            g.appendChild(text);
-            const title = document.createElementNS(ns, 'title');
-            title.textContent = RACI_NAMES[key];
-            g.appendChild(title);
-            raciGroupEl.appendChild(g);
-            xPos += PILL + GAP;
-          }
-        }
-      }
+      if (raciGroupEl) renderRaciPills(raciGroupEl, raci, width, { y: 10 });
 
       // ── Tag pills (bottom row, full width, single line + ellipsis) ──
       // Background uses a theme-neutral semi-transparent grey — `var(--*)`
@@ -539,7 +511,7 @@ export function registerOrg() {
           let curX = startX;
           for (let i = 0; i < tags.length; i++) {
             const tag = tags[i];
-            const textW = Math.ceil(tag.length * 5.5);
+            const textW = Math.ceil(textUnits(tag, FONT / 5.5) * 5.5);   // a wide (CJK) char is 1 em (review S6-9)
             const pillW = textW + PILL_PAD * 2;
             if (curX + pillW > maxX && curX > startX) {
               const ellipsis = document.createElementNS(ns, 'g');

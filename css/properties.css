@@ -16,6 +16,9 @@
   box-shadow: var(--shadow-md);
 }
 
+/* A hidden panel's stale controls leave the Tab order and the a11y tree through `inert` (js/a11y.js, review R1), not
+   `visibility`: WebKit kept sections re-rendered during a delayed visibility transition hidden after the panel came
+   back (multi-mapping.spec.js). */
 .df-properties--hidden {
   transform: translateX(-100%);
   box-shadow: none;
@@ -46,8 +49,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--color-primary);
-  opacity: 0.8;
+  color: var(--color-primary);   /* full strength: 0.8 opacity left it at 3.4:1 (review R15) */
   line-height: 1;
   white-space: nowrap;
 }
@@ -141,6 +143,11 @@
 .df-section--collapsed .df-section__body {
   display: none;
 }
+/* Motion (layout.css): a section the USER opens reveals its body. `--animate` is added by the header click
+   (widgets.js section()), so a panel re-render on every selection change never replays it. */
+.df-section--animate:not(.df-section--collapsed) > .df-section__body {
+  animation: df-motion-reveal var(--df-motion-fast) var(--df-ease-out);
+}
 
 /* ── Field: label stacked above control ────────────────── */
 
@@ -174,6 +181,11 @@
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   box-sizing: border-box;
 }
+/* A control with nothing to act on (connector Font size with no label): its field carries the reason as a title. */
+.df-properties__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* Free-text combobox (Process/Trigger Type) — a contenteditable div, NOT an <input>, so no browser applies its
    autofill overlay. Styled to read identically to the sibling text inputs. */
@@ -187,7 +199,8 @@
   line-height: 1.4;
 }
 .df-suggest__box:focus {
-  outline: none;
+  outline: 2px solid transparent;   /* forced colors drop the box-shadow ring and paint this one (review R10) */
+  outline-offset: 1px;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(29, 115, 201, 0.15);
 }
@@ -300,6 +313,12 @@
   box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.18) !important;
   transition: border-color 80ms ease-out, box-shadow 80ms ease-out;
 }
+/* The same outline, held while the value stays wrong (a Gantt task's End before Start). A class of its own, so the
+   flash above cannot remove it. */
+.df-properties__input--span-invalid {
+  border-color: var(--brand-red) !important;
+  box-shadow: 0 0 0 3px rgba(218, 78, 85, 0.18) !important;
+}
 
 /* CR-6.1: inline-markdown shortcut hint, shown below text fields on shapes
    that accept formatting (sf.TextLabel content, sf.Note description). */
@@ -318,7 +337,8 @@
 }
 
 .df-properties__input:focus {
-  outline: none;
+  outline: 2px solid transparent;   /* the forced-colors ring (R10) */
+  outline-offset: 1px;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
@@ -338,7 +358,8 @@
 }
 
 .df-properties__select:focus {
-  outline: none;
+  outline: 2px solid transparent;   /* the forced-colors ring (R10) */
+  outline-offset: 1px;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
@@ -380,7 +401,8 @@
   height: 16px;
   background: #ffffff;
   border-radius: 50%;
-  transition: left var(--transition-fast);
+  /* The knob slides with transform, not `left` (no layout per frame). Checked = 16px across the 36px track. */
+  transition: transform var(--df-motion-fast) var(--df-ease-out);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
@@ -389,7 +411,7 @@
 }
 
 .df-properties__toggle-input:checked + .df-properties__toggle-track .df-properties__toggle-thumb {
-  left: 18px;
+  transform: translateX(16px);
 }
 
 .df-properties__toggle-input:focus-visible + .df-properties__toggle-track {
@@ -438,7 +460,8 @@
 }
 
 .df-properties__segmented-option:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;   /* the forced-colors ring (R10) */
+  outline-offset: 1px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
@@ -547,6 +570,10 @@
   transform: scale(1.18);
   box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 3px var(--color-primary);
   outline: none;
+}
+.df-prop-palette-swatch:focus-visible {
+  outline: 2px solid transparent;   /* the forced-colors ring (R10) */
+  outline-offset: 2px;
 }
 .df-prop-palette-swatch__remove {
   position: absolute;
@@ -801,16 +828,16 @@
   flex-shrink: 0;
 }
 
-/* Convert — orange accent (darker in light mode for WCAG contrast) */
+/* Convert — amber accent: the border carries the amber, the label is ink in light mode (WCAG text contrast, R7) */
 .df-properties__btn--convert {
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 
 .df-properties__btn--convert:hover {
   background: var(--brand-amber-strong);
   border-color: var(--brand-amber-strong);
-  color: #fff;
+  color: var(--modal-btn-neutral-fg);
 }
 
 /* Clone — blue accent (always blue, regardless of theme) */
@@ -894,7 +921,7 @@
   padding: 0;
   text-align: center;
 }
-.df-field-key--pk { color: var(--brand-amber); border-color: var(--brand-amber); }
+.df-field-key--pk { color: var(--brand-amber-text); border-color: var(--brand-amber); }   /* ink label in light (R7) */
 .df-field-key--fk { color: var(--brand-blue); border-color: var(--brand-blue); }
 .df-field-key--fqk { color: var(--brand-red); border-color: var(--brand-red); }   /* Fully Qualified Key — brand red */
 
@@ -964,7 +991,7 @@
   border: 1px solid var(--brand-amber, #F6B355);
   border-radius: var(--border-radius-sm);
   background: transparent;
-  color: var(--brand-amber, #F6B355);
+  color: var(--brand-amber-text);
   font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
@@ -972,7 +999,7 @@
 }
 .df-properties__btn--full-edit:hover {
   background: var(--brand-amber, #F6B355);
-  color: #fff;
+  color: var(--modal-btn-neutral-fg);   /* ink on amber: white was 1.83:1 (R7) */
 }
 
 /* Field editor header row */
@@ -1033,6 +1060,9 @@
   padding: 3px 0;
   max-height: 240px;
   overflow-y: auto;
+  /* Motion: pops in when JS sets display:flex (a display change restarts the animation). */
+  animation: df-motion-pop var(--df-motion-fast) var(--df-ease-out);
+  transform-origin: top center;
 }
 
 .df-marker-picker__item {
@@ -1130,6 +1160,32 @@
     font-size: var(--font-size-sm);
   }
 
+  /* Round and inline controls keep their shape: the blanket min-height above turned the 16px palette swatches into
+     16x40 ovals and stretched the chip × into the chip (review R9). Square touch targets instead; the strip of six
+     swatches and + still fits one row at 320px. (0,2,0) beats the (0,1,1) rule above. */
+  .df-properties .df-prop-palette-swatch,
+  .df-properties .df-prop-palette-save {
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+  }
+  .df-properties .df-prop-palette-swatch__remove {
+    top: -9px;
+    right: -9px;
+    width: 20px;
+    height: 20px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .df-properties .df-prop-color-reset {
+    width: 40px;
+  }
+  .df-properties .df-chip__remove {
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+  }
+
   .df-section__header {
     min-height: 40px;
     padding: 10px var(--spacing-md);
@@ -1137,6 +1193,18 @@
 
   .df-properties__label {
     font-size: 11px;
+  }
+}
+
+/* iOS Safari zooms the whole page when it focuses a text control under 16px, and the canvas blocks the pinch that
+   would undo it (js/canvas/viewport.js). So every typeable panel control is 16px on a phone or a touch tablet
+   (review J1-11). The selector outranks the narrower ones above (the 11px hex field, 12px icon search, chip input). */
+@media (max-width: 768px), (pointer: coarse) {
+  .df-properties input:not([type="color"]):not([type="checkbox"]):not([type="range"]),
+  .df-properties select,
+  .df-properties textarea,
+  .df-properties [contenteditable="true"] {
+    font-size: var(--font-size-lg);   /* 16px - the iOS threshold; do not lower */
   }
 }
 

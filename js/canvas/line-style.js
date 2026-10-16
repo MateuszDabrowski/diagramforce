@@ -17,7 +17,7 @@
 // Reads the live graph/paper via the canvas context (cctx); the observer +
 // sync-id are private module state (nothing else reads them). canvas.js calls
 // startLineStyleOverlays() once in init() AFTER cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
 
 let _lineStyleObserver = null;
 let _lineStyleSyncId = 0;
@@ -27,6 +27,13 @@ let _lineStyleSyncId = 0;
 // another re-sync.
 function mutationsAffectRealLinks(mutations) {
   for (const m of mutations) {
+    if (m.type === 'attributes') {
+      // A link path's `d` rewritten in place: JointJS re-routes that way, and a re-route with no model change (the
+      // Spread Overlapping Connectors toggle, a colour change on another link at the same port) fires no graph event.
+      const cls = m.target.getAttribute?.('class') || '';
+      if (cls !== 'df-flow-overlay' && cls !== 'df-line-style-overlay' && m.target.closest?.('.joint-link')) return true;
+      continue;
+    }
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue;
       const cls = n.getAttribute?.('class') || '';
@@ -51,49 +58,70 @@ function scheduleLineStyleSync() {
   });
 }
 
+// What an overlay never takes from its line: the markers (the reason for the copy), the JointJS selector and the
+// overlay's own class.
+const NOT_COPIED = new Set(['marker-start', 'marker-end', 'marker-mid', 'joint-selector', 'class']);
+
+/** A marker-less copy of `line` with class `cls`, inserted right after it. Shared with flow-animation.js. */
+export function cloneOverlay(line, cls) {
+  const clone = line.cloneNode(false);
+  for (const name of NOT_COPIED) clone.removeAttribute(name);
+  clone.setAttribute('class', cls);
+  line.parentNode.insertBefore(clone, line.nextSibling);
+  return clone;
+}
+
+/** Bring an existing overlay's attributes in line with its line, in place (`d` after a re-route, `stroke-width` after a
+ *  width change or its undo). Re-cloning on every sync restarted each animated dash (Animate Connectors) whenever
+ *  anything in the cells layer changed (review S5-3). `own` names attributes the overlay sets itself. */
+export function copyOverlayAttrs(line, overlay, own = []) {
+  const skip = (name) => NOT_COPIED.has(name) || own.includes(name);
+  for (const { name, value } of line.attributes) if (!skip(name) && overlay.getAttribute(name) !== value) overlay.setAttribute(name, value);
+  for (const { name } of [...overlay.attributes]) if (!skip(name) && !line.hasAttribute(name)) overlay.removeAttribute(name);
+}
+
 function syncLineStyleOverlays() {
   const { graph, paper } = cctx;
   if (!paper || !graph) return;
   // Disconnect the observer while we mutate the DOM to prevent feedback loops.
   if (_lineStyleObserver) _lineStyleObserver.disconnect();
   try {
-    // Remove stale overlays
-    paper.el.querySelectorAll('.df-line-style-overlay').forEach(el => el.remove());
-
+    // Update each overlay in place, clone only a missing one, then drop the overlays no dashed link claimed.
+    const kept = new Set();
     for (const link of graph.getLinks()) {
       const style = link.prop('lineStyle');
       if (!style || style === 'none') continue;
 
       // The view, not a document-wide selector: O(1) per link instead of a DOM scan per link on every drag frame, and
-      // no selector built from an id - an imported id containing `"` threw here AFTER the overlays above were removed,
-      // leaving every dashed link solid (audit 2026-09-23).
+      // no selector built from an id (an imported id containing `"` threw here and left every dashed link solid,
+      // audit 2026-09-23).
       const linkEl = paper.findViewByModel(link)?.el;
       if (!linkEl) continue;
       const lineEl = linkEl.querySelector('[joint-selector="line"]');
       if (!lineEl) continue;
 
-      const clone = lineEl.cloneNode(false);
-      clone.removeAttribute('marker-start');
-      clone.removeAttribute('marker-end');
-      clone.removeAttribute('marker-mid');
-      clone.removeAttribute('joint-selector');
-      clone.setAttribute('class', 'df-line-style-overlay');
+      let overlay = lineEl.parentNode.querySelector(':scope > .df-line-style-overlay');
+      if (overlay) copyOverlayAttrs(lineEl, overlay, ['stroke-dasharray']);
+      else overlay = cloneOverlay(lineEl, 'df-line-style-overlay');
 
       // Invert the user's dasharray so the overlay erases the right stripes.
       const parts = String(style).trim().split(/\s+/);
       const inverted = parts.length === 2 ? `${parts[1]} ${parts[0]}` : String(style);
-      clone.setAttribute('stroke-dasharray', inverted);
-
-      lineEl.parentNode.insertBefore(clone, lineEl.nextSibling);
+      if (overlay.getAttribute('stroke-dasharray') !== inverted) overlay.setAttribute('stroke-dasharray', inverted);
+      kept.add(overlay);
     }
+    paper.el.querySelectorAll('.df-line-style-overlay').forEach(el => { if (!kept.has(el)) el.remove(); });
   } finally {
     // Reconnect the observer
     if (_lineStyleObserver) {
       const target = lineStyleObserverTarget();
-      if (target) _lineStyleObserver.observe(target, { childList: true, subtree: true });
+      if (target) _lineStyleObserver.observe(target, OBSERVE);
     }
   }
 }
+
+// Child changes AND the `d` attribute of link paths: the overlay is a clone that keeps the `d` it was made with.
+const OBSERVE = { childList: true, subtree: true, attributes: true, attributeFilter: ['d'] };
 
 /** What the overlay observer watches: the CELLS layer. `.joint-viewport` (the old target) does not exist in JointJS 4,
  *  so it fell back to the whole paper SVG, and every bump, guide or drop ghost scheduled a full resync. */
@@ -116,21 +144,18 @@ export function startLineStyleOverlays() {
     if (!mutationsAffectRealLinks(mutations)) return;
     scheduleLineStyleSync();
   });
-  _lineStyleObserver.observe(target, { childList: true, subtree: true });
+  _lineStyleObserver.observe(target, OBSERVE);
 
-  // Re-sync when a link's lineStyle prop changes, or when links are added/removed.
-  graph.on('change:lineStyle', scheduleLineStyleSync);
+  // Re-sync when a link's lineStyle prop or attrs change (the clone copies stroke-width at sync time), or when links
+  // are added/removed.
+  graph.on('change:lineStyle change:attrs', scheduleLineStyleSync);
   graph.on('add remove', (cell) => {
     if (cell.isLink && cell.isLink()) scheduleLineStyleSync();
   });
 
-  // Re-sync overlays whenever any geometry change could move a link's path.
-  // The MutationObserver above only watches childList/subtree, so JointJS's
-  // attribute-only updates (e.g. the `d` attribute on the link path during a
-  // drag of a connected element) slip past it and the overlay stays pinned to
-  // the link's old geometry — leaving the dashed line briefly solid until the
-  // user releases the pointer. RAF debouncing in scheduleLineStyleSync keeps
-  // this cheap even during a continuous drag.
+  // Re-sync overlays whenever any geometry change could move a link's path. The observer above sees `d` rewrites
+  // too since 1.25.9 (a re-route with no model change fires none of these); the events stay so a model change
+  // resyncs even before its view renders. RAF debouncing in scheduleLineStyleSync keeps this cheap during a drag.
   graph.on(
     'change:position change:size change:vertices change:source change:target',
     scheduleLineStyleSync,

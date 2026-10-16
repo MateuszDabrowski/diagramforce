@@ -4,13 +4,21 @@
 // (doCloseTab/deleteBrowserArchive/forgetBrowserSaveName/getGroup/getGroups/getTabGraphJSON/groupBadgeHtml)
 // via tbctx forward-refs at CALL time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.25.9';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.25.9';
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.25.9';
-import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.25.9';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.25.9';
-import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { tbctx } from './context.js?v=1.26.1';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.1';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.1';
+import { bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, splitTableHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, tabInGroup } from '../util.js?v=1.26.1';
+import { listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
+
+/** Does closing this tab need the unsaved-changes question? Only when it is dirty AND has something to decide about:
+ *  shapes to keep, or a saved copy that Discard keeps and Delete removes. An emptied, never-saved tab used to ask
+ *  "Keep it in this browser?", and Save kept nothing, because the close archive skips an empty diagram (review S2-5). */
+export function closeNeedsPrompt(tab) {
+  if (!tab?.dirty) return false;
+  return !!(tab.browserSaveName || tab.driveFileId || countDiagramShapes(tbctx.getTabGraphJSON(tab.id)?.cells) > 0);
+}
 
 export function showCloseConfirmModal(tabId, tabName) {
   const { tabs } = tbctx;
@@ -37,8 +45,13 @@ export function showCloseConfirmModal(tabId, tabName) {
         <strong style="color:var(--text-primary)">Discard</strong> drops these changes and keeps the last saved version in
         <strong style="color:var(--text-primary)">${savedWhere}</strong>.<br>
         <strong style="color:var(--text-primary)">Delete</strong> removes that saved copy too.</p>`
+    // Never kept anywhere yet. The Save and Load panes say every diagram is auto-saved, so ask where to keep it rather
+    // than warn that changes "will be lost" (Q10): Save archives it to Load > Browser, Discard closes it for good.
     : `<p style="margin:0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
-        <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> has unsaved changes that will be lost.</p>`;
+        Keep <strong style="color:var(--text-primary)">${escHtml(tabName)}</strong> in this browser?</p>
+       <p style="margin:8px 0 0;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">
+        <strong style="color:var(--text-primary)">Save</strong> keeps it under Load &gt; Browser so you can reopen it.<br>
+        <strong style="color:var(--text-primary)">Discard</strong> closes it for good.</p>`;
 
   // Button order (saved-copy case): Cancel (far left) · Delete diagram · Discard and Close · Save and Close.
   // Discard sits between the destructive Delete and the safe Save so the escalation reads left→right.
@@ -126,7 +139,7 @@ function storageGaugeHtml() {
     if (bd) breakdown = `<div class="df-load-gauge__caption" style="font-size:var(--font-size-xs);color:var(--text-muted)"><span>Diagrams ${escHtml(formatBytes(bd.diagrams))} · My Templates ${escHtml(formatBytes(bd.templates))} · App data ${escHtml(formatBytes(bd.app))}</span></div>`;
   } catch { /* gauge stays total-only */ }
   return `<div class="df-load-gauge df-load-gauge--${level}" style="margin:0 0 var(--spacing-md)">
-      <div class="df-load-gauge__caption"><span>Browser storage</span><span>${escHtml((used / 1e6).toFixed(1))} MB used</span></div>
+      <div class="df-load-gauge__caption"><span>Browser storage</span><span>${escHtml(formatBytes(used))} used</span></div>
       <div class="df-load-gauge__track"><div class="df-load-gauge__fill" style="width:${pct}%"></div></div>
       ${breakdown}
       ${hint}
@@ -332,7 +345,7 @@ export function showCloseTabsModal() {
   closeBtn.addEventListener('click', () => {
     const selectedIds = tabBoxes().filter(b => b.checked).map(b => b.dataset.tabId);
     if (selectedIds.length === 0) return;
-    const dirtyIds = selectedIds.filter(id => tabs.find(t => t.id === id)?.dirty);
+    const dirtyIds = selectedIds.filter(id => closeNeedsPrompt(tabs.find(t => t.id === id)));
     if (dirtyIds.length > 0) {
       showMultiDiscardConfirm(dirtyIds.length,
         () => { close(); performMultiClose(selectedIds, { noArchiveIds: new Set(dirtyIds) }); },
@@ -395,6 +408,9 @@ export function showCloseTabsModal() {
 function performMultiClose(ids, { noArchiveIds = null } = {}) {
   const { tabs } = tbctx;
   const { doCloseTab } = tbctx;
+  // An archived (kept) active tab with an open Edit-in-Table session asks Save / Discard first (review C3).
+  const kept = ids.filter(id => !(noArchiveIds && noArchiveIds.has(id)));
+  if (!tbctx.guardActiveClose(kept, () => performMultiClose(ids, { noArchiveIds }))) return;
   // Only the DELETE-closed tabs are marked clean (their copies are being removed on purpose). The archived ones keep
   // `dirty`: doCloseTab never prompts on it, but failArchive reads it to stop a close whose archive failed on full
   // storage - clearing it here disarmed that guard for every tab in the batch (audit 2026-09-23).
@@ -402,11 +418,12 @@ function performMultiClose(ids, { noArchiveIds = null } = {}) {
     const tab = tabs.find(t => t.id === id);
     if (tab && noArchiveIds && noArchiveIds.has(id)) tab.dirty = false;
   }
-  // Close in reverse so splice indices stay stable and we don't churn the active tab.
-  // If the active tab is in the set, doCloseTab will switch to the nearest remaining
-  // one each time — which is the right behaviour. `noArchiveIds` are the delete-closed tabs
-  // (their copies are being removed), so they skip the auto-archive; the rest archive normally.
-  for (const id of [...ids]) {
+  // Close the active tab LAST (as deleteGroupWithTabs does): closing it switches the canvas to its nearest neighbour,
+  // which in tab order was usually the next doomed tab, so each close loaded a diagram only to close it (review C10).
+  // Last, it lands on a surviving tab (or the empty canvas) once. `noArchiveIds` are the delete-closed tabs (their
+  // copies are being removed), so they skip the auto-archive; the rest archive normally.
+  const active = tbctx.activeTabId;
+  for (const id of [...ids].sort((a, b) => (a === active) - (b === active))) {
     if (tabs.some(t => t.id === id)) doCloseTab(id, { archive: !(noArchiveIds && noArchiveIds.has(id)) });
   }
 }

@@ -1,152 +1,11 @@
-// Save & Export manager (CLEANUP S4) — the quick Save modal + the full Save Manager (browser saves, Drive copies, export selection) + uniqueSaveName/wireSelectAll. Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.25.9';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.25.9';
-import { driveChipsHtml, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.25.9';
-import { countDiagramShapes, escHtml, formatRelativeTime, getDiagramTypeIcon, isViewForkTab, tabInGroup } from '../util.js?v=1.25.9';
-import { btn, tctx } from './context.js?v=1.25.9';
-
-function uniqueSaveName(baseName, dateSuffix, existingNames) {
-  // Strip trailing date if it already matches today's suffix
-  let stem = baseName;
-  if (stem.endsWith(` ${dateSuffix}`)) {
-    stem = stem.slice(0, -(dateSuffix.length + 1));
-  }
-  // Also strip any existing autonumber before a date suffix: "Name 2 20260406" -> "Name"
-  const autoNumDateRe = new RegExp(` \\d+ ${dateSuffix}$`);
-  if (autoNumDateRe.test(stem)) {
-    stem = stem.replace(autoNumDateRe, '');
-  }
-
-  // Try "Name YYYYMMDD" first
-  let candidate = `${stem} ${dateSuffix}`;
-  if (!existingNames.has(candidate)) return candidate;
-
-  // Try "Name 2 YYYYMMDD", "Name 3 YYYYMMDD", etc.
-  for (let n = 2; ; n++) {
-    candidate = `${stem} ${n} ${dateSuffix}`;
-    if (!existingNames.has(candidate)) return candidate;
-  }
-}
-
-export function showSaveModal() {
-  // Remove existing save modal if any
-  document.querySelector('.df-save-modal')?.remove();
-
-  const allTabs = tctx.modules.tabs.getAllTabs();
-  // ISO-style YYYY-MM-DD suffix (e.g. "Draft 2026-05-30") — readable, and
-  // matches the export filename date format. uniqueSaveName's strip/regex logic
-  // treats the hyphens literally, so it stays collision-safe.
-  const dateSuffix = tctx.modules.persistence.dateSuffix();
-
-  // Collect existing save names to avoid duplicates
-  const existingSaves = new Set(tctx.modules.persistence.getNamedSaves().map(s => s.name));
-
-  const saveTypeLabel = (type) => (tctx.modules.tabs.DIAGRAM_TYPES?.[type]?.short) || 'Architecture';
-  const groupById = new Map((tctx.modules.tabs.getGroups?.() || []).map(g => [g.id, g]));
-  const tabRows = allTabs.map(tab => {
-    const defaultName = uniqueSaveName(tab.name, dateSuffix, existingSaves);
-    existingSaves.add(defaultName);   // so two same-named tabs don't both default to one name (would clobber)
-    const rel = formatRelativeTime(tab.lastModifiedAt || tab.lastSavedAt);
-    const groupBadge = tctx.modules.tabs.groupBadgeHtml?.(tab.groupId ? groupById.get(tab.groupId) : null) || '';
-    return `
-      <div class="df-modal__row${tab.isActive ? ' df-modal__row--active' : ''}">
-        <input type="checkbox" class="df-modal__row-check" data-tab-id="${tab.id}" ${tab.isActive ? 'checked' : ''}>
-        <span class="df-modal__row-icon">${getDiagramTypeIcon(tab.diagramType)}</span>
-        <div class="df-modal__row-info df-save-modal__row-info">
-          <input type="text" class="df-modal__row-name" data-tab-id="${tab.id}" value="${escHtml(defaultName)}" spellcheck="false">
-          ${rel ? `<span class="df-modal__row-meta">Modified ${rel}</span>` : ''}
-        </div>
-        ${groupBadge}
-        <span class="df-modal__row-badge">${escHtml(saveTypeLabel(tab.diagramType))}</span>
-      </div>`;
-  }).join('');
-
-  const { overlay, body: bodyEl, footer, close } = buildModal({
-    title: 'Save open diagrams',
-    className: 'df-save-modal',
-    dialogClass: 'df-save-modal__dialog', // 520px
-    bodyClass: 'df-modal__row-list',
-    bodyHtml: `
-      <p class="df-modal__advisory">Browsers may periodically clear this list. For permanent storage, <button type="button" class="df-modal__advisory-link">back up to JSON</button> from Save &amp; Export.</p>
-      <div class="df-modal__list-box">
-        <div class="df-modal__list-header">
-          <label class="df-modal__select-all"><input type="checkbox" class="df-modal__check-all"> Select all</label>
-          ${groupSelectHtml(tctx.modules.tabs.getGroups?.() || [])}
-        </div>
-        ${tabRows}
-      </div>`,
-    footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-modal__action-btn" style="margin-left:auto">Save Selected</button>',
-  });
-
-  // Advisory CTA — close this overlay, then open Save & Export (where the full-backup affordance now lives).
-  bodyEl.querySelector('.df-modal__advisory-link')?.addEventListener('click', () => {
-    close();
-    showSaveManagerModal();
-  });
-
-  const updateSelectAll = wireSelectAll(bodyEl, footer, '.df-modal__row-check', () => {
-    const selected = [];
-    overlay.querySelectorAll('.df-modal__row-check:checked').forEach(c => {
-      const tabId = c.dataset.tabId;
-      const nameInput = overlay.querySelector(`.df-modal__row-name[data-tab-id="${tabId}"]`);
-      selected.push({ tabId, name: nameInput?.value.trim() || tabId });
-    });
-    if (selected.length === 0) return;
-
-    // Save each tab individually with its custom name. `writtenThisBatch` guards against two rows resolving to
-    // the same name (e.g. the user typed identical names, or two same-named tabs) — the second would otherwise
-    // overwrite the first's localStorage key. On collision, uniquify the later one so both diagrams persist.
-    const saved = [];
-    const writtenThisBatch = new Set();
-    for (const { tabId, name: rawName } of selected) {
-      const graphJSON = tctx.modules.tabs.getTabGraphJSON(tabId);
-      const viewport = tctx.modules.tabs.getTabViewport(tabId);
-      const diagramType = tctx.modules.tabs.getTabDiagramType(tabId);
-      if (!graphJSON) continue;
-
-      const name = writtenThisBatch.has(rawName) ? uniqueSaveName(rawName, dateSuffix, writtenThisBatch) : rawName;
-      const key = 'sfdiag::save::' + name;
-      const data = {
-        name,
-        timestamp: Date.now(),
-        version: 1,
-        appVersion: tctx.modules.persistence.APP_VERSION,
-        diagramType,
-        graph: graphJSON,
-        viewport,
-      };
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-        writtenThisBatch.add(name);
-        saved.push({ id: tabId, name });
-      } catch (err) {
-        showError(`Save failed for "${name}": ${err.message}`);
-      }
-    }
-
-    // Rename the active tab to its save name (legacy behaviour), then stamp browserSaveName + clear dirty on
-    // EVERY saved tab — so their Save Manager "In Browser" chips light up and no inactive tab is left dirty.
-    // Use the FINAL written names (post-uniquify), not the raw selection, so the rename/chip match disk.
-    const activeTab = allTabs.find(t => t.isActive);
-    const activeSaved = saved.find(s => s.id === activeTab?.id);
-    if (activeTab && activeSaved?.name) tctx.modules.tabs.renameActiveTab(activeSaved.name);
-    tctx.modules.tabs.markTabsBrowserSaved(saved);
-
-    close();
-  });
-
-  // "Select Tab Group" — REPLACES the selection with exactly the chosen group's tabs (or Ungrouped).
-  const groupSel = bodyEl.querySelector('.df-group-select');
-  if (groupSel) {
-    const tabGroup = new Map(allTabs.map(t => [t.id, t.groupId || null]));
-    groupSel.addEventListener('change', () => {
-      const chosen = groupSel.value;
-      if (chosen) bodyEl.querySelectorAll('.df-modal__row-check').forEach((cb) => { cb.checked = tabInGroup(tabGroup.get(cb.dataset.tabId), chosen); });
-      groupSel.value = '';
-      updateSelectAll();
-    });
-  }
-}
+// Save & Export manager (CLEANUP S4) — the Save Manager (browser saves, Drive copies, export selection). Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.26.1';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.1';
+import { DRIVE_CHIP_CHECK, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
+import { countDiagramShapes, escHtml, formatRelativeTime, isViewForkTab, tabInGroup } from '../util.js?v=1.26.1';
+import { tctx } from './context.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
+import { isInSlot } from '../persistence/host-env.js?v=1.26.1';
 
 export function showSaveManagerModal() {
   const p = tctx.modules.persistence;
@@ -210,12 +69,13 @@ export function showSaveManagerModal() {
     : `${GDRIVE_GLYPH}Save to Google Drive`;
   // Footer: LEFT = the blue-WIRE Google Drive actions; RIGHT = "Export Selected", the orange-FILL primary.
   // "Save to My Drive" is HIDDEN when auto-sync is on (Drive saving is automatic then); shown when auto-sync is
-  // off / before connecting. "Add to Shared Drive" only when connected. The checkboxes drive them all.
+  // off / before connecting. "Add to Shared Drive" only when connected, and not in Slot, where its Picker cannot sign
+  // in (Share > Add to Shared Drive stays, disabled, and says why). The checkboxes drive them all.
   // (The old "Make offline" button was removed: open tabs already auto-save to the browser session + auto-archive
   // on close, and a Drive-evicted copy is recovered by reopening it from Load & Import → Google Drive.)
   const footerHtml = `
       ${driveOn && !autoSync ? `<button class="df-modal__btn df-save-mgr__drivebtn df-drive-save__save" disabled>${saveBtnLabel}</button>` : ''}
-      ${driveOn && connected ? '<button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__shared" disabled><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>' : ''}
+      ${driveOn && connected && !isInSlot() ? '<button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__shared" disabled><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>' : ''}
       <button class="df-modal__btn df-modal__btn--accent df-save-mgr__export-sel" style="margin-left:auto" disabled>Export Selected</button>`;
 
   // Pre-save check (NBA #3, refocused): the explicit-save hub is the ONE right place to surface loose
@@ -340,10 +200,11 @@ export function showSaveManagerModal() {
   if (driveOn && connected) {
     // (a) The active tab's commit-on-open flush may CREATE/update its file after the rows rendered → refresh once
     //     it settles so its "My Drive" chip turns on immediately (the "grey on first open, green on second" lag).
-    if (committed && typeof committed.then === 'function') committed.then(refreshMyDriveChips).catch(() => {});
+    // A throw in the refresh is recorded, not swallowed: a missing import once stopped every row's refresh unseen.
+    if (committed && typeof committed.then === 'function') committed.then(refreshMyDriveChips).catch((e) => noteError('save-manager:chip-refresh', e));
     // (b) reconcile against the live library: ADOPT same-named files for null/stale pointers + downgrade rows the
     //     user no longer owns, so a ✓ My Drive always matches "Your Google Drive Diagrams".
-    if (p.reconcileTabDriveLinks) p.reconcileTabDriveLinks().then(refreshMyDriveChips).catch(() => { /* offline → keep optimistic chips */ });
+    if (p.reconcileTabDriveLinks) p.reconcileTabDriveLinks().then(refreshMyDriveChips).catch((e) => noteError('save-manager:chip-refresh', e));   // offline → keep optimistic chips
   }
 
   // Save to Drive — each selected becomes a master file in My Drive.
@@ -423,7 +284,19 @@ export function showSaveManagerModal() {
     const closePop = () => { pop.remove(); document.removeEventListener('pointerdown', onDoc, true); };
     const onDoc = (e) => { if (!pop.contains(e.target)) closePop(); };
     setTimeout(() => document.addEventListener('pointerdown', onDoc, true), 0);
-    const toTabThen = (fn) => { closePop(); close(); if (!t.isActive) tctx.modules.tabs.switchTab?.(t.id); requestAnimationFrame(fn); };
+    // An open table edit can hold the switch (its Save / Discard prompt is up): stop, as Export Selected does, or the
+    // export renders the still-active diagram under its own name (review S8-1).
+    const toTabThen = (fn) => {
+      closePop(); close();
+      if (!t.isActive) {
+        tctx.modules.tabs.switchTab?.(t.id);
+        if (tctx.modules.tabs.getActiveTabId?.() !== t.id) {
+          showToast(`Export stopped before "${t.name}" - finish the open table edit, then export again.`, 'warning');
+          return;
+        }
+      }
+      requestAnimationFrame(fn);
+    };
     const exportImage = (fmt) => {
       const transparent = fmt.endsWith('-t');
       const base = fmt.replace('-t', '');
@@ -469,14 +342,20 @@ export function showSaveManagerModal() {
     if (!targets.length) return;
     if (targets.length > 1) showToast(`Exporting ${targets.length} diagrams - allow multiple downloads if your browser asks.`, 'info');
     for (const t of targets) {
-      if (!t.isActive) tctx.modules.tabs.switchTab?.(t.id);
+      // Always switch: the rows' `isActive` is from when the manager opened, so after the first switch it is stale
+      // (switchTab returns at once for the tab already active). An open table edit can hold the switch: stop there.
+      tctx.modules.tabs.switchTab?.(t.id);
+      if (tctx.modules.tabs.getActiveTabId?.() !== t.id) {
+        showToast(`Export stopped before "${t.name}" - finish the open table edit, then export again.`, 'warning');
+        return;
+      }
       await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));   // let the switched diagram render
       if (isCsv) {
         exportActiveCsv(t.diagramType);
       } else {
         const transparent = fmt.endsWith('-t'); const base = fmt.replace('-t', '');
-        if (base === 'png') p.exportPNG(transparent);
-        else if (base === 'webp') p.exportWEBP(transparent);
+        if (base === 'png') await p.exportPNG(transparent);   // a raster encodes async: finish it before the next switch
+        else if (base === 'webp') await p.exportWEBP(transparent);
         else if (base === 'svg') p.exportSVG(transparent);
       }
       await new Promise((res) => setTimeout(res, 350));   // space downloads so the browser keeps them all
@@ -506,31 +385,4 @@ export function showSaveManagerModal() {
       exportSelectedSequential(selTabs, fmt);
     }));
   };
-}
-
-function wireSelectAll(bodyEl, footerEl, checkSelector, onAction) {
-  const checkAll = bodyEl.querySelector('.df-modal__check-all') || footerEl.querySelector('.df-modal__check-all');
-  const actionBtn = footerEl.querySelector('.df-modal__action-btn');
-
-  function update() {
-    const checks = bodyEl.querySelectorAll(checkSelector);
-    const anyChecked = [...checks].some(c => c.checked);
-    const allChecked = checks.length > 0 && [...checks].every(c => c.checked);
-    actionBtn.disabled = !anyChecked;
-    checkAll.checked = allChecked;
-    checkAll.indeterminate = anyChecked && !allChecked;
-  }
-
-  checkAll.addEventListener('change', () => {
-    bodyEl.querySelectorAll(checkSelector).forEach(c => { c.checked = checkAll.checked; });
-    update();
-  });
-
-  bodyEl.addEventListener('change', (e) => {
-    if (e.target.matches(checkSelector)) update();
-  });
-
-  actionBtn.addEventListener('click', onAction);
-  update();
-  return update;   // let callers re-sync after programmatically checking rows (e.g. "Select all in group")
 }

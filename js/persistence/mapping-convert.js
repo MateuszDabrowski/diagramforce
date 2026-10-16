@@ -32,8 +32,13 @@ const tag = (xml, name) => {
   return m ? decode(m[1].trim()) : null;
 };
 const blocks = (xml, name) => [...xml.matchAll(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g'))].map((m) => m[1]);
+// Numeric references too (`&#39;`, `&#x27;`): a formula written `sourceField[&#39;Type&#39;]` kept the raw entity and
+// drew no input connector. Salesforce itself writes `&apos;`; a hand-edited or re-serialised file may not. `&amp;` last.
+const charRef = (m, n) => (n <= 0x10FFFF ? String.fromCodePoint(n) : m);
 const decode = (s) => s.replace(/&apos;/g, "'").replace(/&quot;/g, '"')
-  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&#x([0-9a-f]+);/gi, (m, h) => charRef(m, parseInt(h, 16))).replace(/&#(\d+);/g, (m, d) => charRef(m, Number(d)))
+  .replace(/&amp;/g, '&');
 
 /** One `*.objectSourceTargetMap-meta.xml` document -> a normalised map, or null when it is not one. */
 export function parseMappingXml(xml) {
@@ -82,7 +87,22 @@ export function looksLikeMappingXml(text) {
 export function parseMappingXmlAll(text) {
   const t = String(text || '');
   const docs = [...t.matchAll(/<ObjectSourceTargetMap[\s>][\s\S]*?<\/ObjectSourceTargetMap>/g)].map((m) => m[0]);
-  return (docs.length ? docs : [t]).map(parseMappingXml).filter(Boolean);
+  // A copy that lost its tail is refused, as flow-xml refuses a truncated retrieve: the unclosed document used to be
+  // dropped (or its unclosed field block skipped) behind a success toast, a partial diagram that looked complete.
+  const opened = (t.match(/<ObjectSourceTargetMap[\s>]/g) || []).length;
+  const fieldsCut = docs.some((d) => (d.match(/<fieldSourceTargetMaps>/g) || []).length
+    !== (d.match(/<\/fieldSourceTargetMaps>/g) || []).length);
+  if (opened > docs.length || fieldsCut) {
+    throw new Error('That mapping XML ends before its closing tag - it looks truncated. Copy the whole file and paste again.');
+  }
+  // The same file pasted twice is one mapping, not two stacked sets of links counted twice in the toast.
+  const seen = new Set();
+  return (docs.length ? docs : [t]).map(parseMappingXml).filter(Boolean).filter((m) => {
+    const key = JSON.stringify(m);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function looksLikeMappingJson(text) {

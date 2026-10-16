@@ -4,11 +4,11 @@
 // convertFromIcon. Each mints the replacement shape, re-attaches links + embedding, and swaps in ONE undo batch.
 // Reads the live graph/selection via prctx; never imports the facade back. The facade renderers + buildCellActions
 // import the 5 convertTo* back (they wire the panel's Convert buttons + the right-click convert menu).
-import * as history from '../history.js?v=1.25.9';
-import { prctx } from './context.js?v=1.25.9';
-import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.25.9';
-import { contrastTextColor } from '../components.js?v=1.25.9';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.25.9';
+import * as history from '../history.js?v=1.26.1';
+import { prctx } from './context.js?v=1.26.1';
+import { canEmbed, updateContainerHeaderLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.26.1';
+import { contrastTextColor } from '../components.js?v=1.26.1';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.26.1';
 
 export function collectConnections(cell) {
   return prctx.graph.getConnectedLinks(cell).map(link => ({
@@ -48,24 +48,26 @@ export function preserveParentEmbedding(oldCell, newCell) {
   if (!parent) return;
   if (!canEmbed(parent.get('type'), newCell.get('type'))) return;
   // Suppress change:parent recording — the conversion's add(newCell) command already
-  // captures the embedded state in its JSON (re-captured on undo with `parent`), so the
-  // embed round-trips via the add/remove pair without a separate command.
+  // captures `parent` in its JSON (re-captured on undo) and its redo re-links the parent's
+  // `embeds`, so the embed survives the add/remove pair without a separate command.
   history.suppressEmbedTracking(() => parent.embed(newCell));
 }
 
-export function convertToContainer(cell) {
+export function convertToContainer(cell, { select = true } = {}) {
   const pos = cell.position();
   const size = cell.size();
   const connections = collectConnections(cell);
   const fillColor = cell.attr('body/fill') || '#1D73C9';
   const labelColor = cell.attr('label/fill') || '#ffffff';
+  // An icon node keeps its name and description in _savedLabel / _savedSubtitle; its label text is empty (S4-5).
+  const icon = !!cell.get('iconMode');
   const container = new joint.shapes.sf.Container({
     position: pos,
     size: { width: Math.max(size.width, 360), height: Math.max(size.height, 240) },
     attrs: {
-      headerLabel:    { text: cell.attr('label/text') || 'Container', fill: labelColor },
+      headerLabel:    { text: (icon ? cell.get('_savedLabel') : cell.attr('label/text')) || 'Container', fill: labelColor },
       headerIcon:     { href: cell.attr('icon/href') || '' },
-      headerSubtitle: { text: cell.attr('subtitle/text') || '' },
+      headerSubtitle: { text: (icon ? cell.get('_savedSubtitle') : cell.attr('subtitle/text')) || '' },
       accent:         { fill: fillColor },
       accentFill:     { fill: fillColor },
     },
@@ -77,11 +79,12 @@ export function convertToContainer(cell) {
     preserveParentEmbedding(cell, container);
     reconnectLinks(connections, container.id);
     cell.remove();
-    prctx.selection.selectOnly(container.id);
+    if (select) prctx.selection.selectOnly(container.id);
   } finally { history.endBatch(); }
+  return container.id;
 }
 
-export function convertToNode(cell) {
+export function convertToNode(cell, { select = true } = {}) {
   const pos = cell.position();
   const def = DEFAULT_SIZES['sf.SimpleNode'];
   const connections = collectConnections(cell);
@@ -106,8 +109,9 @@ export function convertToNode(cell) {
     preserveParentEmbedding(cell, node);
     reconnectLinks(connections, node.id);
     cell.remove();
-    prctx.selection.selectOnly(node.id);
+    if (select) prctx.selection.selectOnly(node.id);
   } finally { history.endBatch(); }
+  return node.id;
 }
 
 // ── Placeholder -> a real shape (1.21.5) ─────────────────────────────────────────────────────────────────────
@@ -162,6 +166,9 @@ export function convertFlowPlaceholderTo(cell, targetType) {
   // Flow cards render from the `name` prop, not attrs/label. Carry the author's note ("Approval step - TBD")
   // unless it is still the untouched default, in which case the new class's own default label is better.
   if (name && name !== 'Placeholder') el.set('name', name);
+  // The rest of the uniform trio the placeholder's panel offers: an API Name typed on it was dropped (review J2-14).
+  const apiName = cell.get('apiName');
+  if (apiName) el.set('apiName', apiName);
   const desc = cell.get('description');
   if (desc) el.set('description', desc);
   history.startBatch();
@@ -174,7 +181,7 @@ export function convertFlowPlaceholderTo(cell, targetType) {
   } finally { history.endBatch(); }
 }
 
-export function convertToIcon(cell) {
+export function convertToIcon(cell, { select = true } = {}) {
   // Convert a SimpleNode to icon mode — circle with icon only
   const pos = cell.position();
   const connections = collectConnections(cell);
@@ -201,11 +208,12 @@ export function convertToIcon(cell) {
     preserveParentEmbedding(cell, node);
     reconnectLinks(connections, node.id);
     cell.remove();
-    prctx.selection.selectOnly(node.id);
+    if (select) prctx.selection.selectOnly(node.id);
   } finally { history.endBatch(); }
+  return node.id;
 }
 
-export function convertContainerToIcon(cell) {
+export function convertContainerToIcon(cell, { select = true } = {}) {
   // Convert a Container to icon mode SimpleNode
   const pos = cell.position();
   const connections = collectConnections(cell);
@@ -231,11 +239,12 @@ export function convertContainerToIcon(cell) {
     preserveParentEmbedding(cell, node);
     reconnectLinks(connections, node.id);
     cell.remove();
-    prctx.selection.selectOnly(node.id);
+    if (select) prctx.selection.selectOnly(node.id);
   } finally { history.endBatch(); }
+  return node.id;
 }
 
-export function convertFromIcon(cell) {
+export function convertFromIcon(cell, { select = true } = {}) {
   // Restore a SimpleNode from icon mode back to normal
   const pos = cell.position();
   const connections = collectConnections(cell);
@@ -261,6 +270,7 @@ export function convertFromIcon(cell) {
     preserveParentEmbedding(cell, node);
     reconnectLinks(connections, node.id);
     cell.remove();
-    prctx.selection.selectOnly(node.id);
+    if (select) prctx.selection.selectOnly(node.id);
   } finally { history.endBatch(); }
+  return node.id;
 }

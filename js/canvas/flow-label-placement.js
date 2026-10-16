@@ -36,7 +36,6 @@
 const hits = (a, b) => a.x + 1 < b.x + b.w && b.x + 1 < a.x + a.w
   && a.y + 1 < b.y + b.h && b.y + 1 < a.y + a.h;
 
-export const LABEL_GAP = 8;          // clear air between two pills
 export const DISTANCE_STEP = 4;      // px between candidate points along a path - finer than the eye resolves
 // ONE ring. The perpendicular fallback is the only path that takes a label off its own line, so its whole job
 // is to be a last resort that stays ADJACENT. At three rings it could reach 108px, and after an Auto Layout -
@@ -258,7 +257,15 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     // The label <g>'s transform IS the anchor and getBBox() is relative to it, so the local box is invariant as
     // the anchor slides along the path - one measurement serves every candidate. Pad by 1 for the pill stroke,
     // which getBBox() under-reports by ~1px against getBoundingClientRect().
-    const bb = node.getBBox();
+    // An architecture link's frequency overlay shares label 0's anchor and draws 22 px below it, so the pair is
+    // measured as one block: measured alone, label 0 moved off a card while the overlay stayed on it.
+    let bb = node.getBBox();
+    const freqIdx = link.labels().findIndex((l) => l?.attrs?.freqText);
+    const freqBox = freqIdx > 0 ? view.findLabelNode(freqIdx)?.getBBox?.() : null;
+    if (freqBox) {
+      const x = Math.min(bb.x, freqBox.x), y = Math.min(bb.y, freqBox.y);
+      bb = { x, y, width: Math.max(bb.x + bb.width, freqBox.x + freqBox.width) - x, height: Math.max(bb.y + bb.height, freqBox.y + freqBox.height) - y };
+    }
     const w = bb.width + 2, h = bb.height + 2;
     const rectFor = (position) => {
       const a = view.getLabelCoordinates(position);

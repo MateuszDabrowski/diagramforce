@@ -14,24 +14,24 @@
 // WHY N sibling tables and not one merged table with injected header rows: a single <table> computes
 // ONE column grid, so Decision Elements' 5 columns would be forced to align under Data Writes' 7 -
 // "Outcome" under "Op", same widths. That is the wrong table, not a styling nit.
-import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.25.9';
-import { getActiveTabName } from '../tabs.js?v=1.25.9';
-import { triggerDownload } from '../persistence.js?v=1.25.9';
-import { showToast, showError } from '../feedback.js?v=1.25.9';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.26.1';
+import { getActiveTabName } from '../tabs.js?v=1.26.1';
+import { triggerDownload } from '../persistence.js?v=1.26.1';
+import { showToast, showError } from '../feedback.js?v=1.26.1';
 import {
   buildFlowSections, sortRows, suppressColumns, exportCellText, flowFactsRows, flowResourceRows,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './builders.js?v=1.25.9';
+} from './builders.js?v=1.26.1';
 // The filter's aria-live result count rides the app's sr-only region (a11y.js imports only
 // properties.js + util.js - no cycle). Called ONLY from the debounced input handler, never from
 // renderFlowTable, so graph-change re-renders stay silent.
-import { announce } from '../a11y.js?v=1.25.9';
+import { announce } from '../a11y.js?v=1.26.1';
 // Click-to-focus (post-1.22.2): a row's nav button -> its element on the canvas. selectOnly is the same public
 // call a canvas click lands on (selection.js's own pointer handler uses it), and cctx carries
 // fitToCells, the frame-these-cells helper diagram-check.js uses. Both are acyclic from here:
 // nothing in either chain imports the table-view modules back.
-import { selectOnly } from '../selection.js?v=1.25.9';
-import { cctx } from '../canvas/context.js?v=1.25.9';
+import { selectOnly } from '../selection.js?v=1.26.1';
+import { cctx } from '../canvas/context.js?v=1.26.1';
 
 export const FLOW_TABLE_TITLE = 'Flow Details';
 
@@ -79,6 +79,62 @@ export function resetFlowTableFilter() {
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`;
+
+// ── Scroll + focus across a re-render (review L3) ── Both renderers rebuild container.innerHTML, which made a new
+// .df-tbl__scroll at the top and dropped focus to <body> on every sort click, checkbox toggle, revert and plan add or
+// delete. capture before the rebuild, restore after it. A control is found again by its id, or by its tag + data-*
+// attributes (data-k + data-key, data-bk + data-bprop, data-grid + data-sort...) and its index among the matches
+// (a row's delete and dependency buttons share data-bar). The renderers keep those stable across a rebuild.
+// When the control does not come back (its row was deleted), focus goes to the same control in the row now at that
+// place (the next row, or the previous one after the last), else to the first of `fallbacks` that exists (Save and
+// Cancel end the session: -> Edit). Without that, deleting a row from the keyboard dropped focus to <body>.
+// Exported for table-view.js, which may import this leaf (never the reverse).
+const FOCUSABLE = 'input, select, textarea, button, [tabindex]:not([tabindex="-1"])';
+const focusablesIn = (root) => (root ? [...root.querySelectorAll(FOCUSABLE)].filter(c => !c.disabled) : []);
+// Body rows shaped like `tr` (same cell count), so a one-cell "+ Add task" or empty-state row is never a match.
+const rowsLike = (tbody, cells) => (tbody ? [...tbody.rows].filter(r => r.cells.length === cells) : []);
+export function captureTableView(host) {
+  const sc = host?.querySelector('.df-tbl__scroll');
+  const snap = { top: sc ? sc.scrollTop : 0, left: sc ? sc.scrollLeft : 0, focus: null };
+  const el = document.activeElement;
+  if (!host || !el || el === host || !host.contains(el)) return snap;
+  let sel = null;
+  if (el.id) sel = '#' + CSS.escape(el.id);
+  else {
+    const data = [...el.attributes].filter(a => a.name.startsWith('data-'));
+    if (data.length) sel = el.tagName.toLowerCase() + data.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join('');
+  }
+  if (!sel) return snap;
+  let caret = null;
+  try { if (typeof el.selectionStart === 'number') caret = [el.selectionStart, el.selectionEnd]; } catch { /* no caret */ }
+  let place = null;
+  const tr = el.closest('tbody > tr'), td = el.closest('td');
+  if (tr && td && host.contains(tr)) {
+    place = { tb: [...host.querySelectorAll('tbody')].indexOf(tr.parentElement), cells: tr.cells.length,
+      row: rowsLike(tr.parentElement, tr.cells.length).indexOf(tr), cell: td.cellIndex, ctl: focusablesIn(td).indexOf(el) };
+  }
+  snap.focus = { sel, idx: [...host.querySelectorAll(sel)].indexOf(el), caret, place };
+  return snap;
+}
+function controlAtPlace(host, p) {
+  if (!p) return null;
+  const rows = rowsLike(host.querySelectorAll('tbody')[p.tb], p.cells);
+  const tr = rows[Math.min(p.row, rows.length - 1)];
+  if (!tr) return null;
+  const inCell = focusablesIn(tr.cells[p.cell]);
+  return inCell[p.ctl] || inCell[0] || focusablesIn(tr)[0] || null;
+}
+export function restoreTableView(host, snap, fallbacks = []) {
+  if (!host || !snap) return;
+  const sc = host.querySelector('.df-tbl__scroll');
+  if (sc) { sc.scrollTop = snap.top; sc.scrollLeft = snap.left; }
+  if (!snap.focus) return;
+  const same = host.querySelectorAll(snap.focus.sel)[Math.max(0, snap.focus.idx)];
+  const el = same || controlAtPlace(host, snap.focus.place) || fallbacks.map(s => host.querySelector(s)).find(Boolean);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (same && snap.focus.caret) { try { el.setSelectionRange(...snap.focus.caret); } catch { /* not a text input */ } }
+}
 
 function toggleFlowSort(gridId, key) {
   const cur = _sort.get(gridId);
@@ -182,8 +238,9 @@ function toggleFlowSection(th) {
   // collapsed or expanded, which is exactly what lets a collapsed band stay honest with zero work here.
 }
 
-export function renderFlowTable() {
+export function renderFlowTable({ fresh = false } = {}) {
   if (!container || !graph) return;
+  const view = fresh ? null : captureTableView(container);   // a fresh show starts at the top
   const built = buildFlowSections(graph);
   const { elementCount, writeCount, writeElementCount, contestedCount, decisionCount, outcomeCount, assetRefCount, assetElementCount } = built;
   // Each band carries ITS OWN insight - the counts the retired topbar note line carried, in the same
@@ -294,6 +351,7 @@ export function renderFlowTable() {
   // Re-apply the surviving query after ANY re-render (per-section sort, Show All Columns, graph
   // change) - silently: only the debounced handler above may announce.
   applyFlowFilter();
+  restoreTableView(container, view);
 }
 
 // ── Section widths: five tables, one right edge ─────────────────────────────

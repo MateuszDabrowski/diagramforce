@@ -4,7 +4,7 @@
 // `window.confirm()` in the codebase — and provide a non-blocking success
 // channel for silent actions (save, export, load).
 //
-//   showToast(message, kind?)     — non-blocking, auto-dismisses after 2s
+//   showToast(message, kind?)     — non-blocking, auto-dismisses after 4s
 //   confirmModal(opts) → Promise  — resolves to true (ok) or false (cancel)
 //
 // Both stay inside the existing SLDS-flavoured visual language: toasts
@@ -51,12 +51,22 @@ function positionToastContainer() {
  * @param {'success'|'info'|'warning'|'error'} [kind='info']  Visual variant.
  * @param {object} [opts]   { duration?: number — ms before auto-dismiss,
  *                            action?: { label, onClick } — one button after the message (1.25.2),
- *                            sticky?: true — no auto-dismiss; a close button instead (1.25.2) }
+ *                            sticky?: true — no auto-dismiss; a close button instead (1.25.2),
+ *                            multiline?: true — keep the message's line breaks (1.25.9; every message wraps),
+ *                            dismissOnClick?: false — a click on the body does not close it (S8-3),
+ *                            onClose?: fn — also run when the close button is clicked (S8-3) }
  * @returns {Function}      Dismiss handle. Also exposes `.update(message)` which
  *                          rewrites the toast text in place (used by long-running
  *                          operations like GIF export to show frame N/M progress
  *                          without flashing the toast in and out — Gap 27).
  */
+/** The text a toast shows. A success toast already draws a check icon, so a trailing " ✓" in its message (about 24
+ *  callers) would show two; drop it here, once, rather than at every call site (Q11). Other kinds keep theirs. */
+export function toastMessageText(message, kind) {
+  const text = String(message);
+  return kind === 'success' ? text.replace(/\s*✓\s*$/, '') : text;
+}
+
 export function showToast(message, kind = 'info', opts = {}) {
   const container = ensureToastContainer();
   const toast = document.createElement('div');
@@ -77,7 +87,9 @@ export function showToast(message, kind = 'info', opts = {}) {
   `;
   // Use textContent for the message so user-supplied strings can't inject markup.
   const messageEl = toast.querySelector('.df-toast__message');
-  messageEl.textContent = String(message);
+  messageEl.textContent = toastMessageText(message, kind);
+  // A list (the flow import's notes) needs its line breaks: a plain toast wraps its message but collapses them.
+  if (opts.multiline) toast.classList.add('df-toast--multiline');
   container.appendChild(toast);
 
   // Trigger the enter animation on the next frame so the initial style
@@ -86,22 +98,41 @@ export function showToast(message, kind = 'info', opts = {}) {
 
   const duration = opts.duration ?? TOAST_DEFAULT_DURATION;
   let dismissTimer = null;
+  let leaving = false;
   const dismiss = () => {
-    if (!toast.isConnected) return;
+    // Once only: a second call would re-measure the half-collapsed box and restart the collapse.
+    if (leaving || !toast.isConnected) return;
+    leaving = true;
     clearTimeout(dismissTimer);
     toast.classList.remove('df-toast--shown');
-    // Wait for the exit transition before removing from DOM so stacked
-    // toasts shift down smoothly.
-    setTimeout(() => toast.remove(), 220);
+    // The 120 ms exit fade (--df-motion-fast, css/modals.css) plays first. The leaving toast is out of the
+    // accessibility tree at once (aria-hidden), so it never stands in for a live one. It still takes clicks while it
+    // fades, so the second click of a double-click does not reach the canvas; `leaving` makes those clicks no-ops.
+    toast.setAttribute('aria-hidden', 'true');
+    // Then the box collapses (and the 8px gap under it), so the newer toasts below slide up into its place.
+    // Removing it straight after the fade made each of them jump by its height in one frame.
+    setTimeout(() => {
+      if (!toast.isConnected) return;
+      toast.style.height = `${toast.offsetHeight}px`;
+      void toast.offsetHeight;   // commit the pinned height as the start of the collapse
+      toast.classList.add('df-toast--collapsing');
+      toast.style.height = '0px';
+      const remove = () => toast.remove();
+      // The toast's own height only: a hover transition on the action or close button bubbles up here too.
+      toast.addEventListener('transitionend', (e) => { if (e.target === toast && e.propertyName === 'height') remove(); });
+      setTimeout(remove, 400);   // fallback when no transitionend comes (a hidden tab, a cancelled transition)
+    }, 160);
   };
-  toast.addEventListener('click', dismiss);
+  // A progress toast whose close means Cancel opts out (review S8-3): a stray click hid the GIF's only Cancel while
+  // the encode ran on.
+  if (opts.dismissOnClick !== false) toast.addEventListener('click', dismiss);
   // A STICKY toast (1.25.2) waits for the user: an actionable hint that closed itself after 12 s was gone before the
   // owner could use it in the live check. No timer (setTimeout(fn, Infinity) would fire at once), and a visible close
   // button, so the way out is not only "click anywhere on it".
   const sticky = opts.sticky === true;
   if (!sticky) dismissTimer = setTimeout(dismiss, duration);
   // An ACTION toast (1.25.2, the B4 link-open hint): one button after the message. The toast still dismisses on any
-  // click; the button runs its action as well. Its message wraps, since a hint with a button is a sentence, not a status.
+  // click; the button runs its action as well.
   if (opts.action && opts.action.label) {
     toast.classList.add('df-toast--action');
     const btn = document.createElement('button');
@@ -110,6 +141,7 @@ export function showToast(message, kind = 'info', opts = {}) {
     btn.textContent = String(opts.action.label);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (leaving) return;   // a second Enter on the still-focused button while the toast leaves
       dismiss();
       try { opts.action.onClick?.(); } catch (err) { console.error('Diagramforce: toast action failed:', err); }
     });
@@ -122,7 +154,12 @@ export function showToast(message, kind = 'info', opts = {}) {
     close.className = 'df-toast__close';
     close.setAttribute('aria-label', 'Close');
     close.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-    close.addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (leaving) return;   // a second click, or a toast its caller already released (the GIF finished)
+      dismiss();
+      try { opts.onClose?.(); } catch (err) { console.error('Diagramforce: toast close failed:', err); }
+    });
     toast.appendChild(close);
   }
 
@@ -143,10 +180,27 @@ export function showToast(message, kind = 'info', opts = {}) {
     messageEl.textContent = '';
     requestAnimationFrame(() => {
       if (!toast.isConnected) return;
-      messageEl.textContent = String(newMessage);
+      messageEl.textContent = toastMessageText(newMessage, kind);
     });
   };
   return dismiss;
+}
+
+/** An import's notes as one warning toast: `<head> with N notes:`, up to five notes one per line, then "+N more,
+ *  listed in the browser console", and the full list in the console as `Diagramforce: <label> import notes`. The
+ *  Flow and Mermaid imports both call it, so their formats cannot drift (they were two copies; S7-4 review). */
+export function showImportNotes(head, notes, label) {
+  console.info(`Diagramforce: ${label} import notes\n${notes.map((w) => `- ${w}`).join('\n')}`);
+  return showToast(importNotesText(head, notes), 'warning',
+    { duration: 9000 + 3000 * (Math.min(notes.length, IMPORT_NOTES_SHOWN) - 1), multiline: true });
+}
+const IMPORT_NOTES_SHOWN = 5;
+/** The toast text of showImportNotes. */
+export function importNotesText(head, notes) {
+  const n = notes.length;
+  const lines = notes.slice(0, IMPORT_NOTES_SHOWN).map((w) => `- ${w}`);
+  if (n > IMPORT_NOTES_SHOWN) lines.push(`+${n - IMPORT_NOTES_SHOWN} more, listed in the browser console`);
+  return `${head} with ${n} note${n === 1 ? '' : 's'}:\n${lines.join('\n')}`;
 }
 
 // ── Focus trap (a11y, v1.12.0) ────────────────────────────────────
@@ -162,19 +216,39 @@ const FOCUSABLE_SELECTOR = [
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
+  // Natively focusable too. The trap moves focus itself on every Tab, so anything missing here is unreachable by
+  // keyboard inside a modal: the Group share pane's collapsed "Individual diagram links" summary was (review R9).
+  'details > summary:first-of-type',
+  '[contenteditable]:not([contenteditable="false"])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+// The trap focuses its list itself (below), and focus() on an invisible element is a no-op, so one invisible entry
+// stalls Tab for good (review M4: the New Diagram modal's Create cards stay laid out but visibility:hidden). Skip
+// display:none and visibility:hidden (checkVisibility, with a computed-style fallback), zero-size boxes, and
+// anything under [inert] or an aria-hidden ancestor inside the dialog. The focused element always stays listed.
+function isTabbable(el, rootEl) {
+  if (el === document.activeElement) return true;
+  if (el.closest('[inert]')) return false;
+  const hidden = el.closest('[aria-hidden="true"]');
+  if (hidden && rootEl.contains(hidden)) return false;
+  const visible = el.checkVisibility
+    ? el.checkVisibility({ visibilityProperty: true })
+    : el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible';
+  if (!visible) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 || r.height > 0;
+}
+
 function getTabbables(rootEl) {
   if (!rootEl) return [];
-  return Array.from(rootEl.querySelectorAll(FOCUSABLE_SELECTOR))
-    .filter(el => el.offsetParent !== null || el === document.activeElement); // skip display:none
+  return Array.from(rootEl.querySelectorAll(FOCUSABLE_SELECTOR)).filter(el => isTabbable(el, rootEl));
 }
 
 /**
- * Trap Tab / Shift+Tab focus inside `rootEl`. While the trap is active,
- * tabbing past the last focusable child wraps to the first; Shift+Tab from
- * the first wraps to the last. Pressing Escape calls `opts.onEscape` if
+ * Trap Tab / Shift+Tab focus inside `rootEl`. While the trap is active, every
+ * Tab moves to the next focusable child in DOM order (Shift+Tab: previous),
+ * wrapping at both ends, in every engine. Pressing Escape calls `opts.onEscape` if
  * supplied (typical: dismisses the modal).
  *
  * Returns a release function that unbinds the listener. Idempotent.
@@ -215,18 +289,19 @@ export function trapFocus(rootEl, opts = {}) {
       rootEl.focus({ preventScroll: true });
       return;
     }
-    const first = tabbables[0];
-    const last = tabbables[tabbables.length - 1];
-    const active = document.activeElement;
-    // Forward Tab from the last → wrap to the first.
-    if (!evt.shiftKey && (active === last || !rootEl.contains(active))) {
-      evt.preventDefault();
-      first.focus();
-    }
-    // Shift+Tab from the first → wrap to the last.
-    else if (evt.shiftKey && (active === first || !rootEl.contains(active))) {
-      evt.preventDefault();
-      last.focus();
+    // The trap moves focus on EVERY Tab, not only at the ends. Left to the browser, a middle Tab followed the engine's
+    // own order, and Safari's default skips buttons: from a button-only dialog (New Diagram, confirms) focus jumped to
+    // the next text field behind the modal (review 2026-10-15). DOM order, wrapping at both ends.
+    // A candidate that refuses focus anyway is stepped over, so Tab never stalls on it (review M4).
+    evt.preventDefault();
+    const n = tabbables.length;
+    const step = evt.shiftKey ? -1 : 1;
+    const i = tabbables.indexOf(document.activeElement);
+    const from = i === -1 ? (evt.shiftKey ? n : -1) : i;
+    for (let k = 1; k <= n; k++) {
+      const next = tabbables[(((from + step * k) % n) + n) % n];
+      next.focus();
+      if (document.activeElement === next) return;
     }
   };
   // Capture phase so the trap runs before any inner handlers can swallow Tab.
@@ -239,6 +314,11 @@ export function trapFocus(rootEl, opts = {}) {
 }
 
 // ── Generic modal scaffold ────────────────────────────────────────
+
+// When the last buildModal() closed, so a modal opened in the same click (a chained dialog) can skip its scrim
+// fade-in. 100 ms covers a synchronous chain and one awaited microtask hop, far below a human re-open.
+const MODAL_SWAP_MS = 100;
+let _lastModalClosedAt = -Infinity;
 
 /**
  * Build, mount, and wire a standard `.df-modal` dialog. Centralises the
@@ -279,6 +359,9 @@ export function buildModal(opts = {}) {
 
   const overlay = document.createElement('div');
   overlay.className = `df-modal${className ? ' ' + className : ''}${anchor ? ' df-modal--anchored' : ''}`;
+  // A modal that replaces one closed a moment ago keeps its scrim solid (no CSS fade-in), so the dim does not
+  // blink off and on between two dialogs (css/modals.css, motion).
+  if (performance.now() - _lastModalClosedAt < MODAL_SWAP_MS) overlay.classList.add('df-modal--swap');
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', titleId);
@@ -369,17 +452,23 @@ export function buildModal(opts = {}) {
     const ov = overlay.querySelector('.df-modal__overlay');
     try {
       const o = origin.getBoundingClientRect();
+      // Opt out of the CSS entry pop (css/modals.css) BEFORE measuring the dialog: mid-pop its rect is scaled.
+      overlay.classList.add('df-modal--origin');
       const d = dlg.getBoundingClientRect();
       if ((o.width || o.height) && (d.width || d.height)) {
         dlg.style.transformOrigin = `${(o.left + o.width / 2) - d.left}px ${(o.top + o.height / 2) - d.top}px`;
         dlg.style.transform = 'scale(0.9)';
         dlg.style.opacity = '0';
         // Swapping managers under an already-present scrim: leave the scrim solid (don't fade it 0→1) so it
-        // doesn't blink off/on. The dialog still scales in for a panel-swap cue.
-        if (ov && !replacingAnchored) ov.style.opacity = '0';
+        // doesn't blink off/on. The dialog still scales in for a panel-swap cue. The swap rule above counts too: the
+        // chained opens (Paste's bundle reopening Load, Load's "back up" link) close the old panel first, so
+        // replacingAnchored alone missed them and the scrim blinked (review S8-7).
+        const keepScrim = replacingAnchored || overlay.classList.contains('df-modal--swap');
+        if (ov && !keepScrim) ov.style.opacity = '0';
         void dlg.offsetWidth;   // commit the initial state before transitioning
-        dlg.style.transition = 'transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease-out';
-        if (ov && !replacingAnchored) { ov.style.transition = 'opacity 150ms ease-out'; ov.style.opacity = ''; }
+        // Motion-system tokens (css/variables.css), resolved by the browser from the inline value.
+        dlg.style.transition = 'transform var(--df-motion-base) var(--df-ease-out), opacity var(--df-motion-base) var(--df-ease-out)';
+        if (ov && !keepScrim) { ov.style.transition = 'opacity var(--df-motion-fast) var(--df-ease-out)'; ov.style.opacity = ''; }
         dlg.style.transform = 'scale(1)';
         dlg.style.opacity = '';
         const cleanup = () => {   // clear inline styles so resize / Safari repaint aren't affected later
@@ -388,12 +477,18 @@ export function buildModal(opts = {}) {
           dlg.removeEventListener('transitionend', cleanup);
         };
         dlg.addEventListener('transitionend', cleanup);
-      }
+      } else overlay.classList.remove('df-modal--origin');   // nothing to grow from (a hidden button): CSS pop instead
     } catch { /* entry animation is best-effort */ }
   }
 
   let releaseTrap = () => {};
+  let closed = false;
   const close = () => {
+    // Once only. A caller holding a stale close (the Paste pane after a bundle import reopened Load with its summary)
+    // would otherwise un-merge the trigger button the NEW panel owns and move focus a second time (review D11).
+    if (closed) return;
+    closed = true;
+    _lastModalClosedAt = performance.now();
     releaseTrap();
     if (overlay.__dfReposition) window.removeEventListener('resize', overlay.__dfReposition);
     overlay.__dfAnchor?.classList?.remove('df-toolbar__button--panel-open');   // un-merge the trigger button
@@ -505,13 +600,13 @@ export function confirmModal(opts) {
 }
 
 /**
- * Convenience for showing a non-dismissable error toast when a user-facing
- * operation failed. Encapsulates the common `showToast(msg, 'error', …)`
- * pattern with a slightly longer default duration so the user has time to
- * read the failure.
+ * Convenience for showing an error toast when a user-facing operation
+ * failed. Encapsulates the common `showToast(msg, 'error', …)` pattern; it
+ * keeps the default duration (TOAST_DEFAULT_DURATION) unless `opts.duration`
+ * says otherwise, and a click dismisses it like any toast.
  */
 export function showError(message, opts = {}) {
-  return showToast(message, 'error', { duration: 4000, ...opts });
+  return showToast(message, 'error', opts);
 }
 
 // ── Prompt modal (single text input) ──────────────────────────────

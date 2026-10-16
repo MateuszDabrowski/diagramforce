@@ -21,12 +21,12 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.25.9';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.25.9';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.25.9';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.25.9';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.25.9';
-import { noteError } from './diagnostics.js?v=1.25.9';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.26.1';
+import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.26.1';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.26.1';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.26.1';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.26.1';
+import { noteError } from './diagnostics.js?v=1.26.1';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -142,7 +142,7 @@ async function syncTemplatesOnce({ retry = true } = {}) {
   const res = mergeTemplatesWithTombstones({
     localTemplates: getTemplates(), localDeleted: getDeletedTombstones(),
     remoteTemplates: remote.templates, remoteDeleted: remote.deleted,
-    sigOf, max: MAX_TEMPLATES, now: Date.now(), ttlMs: TOMBSTONE_TTL_MS,
+    sigOf, now: Date.now(), ttlMs: TOMBSTONE_TTL_MS,   // no cap: a union past MAX_TEMPLATES only blocks new adds
   });
 
   // Templates deleted on another device that are still here → confirm before they vanish locally.
@@ -430,11 +430,7 @@ export function insertTemplateCells(template, dropPoint) {
   // Select the new top-level elements (skip links + embedded children) so the
   // dropped group is immediately movable and the properties panel reflects it.
   if (selection) {
-    selection.clearSelection();
-    clones.forEach(c => {
-      const isLink = !!(c.source || c.target);
-      if (!isLink && !c.parent) selection.addToSelection(c.id);
-    });
+    selection.selectMany(clones.filter(c => !(c.source || c.target) && !c.parent).map(c => c.id), { replace: true });
   }
 }
 
@@ -620,25 +616,28 @@ export function exportTemplatesJSON() {
  *  untrusted (a JSON file), same trust level as a pasted/shared diagram. Shows
  *  its own WARNING toast for "library full"; the caller (persistence import)
  *  shows the success toast. Driven by the general Import-from-JSON flow — there
- *  is no longer a templates-specific file picker. */
-export function importTemplatesArray(incoming) {
-  if (!Array.isArray(incoming)) return 0;
+ *  is no longer a templates-specific file picker.
+ *  `stats` (optional) is filled with `{ added, duplicates, full, invalid }`, so a caller can say WHY nothing was
+ *  added: one bare 0 used to mean all three, and the templates-file import called the user's own re-imported export
+ *  "No valid templates" (review D10). A saved shape keeps `kind: 'shape'`, or a backup turned it into a template. */
+export function importTemplatesArray(incoming, stats = null) {
+  const tally = { added: 0, duplicates: 0, full: 0, invalid: 0 };
+  const report = () => { if (stats && typeof stats === 'object') Object.assign(stats, tally); };
+  if (!Array.isArray(incoming)) { report(); return 0; }
   const existing = getTemplates();
-  const room = MAX_TEMPLATES - existing.length;
-  if (room <= 0) {
-    showToast(`Template library is full (max ${MAX_TEMPLATES}). Delete some first.`, 'warning');
-    return 0;
-  }
+  const room = Math.max(0, MAX_TEMPLATES - existing.length);
   // Dedup by exact cell content; rename on name-collision-with-different-content.
   const existingSigs = new Set(existing.map(t => contentSignature(t.cells || [])));
   const existingNames = new Set(existing.map(t => t.name));
   let added = 0;
   for (const t of incoming) {
-    if (added >= room) break;
     const cells = safeTemplateCells(t);            // sanitise — untrusted file content
-    if (!cells.length) continue;                    // malformed / empty → skip
+    if (!cells.length) { tally.invalid++; continue; }   // malformed / empty → skip
     const sig = contentSignature(cells);
-    if (existingSigs.has(sig)) continue;            // exact duplicate → skip
+    if (existingSigs.has(sig)) { tally.duplicates++; continue; }   // exact duplicate → skip
+    // Only a NEW template counts against the cap. The cap ran first, so a re-import into a full or nearly full
+    // library called templates already in it "not imported - your template library is full" (review R3).
+    if (added >= room) { tally.full++; continue; }
     let name = (typeof t.name === 'string' && t.name.trim()) ? t.name.trim().slice(0, 80) : `Template ${existing.length + 1}`;
     if (existingNames.has(name)) name = `${name} (Restored)`;
     existingSigs.add(sig);
@@ -646,6 +645,7 @@ export function importTemplatesArray(incoming) {
     existing.push({
       id: newCellId(),                              // fresh ID → never collides with current library
       name,
+      ...(t.kind === 'shape' ? { kind: 'shape' } : {}),   // My Shapes vs My Templates (stencil.js isShape); allowlisted
       diagramType: typeof t.diagramType === 'string' ? t.diagramType : 'architecture',
       appVersion: typeof t.appVersion === 'string' ? t.appVersion : APP_VERSION,
       createdAt: Date.now(),
@@ -653,7 +653,12 @@ export function importTemplatesArray(incoming) {
     });
     added++;
   }
-  if (added === 0) return 0;
+  tally.added = added;
+  report();
+  if (added === 0) {
+    if (tally.full) showToast(`Template library is full (max ${MAX_TEMPLATES}). Delete some first.`, 'warning');
+    return 0;
+  }
   try {
     writeTemplates(existing);
   } catch {

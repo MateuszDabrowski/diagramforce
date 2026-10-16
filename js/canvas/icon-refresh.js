@@ -5,7 +5,7 @@
 // every element's icon (current normalized viewBoxes). registerIconRefresh(cctx) exposes
 // refreshAllIconHrefs + freqClockUri (the frequency-label clock-glyph builder used by the inline
 // link-styles frequency label) on cctx. Reads the live graph via cctx.
-import { cctx } from './context.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
 
 let _iconDataUriFn = null;
 export function setIconDataUriFn(fn) { _iconDataUriFn = fn; }
@@ -27,7 +27,12 @@ export function refreshIcons() {
       const idMatch = iconHref.match(/data-icon-id(?:%3D|=)(?:%22|")([^%"]+)(?:%22|")/);
       if (idMatch) {
         const iconId = decodeURIComponent(idMatch[1]);
-        el.attr('icon/href', _iconDataUriFn(iconId, nodeText));
+        // dfCosmetic: a repaint, not an edit. history and noteContentEdit skip it, so a theme switch (a click or the
+        // OS in system mode) adds no undo entries, keeps the redo stack, and never marks the tab dirty or reaches
+        // Drive (review C2). Saves slim the href to its data-icon-id anyway. Every undo / redo runs this too (S2-4), so
+        // only an icon whose ink is stale is rewritten: an unchanged write would still re-render the node.
+        const href = _iconDataUriFn(iconId, nodeText);
+        if (href !== iconHref) el.attr('icon/href', href, { dfCosmetic: true });
       }
     }
   }

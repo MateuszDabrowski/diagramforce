@@ -4,8 +4,8 @@ description: >-
   Author an importable Diagramforce diagram - from a description, from an existing diagram (a
   screenshot, draw.io, or Mermaid), or from real Salesforce metadata (Flows, objects, Data Cloud
   mappings, data graphs) - then hand the user a file to open in Diagramforce. Diagramforce is a
-  no-backend browser editor for Salesforce/CRM architecture, data models (ERD), Data Cloud field
-  mappings, process flows, Salesforce Flows, org charts, Gantt timelines, and UML sequence diagrams.
+  no-backend browser editor for Salesforce/CRM architecture, data models (ERD), field mapping and
+  lineage, process flows, Salesforce Flows, org charts, Gantt timelines, and UML sequence diagrams.
   Use it whenever the user wants to visualize, diagram, map, model, draw, or recreate any of those as
   an editable diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context, even when
   they don't name Diagramforce (e.g. 'turn this into an ERD', 'map these fields into the Individual
@@ -20,7 +20,7 @@ Produce a **validated Diagramforce diagram JSON file** and hand it to the user t
 You do not need the app or any network access to build the diagram - you author JSON to a published
 spec, check it with a bundled validator, then give the user the file plus the one-time paste steps.
 
-Diagramforce renders the JSON; your job is to get the JSON **right** so nothing silently drops on
+Diagramforce renders the JSON; your job is to get the JSON **right** so nothing drops on
 import. Work the loop below in order - skipping the spec-read or the validator is the usual cause of
 a diagram that opens with missing shapes or links.
 
@@ -130,9 +130,9 @@ It maps each metadata collection to its `df.Flow*` class, carries decision outco
 / Go To jumps (blue) with their branch labels, synthesises the End cards the metadata has no element
 for, fills each card's **`details`** rows with the documentation detail that will not fit on a card (the
 fields a Create/Update writes, what a Get reads out and into which variables, a screen's components with
-their types, each outcome's condition, an action's parameters), emits a **`df.Table` above Start** holding
-the flow-level facts (status, API version, run mode, description, resource counts) plus a **Resources sidebar**
-to the right listing what each formula computes, what each text template sends and pulls, what fills each
+their types, each outcome's condition, an action's parameters), emits a **`df.Table` to the LEFT of the flow**,
+top-aligned with Start, holding the flow-level facts (status, API version, run mode, description, resource
+counts) plus a **Resources table** directly under it in the same left column, listing what each formula computes, what each text template sends and pulls, what fills each
 choice set, and the description of every variable that carries one, and either honours the flow's own `locationX/Y` or - when the builder stored none (as Marketing
 Cloud Next journeys do) or stored only some - computes the same tidy tree the app's Auto Layout uses.
 Two conventions on those tables to keep when you author a flow by hand: the facts table lists the flow's
@@ -178,7 +178,7 @@ architecture tab with the type-specific tools gated off.
 |------|---------|-------------|
 | `architecture` | "How do these systems/components connect?" | Integrations, system landscapes |
 | `datamodel` | "What objects/entities exist and how do they relate?" | Salesforce/SF Data ERDs |
-| `datamapping` | "How does data flow from source to target, field by field?" | Data Cloud / Data 360 source -> DLO -> DMO mappings |
+| `datamapping` | "How does data flow from source to target, field by field?" | Field lineage of any pipeline (ETL, warehouse Raw -> Staging -> Mart, SQL views); Data Cloud / Data 360 source -> DLO -> DMO mappings |
 | `process` | "What are the steps/decisions in this business process?" | BPMN-style process flows |
 | `flow` | "What does this Salesforce Flow do, element by element?" | Documenting an existing SF Flow |
 | `org` | "Who reports to whom?" | Org / team charts |
@@ -193,14 +193,17 @@ For the genuinely tricky calls (e.g. process vs flow, datamodel vs datamapping),
 The full contract is [`references/DIAGRAM_JSON_SPEC.md`](references/DIAGRAM_JSON_SPEC.md).
 It is large, so read the **Top-Level Structure** plus the **specific type's shape reference** (each
 shape lists its `type`, mandatory fields, port definitions, and link rules) rather than the whole
-file. Shape `type` strings, field keys, and port ids are exact - the app silently drops a cell whose
-`type` is not a real shape and a link pointing at a missing cell, so a guessed name vanishes on load.
+file. Shape `type` strings, field keys, and port ids are exact - the app drops a cell whose `type` is not
+a real shape and a link pointing at a missing cell, so a guessed name vanishes on load. Its load warning gives
+only a count of what it skipped. The validator names each one.
 
 Also read **Common authoring mistakes** for your type (spec, right after "Choosing the right diagram type"), the
 **Layout rules** under Layout Tips (ten rules that separate a diagram that loads from one that reads well) and,
 whenever the diagram has any `sf.Zone` / `sf.Container` / `sf.BpmnPool` / `sf.BpmnSubprocess` / `sf.BpmnLoop` /
 `sf.TaskGroup`, the **Capture** section under Layout Tips. For a `datamodel` also read the port-level note under
-`sf.DataObject` (field-level vs object-level relationships, and which direction to draw them).
+`sf.DataObject` (field-level vs object-level relationships, and which direction to draw them). For a `datamapping`
+read the spec's **Generating Data Mapping and Lineage Diagrams** section: its first table says which parts work in any
+pipeline and which are Data Cloud-only (`layerStage`, `category`, the `ST` / `BT` / `CI` mapping types).
 
 ### 3. Author the JSON
 
@@ -209,7 +212,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -244,15 +247,19 @@ node scripts/validate-diagram.mjs your-diagram.json
 It exits non-zero only on **ERRORS**, but the bar is the last line reading `0 error(s), 0 warning(s)`. Run the
 loop: **fix every ERROR and every WARNING, re-run until both counts are 0.** Why it matters:
 
-- **ERRORS** mean cells or links will **silently vanish** on import (unknown shape `type`, a link to a
-  missing cell, a duplicate id, a missing/wrong `diagramType`). "It parsed as JSON" is not enough.
-- **WARNINGS** are quiet-degrade traps (a shape that loads but renders wrong - e.g. a name in the
-  wrong field, a type-specific shape in the wrong diagram type, a frame drawn behind cards it does not own
+- **ERRORS** mean cells or links will **vanish** on import (unknown shape `type`, a link to a missing
+  cell, a duplicate id). The app's load warning counts the first two and names none, and a duplicate id gets no
+  warning at all. "It parsed as JSON" is not enough.
+- **WARNINGS** are quiet-degrade traps (a shape that loads but renders wrong - e.g. a missing or unknown
+  `diagramType`, which opens as architecture, a name in the wrong field, a type-specific shape in the wrong
+  diagram type, a frame drawn behind cards it does not own
   (DECORATIVE), a relationship with no cardinality markers, a `port-left` / `port-right` on a DataObject). A
   warning is a defect you can fix; fix it.
 - **Layout warnings** are slips a reader sees: a gateway label drawn through a link, a fan-out too close to its
   row, a link whose ends are a few pixels off a straight line, neighbouring cards a few pixels off one grid. Each
-  names the cells and the offset. Fix them by moving cards, not by adding vertices.
+  names the cells and the offset. Fix them by moving cards, not by adding vertices. They cover architecture,
+  process, data model and org diagrams. A `datamapping` gets only the frame-room check (48 px between a card and
+  its lane's edge where an in-lane link leaves), so place its lanes by the spec's geometry table.
 
 The validator proves the diagram **loads intact** and catches the measurable layout slips. It cannot see the
 drawn routes, so it cannot tell you about crossings or a label sitting on another line. **Render it and look
@@ -336,8 +343,8 @@ because the middle one is a judgement only you can make.
 
 ```bash
 # 1. Pull the raw metadata (core objects; use --only later to narrow)
-sf data query -o <org> -t -r csv -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, \
-   ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
+sf data query -o <org> -t -r csv -q "SELECT EntityDefinition.QualifiedApiName, QualifiedApiName, Label, \
+   DataType, ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
    WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact','Opportunity')" > fields.csv
 
 # 2. Draft a selection - infers keys and relationships, prunes to something readable
@@ -376,12 +383,13 @@ exactly the part a script cannot do.
 Read the stderr summary: it tells you how many relationships were dropped for pointing outside the selection
 (add those objects) and how many were lost to field pruning (raise `--max-fields`).
 
-To group objects visually, add a `"zones"` array to selection.json before step 3, naming objects EXACTLY as they
-appear in its `objects` list (API names, namespace included) - e.g.
+To group objects visually, add a `"zones"` array to selection.json before step 3, naming objects as they appear
+in its `objects` list (API names, namespace included; case does not matter) - e.g.
 `"zones": [ { "label": "Contact Points", "objects": ["ssot__ContactPointEmail__dlm", "ssot__ContactPointPhone__dlm"] } ]`.
 The converter draws each zone as a column that OWNS its members (both `embeds[]` and `parent` set). A name that
-does not match an `objects` entry is silently ignored and that object stays loose, so check the stderr summary's
-zone counts. Do not add zones by editing diagram.json afterwards; if you must, set both sides on every child.
+matches no `objects` entry is listed under `warnings` on stderr and that object stays loose, and a zone that
+matches nothing is not drawn. The summary's `zones N` counts the zones DRAWN: compare it with your `zones` array.
+Do not add zones by editing diagram.json afterwards; if you must, set both sides on every child.
 
 #### Access posture: OWD + record-volume badges
 
@@ -456,7 +464,7 @@ node scripts/org-to-selection.mjs ind.json ind-rel.json cpe.json cpe-rel.json --
 A DMO definition carries **no relationships**, so fetch each DMO's `/relationships` too and pass both files; the
 script tells them apart by content. Without them the ERD comes out with no relationships, and the script says so.
 Keep `limit=500`: that endpoint's `nextPageUrl` points back at the page it came from, and the default page is 20
-(Account alone has 331 on an SDO). The script warns when a file holds fewer rows than its `totalSize`. One-to-one
+(Account alone has 331 on an SDO). The script warns when a page holds fewer rows than its `totalSize`. One-to-one
 relationships are counted and not drawn: the ERD has only a many-to-one marker.
 
 ### Data Cloud field mappings → a `datamapping` diagram
@@ -473,6 +481,11 @@ node scripts/mappings-to-diagramforce.mjs force-app/main/default/objectSourceTar
   --only Contact_Home --org <org> --title "Contact_Home mappings" > diagram.json
 node scripts/validate-diagram.mjs diagram.json
 ```
+
+The script reads each file the way the app's Paste does: a file holding several concatenated maps counts as several
+maps, the same map twice counts once, and a file cut off before its closing tag stops the run with that file's name
+and "Retrieve the file again." Retrieve it again; do not hand-edit the XML to close it, or the diagram loses whatever
+the cut removed.
 
 Pass `--org <alias>` when you have one: it fetches each DLO's and DMO's **category** (Profile / Engagement /
 Other) from `/ssot/metadata` in two GETs and stamps it on the cards, the way the official templates categorise
@@ -552,6 +565,23 @@ Two things to tell the user when you hand it over:
   built and removed on owner review - "What value does empty object give?"). And do NOT invent an origin for
   an Ingestion API stream - the org itself cannot name what calls the API, so the honest form is the stream
   card alone captioned "&lt;name&gt; (Ingestion API)", with no "Source:" row.
+
+### Field lineage outside Data Cloud (ETL, warehouse, SQL)
+
+A lineage of any other pipeline is a `datamapping` diagram too - not a `datamodel`, which has no field-to-field
+mapping link, no transform type and no expression. There is no converter for it: author it from the spec's
+**Generating Data Mapping and Lineage Diagrams** section, whose worked example **6b** is a Raw -> Staging -> Mart
+lineage to copy. The parts that differ from a Data Cloud mapping:
+
+- One generic **Layer** zone per layer: an `sf.Zone` with NO `layerStage`, its label the layer name, its accent one
+  palette colour per layer (blue, orange, green, ...).
+- No `category` on any card, and each system's own type spellings (`varchar(255)`, `timestamp`, `numeric(12,2)`).
+- `mappingType` is `Standard` for a straight copy and `Formula` for anything else, with the SQL or the rule in
+  `expressionRule`. A target computed from several columns gets one link from each, all carrying the same expression.
+  `Streaming Transform`, `Batch Transform` and `Calculated Insight` are Data Cloud terms; do not use them here.
+
+In the app, Auto Layout gives each generic layer its own column in the order the mappings run, so a lineage you lay
+out by the spec's lane geometry stays where you put it.
 
 ### Data Cloud DATA GRAPHS
 
@@ -639,6 +669,12 @@ Output: a `datamapping` diagram with source and DMO DataObjects in their layer z
 mapping links, authored from the spec's `datamapping` section and Data 360 guidance, validated clean.
 
 **Example 3**
+Input: "Show the lineage of dim_customers: raw.customers feeds stg_customers, which feeds the mart, here is the SQL."
+Output: a `datamapping` diagram with three generic Layer zones (Raw, Staging, Mart; no `layerStage`, no
+`category`), one card per table with its warehouse column types, and one mapping link per column - `Standard` for a
+straight copy, `Formula` with the SQL expression in `expressionRule` for the rest - validated clean.
+
+**Example 4**
 Input: "Here's the Tooling API JSON for our Case routing flow - diagram it." *(response pasted)*
 Output: run `scripts/flow-to-diagramforce.mjs` on it, validate the result, then run `make-share-url.mjs`: hand
 over the `#diagram=` link if it fits, otherwise the file plus the Load steps, and pass on any converter warning

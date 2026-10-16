@@ -18,8 +18,8 @@
 // Also the switch the domain-move bridge needs: it writes the migrated session itself and then reloads, and the
 // reload's pagehide flush used to write the blank new-origin session straight over it (audit P0-2).
 
-import { buildModal } from '../feedback.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { buildModal } from '../feedback.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
 
 export const OWNER_KEY = 'df.sessionOwner';
 const HANDOFF_PREFIX = 'handoff:';
@@ -78,6 +78,9 @@ export function isSessionHalted() { return halted; }
 function yieldSession() {
   if (halted) return;
   halted = true;
+  // Close an open New Diagram picker: anything created from it here would never be written (R6). Through the DOM
+  // hook rather than an import, since new-diagram-modal.js reaches this module back through persistence.js.
+  try { document.querySelector('.df-new-modal')?.__dfDismiss?.(); } catch { /* the notice still covers it */ }
   showNotice();
 }
 
@@ -90,7 +93,9 @@ function showNotice() {
     showClose: false,
     backdropClose: false,
     onEscape: () => {},   // nothing to dismiss to: this window no longer saves
-    zIndex: 9000,
+    // Above every dialog a user can be in when superseded: the New Diagram picker (10000), the dialogs stacked on
+    // it (10001/10002) and What's new (10050); below the skip link and the 10100 layer (R6).
+    zIndex: 10090,
     bodyHtml: '<p class="df-single-window__text"></p>',
     footerHtml: '<button class="df-modal__btn df-modal__btn--primary df-single-window__take"></button>',
   });

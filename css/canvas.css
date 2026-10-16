@@ -245,9 +245,14 @@
   font-family: var(--font-family);
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-muted);
-  opacity: 0.6;
+  color: var(--text-muted);   /* full strength: 0.6 opacity left it at 2.32:1 on the light canvas (review R15) */
   letter-spacing: 0.3px;
+}
+/* Phone layout: the stencil is a bottom sheet, so the caption points down, not at a sidebar (Q12). */
+.df-canvas-empty__caption--narrow { display: none; }
+@media (max-width: 768px) {
+  .df-canvas-empty__caption--wide { display: none; }
+  .df-canvas-empty__caption--narrow { display: inline; }
 }
 
 /* A Note with no icon assigned has an empty `<image href="">`, which browsers paint as a BROKEN-image
@@ -466,7 +471,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
   text-transform: uppercase;
   color: #fff;
 }
-.df-tbl__sec--src { background: var(--brand-amber); }   /* Data Sources — brand amber */
+.df-tbl__sec--src { background: var(--brand-amber); color: var(--modal-btn-neutral-fg); }   /* Data Sources — brand amber; ink, white was 1.83:1 (R8) */
 .df-tbl__sec--map { background: var(--brand-red); }     /* Data Mapping — brand red */
 .df-tbl__sec--tgt { background: var(--brand-blue); }    /* Data Targets — brand blue */
 .df-tbl__sec--mdl { background: var(--brand-blue); }    /* Data Model (single section) — brand blue */
@@ -578,7 +583,12 @@ foreignObject[data-md] del { text-decoration: line-through; }
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-sm);
 }
-.df-tbl__filter:focus { outline: none; border-color: var(--border-color-strong); }
+/* The shared field focus (primary border + soft ring); a 1.30:1 border shift was the only cue before (review R10).
+   The transparent outline is the forced-colors ring. */
+.df-tbl__filter:focus {
+  outline: 2px solid transparent; outline-offset: 1px;
+  border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
 /* An invalid /regex/ tints the border + swaps the tooltip - never a toast, because typing '/[' on
    the way to '/[abc]/' is the normal path this feature invites, not an error to shout at. */
 .df-tbl__filter--invalid { border-color: var(--brand-amber); }
@@ -618,6 +628,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
   font-weight: 700;
 }
 .df-tbl__csv--primary:hover { color: #1C1E21; filter: brightness(1.06); border-color: var(--brand-amber); }
+.df-tbl__csv:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }   /* Save while a plan date is invalid */
 /* An editable field cell: the control fills it edge-to-edge (no double padding). */
 .df-tbl__cell--edit { padding: 2px 4px; }
 .df-tbl__input {
@@ -634,7 +645,9 @@ foreignObject[data-md] del { text-decoration: line-through; }
 }
 /* Type picklist — same chrome as the text input; native arrow, slightly wider min. */
 .df-tbl__select { min-width: 96px; cursor: pointer; }
-.df-tbl__input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent); }
+.df-tbl__input:focus { outline: 2px solid transparent; outline-offset: 1px; border-color: var(--color-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent); }
+/* A plan Start / End pair that cannot be saved (End before Start, or a cleared date): the input says why in its title. */
+.df-tbl__input--invalid, .df-tbl__input--invalid:focus { border-color: var(--color-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-danger) 22%, transparent); }
 /* In-cell key (PK/FK/FQK) + Nullable checkbox — the app's checkbox glyph (box + tick, tick revealed
    when .is-checked) as a bare centered button. Same convention as the Display-menu toggle checkboxes. */
 .df-tbl__check {
@@ -683,11 +696,13 @@ foreignObject[data-md] del { text-decoration: line-through; }
 .df-tbl__actcol { width: 54px; min-width: 54px; padding: 2px 4px; text-align: center; white-space: nowrap; }
 .df-tbl__act-drag { display: inline-flex; align-items: center; justify-content: center; padding: 2px; color: var(--text-muted); cursor: grab; vertical-align: middle; }
 .df-tbl__act-drag:active { cursor: grabbing; }
+.df-tbl__act-drag:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 1px; border-radius: var(--border-radius-sm); }
 .df-tbl__act-del { display: inline-flex; align-items: center; justify-content: center; padding: 3px; margin-left: 2px; background: none; border: none; border-radius: var(--border-radius-sm); color: var(--text-muted); cursor: pointer; vertical-align: middle; }
 .df-tbl__act-del:hover { color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 16%, transparent); }
 .df-tbl__act-del:focus-visible { outline: 2px solid var(--color-danger); outline-offset: 1px; }
 .df-tbl__row--dragging { opacity: 0.4; }
 .df-tbl__row--drag-over > td { box-shadow: inset 0 -2px 0 var(--brand-amber); }   /* indicator BELOW the row */
+.df-tbl__row--drag-over-before > td { box-shadow: inset 0 2px 0 var(--brand-amber); }   /* ABOVE it: a top-half drop */
 .df-tbl__addrow td { padding: 6px 8px; text-align: left; background: none; }
 .df-tbl__add-task { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; font: inherit; font-size: 12px; background: none; border: 1px dashed var(--border-color); border-radius: var(--border-radius-sm); color: var(--text-secondary); cursor: pointer; }
 .df-tbl__add-task:hover { color: var(--brand-amber); border-color: var(--brand-amber); }
@@ -736,3 +751,6 @@ foreignObject[data-md] del { text-decoration: line-through; }
   pointer-events: none;
 }
 .df-canvas-tip[hidden] { display: none; }
+/* Motion (layout.css): fades in after its 220 ms hover delay. This tip lives on <body>, outside the paper - the
+   one canvas-adjacent surface the motion system touches. */
+.df-canvas-tip:not([hidden]) { animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out); }

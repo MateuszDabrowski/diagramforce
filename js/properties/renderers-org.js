@@ -2,10 +2,10 @@
 // tags / RACI / vacancy) + renderTaskProps. Build via the widget builders + finishStandardProps (render-core),
 // reading graph/paper/selection + the panel DOM refs via prctx; never imports the facade. The showProperties()
 // dispatch imports both back.
-import { prctx } from './context.js?v=1.25.9';
-import { finishStandardProps } from './render-core.js?v=1.25.9';
-import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section } from './widgets.js?v=1.25.9';
-import { prepareImageFile } from '../image-component.js?v=1.25.9';
+import { prctx } from './context.js?v=1.26.1';
+import { finishStandardProps } from './render-core.js?v=1.26.1';
+import { addChipInput, addColor, addNumber, addRaciPicker, addText, addTextarea, addToggle, section, typingBatch } from './widgets.js?v=1.26.1';
+import { prepareImageFile } from '../image-component.js?v=1.26.1';
 
 export function renderOrgPersonProps(cell) {
   // Content (uniform section name across all shapes; stored fields keep their
@@ -167,10 +167,14 @@ export function renderOrgPersonProps(cell) {
       labelInput.className = 'df-properties__input df-detail-row__label-input';
       labelInput.value = entry.label;
       labelInput.placeholder = 'Label';
+      // One undo step per typing run; through the 80 ms merge alone, normal typing was one step per key (review J2-7).
+      const labelTyping = typingBatch();
       labelInput.addEventListener('input', () => {
+        labelTyping.touch();
         detailsState[idx].label = labelInput.value;
         commitDetails();
       });
+      labelInput.addEventListener('blur', labelTyping.close);
       row.appendChild(labelInput);
 
       // Value input
@@ -179,10 +183,13 @@ export function renderOrgPersonProps(cell) {
       valueInput.className = 'df-properties__input';
       valueInput.value = entry.value;
       valueInput.placeholder = 'Value';
+      const valueTyping = typingBatch();
       valueInput.addEventListener('input', () => {
+        valueTyping.touch();
         detailsState[idx].value = valueInput.value;
         commitDetails();
       });
+      valueInput.addEventListener('blur', valueTyping.close);
       row.appendChild(valueInput);
 
       // Remove button

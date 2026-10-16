@@ -10,6 +10,7 @@
   flex-shrink: 0;
 }
 
+/* The 0-wide panel's items leave the Tab order through `inert` (js/a11y.js, review R1). */
 .df-stencil--hidden {
   width: 0;
   min-width: 0;
@@ -136,6 +137,13 @@
   color: var(--text-secondary);
 }
 
+/* Headers are keyboard buttons (review R4). Inset ring: the stencil body scrolls and would clip an outset one. */
+.df-stencil__category-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  color: var(--text-secondary);
+}
+
 .df-stencil__category-count {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
@@ -147,6 +155,17 @@
 
 .df-stencil__category--collapsed .df-stencil__items {
   display: none;
+}
+/* Motion (layout.css): a category the USER opens reveals its items. `--animate` comes from one delegated header
+   click in stencil.js, so renderCategories() (every type switch, every template save) never replays it. */
+.df-stencil__category--animate:not(.df-stencil__category--collapsed) > .df-stencil__items {
+  animation: df-motion-reveal var(--df-motion-fast) var(--df-ease-out);
+}
+/* While a search is active (`--filtered`, set by filterStencil), a section that comes back into the results fades
+   in. A section that stays matched keeps playing nothing: only a display change restarts an animation. Opacity only,
+   so a drag that starts mid-fade lands where it was aimed. */
+.df-stencil__body--filtered > .df-stencil__category {
+  animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out);
 }
 
 /* CR-6.2 (v1.12.0) — collapse/expand chevron on each stencil category header.
@@ -462,6 +481,7 @@
 .df-template-preview-box[hidden] {
   display: none;
 }
+.df-template-preview-box:not([hidden]) { animation: df-motion-reveal var(--df-motion-fast) var(--df-ease-out); }
 
 .df-template-preview-loading {
   display: block;
@@ -547,6 +567,12 @@
     border-top: none;
   }
 
+  /* Motion: the bottom sheet snaps to its height (height is layout, never animated) and its content fades in.
+     Opacity only: a slide would open a gap above the sheet. Desktop keeps its own width transition. */
+  .df-stencil:not(.df-stencil--hidden) {
+    animation: df-motion-fade var(--df-motion-base) var(--df-ease-out);
+  }
+
   .df-stencil--hidden .df-drag-handle {
     display: none;
   }
@@ -559,10 +585,9 @@
     background: var(--stencil-bg);
   }
 
-  /* Touch-friendly stencil items */
+  /* Touch-friendly stencil items (the search's font size is the iOS floor at the end of this file) */
   .df-stencil__search {
     padding: 10px var(--spacing-md);
-    font-size: var(--font-size-md);
   }
 
   .df-stencil__item {
@@ -597,4 +622,10 @@
     height: 44px;
     padding: 8px;
   }
+}
+
+/* The iOS 16 px focus-zoom floor (css/properties.css, review J1-11) for the shape search, on a phone and on a touch
+   tablet: it was 14 px and 12 px there (review S8-5). */
+@media (max-width: 768px), (pointer: coarse) {
+  .df-stencil__search { font-size: var(--font-size-lg); }   /* 16px - the iOS threshold; do not lower */
 }

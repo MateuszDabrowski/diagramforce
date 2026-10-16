@@ -1,7 +1,7 @@
 // Task / Sequence-diagram shapes + the standard.Link label patch tail (CLEANUP S3). registerTaskSequence() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.25.9';
+import { buildSeqActivationPorts, buildSeqActorPorts, buildSeqParticipantPorts, portAttrs, portGroups, portItems, portMarkup } from './ports.js?v=1.26.1';
 
 export function registerTaskSequence() {
   // --- Task ---
@@ -798,9 +798,10 @@ export function registerTaskSequence() {
 
   // ---- Public helper: toggle Actor lifeline visibility ----
   // When hidden, the dashed lifeline, its hitbox, and all lifeline ports are
-  // removed; the Actor collapses to just the stick-figure + label block. Any
-  // connected links with those port endpoints are kept as-is (re-showing the
-  // lifeline restores ports with stable IDs so the links reattach).
+  // removed; the Actor collapses to just the stick-figure + label block.
+  // Clearing the ports DELETES every link on them (JointJS removes a link whose
+  // port vanishes); the panel's undoableLifelineOp records those links, so an
+  // undo brings them back. Re-showing restores ports with the same stable IDs.
   joint.shapes.sf.setActorLifelineVisible = (cell, visible) => {
     if (!cell || cell.get('type') !== 'sf.SequenceActor') return;
     const show = !!visible;

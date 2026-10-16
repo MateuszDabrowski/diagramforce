@@ -1,8 +1,8 @@
 // Clipboard — copy, paste, and duplicate selected elements
 
-import * as history from './history.js?v=1.25.9';
-import { cloneCellsForInsert } from './clone-cells.js?v=1.25.9';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.25.9';
+import * as history from './history.js?v=1.26.1';
+import { cloneCellsForInsert } from './clone-cells.js?v=1.26.1';
+import { reslotInsertedGanttBars, reslotClonedGanttItem } from './gantt-layout.js?v=1.26.1';
 
 const reslotGanttClones = (clones) => reslotInsertedGanttBars(graph, clones);   // see gantt-layout.js
 
@@ -25,6 +25,40 @@ export function init(_graph, _paper, _selection) {
 /** True when there's something to paste — drives the canvas right-click "Paste" enabled state. */
 export function hasClipboard() { return clipboardCells.length > 0; }
 
+/** The ids of `roots` plus every embedded descendant ELEMENT (a grouper brings its whole subtree; link ids in `embeds`
+ *  are skipped). The one expansion copy, duplicate and every Clone path share, so they always copy the same set. */
+function withDescendants(roots) {
+  const ids = new Set(roots.map(el => el.id));
+  const add = (id) => {
+    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
+      const child = graph.getCell(childId);
+      if (child?.isElement?.() && !ids.has(childId)) { ids.add(childId); add(childId); }
+    }
+  };
+  roots.forEach(el => add(el.id));
+  return ids;
+}
+
+/** Clone `roots` with their subtrees and every link whose both ends are in that set, offset by dx/dy, and add them to
+ *  the graph: the step duplicate() and every Clone path share. Containment is remapped through the copy
+ *  (keepContainment), so a cloned Zone keeps its children embedded; a root's own parent is not in the set and is
+ *  dropped. A cloned Gantt bar, milestone or marker re-binds to its source's timeline (reslotClonedGanttItem: with
+ *  two timelines the fallback in ganttTimelineFor finds none). Every touched timeline re-slots its rows, so a bar copy
+ *  takes its own row; a milestone or marker copy is dated where it lands, on that column and a row centre. Panel and right-click Clone used to strip parent/embeds and copy no children, so a Zone cloned to an empty
+ *  shell while Cmd+D on it copied everything inside (owner call 2026-10-15). The caller owns the history batch and
+ *  the selection. Returns the idMap (old id -> new id) and the ids of the links cloned with it. */
+function insertSubtreeClones(roots, { dx = 0, dy = 0 } = {}) {
+  const expanded = withDescendants(roots);
+  const innerLinks = graph.getLinks().filter(l => expanded.has(l.get('source')?.id) && expanded.has(l.get('target')?.id));
+  const { clones, idMap } = cloneCellsForInsert(
+    [...[...expanded].map(id => graph.getCell(id).toJSON()), ...innerLinks.map(l => l.toJSON())],
+    { dx, dy, keepContainment: true });
+  graph.addCells(clones);
+  for (const root of roots) reslotClonedGanttItem(root, graph.getCell(idMap.get(root.id)));
+  reslotGanttClones(clones);
+  return { idMap, innerLinkIds: new Set(innerLinks.map(l => l.id)) };
+}
+
 export function copy() {
   const selected = selection.getSelectedElements().filter(c => c.isElement());
   if (selected.length === 0) return;
@@ -32,17 +66,10 @@ export function copy() {
   // copying a lone-selected grouper captures its whole subtree instead of an empty shell — the reported
   // "click a Zone, Ctrl+C/V pastes an empty box" bug. Selecting a grouper puts only IT in selectedIds
   // (children aren't auto-selected), so without this the clipboard held just the grouper. Recursive →
-  // nested groupers; `embeds` may include LINK ids (filtered out of the element set here, re-copied by the
-  // endpoint pass below). A marquee that already selected the children directly still works — they're in the set.
-  const elementIds = new Set(selected.map(el => el.id));
-  const addDescendants = (id) => {
-    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
-      if (!elementIds.has(childId)) { elementIds.add(childId); addDescendants(childId); }
-    }
-  };
-  selected.forEach(el => addDescendants(el.id));
-  const elements = [...elementIds].map(id => graph.getCell(id)).filter(c => c?.isElement?.());
-  clipboardCells = elements.map(el => el.toJSON());
+  // nested groupers; link ids in `embeds` are skipped (the endpoint pass below re-copies links). A marquee that
+  // already selected the children directly still works — they're in the set.
+  const elementIds = withDescendants(selected);
+  clipboardCells = [...elementIds].map(id => graph.getCell(id).toJSON());
 
   // Copy every link whose BOTH endpoints are in the (expanded) set — captures a grouper's internal links too.
   clipboardLinks = [];
@@ -78,7 +105,7 @@ export function paste() {
     graph.addCells(clones);
     reslotGanttClones(clones);
     // Select the pasted ELEMENTS only (the idMap now covers link ids too); links carry source/target in their JSON.
-    clones.forEach(c => { if (!(c.source || c.target)) selection.addToSelection(c.id); });
+    selection.selectMany(clones.filter(c => !(c.source || c.target)).map(c => c.id));
   } finally {
     history.endBatch();
   }
@@ -93,32 +120,17 @@ export function duplicate() {
 
   selection.clearSelection();
 
-  // Duplicate = paste in place, +24px. The same expansion copy() does (a grouper brings its whole subtree) and the same
-  // clone helper paste() uses with keepContainment, so a duplicated Zone keeps its children EMBEDDED in the copy. It
-  // used to strip parent/embeds from every clone and never included a grouper's children: Cmd+D on a lone Zone gave
-  // an empty shell, and a marquee duplicate looked grouped but left the children behind on the first drag (audit
-  // 2026-09-23). Links whose both ends are duplicated come along, rewired.
-  const expanded = new Set(elementIds);
-  const addDescendants = (id) => {
-    for (const childId of (graph.getCell(id)?.get('embeds') || [])) {
-      const child = graph.getCell(childId);
-      if (child?.isElement?.() && !expanded.has(childId)) { expanded.add(childId); addDescendants(childId); }
-    }
-  };
-  elementIds.forEach(addDescendants);
-  const elementJSON = [...expanded].map(id => graph.getCell(id)).filter(c => c?.isElement?.()).map(c => c.toJSON());
-  const innerLinks = graph.getLinks().filter(l => expanded.has(l.get('source')?.id) && expanded.has(l.get('target')?.id));
-  const interSelectionLinkIds = new Set(innerLinks.map(l => l.id));
-  const { clones, idMap } = cloneCellsForInsert([...elementJSON, ...innerLinks.map(l => l.toJSON())],
-    { dx: 24, dy: 24, keepContainment: true });
-
+  // Duplicate = paste in place, +24px, through insertSubtreeClones: a grouper brings its whole subtree, kept EMBEDDED in
+  // the copy, and links whose both ends are duplicated come along, rewired. It used to strip parent/embeds from every
+  // clone and never included a grouper's children: Cmd+D on a lone Zone gave an empty shell, and a marquee duplicate
+  // looked grouped but left the children behind on the first drag (audit 2026-09-23).
   // One undo step for the whole duplicate (all cloned elements + links).
   history.startBatch();
   try {
-  graph.addCells(clones);
-  reslotGanttClones(clones);
-  // Select the duplicated ELEMENTS the user selected (their duplicated children ride along inside them).
-  for (const id of elementIds) selection.addToSelection(idMap.get(id));
+  const { idMap, innerLinkIds: interSelectionLinkIds } = insertSubtreeClones(elements, { dx: 24, dy: 24 });
+  // Select the duplicated ELEMENTS the user selected (their duplicated children ride along inside them), plus the
+  // duplicated links below, in one selection update.
+  const newSelection = [...elementIds].map(id => idMap.get(id));
 
   // Duplicate explicitly selected links (Cmd+D on a link).
   // If a link's endpoint was also cloned, rewire to the new clone; otherwise
@@ -166,8 +178,9 @@ export function duplicate() {
       clone.set('vertices', verts.map(v => ({ x: v.x + offset.x, y: v.y + offset.y })));
     }
     graph.addCell(clone);
-    selection.addToSelection(clone.id);
+    newSelection.push(clone.id);
   });
+  selection.selectMany(newSelection);
   } finally {
     history.endBatch();
   }
@@ -175,7 +188,7 @@ export function duplicate() {
 
 /**
  * Clone a single element with three connector-handling modes:
- *   - 'none'      → element only (current default behavior)
+ *   - 'none'      → element only (its subtree and the links inside it come along, as with every clone)
  *   - 'dangling'  → element + each attached connector; cloned connectors are
  *                   attached to the new element on one side, with the other
  *                   side disconnected (anchored to a coordinate near where
@@ -183,147 +196,115 @@ export function duplicate() {
  *   - 'connected' → element + each attached connector; cloned connectors are
  *                   attached to the new element on one side and to the SAME
  *                   peer cell as the original on the other side
+ * The clone sits one width + 16 px to the right of the original. A grouper's attached connectors include its
+ * descendants' (classified against the expanded set, like the multi-select variant).
  *
  * Returns the cloned element so callers can reposition / select it.
  */
 /** One undo step for the clone AND every connector it brings (audit 2026-09-23): each addCell was its own entry, so
  *  the first Cmd+Z after "Clone with Connectors" removed a single cloned connector. */
 export function cloneElementWithConnectors(cell, mode = 'none') {
-  history.startBatch();
-  try { return cloneElementWithConnectorsInner(cell, mode); } finally { history.endBatch(); }
-}
-
-function cloneElementWithConnectorsInner(cell, mode = 'none') {
   if (!cell || !cell.isElement || !cell.isElement()) return null;
-
-  const size = cell.size();
-  const pos = cell.position();
-  const offset = { x: size.width + 16, y: 0 };
-
-  const elementClone = cell.clone();
-  elementClone.position(pos.x + offset.x, pos.y + offset.y);
-  elementClone.unset('parent');
-  elementClone.unset('embeds');
-  graph.addCell(elementClone);
-
-  if (mode !== 'none') {
-    const connectors = graph.getLinks().filter(l => {
-      const s = l.get('source')?.id;
-      const t = l.get('target')?.id;
-      return s === cell.id || t === cell.id;
-    });
-
-    // Centre of the original and cloned cells — used to figure out which
-    // cardinal direction (right / left / up / down) the connector exits the
-    // cell, so the dangling stub leaves the clone the same way the original
-    // connector left its cell.
-    const cellCenter  = { x: pos.x + size.width / 2, y: pos.y + size.height / 2 };
-    const cloneCenter = { x: cellCenter.x + offset.x, y: cellCenter.y + offset.y };
-
-    connectors.forEach(link => {
-      const src = link.get('source') || {};
-      const tgt = link.get('target') || {};
-      const linkClone = link.clone();
-
-      // Dangling endpoint: extend DANGLING_STUB_LENGTH (100px) straight out
-      // from the cloned cell along the cardinal axis the original connector
-      // left along. Snapping to the nearest cardinal keeps the stub aligned
-      // with the orthogonal router and preserves the original "shape" of
-      // the connector (right-going stays right, downward stays downward).
-      const danglingCoord = (peerEndpoint) => {
-        let dx = 0, dy = 0;
-        if (peerEndpoint?.id) {
-          const peerCell = graph.getCell(peerEndpoint.id);
-          if (peerCell?.isElement?.()) {
-            const pp = peerCell.position();
-            const ps = peerCell.size();
-            dx = (pp.x + ps.width / 2) - cellCenter.x;
-            dy = (pp.y + ps.height / 2) - cellCenter.y;
-          }
-        } else if (typeof peerEndpoint?.x === 'number' && typeof peerEndpoint?.y === 'number') {
-          dx = peerEndpoint.x - cellCenter.x;
-          dy = peerEndpoint.y - cellCenter.y;
-        }
-        if (dx === 0 && dy === 0) dx = 1; // default to right
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          return { x: cloneCenter.x + Math.sign(dx) * DANGLING_STUB_LENGTH, y: cloneCenter.y };
-        }
-        return { x: cloneCenter.x, y: cloneCenter.y + Math.sign(dy) * DANGLING_STUB_LENGTH };
-      };
-
-      let newSource, newTarget, isDangling = false;
-      if (src.id === cell.id) {
-        newSource = { ...src, id: elementClone.id };
-        if (mode === 'connected') {
-          newTarget = { ...tgt };
-        } else {
-          newTarget = danglingCoord(tgt);
-          isDangling = true;
-        }
-      } else {
-        newTarget = { ...tgt, id: elementClone.id };
-        if (mode === 'connected') {
-          newSource = { ...src };
-        } else {
-          newSource = danglingCoord(src);
-          isDangling = true;
-        }
-      }
-
-      linkClone.set('source', newSource);
-      linkClone.set('target', newTarget);
-
-      // Vertices: when 'connected' we mirror the original path by offsetting
-      // its vertices. When 'dangling' we drop them — the stub is a clean
-      // 100px line and stale vertices would otherwise fall outside the stub
-      // and produce zig-zags.
-      if (isDangling) {
-        linkClone.unset('vertices');
-      } else {
-        const verts = linkClone.get('vertices');
-        if (verts) {
-          linkClone.set('vertices', verts.map(v => ({ x: v.x + offset.x, y: v.y + offset.y })));
-        }
-      }
-
-      graph.addCell(linkClone);
-    });
-  }
-
-  selection.selectOnly(elementClone.id);
-  return elementClone;
+  history.startBatch();
+  try {
+    const idMap = cloneWithConnectorsInner([cell], mode, { x: cell.size().width + 16, y: 0 });
+    const clone = graph.getCell(idMap.get(cell.id));
+    selection.selectOnly(clone.id);
+    return clone;
+  } finally { history.endBatch(); }
 }
 
-/** Count connectors (links) attached to a given cell — used by the UI to
- *  decide whether to surface the connector-clone options. */
+/** Clone `roots` (with their subtrees, via insertSubtreeClones) offset by `offset`, then, unless mode is 'none', every
+ *  EXTERNAL connector: one end inside the expanded set, the other outside (another cell or a free point). Links with
+ *  both ends inside came along with the subtree. The single-element and multi-select variants both run this, so a
+ *  right-clicked Zone and a marquee over the same shapes clone the same thing. Returns the idMap. */
+function cloneWithConnectorsInner(roots, mode, offset) {
+  // Read the external links BEFORE the clones exist, so a cloned link is never itself mistaken for one.
+  const ids = withDescendants(roots);
+  const connectors = mode === 'none' ? [] : graph.getLinks().filter(l => ids.has(l.get('source')?.id) !== ids.has(l.get('target')?.id));
+  const { idMap } = insertSubtreeClones(roots, { dx: offset.x, dy: offset.y });
+
+  connectors.forEach(link => {
+    const src = link.get('source') || {};
+    const tgt = link.get('target') || {};
+    const sIn = ids.has(src.id);
+    const insideKey  = sIn ? 'source' : 'target';
+    const outsideKey = sIn ? 'target' : 'source';
+    const insideEnd  = sIn ? src : tgt;
+    const outsideEnd = sIn ? tgt : src;
+    const linkClone = link.clone();
+    linkClone.set(insideKey, { ...insideEnd, id: idMap.get(insideEnd.id) });
+
+    let isDangling = false;
+    if (mode === 'connected') {
+      linkClone.set(outsideKey, { ...outsideEnd });
+    } else {
+      // 'dangling': a DANGLING_STUB_LENGTH (100px) stub straight out from the cloned cell along the cardinal axis the
+      // original connector left along. Snapping to the nearest cardinal keeps the stub aligned with the orthogonal
+      // router and preserves the original "shape" of the connector (right-going stays right, downward stays down).
+      // The clone's centre is read live: a re-slotted Gantt bar is not where the offset alone would put it.
+      const insideOriginal = graph.getCell(insideEnd.id);
+      const insideClone    = graph.getCell(idMap.get(insideEnd.id));
+      const op = insideOriginal.position(), os = insideOriginal.size();
+      const cellCenter  = { x: op.x + os.width / 2, y: op.y + os.height / 2 };
+      const cp = insideClone.position(), cs = insideClone.size();
+      const cloneCenter = { x: cp.x + cs.width / 2, y: cp.y + cs.height / 2 };
+
+      let dx = 0, dy = 0;
+      if (outsideEnd?.id) {
+        const peerCell = graph.getCell(outsideEnd.id);
+        if (peerCell?.isElement?.()) {
+          const pp = peerCell.position();
+          const ps = peerCell.size();
+          dx = (pp.x + ps.width / 2) - cellCenter.x;
+          dy = (pp.y + ps.height / 2) - cellCenter.y;
+        }
+      } else if (typeof outsideEnd?.x === 'number' && typeof outsideEnd?.y === 'number') {
+        dx = outsideEnd.x - cellCenter.x;
+        dy = outsideEnd.y - cellCenter.y;
+      }
+      if (dx === 0 && dy === 0) dx = 1; // default to right
+
+      linkClone.set(outsideKey, (Math.abs(dx) >= Math.abs(dy))
+        ? { x: cloneCenter.x + Math.sign(dx) * DANGLING_STUB_LENGTH, y: cloneCenter.y }
+        : { x: cloneCenter.x, y: cloneCenter.y + Math.sign(dy) * DANGLING_STUB_LENGTH });
+      isDangling = true;
+    }
+
+    // Vertices: when 'connected' we mirror the original path by offsetting its vertices. When 'dangling' we drop
+    // them — the stub is a clean 100px line and stale vertices would fall outside it and zig-zag.
+    if (isDangling) {
+      linkClone.unset('vertices');
+    } else {
+      const verts = linkClone.get('vertices');
+      if (verts) linkClone.set('vertices', verts.map(v => ({ x: v.x + offset.x, y: v.y + offset.y })));
+    }
+
+    graph.addCell(linkClone);
+  });
+  return idMap;
+}
+
+/** Count connectors (links) attached to a given cell — used by the UI to decide whether to surface the
+ *  connector-clone options. Counts what "Clone with Connectors" would clone: a grouper's descendants' connectors
+ *  too, and not a link that stays inside the cell's own subtree (that one comes along with every clone). */
 export function countConnectors(cell) {
-  if (!cell?.id) return 0;
-  return graph.getLinks().filter(l =>
-    l.get('source')?.id === cell.id || l.get('target')?.id === cell.id
-  ).length;
+  return cell?.id ? countExternalConnectors([cell]) : 0;
 }
 
-/** Count connectors attached to `cell` whose OTHER endpoint is connected to
- *  a different cell (not just dangling at a coordinate). Used to decide
- *  whether the "with connected Connectors" clone option is meaningful — it
- *  has no effect when every connector dangles, so we hide it in that case. */
+/** Count connectors attached to `cell` whose OTHER endpoint is connected to a different cell (not just dangling at
+ *  a coordinate). Used to decide whether the "with connected Connectors" clone option is meaningful — it has no
+ *  effect when every connector dangles, so we hide it in that case. */
 export function countConnectedConnectors(cell) {
-  if (!cell?.id) return 0;
-  return graph.getLinks().filter(l => {
-    const src = l.get('source');
-    const tgt = l.get('target');
-    if (src?.id === cell.id) return !!tgt?.id && tgt.id !== cell.id;
-    if (tgt?.id === cell.id) return !!src?.id && src.id !== cell.id;
-    return false;
-  }).length;
+  return cell?.id ? countExternalConnectedConnectors([cell]) : 0;
 }
 
 /** Count connectors that have ONE endpoint inside the given set of element
- *  cells and the OTHER endpoint outside (either a different cell or a
- *  dangling coordinate). These are the connectors the multi-select
- *  "with Connectors" clone option will additionally clone. */
+ *  cells (with their embedded descendants) and the OTHER endpoint outside
+ *  (either a different cell or a dangling coordinate). These are the
+ *  connectors the "with Connectors" clone options will additionally clone. */
 export function countExternalConnectors(cells) {
-  const ids = new Set((cells || []).map(c => c?.id).filter(Boolean));
+  const ids = withDescendants((cells || []).filter(c => c?.id));
   if (ids.size === 0) return 0;
   return graph.getLinks().filter(l => {
     const sId = l.get('source')?.id;
@@ -335,10 +316,10 @@ export function countExternalConnectors(cells) {
 }
 
 /** Count external connectors (as above) whose OUTSIDE endpoint is connected
- *  to a real cell (not dangling). Used to decide whether the multi-select
+ *  to a real cell (not dangling). Used to decide whether the
  *  "with connected Connectors" option is meaningful. */
 export function countExternalConnectedConnectors(cells) {
-  const ids = new Set((cells || []).map(c => c?.id).filter(Boolean));
+  const ids = withDescendants((cells || []).filter(c => c?.id));
   if (ids.size === 0) return 0;
   return graph.getLinks().filter(l => {
     const sId = l.get('source')?.id;
@@ -351,124 +332,28 @@ export function countExternalConnectedConnectors(cells) {
   }).length;
 }
 
-/** Multi-select clone: duplicate every selected element, preserve
- *  inter-selection connectors (rewired to clones), and additionally
- *  clone every EXTERNAL connector (one end in selection, one end outside).
+/** Multi-select clone: duplicate every selected element (with its subtree),
+ *  preserve connectors inside that set (rewired to clones), and additionally
+ *  clone every EXTERNAL connector (one end in the set, one end outside).
+ *  The clones sit 24 px down and right, like Cmd+D. Containment is kept as
+ *  paste and Cmd+D keep it: a selected frame's children land in its copy
+ *  (review D4, 2026-10-15), and a cloned Gantt bar gets its own row.
  *
  *  Modes:
- *    - 'dangling'  → outside end becomes a free coordinate stub 100px to
- *                    the right of the cloned cell on the inside side
+ *    - 'dangling'  → outside end becomes a free coordinate stub 100px out
+ *                    from the cloned cell on the inside side
  *    - 'connected' → outside end keeps its original peer reference, so the
  *                    cloned connector also wires to that same outside cell
  */
 /** One undo step for the clone AND every connector it brings (audit 2026-09-23): each addCell was its own entry, so
  *  the first Cmd+Z after "Clone with Connectors" removed a single cloned connector. */
 export function cloneSelectionWithMode(mode = 'dangling') {
-  history.startBatch();
-  try { return cloneSelectionWithModeInner(mode); } finally { history.endBatch(); }
-}
-
-function cloneSelectionWithModeInner(mode = 'dangling') {
-  const allCells = selection.getSelectedElements();
-  const elements = allCells.filter(c => c.isElement());
+  const elements = selection.getSelectedElements().filter(c => c.isElement());
   if (elements.length === 0) return;
-  const elementIds = new Set(elements.map(e => e.id));
-
-  const offset = { x: 24, y: 24 };
-
-  selection.clearSelection();
-  const idMap = new Map();
-
-  // Clone elements first
-  elements.forEach(el => {
-    const clone = el.clone();
-    const pos = el.position();
-    clone.position(pos.x + offset.x, pos.y + offset.y);
-    clone.unset('parent');
-    clone.unset('embeds');
-    graph.addCell(clone);
-    idMap.set(el.id, clone.id);
-    selection.addToSelection(clone.id);
-  });
-
-  // Walk every link in the graph once
-  graph.getLinks().forEach(link => {
-    const src = link.get('source') || {};
-    const tgt = link.get('target') || {};
-    const sId = src.id;
-    const tId = tgt.id;
-    const sIn = sId && elementIds.has(sId);
-    const tIn = tId && elementIds.has(tId);
-    if (!sIn && !tIn) return;
-
-    const linkClone = link.clone();
-
-    let isDangling = false;
-
-    if (sIn && tIn) {
-      // Inter-selection: rewire both ends to clones
-      linkClone.set('source', { ...src, id: idMap.get(sId) });
-      linkClone.set('target', { ...tgt, id: idMap.get(tId) });
-    } else {
-      // External connector: rewire the inside end to the clone, then
-      // either keep the outside peer ('connected') or extend a 100px
-      // straight stub in the cardinal direction the original connector
-      // exited along ('dangling').
-      const insideKey  = sIn ? 'source' : 'target';
-      const outsideKey = sIn ? 'target' : 'source';
-      const insideEnd  = sIn ? src : tgt;
-      const outsideEnd = sIn ? tgt : src;
-      const insideOriginal = graph.getCell(insideEnd.id);
-      const insideClone    = graph.getCell(idMap.get(insideEnd.id));
-
-      linkClone.set(insideKey, { ...insideEnd, id: idMap.get(insideEnd.id) });
-
-      if (mode === 'connected') {
-        linkClone.set(outsideKey, { ...outsideEnd });
-      } else {
-        // 'dangling' — snap-to-cardinal 100px stub matching original exit
-        const op = insideOriginal.position();
-        const os = insideOriginal.size();
-        const cellCenter  = { x: op.x + os.width / 2, y: op.y + os.height / 2 };
-        const cp = insideClone.position();
-        const cs = insideClone.size();
-        const cloneCenter = { x: cp.x + cs.width / 2, y: cp.y + cs.height / 2 };
-
-        let dx = 0, dy = 0;
-        if (outsideEnd?.id) {
-          const peerCell = graph.getCell(outsideEnd.id);
-          if (peerCell?.isElement?.()) {
-            const pp = peerCell.position();
-            const ps = peerCell.size();
-            dx = (pp.x + ps.width / 2) - cellCenter.x;
-            dy = (pp.y + ps.height / 2) - cellCenter.y;
-          }
-        } else if (typeof outsideEnd?.x === 'number' && typeof outsideEnd?.y === 'number') {
-          dx = outsideEnd.x - cellCenter.x;
-          dy = outsideEnd.y - cellCenter.y;
-        }
-        if (dx === 0 && dy === 0) dx = 1;
-
-        const stub = (Math.abs(dx) >= Math.abs(dy))
-          ? { x: cloneCenter.x + Math.sign(dx) * DANGLING_STUB_LENGTH, y: cloneCenter.y }
-          : { x: cloneCenter.x, y: cloneCenter.y + Math.sign(dy) * DANGLING_STUB_LENGTH };
-
-        linkClone.set(outsideKey, stub);
-        isDangling = true;
-      }
-    }
-
-    // Vertices: drop them on dangling stubs (would zig-zag outside the
-    // 100px segment); offset them otherwise so the path is parallel-shifted.
-    if (isDangling) {
-      linkClone.unset('vertices');
-    } else {
-      const verts = linkClone.get('vertices');
-      if (verts) {
-        linkClone.set('vertices', verts.map(v => ({ x: v.x + offset.x, y: v.y + offset.y })));
-      }
-    }
-
-    graph.addCell(linkClone);
-  });
+  history.startBatch();
+  try {
+    selection.clearSelection();
+    const idMap = cloneWithConnectorsInner(elements, mode, { x: 24, y: 24 });
+    selection.selectMany(elements.map(el => idMap.get(el.id)));
+  } finally { history.endBatch(); }
 }

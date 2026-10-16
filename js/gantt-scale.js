@@ -5,7 +5,7 @@
 // weekStartDay; month → 1st-of-month; day → unchanged). A task bar's absolute x is therefore
 //   timeline.x + taskListWidth + periodsFromOrigin(date) * colW
 // and xToDate is the inverse (for drag write-back). `t` is a plain props bag pulled from the timeline MODEL
-//   { x, width, taskListWidth, numPeriods, viewMode, startDate, weekStartDay, tasksLen, barCount }
+//   { x, width, taskListWidth, numPeriods, viewMode, startDate, weekStartDay, rowsLen }
 // so these functions stay pure (no JointJS, no Date.now) and testable. They return null when geometry can't be
 // derived (no/invalid startDate) — the caller then falls back to the bar's manual pixel position (back-compat).
 
@@ -13,12 +13,12 @@ const DAY_MS = 86400000;
 const wrap7 = (n) => ((Number(n) % 7) + 7) % 7;
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
 
-/** Width (px) of the left task-list panel — 0 only when the timeline has NO rows AND NO bars (matches the
- *  view). Phase 4.0: the axis origin is the UNION of label rows (`tasksLen`) and dated bars (`barCount`), so a
- *  bars-only timeline (no `tasks[]`) still reserves the panel. No change for existing diagrams (rows present). */
+/** Width (px) of the left task-list panel: `taskListWidth` (default 200) when the timeline draws any row, 0 when it
+ *  draws none. `rowsLen` is `ganttRowLayout(tl).length` (group headers AND bars), the count the view reserves the
+ *  panel by. Counting bars alone put the axis 200 px left of the drawn columns on a phases-only timeline, and the
+ *  legacy `tasks[]` count reserved a panel the view never drew (review L4/L7, 2026-10-15). */
 export function leftOffset(t) {
-  const rows = Math.max(t.tasksLen || 0, t.barCount || 0);
-  return rows > 0 ? (t.taskListWidth || 200) : 0;
+  return (t.rowsLen || 0) > 0 ? (t.taskListWidth || 200) : 0;
 }
 
 /** Pixels per period column. */
@@ -64,6 +64,66 @@ export function dateToX(t, iso) {
   const date = new Date(iso + 'T00:00:00');
   if (isNaN(date.getTime())) return null;
   return (t.x || 0) + leftOffset(t) + periodsFromOrigin(origin, date, t.viewMode || 'week') * colWidth(t);
+}
+
+/** How many whole periods the axis needs so `endISO` is on it (dateToX(endISO) <= the right edge): counted from the
+ *  SNAPPED origin, the columns the view draws, with a partial period rounded up. Calendar days, so a DST change adds
+ *  no column. Null when either date is missing or invalid. The inverse of axisEdgeDate. Counting from the unsnapped
+ *  start left a mid-month or mid-week End Date off the axis, and elapsed milliseconds added a column across the
+ *  autumn clock change (review L2, L9). */
+export function periodsToReach(t, endISO) {
+  const origin = originDate(t);
+  if (!origin || !endISO) return null;
+  const end = new Date(endISO + 'T00:00:00');
+  if (isNaN(end.getTime())) return null;
+  return Math.ceil(periodsFromOrigin(origin, end, t.viewMode || 'week'));
+}
+
+/** The `numPeriods` an axis must grow to so `endISO` is on it, or null when it already is. A date inside the last
+ *  column, or exactly on the right edge, needs nothing: the old rule grew on `reach >= numPeriods`, so any date edit
+ *  on a plan that filled the axis added a column and moved the End Date (review S6-3). Past the edge it is the periods
+ *  to reach the date plus `spare` columns (one by default), capped at `max` and never below the current count. */
+export function grownPeriods(t, endISO, max, spare = 1) {
+  const reach = periodsToReach(t, endISO);
+  const cur = Number(t.numPeriods) || 12;
+  if (reach == null || reach <= cur) return null;
+  const needed = Math.min(reach + spare, Math.max(cur, max));
+  return Number.isFinite(needed) && needed > cur ? needed : null;
+}
+
+/** The date `n` whole periods after the snapped origin, as YYYY-MM-DD: the left edge of column `n`. Null when the start
+ *  is missing or invalid. A starter plan dates its phases with this: counted from the UNSNAPPED start, the last phase
+ *  ran up to six days past the right edge on any day but the week's first (review S6-1). */
+export function periodDate(t, n) {
+  const d = originDate(t);
+  if (!d) return null;
+  const k = Math.round(Number(n) || 0);
+  const vm = t.viewMode || 'week';
+  if (vm === 'day') d.setDate(d.getDate() + k);
+  else if (vm === 'month') d.setMonth(d.getMonth() + k);   // the origin is the 1st, so no month-end overflow
+  else d.setDate(d.getDate() + k * 7);
+  return toISO(d);
+}
+
+/** How many whole periods the axis needs to DRAW `endISO`'s day: the periods that reach the day after it. A timeline's
+ *  End Date is inclusive (owner call, review L2, 2026-10-15): End 10 Jun in day view draws the 10 Jun column, and in
+ *  week or month view the week or month it falls in. Null when either date is missing or invalid. The inverse of
+ *  axisEndDate. */
+export function periodsThrough(t, endISO) {
+  return periodsToReach(t, addDaysISO(endISO, 1));
+}
+
+/** The date at the axis's right edge: the snapped origin plus `numPeriods` periods, as YYYY-MM-DD. A bar's `endDate`
+ *  is an edge too, so a bar that ends here fills the last column. Null when the start is missing or invalid. */
+export function axisEdgeDate(t) {
+  return periodDate(t, Number(t.numPeriods) || 12);
+}
+
+/** The last day the axis draws, the day before its right edge, as YYYY-MM-DD: a timeline's End Date. Null when the
+ *  start is missing or invalid. Until review L2 the End Date was the edge itself, so its own day was not drawn. */
+export function axisEndDate(t) {
+  const edge = axisEdgeDate(t);
+  return edge && addDaysISO(edge, -1);
 }
 
 /** Width (px) of a [startISO, endISO] span on the timeline (clamped >= 0), or null when not derivable. */

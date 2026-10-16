@@ -2,22 +2,22 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.25.9';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.25.9';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.25.9';
-import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.25.9';
-import { nodeContrastText } from '../util.js?v=1.25.9';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.25.9';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.25.9';
-import { getIconDataUri } from '../icons.js?v=1.25.9';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.25.9';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.9';
-import { isSharedBusDiagram } from './router.js?v=1.25.9';
-import { rerouteAllLinks } from './link-runtime.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.1';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.1';
+import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.1';
+import { nodeContrastText } from '../util.js?v=1.26.1';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.1';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.1';
+import { getIconDataUri } from '../icons.js?v=1.26.1';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.1';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.1';
+import { isSharedBusDiagram } from './router.js?v=1.26.1';
+import { rerouteAllLinks } from './link-runtime.js?v=1.26.1';
 
 // Types whose connector labels are resolved collision-only on load (see the end of migrateNodes).
 const LOAD_LABEL_TYPES = new Set(['architecture', 'process', 'org']);
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline } from '../gantt-layout.js?v=1.25.9';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.1';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -86,15 +86,19 @@ export function migrateLinks() {
     // (`field-left-2`); reordering/deleting a field then drifted the link.
     // Fields now carry an immutable `fid` (assigned in sf.DataObject.initialize,
     // so it exists by the time this runs) and `fields[i].fid` is the id of the
-    // field saved at index i. fid ports don't match the numeric form, so this
-    // is idempotent on already-migrated diagrams.
+    // field saved at index i. Minted fid ports don't match the numeric form, so this
+    // is idempotent on already-migrated diagrams. A hand-authored all-digit fid
+    // ("1", "2") does match it: when a field owns the number, the port is already a
+    // fid port. Re-keying it moved the link one field down on every load (K3).
     for (const end of ['source', 'target']) {
       const ep = link.get(end);
       const m = typeof ep?.port === 'string' ? /^field-(left|right)-(\d+)$/.exec(ep.port) : null;
       if (!m) continue;
       const cell = graph.getCell(ep.id);
       if (cell?.get('type') !== 'sf.DataObject') continue;
-      const field = (cell.get('fields') || [])[Number(m[2])];
+      const fields = cell.get('fields') || [];
+      if (fields.some((f) => f?.fid != null && String(f.fid) === m[2])) continue;
+      const field = fields[Number(m[2])];
       if (field?.fid) link.set(end, { ...ep, port: `field-${m[1]}-${field.fid}` });
     }
 
@@ -328,7 +332,9 @@ export function migrateLinks() {
     // the generic white-rect normalization so it doesn't clobber the pill back to a borderless body.
     const lblSrc = graph.getCell(link.get('source')?.id), lblTgt = graph.getCell(link.get('target')?.id);
     if (String(lblSrc?.get('type') || '').startsWith('df.Flow') || String(lblTgt?.get('type') || '').startsWith('df.Flow')) continue;
-    const lineColor = link.attr('line/stroke') || '#888888';
+    // A custom Label color (the `fontColor` prop, link-props.js applyLinkFontColor) wins over the line colour, or
+    // every load, tab switch and template insert would repaint the label back to the line colour (review H1-2).
+    const textColor = link.prop('fontColor') || link.attr('line/stroke') || '#888888';
     const newLabels = labels.map(lbl => {
       const text = lbl.attrs?.text?.text || lbl.attrs?.label?.text || '';
       if (!text) return lbl;
@@ -339,7 +345,7 @@ export function migrateLinks() {
           { tagName: 'text', selector: 'text' },
         ],
         attrs: {
-          text: { text, fill: lineColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
+          text: { text, fill: textColor, fontSize, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', textAnchor: 'middle', textVerticalAnchor: 'middle' },
           body: { ref: 'text', refWidth: 12, refHeight: 4, refX: -6, refY: -2, fill: 'var(--bg-canvas, #FFFFFF)', stroke: 'none', rx: 2, ry: 2 },
         },
         position: lbl.position || { distance: 0.5 },
@@ -359,7 +365,10 @@ export function migrateLinks() {
 //  - With description: icon+text top-left, description below full-width
 
 export function updateSimpleNodeLayout(cell) {
-  if (cell.get('type') !== 'sf.SimpleNode') return;
+  // df.Placeholder copies the SimpleNode geometry and always carries its ? glyph, so it takes the same pass: without
+  // it a Description printed over the glyph (K8, 2026-10-15).
+  const type = cell.get('type');
+  if (type !== 'sf.SimpleNode' && type !== 'df.Placeholder') return;
   if (cell.get('iconMode')) return;
 
   const hasIcon = !!cell.attr('icon/href');
@@ -575,11 +584,15 @@ export function alignFlowAnnotationColumn() {
   };
   seat();
   // The paper renders synchronously, so by the time this pass runs the table has normally measured itself and
-  // the call above is the one that does the work (removing it fails dev/tests/e2e/flow-card-height.spec.js;
-  // removing the listener does not). The listener covers the OTHER branch in df.TableView: a first measurement
-  // of 0 - foreignObjects not laid out yet - defers to requestAnimationFrame and resizes up to 8 frames later.
-  // That path is not exercised by the test.
+  // the call above is the one that does the work (removing it fails dev/tests/e2e/flow-card-height.spec.js).
+  // The listener covers the OTHER branch in df.TableView: a first measurement of 0 - foreignObjects not laid out
+  // yet - defers to requestAnimationFrame (`_mdRetry`) and resizes up to 8 frames later. Arm it only then, and
+  // disarm it after that window: armed after a measurement had landed, it fired on the user's first collapse or
+  // edit, moved Resources, and the next expand overlapped it (review H1-9). That path is not exercised by a test.
+  const view = cctx.paper?.findViewByModel?.(meta);
+  if (view && !view._mdRetry) return;
   meta.once('change:size', seat);
+  setTimeout(() => meta.off('change:size', seat), 1000);
 }
 
 export function migrateNodes() {
@@ -588,7 +601,9 @@ export function migrateNodes() {
   // dated bars appear in the snapshot below and re-run applyGanttGeometry idempotently (no move). No-op for a
   // timeline that already has bars (idempotent) or is group-bearing (kept on the legacy path).
   for (const tl of graph.getElements()) {
-    if (tl.get('type') === 'sf.GanttTimeline') migrateGanttTimeline(tl);
+    if (tl.get('type') !== 'sf.GanttTimeline') continue;
+    migrateGanttTimeline(tl);
+    healTimelineEndDate(tl);   // the End Date is the last drawn day (review L2); the axis is unchanged
   }
   for (const el of graph.getElements()) {
     healLinkIcon(el);
@@ -600,6 +615,8 @@ export function migrateNodes() {
       // bake a contrasting text colour when the body is an explicit solid but the text is the
       // theme default (which would otherwise flip to light and vanish on the light body).
       applyNodeTextContrast(el);
+    } else if (el.get('type') === 'df.Placeholder') {
+      updateSimpleNodeLayout(el);
     }
     // The Note dog-ear fold now tracks the border colour (#8). Reconcile older notes whose fold still carries
     // the legacy fixed tint so a custom border shows on the flipped corner. Idempotent + silent (no history).

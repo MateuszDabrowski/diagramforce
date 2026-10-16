@@ -5,17 +5,17 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.25.9';
-import { prctx } from './context.js?v=1.25.9';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.25.9';
-import { SVG as COMPONENT_SVG, contrastTextColor, extractLinkDomain, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.25.9';
-import { startImageAddFlow } from '../image-component.js?v=1.25.9';
-import { recolorCellIcon } from './color-schema.js?v=1.25.9';
-import { DASH_BY_LINE_STYLE, BRACKET_PATHS, BRACKET_LABEL_X } from '../persistence/diagram-schema.js?v=1.25.9';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.25.9';
-import { renderFieldEditor } from './field-editor.js?v=1.25.9';
-import { finishStandardProps } from './render-core.js?v=1.25.9';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.25.9';
+import * as history from '../history.js?v=1.26.1';
+import { prctx } from './context.js?v=1.26.1';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.26.1';
+import { SVG as COMPONENT_SVG, contrastTextColor, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.26.1';
+import { startImageAddFlow } from '../image-component.js?v=1.26.1';
+import { recolorCellIcon } from './color-schema.js?v=1.26.1';
+import { DASH_BY_LINE_STYLE, BRACKET_PATHS, BRACKET_LABEL_X } from '../persistence/diagram-schema.js?v=1.26.1';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.26.1';
+import { renderFieldEditor } from './field-editor.js?v=1.26.1';
+import { finishStandardProps } from './render-core.js?v=1.26.1';
+import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.26.1';
 
 /** df.Placeholder — Label + Description, and deliberately nothing else.
  *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
@@ -25,10 +25,12 @@ export function renderPlaceholderProps(cell) {
   const content = section(prctx.bodyEl, 'Content');
   addText(content, 'Label', cell.attr('label/text'), (v) => {
     cell.attr('label/text', v);
+    updateSimpleNodeLayout(cell);
     prctx.titleEl.textContent = v || '';
   }, cell);
   addTextarea(content, 'Description', cell.attr('subtitle/text'), (v) => {
     cell.attr('subtitle/text', v);
+    updateSimpleNodeLayout(cell);   // lift the glyph + label into a header row while there is a description
     // Keep the band hidden while empty - the shape's own _syncSubtitle does this on load; mirror it on edit.
     cell.attr('subtitle/visibility', String(v || '').trim() ? 'visible' : 'hidden');
   });
@@ -98,16 +100,19 @@ export function renderSimpleNodeProps(cell) {
     sizeExtras: (s) => {
       if (isIcon) {
         addNumber(s, 'Size', cell.size().width, v => {
-          cell.resize(v, v);
-          const r = v / 2;
-          cell.attr('body/rx', r);
-          cell.attr('body/ry', r);
-          const pad = Math.round(v * 0.2);
-          const iconSz = v - pad * 2;
-          cell.attr('icon/x', pad);
-          cell.attr('icon/y', pad);
-          cell.attr('icon/width', iconSz);
-          cell.attr('icon/height', iconSz);
+          history.startBatch();   // the resize + six attr writes = one undo step (it was seven - review J2-7)
+          try {
+            cell.resize(v, v);
+            const r = v / 2;
+            cell.attr('body/rx', r);
+            cell.attr('body/ry', r);
+            const pad = Math.round(v * 0.2);
+            const iconSz = v - pad * 2;
+            cell.attr('icon/x', pad);
+            cell.attr('icon/y', pad);
+            cell.attr('icon/width', iconSz);
+            cell.attr('icon/height', iconSz);
+          } finally { history.endBatch(); }
         });
       } else {
         addNumberPair(s,
@@ -415,7 +420,7 @@ export function renderImageProps(cell) {
   // user-gesture chain reaches `input.click()` intact (same constraint as
   // the stencil drop path).
   replaceBtn.addEventListener('click', () => {
-    startImageAddFlow(graph, (result) => {
+    startImageAddFlow(prctx.graph, (result) => {
       history.startBatch();
       try {
         cell.attr('image/href', result.dataURI);

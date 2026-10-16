@@ -1,10 +1,10 @@
 // Drive version history (CLEANUP S4) — lists the active synced diagram Drive revisions (View / Restore / Pin / eye-preview / Review). Reads tctx.modules; imports renderDriveSignIn (context) + reviewAgainstRevision (review) - one-way slice edges. sync-control calls showDriveHistoryModal.
-import { buildModal, confirmModal } from '../feedback.js?v=1.25.9';
-import { storageRowHtml } from '../storage-ui.js?v=1.25.9';
-import { renderTemplateThumbnail } from '../templates.js?v=1.25.9';
-import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.25.9';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.25.9';
-import { reviewAgainstRevision } from './review.js?v=1.25.9';
+import { buildModal, confirmModal } from '../feedback.js?v=1.26.1';
+import { storageRowHtml } from '../storage-ui.js?v=1.26.1';
+import { renderTemplateThumbnail } from '../templates.js?v=1.26.1';
+import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.26.1';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.26.1';
+import { reviewAgainstRevision } from './review.js?v=1.26.1';
 
 // Version history for the active synced diagram — list its Drive revisions newest-first with View / Restore
 // / Pin. Mirrors the library modal's loading/empty/error scaffold. Restore is non-destructive (the current
@@ -25,7 +25,7 @@ export function showDriveHistoryModal() {
     bodyHtml: `
       <p class="df-drive-save-modal__hint" style="margin-bottom:6px">Past saves of this diagram in your Google Drive:</p>
       <ul class="df-history__legend">
-        <li><strong>Open</strong> opens that version as an editable copy in a new tab - your current diagram stays untouched.</li>
+        <li><strong>Open</strong> opens that version in a new tab to look at - it is not saved to Google Drive unless you use <strong>Save as new</strong>. Your current diagram stays untouched.</li>
         <li><strong>Restore</strong> brings it back as the current version (your current version stays in this list).</li>
         <li><strong>Pin</strong> keeps a version safe from Drive's automatic cleanup, which removes unpinned versions after about 30 days, and sooner on a file with many versions.</li>
       </ul>
@@ -122,7 +122,7 @@ export function showDriveHistoryModal() {
     // Signed-out (token lapsed) but the tab is still Drive-linked: do NOT auto-call listRevisions, which would
     // force an unsolicited Google sign-in overlay on open. Offer the SHARED explicit Sign-in (orange, centred -
     // matching Load + Compare), never an auto-popup.
-    if (p.activeHasDriveFile?.() && !p.isSignedIn?.()) {
+    if (p.activeHasOwnFile?.() && !p.isSignedIn?.()) {
       renderDriveSignIn(bodyBox, "Sign in to Google Drive to see this diagram's saved versions.", render);
       return;
     }

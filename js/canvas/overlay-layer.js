@@ -16,7 +16,7 @@
 //   deactivate() → unsubscribe, clear + remove the <g>, run onTeardown (reset the overlay's own state / fire a
 //                  caller banner). Idempotent: a no-op when not active.
 //   isActive()   → activation state (review exposes this as isReviewing()).
-import { cctx } from './context.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -33,7 +33,7 @@ export function createOverlay({ className, events, onTeardown } = {}) {
     if (!layersGroup) return null;
     if (layer && layer.parentNode) return layer;
     layer = document.createElementNS(SVGNS, 'g');
-    layer.setAttribute('class', className);
+    layer.setAttribute('class', `${className} df-transient`);   // df-transient: every image export strips it
     layer.setAttribute('pointer-events', 'none');
     // Above cells + links (below the tools layer) — the same anchor the crossing-bump overlay uses, so the
     // overlay is painted in the scaled layer group and tracks pan/zoom without any per-frame transform math.

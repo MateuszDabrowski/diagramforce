@@ -22,8 +22,17 @@
 // Salesforce Flow lands near 3300, comfortably inside; the big Data Cloud field-mapping diagrams reach 12-16k and
 // do NOT fit. The script REFUSES to emit an over-length link rather than handing over one that silently breaks -
 // exit code 2, with the advice to deliver the .json file instead.
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
+import { readText } from './sf-cli.js';
+
+// The version this skill's bundled spec targets (its "Spec snapshot: vX" marker), read the way render-diagram.mjs
+// and the converters read it. A link with no version opens behind the app's red "probably won't load" dialog.
+export const SPEC_VERSION = (() => {
+  try { return (readFileSync(new URL('../references/DIAGRAM_JSON_SPEC.md', import.meta.url), 'utf8').match(/Spec snapshot: v([\d.]+)/) || [])[1] || '1.0.0'; }
+  catch { return '1.0.0'; }
+})();
 
 // ── FROZEN, verbatim from js/share-codec.js ──────────────────────────────────────────────────────────────────
 const MIN = Object.freeze({
@@ -160,14 +169,16 @@ export function encodeShare(data) {
 export function fileToShareData(file) {
   return {
     v: 1,
-    av: file.appVersion || '',
-    name: file.title || 'Diagram',
+    av: file.appVersion ? String(file.appVersion) : SPEC_VERSION,   // stamped when missing, like render-diagram.mjs
+    name: String(file.title || 'Diagram'),   // a numeric title would reach the app as a numeric tab name
     type: file.diagramType || 'architecture',
     mappingMode: !!file.mappingMode,
     // No slimForShare pass: that strips load-reconstructable data (default ports, baked icon artwork) which
     // authored JSON does not carry in the first place. Skipping it costs a few percent of payload, never
     // correctness - the app rebuilds those on load either way.
-    graph: file.graph || { cells: [] },
+    // A FLAT file (top-level `cells`, no `graph`) validates and opens in the app, which rewraps it
+    // (json-pipeline.js), so take the same rule. Reading only `graph` linked such a file to an empty tab.
+    graph: file.graph || (Array.isArray(file.cells) ? { cells: file.cells } : { cells: [] }),
   };
 }
 
@@ -179,10 +190,13 @@ export function makeShareUrl(file, origin = 'https://diagramforce.com/') {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+// Entry point: compare REAL paths. The module URL is symlink-resolved and percent-encoded while argv[1] is as typed,
+// and on Windows it uses backslashes, so a name or URL comparison skipped main() (skill-cli-paths.test.js).
+const isMain = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
 if (isMain) {
   const args = process.argv.slice(2);
-  const file = args.find((a) => !a.startsWith('--'));
+  // `--origin <url>` takes a value, which is not the file wherever the flag sits.
+  const file = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--origin');
   const oi = args.indexOf('--origin');
   const origin = oi > -1 ? args[oi + 1] : 'https://diagramforce.com/';
   if (!file) {
@@ -191,7 +205,7 @@ if (isMain) {
   }
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync(file, 'utf8'));
+    parsed = JSON.parse(readText(file));
   } catch (err) {
     console.error(`Could not read ${file}: ${err.message}`);
     process.exit(1);
@@ -200,6 +214,14 @@ if (isMain) {
     console.error('That is a multi-diagram bundle. A share link carries ONE diagram - export a single one first.');
     process.exit(1);
   }
+  // A link to no cells opens an empty tab, which the user would read as a broken diagram.
+  const cells = fileToShareData(parsed).graph?.cells;
+  if (!Array.isArray(cells) || !cells.length) {
+    console.error(`${file} has no cells - a link would open an empty diagram. Put them in "graph": { "cells": [...] }.`);
+    process.exit(1);
+  }
+  // stderr, so stdout stays the bare URL a caller can capture.
+  if (!parsed.appVersion) console.error(`⚠ ${file}: no appVersion - the link carries ${SPEC_VERSION} (add "appVersion" to the file)`);
   const { url, length, fits } = makeShareUrl(parsed, origin);
   if (!fits) {
     console.error(`Too large for a link: ${length} chars (ceiling ${MAX_URL}).`);

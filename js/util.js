@@ -50,18 +50,25 @@ export function formatRelativeTime(ts) {
   return `${Math.floor(ageSec / 86400)}d ago`;
 }
 
-/** Compare two semver strings. Returns -1 if a<b, 0 if equal, 1 if a>b. A falsy
- *  `a` sorts first, a falsy `b` sorts last. */
+/** Compare two semver strings. Returns -1 if a<b, 0 if equal, 1 if a>b. A missing
+ *  `a` sorts first, a missing `b` sorts last. A non-string (an authored `"appVersion": 1.25`) is read as its
+ *  String(); one with no numeric major counts as missing. It used to throw on `a.split`, which left Paste > Load
+ *  doing nothing (review 2026-10-15, B6). */
 export function compareSemver(a, b) {
-  if (!a) return -1;
-  if (!b) return 1;
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
+  const pa = semverParts(a);
+  const pb = semverParts(b);
+  if (!pa) return -1;
+  if (!pb) return 1;
   for (let i = 0; i < 3; i++) {
     if ((pa[i] || 0) < (pb[i] || 0)) return -1;
     if ((pa[i] || 0) > (pb[i] || 0)) return 1;
   }
   return 0;
+}
+function semverParts(v) {
+  if (v == null || v === '' || v === false) return null;
+  const parts = String(v).split('.').map(Number);
+  return Number.isNaN(parts[0]) ? null : parts;
 }
 
 /**
@@ -208,6 +215,15 @@ export function isViewForkTab(t) {
   return !!(t && t.driveFileId && t.driveSharedSource && t.driveSharedSource.canEdit !== true);
 }
 
+/** True for a finger. JointJS 4 binds the paper to mousedown/touchstart (not pointer events), and its event wrapper
+ *  reads `pointerType` off the native event, which a TouchEvent lacks, so `evt.pointerType === 'touch'` alone is
+ *  never true for a paper event from a finger. The native event type is. */
+export function isTouchEvent(evt) {
+  if (!evt) return false;
+  if (evt.pointerType === 'touch') return true;
+  return String(evt.originalEvent?.type || evt.type || '').startsWith('touch');
+}
+
 /** Deterministic JSON: deep-sorts object keys so two cells from different serializations (or app versions) compare
  *  equal when their content is equal. Used by diffGraphs. */
 export function stableStringify(v) {
@@ -339,13 +355,14 @@ export function formatBytes(bytes) {
  *   1. Unions the tombstones (newest `deletedAt` per id) and prunes any older than `ttlMs` (vs `now`).
  *   2. Additively unions the templates (local first; new remote ones added; content/id dups skipped) -
  *      EXCEPT any id present in the combined tombstone set, which is removed (a delete propagates).
- *   3. Caps at `max`, newest `createdAt` first.
+ *   3. Sorts canonically. It never caps: the 60-template limit refuses new adds and imports, and a cap here deleted
+ *      the oldest templates on every device with no tombstone and no prompt.
  *
  * Returns { templates, deleted, incomingDeletions, changed }. `incomingDeletions` = templates still present
  * locally that a REMOTE tombstone (one the local side didn't have) would remove - the caller confirms these
  * with the user before applying (or "Keep" to resurrect). `changed` = the local templates OR tombstones differ.
  */
-export function mergeTemplatesWithTombstones({ localTemplates = [], localDeleted = [], remoteTemplates = [], remoteDeleted = [], sigOf, max = Infinity, now = 0, ttlMs = Infinity } = {}) {
+export function mergeTemplatesWithTombstones({ localTemplates = [], localDeleted = [], remoteTemplates = [], remoteDeleted = [], sigOf, now = 0, ttlMs = Infinity } = {}) {
   const arr = (a) => (Array.isArray(a) ? a : []);
   // 1) Combine tombstones (newest per id), prune stale ones.
   const tomb = new Map();
@@ -389,11 +406,9 @@ export function mergeTemplatesWithTombstones({ localTemplates = [], localDeleted
     if (sigs.has(s)) continue;
     out.push(t); if (t.id != null) ids.add(t.id); sigs.add(s);
   }
-  // 3) cap to the newest `max`, then sort CANONICALLY (createdAt asc, id asc) so two devices converge on the
-  //    SAME order → the push dedupe-hash matches and no-op pull→push doesn't churn a revision (review finding).
-  let templates = out;
-  if (out.length > max) templates = out.slice().sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0)).slice(0, max);
-  templates = templates.slice().sort((a, b) => (a?.createdAt || 0) - (b?.createdAt || 0) || String(a?.id).localeCompare(String(b?.id)));
+  // 3) sort CANONICALLY (createdAt asc, id asc) so two devices converge on the SAME order → the push dedupe-hash
+  //    matches and no-op pull→push doesn't churn a revision (review finding).
+  const templates = out.slice().sort((a, b) => (a?.createdAt || 0) - (b?.createdAt || 0) || String(a?.id).localeCompare(String(b?.id)));
 
   // `changed` is order-INSENSITIVE (set membership): a pure reorder must not rewrite the local library, so the
   // user's stencil order is preserved until a real add/remove. Compares template id-sets + tombstone id-sets.
@@ -448,6 +463,39 @@ export function sniffDelimiter(text) {
     else if (!inQ && ch === ',') commas++;
   }
   return tabs > commas ? '\t' : ',';
+}
+
+// ── Text width estimates (K10, 2026-10-15) ──
+// Shapes size and truncate text before it is in the DOM (getComputedTextLength reads 0 during an async mount), so they
+// count characters at a per-font factor. That factor is a fraction of an em for Latin text, but a CJK, Hangul,
+// fullwidth or emoji character is a full em: counting UTF-16 units under-sized a Japanese label by almost half and could
+// cut a surrogate pair in two. These count by code point, a wide character as `wide` narrow units (1 em / the factor).
+function isWideCodePoint(cp) {
+  return (cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3041 && cp <= 0x33FF)
+    || (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0xA000 && cp <= 0xA4CF)
+    || (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF)
+    || (cp >= 0xFE10 && cp <= 0xFE19) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF00 && cp <= 0xFF60)
+    || (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x1F300 && cp <= 0x1F64F) || (cp >= 0x1F680 && cp <= 0x1F6FF)
+    || (cp >= 0x1F900 && cp <= 0x1F9FF) || (cp >= 0x20000 && cp <= 0x3FFFD);
+}
+
+/** Width of `text` in narrow-character units: 1 per ordinary character, `wide` per wide one. */
+export function textUnits(text, wide) {
+  let n = 0;
+  for (const ch of String(text ?? '')) n += isWideCodePoint(ch.codePointAt(0)) ? wide : 1;
+  return n;
+}
+
+/** The longest prefix of `text`, in whole code points, whose textUnits fit in `maxUnits`. */
+export function sliceUnits(text, maxUnits, wide) {
+  let n = 0, out = '';
+  for (const ch of String(text ?? '')) {
+    const u = isWideCodePoint(ch.codePointAt(0)) ? wide : 1;
+    if (n + u > maxUnits) break;
+    n += u;
+    out += ch;
+  }
+  return out;
 }
 
 /** Parse delimited text (RFC 4180): quoted cells may hold the delimiter, doubled quotes and newlines; CRLF or LF rows;

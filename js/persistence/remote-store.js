@@ -15,14 +15,15 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.25.9';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds } from './drive-sync-logic.js?v=1.25.9';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect } from './host-env.js?v=1.25.9';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.25.9';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.1';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.1';
+import { isInSlot, silentRefreshDelay, shouldAutoConnect, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.1';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.26.1';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.1';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -167,7 +168,9 @@ let _tokenInFlight = null;
  *  Google is asked for its chooser. The hourly re-auth has an account on record and stays one click. A login hint
  *  (a Drive "Open with" launch) already names the account, and 'none' / 'consent' callers keep what they asked for. */
 function connectPrompt(prompt) {
-  if (prompt !== '' || _loginHint) return prompt;
+  // Slot's tab IS one Google account's own session: the chooser only offered to sign a second identity into that
+  // account's store (Slot's review, 2026-10-15). Google signs straight into the store's one session instead.
+  if (prompt !== '' || _loginHint || isInSlot()) return prompt;
   let onRecord = true;   // storage unavailable (private mode): keep today's behaviour rather than a chooser every hour
   try { onRecord = !!localStorage.getItem(LS.account); } catch { /* private mode */ }
   return onRecord ? prompt : 'select_account';
@@ -209,6 +212,7 @@ function requestToken({ prompt = '' } = {}) {
       // (switch/open/close already fire auto-independently; this adds leave-the-page) must run in manual mode too,
       // so closing the window flushes the active tab's edits even with Auto-sync Diagrams unchecked. Idempotent.
       wireHiddenFlush();
+      wireOnlineRetry();
       // Start the recurring upstream poll now we're connected - so shared-file changes surface even while idle, not
       // only after the next local edit/save (idempotent; cleared on disconnect).
       startUpstreamPoll();
@@ -237,7 +241,7 @@ function armSilentRefresh() {
   _refreshTimer = setTimeout(() => { _refreshTimer = null; void refreshSilently(); }, silentRefreshDelay(_tokenExpiry));
 }
 async function refreshSilently() {
-  if (!isInSlot() || !isDriveConfigured()) return;
+  if (!isInSlot() || !isDriveConfigured() || isSessionHalted()) return;   // a superseded window needs no token (A14)
   try { await getToken({ prompt: 'none', force: true }); notify(); }
   catch (e) { console.info('Diagramforce: silent Drive token refresh declined (will ask on the next click)', e && e.message); }
 }
@@ -248,10 +252,10 @@ async function refreshSilently() {
  *  the chain and everything tried). The two Picker doors say so up front instead of showing Google's dead end. Only in
  *  Slot; a browser runs the Picker as it always has, and everything on the Drive API works in Slot as before. */
 function pickerUnavailableInSlot() {
-  showToast('Google\'s file picker can\'t sign in inside Slot currently. Saving, loading and sharing work here. '
-    + 'Just the picker needed for selecting a Google Drive folder needs a browser. To use it, open Diagramforce in a browser, '
-    + 'and Share to drive there. To access this Diagram, open it via Load or paste from Share > Copy JSON.',
-    'info', { duration: 10000 });
+  // Each door now says this up front and is disabled in Slot (Load, Share, the Save Manager), so this is the safety
+  // net for any path that still reaches the Picker. Two sentences and no timer (Slot's review, 2026-10-15): the 10 s
+  // paragraph it replaced told the user to use Load right after closing Load.
+  showToast(`${SLOT_PICKER_NOTE} ${SLOT_OPEN_IN_BROWSER}`, 'info', { sticky: true });
 }
 
 /** Boot inside Slot: restore the Drive connection without a click when the user connected here before. Awaited by
@@ -316,6 +320,11 @@ function multipartBody(metadata, jsonStr, boundary) {
 // a reload (re-seeded by hydrateTabDrive on session restore).
 const driveByTab = new Map();   // tabId -> per-tab Drive state (see tabState below)
 const activeTabId = () => (pctx.activeTabIdCb ? pctx.activeTabIdCb() : '__single__');
+// Bumped by disconnectDrive. A save, sweep or poll that was waiting on Drive when the user disconnected must not write
+// its answer into the tabs Disconnect just cleared: a save re-linked its tab, and a poll or a token-less sweep put back
+// a red "Sign in" or an amber Refresh (review 2026-10-15, A6). Each compares the value it started with.
+let _driveEpoch = 0;
+const disconnectedSince = (epoch) => epoch !== _driveEpoch;
 function tabState(id) {
   let s = driveByTab.get(id);
   if (!s) {
@@ -335,6 +344,9 @@ function tabState(id) {
       sharedInEdit: null,
       outgoingGrants: 0,   // # of direct view/edit invites you granted on this master (live-reconciled via listActiveShareGrants)
       folderId: null, driveId: null, folderName: null,   // a picked Shared-Drive folder → a COPY target (NOT the master's home)
+      // The file's own name when the tab shows another one ("Plan 2" beside an open "Plan"). Saves carry it, so a name
+      // the app gave the tab stays local to it; the user's rename clears it (keepDriveName, review RA2).
+      driveName: null,
       lastSavedAt: 0, lastHash: null, dirty: false, saving: false, needsSignin: false,
     };
     driveByTab.set(id, s);
@@ -391,6 +403,10 @@ function checkAccount(token) {
       if (!res.ok) { noteError('drive:account-check', new Error(`about ${res.status}`)); return; }
       const user = (await res.json())?.user;
       if (!user || !user.permissionId) return;
+      if (user.permissionId !== _emailAccount) { _emailAccount = user.permissionId; forgetUserEmail(); }
+      // The Drive account's own address names its Organisation. The `email`-scope token is a separate grant, which
+      // Google can give for another signed-in account after a switch (review round 2, S1-6 follow-up).
+      if (user.emailAddress) _userEmail = user.emailAddress;
       let stored = null;
       try { stored = JSON.parse(localStorage.getItem(LS.account) || 'null'); } catch { stored = null; }
       if (!stored || !stored.permissionId) {
@@ -475,9 +491,19 @@ function notify() { try { _statusListener?.(); } catch { /* ignore */ } }
 
 /**
  * Drive sync status for the ACTIVE tab — drives the navbar icon's colour + glyph + text.
- * state: off | synced | pending | saving | error.  showText: only when auto-sync is on
- * (per design — the icon alone otherwise).
+ * state: off | synced | pending | saving | failed | refresh | conflict | error.  showText: only when auto-sync is on
+ * (per design — the icon alone otherwise), and always for a state the user should act on or know about.
  */
+/** A Drive write a page release would cut short: one on the wire that started under two minutes ago. Not an unpushed
+ *  edit: the browser session keeps it and the next open pushes it, and since 2026-10-16 Slot keeps a tab that answers
+ *  yes with no time limit, so a dirty flag no write will clear (a shared master in Drive's trash answers "blocked"
+ *  with no error flag, every time) would have held the tab for good. The two minutes bound a request that hangs. */
+const PUSH_HOLD_MS = 120000;
+let _saveStartedAt = 0;
+export function drivePushPending() {
+  return _savingCount > 0 && Date.now() - _saveStartedAt < PUSH_HOLD_MS;
+}
+
 export function getDriveStatus() {
   const auto = isAutosyncOn();
   const s = driveByTab.get(activeTabId());
@@ -493,6 +519,9 @@ export function getDriveStatus() {
   else if (s && (s.conflict || (s.copies || []).some((c) => c && c.conflict))) state = 'conflict';   // paused — needs Pull/Keep/Fork
   else if (s && ((s.sharedSource && s.sharedSource.upstreamChanged) || s.upstreamChanged)) state = 'refresh';   // the shared file changed upstream — pull available (item 6 + B2 direct-edit)
   else if (s && s.saving) state = 'saving';
+  // A save Drive did not take (offline, 5xx, a full Drive, an unverifiable conflict check): "pending" promised the edits
+  // would sync while every save failed, and said nothing of why (review 2026-10-15, A2). Cleared by the next save.
+  else if (s && s.lastError) state = 'failed';
   else if (s && s.dirty) state = 'pending';
   // A Drive-LINKED tab with NO live token reads "sign in to reconnect", NOT a misleading "Synced": the token is
   // per-tab in memory, so a FRESH tab (a Drive "Open with" launch, or any new tab in the same browser) is signed
@@ -504,9 +533,12 @@ export function getDriveStatus() {
   // ANY tab saving (incl. a background tab during a multi-tab sweep) animates the navbar - the active-tab
   // check above only covers the active tab, so a sign-in/cadence sweep of OTHER tabs would never spin. The
   // global counter surfaces it as one continuous spin. Never mask the higher-priority error/conflict states.
-  if (_savingCount > 0 && state !== 'error' && state !== 'conflict' && state !== 'refresh') state = 'saving';
+  if (_savingCount > 0 && state !== 'error' && state !== 'conflict' && state !== 'refresh' && state !== 'failed') state = 'saving';
   // Conflict + Refresh show their text even in manual mode — the user must act, an icon alone is too quiet.
-  return { state, showText: auto || state === 'error' || state === 'conflict' || state === 'refresh', lastSavedAt: s?.lastSavedAt || 0 };
+  const failText = state === 'failed' ? saveFailureText({ ...s.lastError, offline: typeof navigator !== 'undefined' && navigator.onLine === false, auto }) : null;
+  // Refresh on your OWN diagram (saved elsewhere, A5) is not "the original shared file": the copy says which.
+  const refreshOwn = state === 'refresh' && !!(s && s.upstreamChanged && !s.sharedInEdit);
+  return { state, showText: auto || state === 'error' || state === 'conflict' || state === 'refresh' || state === 'failed', lastSavedAt: s?.lastSavedAt || 0, failText, refreshOwn };
 }
 
 function persistState(id, s) {
@@ -523,6 +555,8 @@ function persistState(id, s) {
     driveOutgoingGrants: s.outgoingGrants || 0,  // # of direct view/edit invites on the master → tab "shared out" glyph
     driveLocalOnly: !!s.localOnly,               // a look-only copy (an older version) - automatic saves skip it
     driveViewEdited: !!s.viewEdited,             // a master-less view share the user edited (doSaveInner's Mode C guard)
+    drivePendingRename: !!s.pendingRename,       // renamed while signed out: the next sweep renames the Drive file (A13)
+    driveName: s.driveName || null,              // the file's own name, kept while the tab shows another (RA2)
   });
 }
 
@@ -532,6 +566,8 @@ export function hydrateTabDrive(id, meta) {
   const s = tabState(id);
   s.localOnly = !!meta.driveLocalOnly;
   s.viewEdited = !!meta.driveViewEdited;
+  s.pendingRename = !!meta.drivePendingRename;
+  s.driveName = meta.driveName || null;
   s.fileId = meta.driveFileId || null;
   // The upstream shared file (Shared File model). A tab opened from a #gd= link can carry a sharedSource with
   // no own master yet (fileId null) until its first save.
@@ -567,6 +603,9 @@ export function adoptDriveMetaIntoTab(id, meta) {
   // A look-only copy has no file of its own but must keep its flag (see archiveTabToBrowser in tabs.js).
   if (!meta || (!meta.driveFileId && !meta.driveSharedSource && !meta.driveLocalOnly)) return;
   hydrateTabDrive(id, meta);
+  // Reopened beside a same-named tab, an archive's tab is "Plan 2": its saves keep the name its file holds, the
+  // archived tab's own name when it had no other (RA2).
+  keepDriveName(id, tabState(id), meta.driveName || meta.tabName);
   persistState(id, tabState(id));
 }
 
@@ -589,6 +628,20 @@ function groupMetaForTab(tab) {
   return g ? { name: g.name, icon: g.icon || null, color: g.color || null } : null;
 }
 
+/** The name a Drive save of tab `id` carries: its file's own name while the tab shows another one, else the tab's. */
+function saveName(id, tabName) {
+  return (id != null && driveByTab.get(id)?.driveName) || tabName || 'Diagram';
+}
+
+/** Record Drive's own name (`name`, the body of the file the tab now holds) when the tab shows another one: "Plan 2"
+ *  beside an open "Plan", or "Plan (Drive)". The first real edit used to write the tab's name into the file, so a name
+ *  the app gave the tab renamed the file's diagram (review RA2, owner decision 2026-10-15). Call it before loadedHash,
+ *  whose baseline is the tab as it would save. Only the user's rename clears it (renameDriveMaster). */
+function keepDriveName(id, s, name) {
+  const tab = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t && t.id === id);
+  s.driveName = tab && name && String(name) !== tab.name ? String(name) : null;
+}
+
 function currentDiagramData() {
   const aid = pctx.activeTabIdCb ? pctx.activeTabIdCb() : null;
   const activeTab = aid && pctx.getAllTabs ? (pctx.getAllTabs() || []).find((t) => t && t.id === aid) : null;
@@ -596,7 +649,7 @@ function currentDiagramData() {
   return {
     v: 1,
     av: pctx.appVersion,
-    name: pctx.tabNameCb ? pctx.tabNameCb() : 'Diagram',
+    name: saveName(aid, pctx.tabNameCb ? pctx.tabNameCb() : 'Diagram'),
     type: pctx.diagramTypeCb ? pctx.diagramTypeCb() : 'architecture',
     mappingMode: pctx.mappingModeCb ? pctx.mappingModeCb() : false,
     graph: liveGraphForSave(),
@@ -620,7 +673,7 @@ function dataForTab(tab) {
   return {
     v: 1,
     av: pctx.appVersion,
-    name: tab.name || 'Diagram',
+    name: saveName(tab.id, tab.name),
     type: pctx.normalizeDiagramType(tab.diagramType || 'architecture'),
     mappingMode: pctx.getTabMappingMode ? pctx.getTabMappingMode(tab.id) : false,
     graph,
@@ -650,6 +703,7 @@ const RECONCILE_FRESH_MS = 60000;
  *      content-hash dedupe would otherwise skip the write forever). A freshness guard skips masters saved < 60 s ago.
  *  Non-fatal: a list/probe failure leaves everything as-is for a later retry. */
 async function reconcileDriveLinks() {
+  const epoch = _driveEpoch;   // a Disconnect while this waits on Drive leaves the cleared tabs alone (A6)
   // Open tabs only: driveByTab keeps the state of CLOSED tabs too, and probing their files was pure cost.
   const openIds = new Set((pctx.getAllTabs ? pctx.getAllTabs() : []).map((t) => t && t.id));
   const entries = [...driveByTab.entries()].filter(([id]) => openIds.has(id));
@@ -679,9 +733,11 @@ async function reconcileDriveLinks() {
     // Every step below reads a 404 or an absence as "gone". Under another (or an unknown) account everything is
     // absent, so nothing runs until the account is positively the links' own; the next sweep tries again.
     if (!(await accountReady())) { _driveReconcileDone = false; return; }
+    if (disconnectedSince(epoch)) return;
 
     if (legacy.length) {
       const owned = await listMyDiagrams();
+      if (disconnectedSince(epoch)) return;
       // Someone else's file (`listedFileNotOwned`: ownedByMe false, or unset on a fresh invite) is never un-flagged
       // into an own master (A8, C10). A Shared-Drive item (ownedByMe always unset) counts as yours, as before.
       const ids = new Set((owned || []).filter((f) => !listedFileNotOwned(f)).map((f) => f.id));
@@ -698,14 +754,24 @@ async function reconcileDriveLinks() {
     }
 
     const now = Date.now();
+    const tabById = new Map((pctx.getAllTabs ? pctx.getAllTabs() : []).map((t) => [t && t.id, t]));
     for (const [id, s] of ownMasters) {
       if (now - (s.lastSavedAt || 0) <= RECONCILE_FRESH_MS) continue;   // just saved → a create can lag files.get; skip
       let dead = false;
       try {
         const meta = await remoteMeta(s.fileId, token);
+        if (disconnectedSince(epoch)) return;
         if (meta && meta.trashed) dead = true;                            // user trashed it in Drive → re-save as a fresh master
         else if (!isRecognizedDgfMaster(meta, DGF_MIME)) dead = true;     // exists but NOT a .dgf master (legacy .json / foreign) → recreate
         // else: a live `.dgf` master (even if listMyDiagrams lagged/paginated past it) → KEEP, never duplicate.
+        else if (revisionMoved(s.headRevisionId, meta.headRevisionId) && !s.conflict && !s.upstreamChanged) {
+          // Saved from another device (or Slot, which keeps its own storage) since this tab last synced. Own masters
+          // are not polled, so the tab read "Synced" and Sync now said "already up to date" over a stale canvas
+          // (review 2026-10-15, A5). Clean → Refresh, which pulls it in place; edited here too → Review.
+          const tab = tabById.get(id);
+          const clean = !s.dirty && !!tab && hashMatches(s.lastHash, dataForTab(tab));
+          if (clean) s.upstreamChanged = true; else s.conflict = true;
+        }
       } catch (e) {
         if (healDecision(e && e.status, { imported: false, reason: e && e.reason }) === 'recreate') dead = true;   // 404 gone / 403 no-access
         // network / 5xx / 401 → leave the link as-is for a later session
@@ -771,6 +837,44 @@ function dataHash(d) {
 function dataHashBasis(d) {
   return JSON.stringify({ g: d.graph, n: d.name, t: pctx.normalizeDiagramType(d.type), m: !!d.mappingMode });
 }
+/** The dedupe baseline for a tab that was just filled from Drive: the hash of what a save of THAT TAB would write, not
+ *  of the file as read. The tab can carry another name ("Plan 2" beside an open "Plan", the name a pull kept) and its
+ *  graph comes back compacted, and the name is in the hash: Drive's own bytes as the baseline made the next sweep write
+ *  the file back with no edit, under the tab's name (review 2026-10-15, A1). Falls back to `data` with no such tab. */
+function loadedHash(id, data) {
+  const raw = dataHash(data);
+  let h = raw;
+  const tab = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t && t.id === id);
+  try { if (tab) h = dataHash(dataForTab(tab)); } catch (e) { noteError('drive:loaded-hash', e); }
+  if (h !== raw) _loadedFrom.set(h, raw);
+  return h;
+}
+// The hash of Drive's own bytes behind each loadedHash baseline, keyed by that baseline. A missing head is checked by
+// reading the file, and Drive's bytes differ from the tab's save form in the name ("Plan 2") and the serialisation, so
+// an unchanged file read as changed: a false Review on the first save (RA4). Runtime only: after a reload the check
+// compares with lastHash alone, which fails closed.
+const _loadedFrom = new Map();
+/** With no head baseline: does Drive's file (`held`, as read) still hold what this tab last saved, or the content it
+ *  was loaded from? */
+/** Does Drive's `fileId` hold exactly one of these contents (stored hashes)? One read, with the caller's token so a
+ *  background poll never prompts. Unreadable answers no, so the caller's conflict pause stands (fail closed). A write
+ *  Drive took whose answer was lost left the old head behind, and the head alone then read the user's own write as
+ *  someone else's (Slot's review, 2026-10-15). */
+async function remoteHoldsOneOf(fileId, hashes, token) {
+  const wanted = hashes.filter((h) => h != null);
+  if (!wanted.length) return false;
+  try {
+    const res = await fetch(`${API}/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) return false;
+    const held = JSON.parse(await res.text());
+    return !!(held && held.graph) && wanted.some((h) => hashMatches(h, held));
+  } catch { return false; }
+}
+function holdsBaseline(s, held) {
+  if (!held || !held.graph) return false;
+  try { pctx.sanitizeGraphJSON(held.graph); } catch { return false; }   // the loaded content was sanitised before it was hashed
+  return hashMatches(s.lastHash, held) || (typeof s.lastHash === 'string' && _loadedFrom.get(s.lastHash) === dataHash(held));
+}
 /** Does a STORED hash (s.lastHash, sharedSource.openedHash) describe this data? Values saved before 1.24.13 are the
  *  old 32-bit numbers, so they are checked with the old formula: no tab rewrites its file just because the hash
  *  changed. */
@@ -799,8 +903,10 @@ export async function reconcileTabDriveLinks() {
   // happens; a manager opened before any token shows last-known chips until the next sweep.
   if (!isDriveConfigured() || !tokenValid()) return;
   const token = _accessToken;
+  const epoch = _driveEpoch;   // see reconcileDriveLinks
   let owned;
   try { owned = await listMyDiagrams(); } catch (e) { noteError('drive:link-heal', e); return; }
+  if (disconnectedSince(epoch)) return;
   // Backup mirrors carry a visible '[Backup] ' prefix so a user scanning Drive's own UI can't mistake one for
   // the working diagram (they used to share its exact name - the delete-the-wrong-file trap, CR). Mirrors from
   // before the prefix are healed HERE: the listing already holds names + stamps, so it's one fire-and-forget
@@ -855,6 +961,7 @@ export async function reconcileTabDriveLinks() {
       if (!res.ok) continue;
       const remote = JSON.parse(await res.text());
       if (!remote || !remote.graph) continue;
+      if (disconnectedSince(epoch)) return changed;   // never re-link a tab Disconnect just cleared
       const local = localData.get(d.tabId);
       if (!local || dataHash(local) !== dataHash(remote)) continue;   // missing/diverged → do NOT adopt (never clobber a newer remote)
       const s = tabState(d.tabId);
@@ -887,10 +994,16 @@ export async function reconcileTabDriveLinks() {
 // awaits a sweep); without this they'd run concurrent passes, racing the per-tab doSaves. A skipped overlap just
 // returns the in-flight promise — the next cadence tick / edit re-sweeps anything that lands mid-flight.
 let _syncAllInFlight = null;
+/** Before an explicit Sync now or Enable sync: a sweep already running took its tab list and data before the press,
+ *  so joining it reported its count while a later edit stayed unsaved. Let it finish; the caller then runs its own. */
+async function afterRunningSweep() {
+  while (_syncAllInFlight) { try { await _syncAllInFlight; } catch { /* its own caller reports it */ } }
+}
 async function syncAllDiagrams({ fromTick = false } = {}) {
   if (_syncAllInFlight) return _syncAllInFlight;
   if (isSessionHalted()) return;   // a superseded window: see doSaveInner (A7)
   _syncAllInFlight = (async () => {
+    const epoch = _driveEpoch;
     const firstOfCycle = !_driveReconcileDone;
     if (!_driveReconcileDone) { _driveReconcileDone = true; await reconcileDriveLinks(); }
     const tabs = pctx.getAllTabs ? pctx.getAllTabs() : [];
@@ -913,21 +1026,33 @@ async function syncAllDiagrams({ fromTick = false } = {}) {
     if (firstOfCycle || unlinked) await reconcileTabDriveLinks();
     let written = 0;
     let checked = 0;
-    let failed = 0;   // 'error' / 'blocked' (offline, a conflict pause, sign-in needed): NOT up to date, and the toast must say so
+    let failed = 0;   // 'error' / 'blocked' (offline, sign-in needed, an unverifiable remote): NOT up to date, and the toast must say so
+    let paused = 0;   // blocked on a conflict: edited here AND changed on Drive. Review, not a connection problem (S1-9)
+    let retry = false;   // a save Drive did not take (not a conflict pause or a missing sign-in, which need the user)
+    let changed = 0;     // in sync with what this tab last saved, but Drive has a newer version: Refresh (A5)
     for (const tab of tabs) {
+      if (disconnectedSince(epoch)) break;   // each later tab would be marked "Sign in" after Disconnect (A6)
+      if (driveByTab.get(tab.id)?.pendingRename) await renameDriveMaster(tab.id, tab.name);   // renamed while signed out (A13)
       const data = dataForTab(tab);
       if (!data.graph || !(data.graph.cells && data.graph.cells.length)) continue;   // skip empty
       if (driveByTab.get(tab.id)?.localOnly) continue;   // a look-only copy: never synced, so never "up to date" (C9)
       checked++;
       const r = await doSave(tab.id, { interactive: false, data });
       if (r === 'written') written++;
+      else if ((r === 'error' || r === 'blocked') && driveByTab.get(tab.id)?.conflict) paused++;
       else if (r === 'error' || r === 'blocked') failed++;
+      else if (driveByTab.get(tab.id)?.upstreamChanged) changed++;
+      if (driveByTab.get(tab.id)?.lastError) retry = true;
     }
+    // Only an edit armed the tick, so an idle window never retried a failed save (A2). One more tick per failed sweep;
+    // manual mode never writes on its own, so it is left to the next boundary or Sync now.
+    if (disconnectedSince(epoch)) return { written, checked, failed, changed, paused };
+    if (retry && isAutosyncOn()) scheduleAutosave();
     // Item 6 — proactive upstream-change detection (shared-source / shared copies / direct-edit). Metadata-only, no
     // writes; extracted into pollUpstreamAll so the recurring idle poll (startUpstreamPoll) runs the SAME checks even
     // when the user is just viewing (the autosave tick only fires after a local edit).
     await pollUpstreamAll({ skipIfRecent: fromTick });   // Sync now / sign-in always poll fresh
-    return { written, checked, failed };
+    return { written, checked, failed, changed, paused };
   })();
   try { return await _syncAllInFlight; } finally { _syncAllInFlight = null; }
 }
@@ -935,8 +1060,8 @@ async function syncAllDiagrams({ fromTick = false } = {}) {
 // A successful sign-in / re-auth flushes whatever accumulated while the token was lapsed — the user's
 // expectation ("I signed back in, save my changes"). Hooked into the LOW-LEVEL token callback so it fires for
 // EVERY path (the explicit signIn button AND a silent re-auth mid-save/share), not just signIn(). Deferred so the
-// caller that prompted the re-auth (e.g. an in-flight doSave) settles first; syncAllDiagrams coalesces, so this
-// never doubles up with the explicit signIn()/enableAutosync() sweeps.
+// caller that prompted the re-auth (e.g. an in-flight doSave) settles first; syncAllDiagrams coalesces background
+// sweeps. An explicit Sync now or Enable sync waits for a running one and then sweeps again (afterRunningSweep).
 let _catchUpTimer = null;
 function scheduleCatchUpSave() {
   if (_catchUpTimer || !tokenValid()) return;
@@ -963,17 +1088,22 @@ async function pollUpstreamAll({ skipIfRecent = false } = {}) {
   // reads-then-sets its flag across an `await remoteMeta`, so two overlapping sweeps could both pass the guard for
   // the same copy and double-toast. Serialising them removes that race (a skipped tick just runs next cadence).
   if (_pollInFlight) return;
+  // A superseded window stops polling too: its interval kept reading every linked file's metadata, and a lost
+  // direct-edit share could still promote its backup (a Drive write) behind the "open in another window" notice (A14).
+  if (isSessionHalted()) return;
   const token = tokenValid() ? _accessToken : null;
   if (!token) return;
   _pollInFlight = true;
   _lastPollAt = Date.now();
+  const epoch = _driveEpoch;   // each check drops its answer after a Disconnect (A6)
   try {
     const tabs = pctx.getAllTabs ? pctx.getAllTabs() : [];
     for (const tab of tabs) {
+      if (disconnectedSince(epoch)) break;
       try {
-        await checkSharedSourceUpstream(tab.id, token);
-        await checkCopiesUpstream(tab.id, token);
-        await checkDirectEditUpstream(tab.id, token);
+        await checkSharedSourceUpstream(tab.id, token, epoch);
+        await checkCopiesUpstream(tab.id, token, epoch);
+        await checkDirectEditUpstream(tab.id, token, epoch);
       } catch (e) { noteError('drive:sweep-tab', e); /* per-tab best-effort; one unreadable tab never aborts the sweep */ }
     }
   } finally { _pollInFlight = false; }
@@ -985,22 +1115,37 @@ async function pollUpstreamAll({ skipIfRecent = false } = {}) {
  *   - 'conflict' (you have unsaved edits + it moved) → pause + the navbar Review (resolveMasterConflict, diff preview),
  *   - 'notice'   (someone else changed it, you're clean) → a non-blocking "X changed this file" toast + navbar Refresh,
  *   - 'rebase'   (your own save from another device, you're clean) → a quiet Refresh (no toast).
- * s.headRevisionId is the baseline (set at open); a null baseline is seeded silently so only a SUBSEQUENT move flags.
+ * s.headRevisionId is the baseline (set at open); a null one is seeded only after a content check (A4).
  * s.upstreamChanged / s.upstreamAuthor are RUNTIME-only (re-detected each sweep; never persisted). Best-effort.
  */
-async function checkDirectEditUpstream(id, token) {
+async function checkDirectEditUpstream(id, token, epoch = _driveEpoch) {
   const s = driveByTab.get(id);
   if (!s || !s.sharedInEdit || !s.fileId) return;
   let meta = null;
   try { meta = await remoteMeta(s.fileId, token, true); }
   catch (e) {
+    if (disconnectedSince(epoch)) return;   // the tab was cleared meanwhile: no promoted backup, no Refresh (A6)
     const tab = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t && t.id === id);
     if (tab) { try { await directEditLost(id, s, dataForTab(tab), token, e); } catch (e2) { noteError('drive:direct-edit-lost', e2); } }
     return;   // moved: the next save writes your version to your own file; transient: try again next poll
   }
+  if (disconnectedSince(epoch)) return;
   const head = meta && meta.headRevisionId;
   if (!head) return;
-  if (s.headRevisionId == null) { s.headRevisionId = head; persistState(id, s); return; }   // baseline silently
+  if (s.headRevisionId == null) {
+    // No baseline (the head read at open failed). Adopt today's head only when the file still holds what this tab has;
+    // adopting it unchecked hid a collaborator's save, and the next write overwrote it (A4). Otherwise a baseline no
+    // revision has: Refresh is offered and the next save pauses.
+    let held = null;
+    try { held = await fetchGraphAuthed(s.fileId); } catch { return; }   // unreadable now → the next poll
+    if (driveByTab.get(id) !== s || s.headRevisionId != null || disconnectedSince(epoch)) return;   // moved on while reading
+    const same = holdsBaseline(s, held);
+    s.headRevisionId = same ? head : UNSEEN_HEAD;
+    if (!same) s.upstreamChanged = true;
+    persistState(id, s);
+    if (!same) notify();
+    return;
+  }
   const decision = upstreamNoticeDecision({ headChanged: revisionMoved(s.headRevisionId, head), lastByMe: !!(meta.lastModifyingUser && meta.lastModifyingUser.me), hasLocalEdits: !!s.dirty });
   if (decision === 'none') {
     if (s.upstreamChanged) { s.upstreamChanged = false; s.upstreamAuthor = null; notify(); }
@@ -1026,7 +1171,7 @@ async function checkDirectEditUpstream(id, token) {
  * fanOutToCopies sets - so the navbar offers Review (resolveCopyConflict, now with the side-by-side diff). Sets the
  * flag only; the user resolves at their pace. Metadata-only GET per copy; best-effort (an unreadable copy is skipped).
  */
-async function checkCopiesUpstream(id, token) {
+async function checkCopiesUpstream(id, token, epoch = _driveEpoch) {
   const s = driveByTab.get(id);
   const copies = (s && s.copies) || [];
   let newlyDiverged = false;
@@ -1035,7 +1180,14 @@ async function checkCopiesUpstream(id, token) {
     if (!c || (c.kind !== 'edit-share' && c.kind !== 'shared-drive') || !c.fileId || c.lastRevisionId == null || c.conflict) continue;
     let head = null;
     try { head = (await remoteMeta(c.fileId, token)).headRevisionId || null; } catch { continue; }
-    if (head && revisionMoved(c.lastRevisionId, head)) { c.conflict = true; newlyDiverged = true; }
+    if (disconnectedSince(epoch)) return;
+    if (head && revisionMoved(c.lastRevisionId, head)) {
+      // The copy holds what the master last saved or what the last push sent: a push whose answer was lost.
+      const own = await remoteHoldsOneOf(c.fileId, [s.lastHash, c.pushedHash], token);
+      if (disconnectedSince(epoch)) return;
+      if (own) { c.lastRevisionId = head; persistState(id, s); continue; }
+      c.conflict = true; newlyDiverged = true;
+    }
   }
   if (newlyDiverged) {
     persistState(id, s); notify();
@@ -1060,7 +1212,7 @@ const _lostSourcesThisLoad = new Set();
 // A head baseline no real Drive revision has: "this tab never loaded this file's content" (ensureSharedWorkingCopy's
 // different-fork case). revisionMoved() then always reports a move, so the save guard pauses for Review.
 const UNSEEN_HEAD = 'df:unseen-content';
-async function checkSharedSourceUpstream(id, token) {
+async function checkSharedSourceUpstream(id, token, epoch = _driveEpoch) {
   const s = driveByTab.get(id);
   let src = s && s.sharedSource;
   if (!src || !src.fileId) return;
@@ -1074,6 +1226,7 @@ async function checkSharedSourceUpstream(id, token) {
       // 404 while the file is alive [Likely]. Only when the anonymous read fails too is the original gone.
       let publicAlive = false;
       try { await fetchPublicGraph(src.fileId); publicAlive = true; } catch { publicAlive = false; }
+      if (disconnectedSince(epoch)) return;   // it would put the cleared source back (A6)
       if (!publicAlive && !src.unreachableAt) {
         // A NEW object, not a mutation: the tab holds this same object, and persistTabDrive only re-renders the share
         // glyph when the tab's signature differs from the one it computes BEFORE applying - a mutation already shows.
@@ -1087,6 +1240,7 @@ async function checkSharedSourceUpstream(id, token) {
     }
     return;
   }
+  if (disconnectedSince(epoch)) return;
   if (src.unreachableAt) {   // shared again - a new object, for the same re-render reason as above
     const { unreachableAt: _gone, ...rest } = src;
     s.sharedSource = src = rest;
@@ -1102,6 +1256,7 @@ async function checkSharedSourceUpstream(id, token) {
     if (src.openedHash) {
       let remoteData = null;
       try { remoteData = await fetchGraphAuthed(src.fileId); } catch { return; }   // unreadable now → the next poll
+      if (disconnectedSince(epoch)) return;
       if (remoteData && remoteData.graph) pctx.sanitizeGraphJSON(remoteData.graph);
       if (!remoteData || !remoteData.graph || !hashMatches(src.openedHash, remoteData)) base = UNSEEN_HEAD;
     }
@@ -1137,7 +1292,8 @@ async function remoteMeta(fileId, token, withUser = false) {
  */
 async function writeFile(fileId, data, target, token) {
   const jsonStr = JSON.stringify(data);
-  const FIELDS = 'id,headRevisionId,modifiedTime';
+  // A create also reports `trashed`: a file made inside a folder that is in Drive's trash is in the trash too (A8).
+  const FIELDS = fileId ? 'id,headRevisionId,modifiedTime' : 'id,headRevisionId,modifiedTime,trashed';
   // appProperties carry the per-file metadata the library lists WITHOUT reading each file's bytes:
   // dfType (the per-type icon) + dfShapes (the "N elements" count). Values must be strings. Both are sent on
   // every write — including in-place updates — via multipart so the count stays fresh as the diagram changes.
@@ -1167,6 +1323,20 @@ async function writeFile(fileId, data, target, token) {
   return res.json();
 }
 
+/** CREATE a file in the "Diagramforce" folder (writeFile's `target` minus the folder). The cached folder is never
+ *  re-checked, so once the user trashed it every new file could land in the trash with it while the navbar said
+ *  Synced (review 2026-10-15, A8; whether Drive takes such a create at all is not checked live, and a 404 is healed by
+ *  the callers). A create that comes back `trashed` forgets the folder and runs once more in a live one. Every create
+ *  into the folder goes through here: only the master's did, and backups, Keep both, Collaborate copies, clones and
+ *  published masters went on into the trash (review round 2, S1-7). */
+async function createInMyFolder(data, target, token) {
+  const folderId = await ensureFolder(token);
+  const meta = await writeFile(null, data, { ...(target || {}), folderId }, token);
+  if (!folderId || !meta || !meta.trashed) return meta;
+  forgetFolder();
+  return writeFile(null, data, { ...(target || {}), folderId: await ensureFolder(token) }, token);
+}
+
 // ── The save engine (create first time, in-place update after) ───────────────
 // interactive=true  → menu/Save-now: may pop the Google consent dialog + the Pull/Keep/Fork modal + toasts.
 // interactive=false → autosave/flush: NEVER pops a dialog — on divergence it PAUSES (sets s.conflict) instead.
@@ -1179,17 +1349,27 @@ async function writeFile(fileId, data, target, token) {
 // token and the conflict modal, so a sweep and a flush on the same tab could both PATCH - the older snapshot could land
 // last, or leave a stale baseline that raised a false conflict (audit 2026-09-23). The wrapper snapshots the data
 // SYNCHRONOUSLY (the active graph can change the moment we yield) and chains the save behind any in-flight one.
+/** Record a save Drive did not take: the navbar's `failed` state reads it (saveFailureText), Help > Copy diagnostics
+ *  lists it, and the sweep retries while it is set. Runtime only; the next save that lands clears it (A2). */
+function noteSaveFailure(s, err) {
+  // `network`: fetch rejects with a TypeError when the request gets no answer. Another error with no status is not
+  // "Offline" (RA6).
+  s.lastError = { status: (err && err.status) || null, reason: (err && err.reason) || null, network: err instanceof TypeError, at: Date.now() };
+  noteError('drive:save', err);
+}
+
 function doSave(id, opts = {}) {
   const s = tabState(id);
-  const snap = { ...opts, data: opts.data || currentDiagramData(), gen: s.editGen || 0 };
+  const snap = { ...opts, data: opts.data || currentDiagramData(), gen: s.editGen || 0, epoch: _driveEpoch };
   const run = (s._saveChain || Promise.resolve()).catch(() => {}).then(() => doSaveInner(id, snap));
   s._saveChain = run.catch(() => {});
   return run;
 }
 
-async function doSaveInner(id, { interactive, flush = false, data: dataOverride, gen = 0 } = {}) {
+async function doSaveInner(id, { interactive, flush = false, data: dataOverride, gen = 0, epoch = _driveEpoch } = {}) {
   const s = tabState(id);
   if (s.saving) return 'skipped';
+  if (disconnectedSince(epoch)) return 'blocked';   // queued before a Disconnect (A6)
   // A window superseded by a newer one (one active window, single-window.js) writes nothing to Drive either: its new
   // revision ids could never reach the shared session, so the new window's first save hit a false conflict, and
   // "Keep both" there duplicated the file (drive review A7). The newer window syncs the same session content.
@@ -1234,6 +1414,7 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
   // lets the guard below re-detect it, so an interactive Review can still pull the remote after the user undid their
   // own change back to the synced content (it used to answer "Already up to date" and strand the amber state).
   if (s.fileId && hashMatches(s.lastHash, data) && !s.conflict) {
+    s.lastError = null;   // Drive holds this content: whatever failed before no longer matters
     if (unchangedSinceSnapshot()) {
       s.dirty = false;
       pctx.onDriveTabSaved?.(id);   // content matches Drive → this tab is in sync; clear its UI dirty dot
@@ -1255,7 +1436,7 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
     notify();
     // Honest only because `reconcileDriveLinks` has already probed this master (syncNow / signIn / saveTabsToDrive all
     // run it first). Without that probe this line claimed "up to date" against a file deleted in Drive.
-    if (interactive) showToast('Already up to date ✓', 'info');
+    if (interactive) showToast('Already up to date', 'info');
     return 'uptodate';   // distinct from 'skipped' (nothing was even attempted) - callers report it as in sync
   }
 
@@ -1273,17 +1454,20 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
 
   // Pre-save lost-update guard: did the MASTER move on Drive since our last sync (another device)?
   // We only reach here with a real local change to push (dedupe above), so the GET is well-bounded.
-  if (s.fileId && s.headRevisionId) {
+  // With no baseline (the head read at open failed) it runs too, checking by content below. It used to be skipped, and
+  // that write went out blind (review 2026-10-15, A4). A promoted backup (no hash either) is the user's own mirror.
+  if (s.fileId && (s.headRevisionId || s.lastHash != null || s.sharedInEdit)) {
     let remote = null;
     try {
       remote = await remoteMeta(s.fileId, token);
     } catch (e) {
+      if (disconnectedSince(epoch)) return 'blocked';
       // 401 → re-auth prompt.
       if (e && e.status === 401) { _accessToken = null; s.needsSignin = true; notify(); if (interactive) showError('Google sign-in expired - click the Drive icon to sign in again.'); return 'blocked'; }
       // Lost access to a shared / Shared-Drive file: its private My-Drive backup becomes the working master.
       if (!s._healing && (await directEditLost(id, s, data, token, e) || await promoteBackupOnAccessLoss(id, s, data, token, e))) {
         s._healing = true;
-        try { return await doSaveInner(id, { interactive, flush, data, gen }); } finally { s._healing = false; }
+        try { return await doSaveInner(id, { interactive, flush, data, gen, epoch }); } finally { s._healing = false; }
       }
       // 404/403 = the master is GONE (trashed/deleted in Drive, or access lost). Don't defer forever (which would
       // leave the diagram permanently "synced" but absent) — clear the dead link and fall through to a fresh
@@ -1294,11 +1478,14 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
         detachFromOldMaster(s);   // the re-created master lives in My Drive (C6)
       } else {
         // FAIL CLOSED on anything else (network blip / 5xx / 429): we could NOT verify the remote base, so we must
-        // NOT overwrite — that would be the silent cross-device clobber this guard prevents. Defer; next save retries.
+        // NOT overwrite — that would be the silent cross-device clobber this guard prevents. Defer; the navbar says the
+        // save failed, and the sweep re-arms the tick to retry (A2).
+        noteSaveFailure(s, e); notify();
         if (interactive) showError('Could not check the latest version on Google Drive - please try again.');
         return 'blocked';
       }
     }
+    if (disconnectedSince(epoch)) return 'blocked';
     if (remote && remote.trashed) {
       // In Drive's trash: writes still land there, so the navbar said "Synced" until the trash emptied and the file
       // was gone (drive review C7). Treat it like a deleted master: a shared / Shared-Drive one promotes its backup,
@@ -1306,7 +1493,7 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
       const gone = Object.assign(new Error('in Drive trash'), { status: 404, reason: 'notFound' });
       if (!s._healing && await promoteBackupOnAccessLoss(id, s, data, token, gone)) {
         s._healing = true;
-        try { return await doSaveInner(id, { interactive, flush, data, gen }); } finally { s._healing = false; }
+        try { return await doSaveInner(id, { interactive, flush, data, gen, epoch }); } finally { s._healing = false; }
       }
       if (healDecision(404, { imported: !!s.imported, sharedInEdit: !!s.sharedInEdit }) === 'recreate' && await accountReady()) {
         s.fileId = null; s.headRevisionId = null; s.modifiedTime = null; s.lastHash = null;
@@ -1317,16 +1504,34 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
         return 'blocked';
       }
     }
+    if (remote && !s.headRevisionId) {
+      // No baseline: does Drive still hold what this tab last synced? Yes → that head (read before the content) is the
+      // baseline. No, or no hash to compare → a baseline no revision has, so the check below reports a move.
+      let held = null;
+      try { held = await fetchGraphAuthed(s.fileId); } catch (e) { if (!disconnectedSince(epoch)) { noteSaveFailure(s, e); notify(); } return 'blocked'; }
+      if (disconnectedSince(epoch)) return 'blocked';
+      s.headRevisionId = holdsBaseline(s, held) ? (remote.headRevisionId || null) : UNSEEN_HEAD;
+      persistState(id, s);
+    }
     if (remote && revisionMoved(s.headRevisionId, remote.headRevisionId)) {
+      // Drive already holds exactly this content: the move is this tab's own write whose answer was lost. Adopt its
+      // head as the baseline, and the dedupe path below the re-entry finishes as up to date (fan-out included).
+      if (await remoteHoldsOneOf(s.fileId, [hash], token)) {
+        if (disconnectedSince(epoch)) return 'blocked';
+        s.headRevisionId = remote.headRevisionId || null; s.lastHash = hash; s.conflict = false;
+        persistState(id, s);
+        return doSaveInner(id, { interactive, flush, data, gen, epoch });   // in the tab's save chain: not doSave
+      }
+      if (disconnectedSince(epoch)) return 'blocked';
       if (!interactive) { s.conflict = true; notify(); return 'blocked'; }   // autosave/flush pause — no silent clobber
       const proceed = await resolveMasterConflict(id, data, hash, token);
       if (proceed !== 'keep') return 'blocked';   // pull/fork handled inside; dismiss aborts. 'keep' falls through to overwrite.
     }
   }
+  if (disconnectedSince(epoch)) return 'blocked';
 
-  s.saving = true; s.needsSignin = false; _savingCount++; notify();   // _savingCount drives the navbar spin for ANY tab
+  s.saving = true; s.needsSignin = false; _savingCount++; _saveStartedAt = Date.now(); notify();   // _savingCount drives the navbar spin for ANY tab
   try {
-    const folderId = s.fileId ? null : await ensureFolder(token);   // the master always lives in My Drive
     const wasNew = !s.fileId;
     // On CREATE of a tab opened FROM a shared source, the new file is the recipient's own editable working copy of
     // that shared diagram. Stamp the upstream source id so the Load list can collapse the working copy + the original
@@ -1335,10 +1540,16 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
     const sharedFromProps = (wasNew && s.sharedSource && s.sharedSource.fileId)
       ? { appProperties: { dfSharedFrom: s.sharedSource.fileId, dfSharedEdit: s.sharedSource.canEdit ? '1' : '0' } }
       : null;
-    const meta = await writeFile(s.fileId, data, { folderId, ...(sharedFromProps || {}) }, token);
+    // The master always lives in My Drive (createInMyFolder: a trashed folder is replaced, A8).
+    const meta = wasNew ? await createInMyFolder(data, sharedFromProps, token) : await writeFile(s.fileId, data, {}, token);
     s.saving = false; _savingCount = Math.max(0, _savingCount - 1);
+    // Disconnected while the write was in flight: Drive has the content, but the tab stays as Disconnect left it,
+    // unlinked (A6). It used to take the file id back here, so the tab was linked again behind a cleared navbar.
+    if (disconnectedSince(epoch)) { notify(); return 'blocked'; }
     s.fileId = meta.id; s.headRevisionId = meta.headRevisionId || null; s.modifiedTime = meta.modifiedTime || null;
-    s.conflict = false; s.lastSavedAt = Date.now(); s.lastHash = hash;
+    s.conflict = false; s.lastSavedAt = Date.now(); s.lastHash = hash; s.lastError = null;
+    s.upstreamChanged = false; s.upstreamAuthor = null;   // this write is the head now: nothing newer to refresh from
+    if (wasNew) s.pendingRename = false;   // a new file is created under the tab's current name
     const allSaved = unchangedSinceSnapshot();
     if (allSaved) s.dirty = false;
     persistState(id, s); notify();
@@ -1357,6 +1568,7 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
     return 'written';
   } catch (err) {
     s.saving = false; _savingCount = Math.max(0, _savingCount - 1);
+    if (disconnectedSince(epoch)) { notify(); return 'blocked'; }
     if (err && err.status === 401) { _accessToken = null; s.needsSignin = true; notify(); if (interactive) showError('Google sign-in expired - click the Drive icon to sign in again.'); return 'blocked'; }
     // A CREATE (no fileId) that 404s: the cached "Diagramforce" folder is gone. Forget it, so the heal retry below
     // finds or makes a live one instead of targeting the dead parent again.
@@ -1364,7 +1576,7 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
     // Lost access to a shared / Shared-Drive file: its private My-Drive backup becomes the working master.
     if (!s._healing && (await directEditLost(id, s, data, token, err) || await promoteBackupOnAccessLoss(id, s, data, token, err))) {
       s._healing = true;
-      try { return await doSaveInner(id, { interactive, flush, data, gen }); } finally { s._healing = false; }
+      try { return await doSaveInner(id, { interactive, flush, data, gen, epoch }); } finally { s._healing = false; }
     }
     // Self-heal a dead/inaccessible OWN master: a 404 (file trashed/deleted in Drive) or 403 (we lost access
     // to a file we created — e.g. a prior OAuth grant) means the stored fileId is a dead link. Rather than fail
@@ -1376,9 +1588,10 @@ async function doSaveInner(id, { interactive, flush = false, data: dataOverride,
       detachFromOldMaster(s);   // the re-created master lives in My Drive (C6)
       persistState(id, s); notify();
       // doSaveInner, not doSave: this runs INSIDE the tab's save chain, and queueing behind itself would deadlock.
-      try { return await doSaveInner(id, { interactive, flush, data, gen }); }
+      try { return await doSaveInner(id, { interactive, flush, data, gen, epoch }); }
       finally { s._healing = false; }
     }
+    noteSaveFailure(s, err);
     notify();
     console.error('Diagramforce: Sync to Drive failed:', err);
     if (interactive) showError('Could not sync to Google Drive: ' + (err?.message || 'see console for details.'));
@@ -1486,8 +1699,9 @@ async function adoptDriveFileIntoNewTab({ oldTabId, data, fileId, copies, label,
   ns.fileId = fileId; ns.imported = false; ns.copies = copies || []; ns.dirty = false; ns.conflict = false;
   ns.sharedInEdit = old && old.sharedInEdit ? { ...old.sharedInEdit } : null;
   ns.driveId = (old && old.driveId) || null;
+  keepDriveName(newId, ns, data.name);   // "Plan (Drive)", or "Plan 2" beside another "Plan": saves keep "Plan" (RA2)
   // The content IS Drive's, so the next sweep must not write it straight back as a no-op revision.
-  ns.lastHash = dataHash(data);
+  ns.lastHash = loadedHash(newId, data);
   // Baseline = the revision the CONTENT came from, read before (or returned with) the content. Reading the head AFTER
   // the content let a collaborator's save in between become the baseline without ever being loaded - the next save
   // then overwrote it with no conflict prompt.
@@ -1547,8 +1761,10 @@ async function resolveMasterConflict(id, localData, localHash, token) {
         const ok = await pctx.checkVersionWarning(data.av || null, data.name || 'Diagram', data);
         if (!ok) return null;
         if (id !== activeTabId()) { showToast('You switched diagrams, so the Google Drive version was not loaded.', 'info'); return null; }
-        pctx.onReplaceActive(data.name || 'Diagram', pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode);
-        s.conflict = false; s.dirty = false; s.lastHash = dataHash(data); s.headRevisionId = baseHead;
+        pctx.onReplaceActive(data.name || 'Diagram', pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode, { adoptName: true });
+        keepDriveName(id, s, data.name);
+        s.conflict = false; s.dirty = false; s.lastHash = loadedHash(id, data); s.headRevisionId = baseHead;
+        s.upstreamChanged = false; s.upstreamAuthor = null;   // the canvas now IS the Drive head: nothing left to refresh
         persistState(id, s); notify();
         showToast('Switched to the Google Drive version ✓', 'success');
       } else {
@@ -1561,9 +1777,12 @@ async function resolveMasterConflict(id, localData, localHash, token) {
   }
   if (choice === 'fork') {
     try {
-      const meta = await writeFile(null, localData, { folderId: await ensureFolder(token) }, token);
+      const meta = await createInMyFolder(localData, null, token);
       s.fileId = meta.id; s.headRevisionId = meta.headRevisionId || null; s.modifiedTime = meta.modifiedTime || null;
       s.conflict = false; s.dirty = false; s.lastHash = localHash; s.lastSavedAt = Date.now();
+      // The newer version is the OLD file's: the new one has nothing to refresh from. Left set, it read "A newer
+      // version is on Google Drive" right after the Review (review round 2, S1-8).
+      s.upstreamChanged = false; s.upstreamAuthor = null;
       detachFromOldMaster(s, { keepCopies: false });   // a new private diagram, not the old (maybe shared) file (B7)
       persistState(id, s); notify();
       showToast('Saved as a new Google Drive diagram ✓', 'success');
@@ -1592,8 +1811,7 @@ async function ensureMyDriveBackup(id, data, token) {
   if ((!s.driveId && !s.sharedInEdit) || !s.fileId) return;
   if ((s.copies || []).some((c) => c && c.kind === 'mydrive-backup')) return;     // already mirrored
   try {
-    const folderId = await ensureFolder(token);
-    const meta = await writeFile(null, data, { folderId, name: driveBackupFileName(data.name), appProperties: { dfBackupOf: s.fileId } }, token);   // '[Backup] ' prefix - visibly NOT the working diagram in Drive's UI (CR)
+    const meta = await createInMyFolder(data, { name: driveBackupFileName(data.name), appProperties: { dfBackupOf: s.fileId } }, token);   // '[Backup] ' prefix - visibly NOT the working diagram in Drive's UI (CR)
     s.copies = upsertCopy(s.copies, { fileId: meta.id, kind: 'mydrive-backup', label: 'My Drive backup', lastRevisionId: meta.headRevisionId || null, lastPushedAt: Date.now(), verifiedAt: Date.now(), conflict: false });
     persistState(id, s); notify();
   } catch (e) { console.warn('Diagramforce: My-Drive backup create failed', e); }   // retry on the next save
@@ -1645,6 +1863,10 @@ async function directEditLost(id, s, data, token, err) {
   if (!(await promoteBackupOnAccessLoss(id, s, data, token, err, { quiet: true }))) {
     s.fileId = null; s.headRevisionId = null; s.modifiedTime = null; s.lastHash = null; s.conflict = false;
     detachFromOldMaster(s, { keepCopies: false });
+    // Your version differs from the original. Unmarked, the view-only case read as an unedited view, which no background
+    // save may copy into your Drive, so the retry skipped while the toast said "your own copy in My Drive" (S1-5).
+    // Access gone attaches no view, so nothing guards the retry there: marked anyway, the flag outlived the new master.
+    if (viewHead) s.viewEdited = true;
   }
   if (viewHead) s.sharedSource = { fileId: original, canEdit: false, lastRevisionId: viewHead, lastPushedAt: 0, conflict: false, sharedBy: by || undefined };
   persistState(id, s); notify();
@@ -1673,8 +1895,13 @@ async function fanOutToCopies(id, data, token, interactive) {
     // A My-Drive backup is a PRIVATE one-way mirror (the user never edits it directly), so always overwrite it -
     // skip the recipient-edited conflict guard that protects genuine shared copies from a clobber.
     if (copy.kind !== 'mydrive-backup' && revisionMoved(copy.lastRevisionId, remote.headRevisionId)) {
-      if (!copy.conflict) { copy.conflict = true; changed = true; }               // recipient edited → never clobber
-      continue;
+      // The copy holds what this save pushes, or what the last push sent: the move is a push whose answer was lost.
+      if (await remoteHoldsOneOf(copy.fileId, [dataHash(data), copy.pushedHash], token)) {
+        copy.lastRevisionId = remote.headRevisionId || null; copy.conflict = false; changed = true;
+      } else {
+        if (!copy.conflict) { copy.conflict = true; changed = true; }             // recipient edited → never clobber
+        continue;
+      }
     }
     // Already holds this content (nobody changed it, checked above): no write. Every explicit save rewrote every copy,
     // a new revision each time, and recipients saw "changed" notices for nothing (drive review B15).
@@ -1748,7 +1975,8 @@ async function pushToSharedSource(id, data, token, interactive) {
   if (decision === 'skip-readonly') return;                       // view-only: edits live in My Drive only
   if (decision === 'flag-conflict') {
     if (!src.conflict) { src.conflict = true; persistState(id, s); notify(); }
-    if (interactive) showToast('The shared file changed - use Refresh to pull the latest before it syncs back.', 'info');
+    // Only a fork writes back, and Refresh never pulls into a fork: it opens the latest elsewhere (RA5).
+    if (interactive) showToast('The original changed, so your edits stay in your copy. Use Refresh to open the latest.', 'info');
     return;
   }
   if (hashMatches(src.pushedHash, data)) return;   // the source already holds this content (B15)
@@ -1767,6 +1995,15 @@ export async function saveToDrive() {
   return doSave(activeTabId(), { interactive: true });
 }
 
+const diagramsOf = (n, of) => `${n} of ${of} diagram${of === 1 ? '' : 's'}`;
+/** The sweep's Review and Refresh counts in words, or '' (shared by Enable sync and Sync now, S1-9). */
+function sweepNotice({ checked, written, changed, paused }) {
+  const synced = written ? ` (${written} synced)` : '';
+  if (paused) return `${diagramsOf(paused, checked)} changed on Google Drive and here${synced} - open ${paused === 1 ? 'it' : 'each one'} and use Review.`;
+  if (changed) return `${diagramsOf(changed, checked)} changed on Google Drive${synced} - use Refresh to get the latest.`;
+  return '';
+}
+
 /** "Enable sync" — interactive sign-in, turn auto-sync on, and sync ALL open diagrams now
  *  (the promise is every diagram, not just the active one). */
 export async function enableAutosync() {
@@ -1775,12 +2012,16 @@ export async function enableAutosync() {
   catch (e) { if (!/access_denied|popup|closed|cancel/i.test(e.message)) showError(e.message); return; }
   localStorage.setItem(LS.autosync, '1');
   notify();
+  await afterRunningSweep();
   _driveReconcileDone = false;   // a fresh connect re-checks Drive state (catches files deleted/moved out-of-band)
   try {
-    const { written, checked, failed } = await syncAllDiagrams();
+    const res = await syncAllDiagrams();
+    const { written, checked, failed } = res;
     // "Already up to date" only when every diagram actually is: offline, every dirty tab failed closed and this still
-    // said so (audit 2026-09-23).
+    // said so (audit 2026-09-23). Nor while a diagram waits on Refresh or Review: A5's count was ignored here (S1-9).
+    const notice = sweepNotice(res);
     if (failed) showError(`Auto-sync is on, but ${failed} of ${checked} diagram${checked === 1 ? '' : 's'} could not be synced yet - they will retry.`);
+    else if (notice) showToast(`Auto-sync is on. ${notice}`, 'info');
     else showToast(written
       ? `Auto-sync on - ${written} diagram${written === 1 ? '' : 's'} synced to Google Drive ✓`
       : `Auto-sync on - all ${checked} diagram${checked === 1 ? '' : 's'} already up to date ✓`, 'success');
@@ -1801,6 +2042,7 @@ export function disableAutosync() {
  *  The user's files stay untouched in their Drive - reconnecting + saving (or opening from the Drive library)
  *  re-establishes the links. */
 export function disconnectDrive() {
+  _driveEpoch++;   // whatever is still waiting on Drive drops its answer (A6)
   _accessToken = null; _tokenExpiry = 0;
   if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
   // CLEAR the key (not set '0'): an explicit Disconnect is a full reset, NOT a "manual mode" choice. Leaving '0'
@@ -1811,6 +2053,7 @@ export function disconnectDrive() {
   localStorage.removeItem(LS.autosync);
   try { localStorage.removeItem(LS.account); } catch { /* private mode */ }   // the next account is adopted cleanly
   _accountMismatch = null; _accountVerified = false;
+  forgetUserEmail();   // the next account's Organisation is its own (S1-6)
   if (_autosaveTimer) { clearTimeout(_autosaveTimer); _autosaveTimer = null; }
   stopUpstreamPoll();
   _driveReconcileDone = false;   // a future reconnect re-checks Drive state from scratch
@@ -1845,6 +2088,19 @@ function wireHiddenFlush() {
   if (_hiddenFlushWired) return;
   _hiddenFlushWired = true;
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDriveSave(); });
+}
+
+// Back online: retry what failed while offline, instead of waiting for the next edit or tick (A2). Auto-sync only (manual
+// mode never writes on its own), and only when a tab has something to send.
+let _onlineRetryWired = false;
+function wireOnlineRetry() {
+  if (_onlineRetryWired) return;
+  _onlineRetryWired = true;
+  window.addEventListener('online', () => {
+    if (!tokenValid() || !isAutosyncOn()) return;
+    if (![...driveByTab.values()].some((st) => st && (st.lastError || st.dirty))) return;
+    void syncAllDiagrams({ fromTick: true }).catch((e) => noteError('drive:online-retry', e));
+  });
 }
 
 // Schedules a save `cadence` ms after the FIRST unsaved edit (periodic, not per-keystroke
@@ -1884,7 +2140,11 @@ export function notifyDriveChange() {
   const s = tabState(id);
   const auto = isAutosyncOn();
   if (!auto && !s.fileId) return;     // not tracked & auto-sync off → ignore
-  s.dirty = true; s.editGen = (s.editGen || 0) + 1; notify();   // editGen: see doSaveInner's unchangedSinceSnapshot
+  const wasDirty = s.dirty;
+  s.dirty = true; s.editGen = (s.editGen || 0) + 1;   // editGen: see doSaveInner's unchangedSinceSnapshot
+  // This runs on every graph 'change' (a 30-shape drag fires ~30 per frame). The status can only change when the tab
+  // turns unsaved, so re-render the sync control then and not per event (review C12).
+  if (!wasDirty) notify();
   if (!auto) return;                  // manual mode: reflect "unsaved", but don't auto-write
   scheduleAutosave();
   wireHiddenFlush();
@@ -1937,8 +2197,9 @@ export function saveTabNow(id) {
   // A clean tab already linked to Drive (e.g. you just OPENED a synced master) needs no write - skip the redundant
   // boundary PATCH that would otherwise spend an API call + a Drive revision on every open of an unchanged file. A
   // NEW import (no fileId) or a DIRTY tab still saves (that's the whole point of the boundary).
-  // Not the dirty dot alone: Save to Browser clears it, and a close right after skipped the Drive save, leaving the
-  // edit only in the browser (drive review A11). `s.dirty` is set by every edit and cleared only by a Drive save.
+  // Not the dirty dot alone: Save to Browser cleared it (until review D13 removed that modal), and a close right after
+  // skipped the Drive save, leaving the edit only in the browser (drive review A11). `s.dirty` is set by every edit
+  // and cleared only by a Drive save.
   // (Not the hash alone either: a just-opened file's raw content can hash differently from the loaded tab.)
   if (s && s.fileId && !s.dirty && (!tab.dirty || tabDriveClean(id))) return Promise.resolve();
   const data = dataForTab(tab);
@@ -1962,11 +2223,17 @@ export async function syncNow() {
     if (/access_denied|popup|closed|cancel/i.test(e.message)) { showToast('Google sign-in cancelled.', 'info'); return; }
     showError(e.message); return;
   }
+  await afterRunningSweep();
   _driveReconcileDone = false;
   try {
-    const { written, checked, failed } = await syncAllDiagrams();
+    const res = await syncAllDiagrams();
+    const { written, checked, failed } = res;
+    // A conflict pause is not a connection problem: it was counted as failed and blamed the connection while the
+    // navbar said Review (S1-9).
+    const notice = sweepNotice(res);
     if (!checked) showToast('Nothing to sync yet - add some shapes to a diagram first.', 'info');
     else if (failed) showError(`${failed} of ${checked} diagram${checked === 1 ? '' : 's'} could not be synced to Google Drive${written ? ` (${written} synced)` : ''} - check your connection and try again.`);
+    else if (notice) showToast(notice, 'info');
     else if (!written) showToast(`All ${checked} diagram${checked === 1 ? '' : 's'} already up to date on Google Drive ✓`, 'success');
     else showToast(`Synced ${written} of ${checked} diagram${checked === 1 ? '' : 's'} to Google Drive ✓`, 'success');
   } catch (err) {
@@ -2022,11 +2289,19 @@ export async function openFromDrive({ title, sharedFirst, fileId = null } = {}) 
     }
     if (sharedFirst) { builder.addView(sharedView).addView(myView).addView(sharedDrivesView); }
     else { builder.addView(myView).addView(sharedView).addView(sharedDrivesView); }
+    // Resolves once the Picker is done: cancelled, or the picked file has opened. A caller that handed off to it (the
+    // Load Manager, with no tab open) re-offers New Diagram then (review R10).
+    let done;
+    const closed = new Promise((resolve) => { done = resolve; });
     const picker = builder
       .setTitle(title || 'Open a Diagramforce diagram from Drive')
-      .setCallback((d) => { if (d.action === google.picker.Action.PICKED) loadPickedFile(d.docs[0], token); })
+      .setCallback((d) => {
+        if (d.action === google.picker.Action.PICKED) Promise.resolve().then(() => loadPickedFile(d.docs[0], token)).finally(done);
+        else if (d.action === google.picker.Action.CANCEL) done();
+      })
       .build();
     picker.setVisible(true);
+    await closed;
   } catch (err) {
     if (/access_denied|popup|closed|cancel/i.test(err.message)) { showToast('Google sign-in cancelled.', 'info'); return; }
     console.error('Diagramforce: Open from Drive failed:', err);
@@ -2035,10 +2310,12 @@ export async function openFromDrive({ title, sharedFirst, fileId = null } = {}) 
 }
 
 function loadPickedFile(doc, token) {
-  const view = cleanViewTabOf(doc.id);
-  if (view != null) return promotePickedView(view, doc.id, doc.name, token);
-  if (focusTabWithFile(doc.id, doc.name)) return Promise.resolve(true);
-  return importDriveFileById(doc.id, doc.name, token);
+  return openOnce(doc.id, () => {
+    const view = cleanViewTabOf(doc.id);
+    if (view != null) return promotePickedView(view, doc.id, doc.name, token);
+    if (focusTabWithFile(doc.id, doc.name)) return true;
+    return importDriveFileById(doc.id, doc.name, token);
+  });
 }
 
 /** The open tab showing this file as an UNEDITED view (Mode C: no master of its own, nothing unsaved), or null. */
@@ -2085,8 +2362,9 @@ async function promotePickedView(tabId, fileId, name, token) {
   pctx.sanitizeGraphJSON(data.graph);
   const ok = await pctx.checkVersionWarning(data.av || null, data.name || label, data);
   if (!ok || !stillView() || !pctx.onReplaceActive) return false;
-  pctx.onReplaceActive(data.name || label, pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode);
-  setDirectEditMaster(tabId, tabState(tabId), fileId, meta.sharedBy, baseHead, dataHash(data));
+  pctx.onReplaceActive(data.name || label, pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode, { adoptName: true });
+  keepDriveName(tabId, tabState(tabId), data.name);
+  setDirectEditMaster(tabId, tabState(tabId), fileId, meta.sharedBy, baseHead, loadedHash(tabId, data));
   _pickHintDismiss?.(); _pickHintDismiss = null;   // the hint has done its job, however the pick was reached
   showToast(`You can now edit "${label}" - your changes save to the original ✓`, 'success');
   return true;
@@ -2246,7 +2524,7 @@ function setDirectEditMaster(id, s, fileId, sharedBy, headRev, contentHash = nul
  *  a foreign-owned file can be picked; it gets the Shared File model (own My Drive copy + write-back) via
  *  `importedFileRole`, exactly like a `#gd=` share link, instead of being mis-modelled as the user's master.
  *  Returns bool. */
-async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = false, knownCanEdit = false, driveId = null, sharedFrom = null, sharedEdit = null } = {}) {
+async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = false, knownCanEdit = false, driveId = null, sharedFrom = null } = {}) {
   try {
     // Baseline BEFORE the content: a save landing between the two reads then surfaces as a conflict on the next save,
     // instead of becoming a baseline for content this tab never loaded (audit 2026-09-23).
@@ -2274,7 +2552,8 @@ async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = 
     // it, offer to open THAT instead of a fresh view (assumeOwned: it's their master → role 'master', no recursion).
     if (role === 'shared-source') {
       const fork = await offerExistingFork(fileId, data.name || fallbackName);
-      if (fork) return importDriveFileById(fork.id, fork.name, token, { assumeOwned: true });
+      // The copy keeps its link to this original (A12: Load passed the stamp, this door did not).
+      if (fork) return openForkOnce(fork, token, fork.appProperties?.dfSharedFrom || fileId);
     }
 
     const type = pctx.normalizeDiagramType(data.type);
@@ -2284,6 +2563,10 @@ async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = 
     pctx.onImport(data.name || fallbackName, type, data.graph, data.viewport || null, data.mappingMode, null, data.group || null);
     const aid = activeTabId();
     const s = tabState(aid);
+    keepDriveName(aid, s, data.name);
+    // The tab as loaded, hashed NOW: the edit-rights probe below may answer after an edit, and hashing the tab then made
+    // that edit the "already on Drive" baseline, so it never saved (RA3).
+    const openHash = loadedHash(aid, data);
 
     if (role === 'shared-source') {
       // Seed canEdit from the probe; if it came back null (Drive omits capabilities right after a grant), fall back
@@ -2294,7 +2577,7 @@ async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = 
         // Phase B: a Collab/received-EDITABLE share opens as a DIRECT-EDIT master - `fileId` IS the shared file (the
         // ONE source of truth). No working copy + write-back; the private My-Drive backup mirror is minted on the
         // first save. Seed the head revision so the first save is conflict-aware (cross-device lost-update guard).
-        setDirectEditMaster(aid, s, fileId, sharedBy, baseHead, dataHash(data));
+        setDirectEditMaster(aid, s, fileId, sharedBy, baseHead, openHash);
         showToast(`Opened shared "${data.name || fallbackName}" from Drive ✓`, 'success');
         return true;
       }
@@ -2314,7 +2597,7 @@ async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = 
           if (!s2.sharedSource || s2.sharedSource.fileId !== fileId || s2.fileId) return;   // moved on / already forked
           if (ce === true) {
             // Baseline = the revision this tab's content came from (read before it at open), not today's head.
-            setDirectEditMaster(aid, s2, fileId, s2.sharedSource.sharedBy, baseHead, dataHash(data));
+            setDirectEditMaster(aid, s2, fileId, s2.sharedSource.sharedBy, baseHead, openHash);
           } else if (ce != null && s2.sharedSource.canEdit !== ce) {
             s2.sharedSource = { ...s2.sharedSource, canEdit: ce }; persistState(aid, s2); notify();   // replace: glyph re-renders
           }
@@ -2326,14 +2609,16 @@ async function importDriveFileById(fileId, fallbackName, token, { assumeOwned = 
     // Owned → this is the user's master. Mark it synced (imported:false) so edits autosave back and a later sync
     // updates it, not a duplicate. (imported:true was the legacy share flag — superseded by the Shared File model.)
     // lastHash = the file's own content: the next sweep must not write an unchanged diagram back as a no-op revision.
-    s.fileId = fileId; s.imported = false; s.dirty = false; s.lastSavedAt = Date.now(); s.lastHash = dataHash(data);
+    s.fileId = fileId; s.imported = false; s.dirty = false; s.lastSavedAt = Date.now(); s.lastHash = openHash;
     s.copies = []; s.conflict = false;
     // Mode C: a re-opened FORK is an owned master that carries the `dfSharedFrom` stamp (threaded in from the Load
     // row's appProperties). Rebuild its sharedSource as a REFRESH-ONLY pointer to the original so "Refresh from
     // original" keeps working - the fork classifies as an OWNED file (tabShareRole's ownFileId carve-out), NOT as a
     // shared-in tab, so there's no shared glyph and no "Shared with you" row. Without the stamp, no sharedSource.
+    // Never a write-back (canEdit:false), whatever `dfSharedEdit` says: a legacy '1' stamp rebuilt one with a baseline
+    // this tab never loaded, and the next flush wrote the copy over the original (review 2026-10-15, A3).
     s.sharedSource = sharedFrom
-      ? { fileId: sharedFrom, canEdit: sharedEdit === '1', lastRevisionId: null, lastPushedAt: 0, conflict: false }
+      ? { fileId: sharedFrom, canEdit: false, lastRevisionId: null, lastPushedAt: 0, conflict: false }
       : null;
     // Capture whether this owned master LIVES on a team Shared Drive (its own driveId). The library path passes the
     // value through from listMyDiagrams (the probe is skipped under assumeOwned, so meta has none); a probed open
@@ -2403,7 +2688,10 @@ const LIST_MAX_PAGES = 20;
  *  'shared-source' and the file gets the Shared File model (own My Drive copy + write-back) instead of being
  *  mis-modelled as your master - which previously let Close & Delete TRASH a file you don't own (data loss on a
  *  Shared Drive where you're a writer). */
-export async function openDriveDiagram(fileId, name, ownedByMe = true, { knownCanEdit = false, driveId = null, sharedFrom = null, sharedEdit = null } = {}) {
+export function openDriveDiagram(fileId, name, ownedByMe = true, opts = {}) {
+  return openOnce(fileId, () => openDriveDiagramNow(fileId, name, ownedByMe, opts));
+}
+async function openDriveDiagramNow(fileId, name, ownedByMe, { knownCanEdit = false, driveId = null, sharedFrom = null } = {}) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return false; }
   if (focusTabWithFile(fileId, name)) return true;
   let token = tokenValid() ? _accessToken : null;
@@ -2416,9 +2704,9 @@ export async function openDriveDiagram(fileId, name, ownedByMe = true, { knownCa
   // driveId = the row's KNOWN Shared-Drive id (set only when the file LIVES on a team Shared Drive). The owned-master
   // open path skips the ownership probe (assumeOwned), so meta has no driveId - we thread the list's value through so
   // the tab records it (s.driveId) and every local-state surface reads "Shared Drive" + a tab glyph (item 5).
-  // sharedFrom/sharedEdit = the row's `appProperties.dfSharedFrom`/`dfSharedEdit` stamp (Mode C). For an OWNED FORK
-  // this rebuilds the refresh-only sharedSource so "Refresh from original" survives a close+re-open; otherwise null.
-  return importDriveFileById(fileId, name || 'Diagram', token, { assumeOwned: ownedByMe !== false, knownCanEdit, driveId, sharedFrom, sharedEdit });
+  // sharedFrom = the row's `appProperties.dfSharedFrom` stamp (Mode C). For an OWNED FORK this rebuilds the
+  // refresh-only sharedSource so "Refresh from original" survives a close+re-open; otherwise null.
+  return importDriveFileById(fileId, name || 'Diagram', token, { assumeOwned: ownedByMe !== false, knownCanEdit, driveId, sharedFrom });
 }
 
 /**
@@ -2447,15 +2735,16 @@ export async function cloneSharedToMyDrive(sourceFileId, sourceName) {
     // Create the owned copy first (so the new tab can be linked to it immediately), then open it.
     const baseName = (data.name || sourceName || 'Diagram').replace(/\.dgf$/i, '');
     data.name = `${baseName} (copy)`;
-    const folderId = await ensureFolder(token);
-    const created = await writeFile(null, data, { folderId }, token);
+    const created = await createInMyFolder(data, null, token);
     if (!created || !created.id) { showError('Could not create the copy in your Drive.'); return false; }
 
     const type = pctx.normalizeDiagramType(data.type);
     pctx.onImport(data.name, type, data.graph, data.viewport || null, data.mappingMode);
     const aid = activeTabId();
     const s = tabState(aid);
-    s.fileId = created.id; s.imported = false; s.dirty = false; s.lastSavedAt = Date.now(); s.lastHash = null;
+    keepDriveName(aid, s, data.name);
+    // lastHash: the new file holds exactly this content, so the next sweep has nothing to write (A1: null wrote it again).
+    s.fileId = created.id; s.imported = false; s.dirty = false; s.lastSavedAt = Date.now(); s.lastHash = loadedHash(aid, data);
     s.copies = []; s.conflict = false;
     // A clone is YOUR My Drive copy, but it KEEPS a refresh-only link to the original (item 5): the "Shared File"
     // chip marks where it came from, and the upstream sweep can offer Refresh when the original changes. canEdit is
@@ -2491,15 +2780,22 @@ async function findBackupFileId(masterFileId, token) {
 /** Rename the tab's OWNED Drive master when the TAB is renamed, so Drive stays in step with the app (CR: a
  *  cloned "X (clone)" file kept its old name after the tab became "Y"). Metadata-only `files.update({name})` -
  *  content, revisions and sharing are untouched. Deliberately narrow + silent:
- *  - token-gated (no popup): signed out -> skip; the Drive name simply lags until a rename while signed in.
+ *  - token-gated (no popup): signed out, or a transient failure, marks the rename pending (`s.pendingRename`,
+ *    persisted) and the next sweep with a token renames the file to the tab's name then. It used to be dropped: a
+ *    rename during an hourly token lapse left Drive and Load > Google Drive on the old name for good, and content
+ *    saves never send a name (review 2026-10-15, A13).
  *  - OWN masters only: a direct-edit shared master (s.sharedInEdit) is someone ELSE'S file - renaming it would
  *    rename it for its owner. Every other s.fileId in the model is user-owned (created by doSave / adopted via
  *    the owned import branch); if that invariant ever breaks, Drive 403s and we swallow it (fire-and-forget). */
 export async function renameDriveMaster(tabId, newTabName) {
+  if (!isDriveConfigured()) return false;
+  const s = driveByTab.get(tabId);
+  // The user named the tab, so its saves carry that name from now on, not the one the file had (RA2).
+  if (s && s.driveName) { s.driveName = null; persistState(tabId, s); }
+  if (!s || !s.fileId || s.sharedInEdit) return false;
+  const pending = (on) => { if (!!s.pendingRename !== on) { s.pendingRename = on; persistState(tabId, s); } };
+  if (!tokenValid()) { pending(true); return false; }
   try {
-    if (!isDriveConfigured() || !tokenValid()) return false;
-    const s = driveByTab.get(tabId);
-    if (!s || !s.fileId || s.sharedInEdit) return false;
     const res = await fetch(`${API}/${encodeURIComponent(s.fileId)}?supportsAllDrives=true`, {
       method: 'PATCH',
       headers: { Authorization: 'Bearer ' + _accessToken, 'Content-Type': 'application/json' },
@@ -2514,8 +2810,10 @@ export async function renameDriveMaster(tabId, newTabName) {
         body: JSON.stringify({ name: driveBackupFileName(newTabName) }),
       }).catch(() => { /* the reconcile prefix-heal doesn't cover base-name drift; next rename retries */ });
     }
+    // Retried only when it may pass later (sign-in, a rate limit, Drive down). A 403 or 404 would fail every sweep.
+    pending(!res.ok && (res.status === 401 || res.status === 429 || res.status >= 500));
     return res.ok;
-  } catch { return false; }
+  } catch { pending(true); return false; }   // offline
 }
 
 /** Delete a diagram from Drive. Resolves to what actually happened, and callers report only that:
@@ -2613,6 +2911,10 @@ function clearTabDriveState(tabId) {
   s.folderId = null; s.driveId = null; s.folderName = null; s.sharedSource = null; s.sharedInEdit = null;
   s.headRevisionId = null; s.modifiedTime = null; s.conflict = false; s.copies = [];
   s.outgoingGrants = 0;   // the invites were on the old file: an unlinked tab kept its "shared out" glyph (B14)
+  s.lastError = null;
+  // The navbar reads these before the link: kept, Disconnect left a red "Sign in" or an amber Refresh up (A6).
+  s.needsSignin = false; s.upstreamChanged = false; s.upstreamAuthor = null; s.viewEdited = false;
+  s.pendingRename = false; s.driveName = null;
   persistState(tabId, s);
 }
 
@@ -2661,7 +2963,7 @@ export function publishTabsToSharedDrive(ids) {
                 // `dataHash` — the SAME basis doSave dedupes on. The old `hashStr(JSON.stringify(data))` hashed the
                 // whole payload (viewport included), so the baseline it wrote never matched doSave's {graph,name,type,
                 // mappingMode} hash and the next save always re-wrote the master for nothing.
-                if (!s.fileId) { const m = await writeFile(null, data, { folderId: await ensureFolder(token) }, token); s.fileId = m.id; s.headRevisionId = m.headRevisionId || null; s.lastSavedAt = Date.now(); s.lastHash = dataHash(data); }
+                if (!s.fileId) { const m = await createInMyFolder(data, null, token); s.fileId = m.id; s.headRevisionId = m.headRevisionId || null; s.lastSavedAt = Date.now(); s.lastHash = dataHash(data); }
                 // dfCopyOf marks this as a PUBLISHED COPY of the master, never a master itself — so the name-match
                 // adopt in reconcileTabDriveLinks skips it even after this tab is closed (it shares the master's name).
                 const meta = await writeFile(null, data, { folderId: f.id, appProperties: { dfCopyOf: s.fileId } }, token);
@@ -2714,10 +3016,16 @@ export async function fetchPublicGraph(fileId) {
   return JSON.parse(await res.text());
 }
 
-// The signed-in user's email — fetched once (needs the `email` scope) to auto-derive the Workspace
-// domain for "Organisation" sharing, so the UI doesn't have to ask for it.
+// The signed-in user's email — to auto-derive the Workspace domain for "Organisation" sharing, so the UI doesn't have
+// to ask for it. checkAccount takes it from the Drive account's `about`; only without one is it fetched (once) through
+// the separate `email` scope.
 let _userEmail = null;
+let _emailAccount = null;   // the Drive account (permissionId) checkAccount last saw: the cached email is that account's
+/** Disconnect, or a token for another account. Kept, the next Organisation share went to the previous account's
+ *  company (review round 2, S1-6). */
+function forgetUserEmail() { _userEmail = null; _emailTokenClient = null; }
 async function getUserEmail() {
+  await _accountCheck;   // a share right after an account switch waits for the new account's address
   if (_userEmail) return _userEmail;
   const token = await getEmailToken();   // separate `email` consent — only reached via org sharing
   const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token } });
@@ -2812,7 +3120,7 @@ export async function shareActiveEditable({ scope = 'user', emails = [], domain 
   // The recipient-editable copy is stamped dfEditShareOf:<master id> so the Load library HIDES it (like a backup) -
   // it's not a diagram the sharer works on directly; its surface is the Share Manager + the Review flow. Without the
   // stamp it read as a phantom second owned diagram in "Your Google Drive" (screen 3).
-  const meta = await writeFile(null, currentDiagramData(), { folderId: await ensureFolder(token), appProperties: { dfEditShareOf: s.fileId } }, token);
+  const meta = await createInMyFolder(currentDiagramData(), { appProperties: { dfEditShareOf: s.fileId } }, token);
   const copyId = meta.id;
   try {
     if (scope === 'user') {
@@ -2973,6 +3281,9 @@ export function activeShareStatus() {
     copies: activeShareCopies(),
     source: src ? { fileId: src.fileId, canEdit: src.canEdit === true, manageUrl: getDriveManageUrl(src.fileId) } : null,
     manageUrl: s?.fileId ? getDriveManageUrl(s.fileId) : null,
+    // The last live count of direct grants (listActiveShareGrants). NOT a role input: the Share pane shows it only
+    // while the live list is still loading, so a shared master never reads "Not shared yet" in that gap.
+    outgoingGrants: s?.outgoingGrants || 0,
     ownerOnlySharing: !!s?.sharedInEdit,   // someone else's file, edited directly: the Drive link controls are locked (B6)
     ownerOnlyMessage: OWNER_ONLY_SHARE,
   };
@@ -3010,8 +3321,12 @@ export async function resolveCopyConflict(fileId) {
 
   if (choice === 'keep') {   // Keep mine: overwrite their copy with my live master; re-baseline so it's no longer flagged.
     try {
-      const meta = await writeFile(fileId, currentDiagramData(), null, token);
+      const mine = currentDiagramData();
+      const meta = await writeFile(fileId, mine, null, token);
       copy.lastRevisionId = meta.headRevisionId || null; copy.lastPushedAt = Date.now(); copy.conflict = false;
+      // What the copy now holds, as fanOutToCopies records it: without it the next explicit save wrote the same bytes
+      // again, and the recipient got a "changed this file" notice for nothing (review 2026-10-15, A11).
+      copy.pushedHash = dataHash(mine);
       persistState(id, s); notify();
       showToast('Overwrote the shared copy with your version ✓', 'success');
     } catch { showError('Could not overwrite the shared copy.'); }
@@ -3047,6 +3362,9 @@ export async function resolveCopyConflict(fileId) {
     pctx.onReplaceActive(data.name || 'Shared copy', pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode);
     copy.conflict = false; copy.lastPushedAt = Date.now();
     copy.lastRevisionId = copyHead;
+    // The copy holds what this tab now shows. Hashed as the tab would save it (loadedHash: its name, compacted graph),
+    // so the next fan-out skips the copy instead of writing their own content back to them (A11).
+    copy.pushedHash = loadedHash(id, data);
     // Persist the accepted content to the sharer's OWN master RIGHT AWAY (with explicit "saved" feedback). The canvas
     // swap (onReplaceActive) fires NO graph-change event to arm the autosave timer, so without this the accept sits
     // unsaved and Version History wouldn't show it (the reported gap). The master's baseline is KEPT (drive review A2,
@@ -3080,7 +3398,7 @@ export async function resolveActiveConflict() {
   if (s.conflict) { await doSave(id, { interactive: true }); return; }
   const copy = (s.copies || []).find((c) => c && c.conflict);
   if (copy) { await resolveCopyConflict(copy.fileId); return; }
-  showToast("Nothing to resolve - you're in sync ✓", 'info');
+  showToast("Nothing to resolve - you're in sync", 'info');
 }
 
 /**
@@ -3124,6 +3442,9 @@ export async function saveTabsToDrive(tabIds, { share = false } = {}) {
         const why = s.conflict ? 'changed in Google Drive since your last sync - open it and review' : (r === 'skipped' ? 'not saved' : 'could not be saved');
         results.push({ tabId: id, name, status: 'error', error: why }); continue;
       }
+      // A Mode B tab's fileId is someone else's file: Share group made it public in your name and put it in the group
+      // link. The Share pane refuses the same thing (B6); `ownerOnly` lets the group modal say why it was left out.
+      if (share && s.sharedInEdit) { results.push({ tabId: id, name, status: 'error', error: OWNER_ONLY_SHARE, ownerOnly: true }); continue; }
       let shareUrl = null;
       // Reuse the batch token (don't let shareAnyone fire its own getToken — a redundant GIS round-trip that
       // re-popped the account picker even though we're already signed in).
@@ -3149,10 +3470,11 @@ async function adoptSharedDiagram(data, fileId) {
   // just skip the offer and view the original).
   if (tokenValid()) {
     const fork = await offerExistingFork(fileId, data.name || 'Shared diagram');
-    if (fork) { await importDriveFileById(fork.id, fork.name, _accessToken, { assumeOwned: true }); return true; }
+    if (fork) { await openForkOnce(fork, _accessToken, fork.appProperties?.dfSharedFrom || fileId); return true; }
   }
   pctx.onImport(data.name || 'Shared diagram', pctx.normalizeDiagramType(data.type), data.graph, data.viewport || null, data.mappingMode);
   const s = tabState(activeTabId());
+  keepDriveName(activeTabId(), s, data.name);
   // Shared File model: the opened file is the upstream SOURCE, not the user's file. Track it as `sharedSource`
   // (no own master yet — created on the first save) so the tab can keep its own My Drive copy AND, if the user
   // has writer permission, fan edits back to the source. `imported` stays false — the new model supersedes it.
@@ -3181,6 +3503,7 @@ export async function openGroupFromLink({ name = 'Group', ids = [], color = null
   if (!isDriveConfigured()) { showError("This is a Google Drive group link, but Drive isn't set up on this site yet."); return false; }
   if (!Array.isArray(ids) || !ids.length || !pctx.onImportGroup) return false;
   const diagrams = [];
+  const ownLoads = [];   // {fileId, data} of each member that opens as your master, re-baselined once its tab exists
   let oldestAv = null, alreadyOpen = 0;
   for (const fileId of ids) {
     if (tabHolding(fileId) != null) { alreadyOpen++; continue; }
@@ -3194,9 +3517,14 @@ export async function openGroupFromLink({ name = 'Group', ids = [], color = null
     pctx.sanitizeGraphJSON(data.graph);
     if (data.av && (!oldestAv || compareSemver(data.av, oldestAv) < 0)) oldestAv = data.av;
     const head = (probe && probe.headRevisionId) || null;
+    // driveName: a member opened beside a same-named tab is "Plan 2", and its saves keep the file's name (RA2).
     const driveMeta = probe && probe.ownedByMe === true
-      ? { driveFileId: fileId, driveHeadRevisionId: head, driveLastHash: dataHash(data), driveLastSavedAt: Date.now() }
-      : { driveSharedSource: { fileId, canEdit: null, lastRevisionId: head, lastPushedAt: 0, conflict: false, sharedBy: (probe && probe.sharedBy) || undefined } };
+      ? { driveFileId: fileId, driveHeadRevisionId: head, driveLastHash: dataHash(data), driveLastSavedAt: Date.now(), driveName: data.name || null }
+      : { driveSharedSource: { fileId, canEdit: null, lastRevisionId: head, lastPushedAt: 0, conflict: false, sharedBy: (probe && probe.sharedBy) || undefined,
+        // No head read (signed out, or the probe failed): the poll checks the content against what was opened before it
+        // takes a baseline, as a single #gd= open does (B4). Without it, today's head was taken as seen (S1-10).
+        ...(head ? {} : { openedHash: dataHash(data) }) }, driveName: data.name || null };
+    if (driveMeta.driveFileId) ownLoads.push({ fileId, data });
     diagrams.push({
       name: data.name || 'Diagram',
       diagramType: pctx.normalizeDiagramType(data.type),
@@ -3216,6 +3544,13 @@ export async function openGroupFromLink({ name = 'Group', ids = [], color = null
   const ok = await pctx.checkVersionWarning(oldestAv, `Group "${name}"`, null);
   if (!ok) return true;   // declined — handled, nothing more to do
   pctx.onImportGroup([{ name, icon: icon || null, color: color || null }], diagrams);
+  // An own member's baseline is its TAB as it would save (loadedHash), as for every other open (A1): one opened beside
+  // a same-named tab is "Plan 2", the name is in the hash, and the next sweep wrote it back under that name (RA1).
+  for (const { fileId, data } of ownLoads) {
+    const tid = tabHolding(fileId);
+    const st = tid != null ? driveByTab.get(tid) : null;
+    if (st && st.fileId === fileId) { st.lastHash = loadedHash(tid, data); persistState(tid, st); }
+  }
   const skipped = ids.length - diagrams.length - alreadyOpen;
   const notes = [skipped ? `${skipped} couldn't be opened` : '', alreadyOpen ? `${alreadyOpen} already open` : ''].filter(Boolean).join(', ');
   showToast(`Opened shared group "${name}" - ${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'}${notes ? ` (${notes})` : ''} ✓`, skipped ? 'warning' : 'success');
@@ -3246,6 +3581,12 @@ function tabWithFile(fileId) {
   }
   return null;
 }
+/** The open tab whose own Drive file this is, or null (tabWithFile, for storage.js's Browser-archive load). `anyRole`
+ *  widens it to tabHolding, so a fork whose original this is counts too: an unforked view's archive asks that way. */
+export function driveTabHolding(fileId, { anyRole = false } = {}) {
+  if (!fileId) return null;
+  return anyRole ? tabHolding(fileId) : tabWithFile(fileId);
+}
 /** Library / Picker open of a file already open: bring its tab forward instead of a second tab ("X 2") on the same
  *  file, which rewrote its master under another name and gave the first tab a false conflict (drive review C2). */
 function focusTabWithFile(fileId, name) {
@@ -3255,14 +3596,40 @@ function focusTabWithFile(fileId, name) {
   showToast(`"${String(name || 'This diagram').replace(/\.dgf$/i, '')}" is already open - switched to its tab.`, 'info');
   return true;
 }
+/** One open per Drive file at a time (review 2026-10-15, A7). The already-open checks above look at tabs, and an open
+ *  makes its tab only once its reads finish, about a second later. Two opens of one file in that window (Drive's "Open
+ *  with" twice, two #gd= hash changes, a Picker pick while the library opens it) each made a linked tab, the second
+ *  "Plan 2", which wrote that name into the file and gave the first tab a false Review. A second open now waits for
+ *  the first and takes its answer; the first one's tab is in front. */
+const _openingFile = new Map();   // fileId -> the open in flight
+function openOnce(fileId, open) {
+  const inFlight = _openingFile.get(fileId);
+  if (inFlight) return inFlight;
+  const run = Promise.resolve().then(open).finally(() => { if (_openingFile.get(fileId) === run) _openingFile.delete(fileId); });
+  _openingFile.set(fileId, run);
+  return run;
+}
+/** "Open my copy" from the existing-copy offer: the copy may be open already (a Picker open of it has no link to the
+ *  original, so the original's already-open check missed it), and a second tab on it was the same "Plan 2" (XA1). */
+function openForkOnce(fork, token, sharedFrom) {
+  return openOnce(fork.id, () => focusTabWithFile(fork.id, fork.name)
+    || importDriveFileById(fork.id, fork.name, token, { assumeOwned: true, sharedFrom }));
+}
 
 /** Open a `#gd=<fileId>` share link: zero-sign-in anonymous read first, authed direct-open fallback.
  *  A file already open in a tab is brought forward instead of opened again - the case Drive's "Open with"
  *  makes common once it lands in a RUNNING editor (Slot routes it in as a hash change, 1.23.5); before, every
  *  open of the same file was another tab named "<name> 2" on the same master. */
-export async function loadDriveRef(fileId) {
+export function loadDriveRef(fileId) { return openOnce(fileId, () => loadDriveRefNow(fileId)); }
+async function loadDriveRefNow(fileId) {
   const open = tabHolding(fileId);
   if (open != null) { pctx.activateTab?.(open); return true; }
+  // Inside Slot a boot reconnect may be in flight (autoConnectInSlot), and a cold-boot "Open with" lands here at the
+  // same moment. Wait for it BEFORE the probe below: without a token the probe was skipped, the anonymous read opened
+  // your own public file as someone else's view, and its first edit forked a second file (Slot's review, 2026-10-15).
+  // A private file waits too, rather than showing a sign-in the connect is about to make unnecessary. Null
+  // everywhere else - browsers never wait.
+  if (!tokenValid() && _autoConnect) { try { await _autoConnect; } catch { /* declined → the anonymous read below */ } }
   // Signed in already: ask Drive whose file this is BEFORE the anonymous read. That read succeeds for any public file,
   // so your OWN public diagram opened as someone else's (its first edit then minted a second "X.dgf", B2), and an
   // editable one lost its edit rights and its write-back baseline (B4). A file this account cannot see (drive.file
@@ -3294,12 +3661,9 @@ export async function loadDriveRef(fileId) {
     // Private share / very large file / Workspace policy blocked the anonymous read → the recipient must be
     // signed in. If we ALREADY hold a live token this session, open it straight away - no overlay, no second
     // sign-in (item 10). Otherwise this runs on PAGE LOAD with no user gesture, so we can't pop the sign-in
-    // ourselves; show an actionable modal whose button IS the gesture and opens THIS file directly.
-    // Inside Slot a boot reconnect may be in flight (autoConnectInSlot); an "Open with" launch lands here at the
-    // same moment, so wait for it rather than showing a sign-in the connect is about to make unnecessary. Null
-    // everywhere else - browsers never wait.
-    if (!tokenValid() && _autoConnect) { try { await _autoConnect; } catch { /* declined → modal below */ } }
-    if (tokenValid()) { openSharedFileAuthed(fileId); return true; }
+    // ourselves; show an actionable modal whose button IS the gesture and opens THIS file directly. (Slot's boot
+    // reconnect was waited for at the top.)
+    if (tokenValid()) { await holdUpdateReload(openSharedFileAuthed(fileId)); return true; }   // awaited: one open at a time
     showRestrictedOpenModal(fileId);
     return true;
   }
@@ -3346,7 +3710,11 @@ async function openSharedFileAuthed(fileId) {
     showError(e?.status === 403
       ? 'This Google account does not have access to that diagram. Open it with the account it was shared to.'
       : `Could not open the shared diagram${detail}.`);
-    openFromDrive();   // last resort: let them locate it with the right account
+    // Last resort: let them locate it with the right account. Held, not awaited: the Picker is Google's iframe, not one
+    // of our modals, so nothing else stops an update reload while it is up (review round 2, S1-4). Awaited, a pick of
+    // this same file waited on this open (openOnce) and never opened.
+    // Not in Slot: the Picker cannot sign in there, and the error above already says what happened (Slot's review).
+    if (!isInSlot()) holdUpdateReload(openFromDrive());
   }
 }
 
@@ -3364,7 +3732,7 @@ function showRestrictedOpenModal(fileId) {
     footerHtml: '<button class="df-modal__btn" data-act="cancel">Cancel</button><button class="df-modal__btn df-modal__btn--primary" data-act="open" style="margin-left:auto">Sign in &amp; open</button>',
   });
   footer.querySelector('[data-act="cancel"]')?.addEventListener('click', close);
-  footer.querySelector('[data-act="open"]')?.addEventListener('click', () => { close(); openSharedFileAuthed(fileId); });
+  footer.querySelector('[data-act="open"]')?.addEventListener('click', () => { close(); holdUpdateReload(openSharedFileAuthed(fileId)); });
 }
 
 /** Shown after a SIGNED-IN recipient's direct read 404s. Under `drive.file` a 404 is ambiguous - the account may
@@ -3373,6 +3741,21 @@ function showRestrictedOpenModal(fileId) {
  *  shared it (never the owner's identity - we don't have it), and only open the Picker on the user's click. */
 function showNoDirectAccessModal(fileId = null) {
   document.querySelector('.df-drive-open-modal')?.remove();
+  if (isInSlot()) {
+    // The Picker cannot sign in inside Slot, so its button was a dead end (Slot's review, 2026-10-15). Drive's own
+    // Open with grants the file and lands it in this tab.
+    const { footer, close } = buildModal({
+      title: 'Open this shared diagram',
+      className: 'df-drive-open-modal',
+      width: '460px',
+      bodyStyle: 'padding:16px 20px',
+      bodyHtml: `<p style="margin:0 0 10px;color:var(--text-secondary);line-height:1.5">This diagram is shared privately, and Google lets Diagramforce read it once you open it from Drive. ${SLOT_OPEN_WITH_ROUTE}</p>
+        <p style="margin:0;color:var(--text-secondary);line-height:1.5">If it's not there, your account doesn't have access - contact the person who shared it with you.</p>`,
+      footerHtml: '<button class="df-modal__btn df-modal__btn--primary" data-act="cancel" style="margin-left:auto">OK</button>',
+    });
+    footer.querySelector('[data-act="cancel"]')?.addEventListener('click', close);
+    return;
+  }
   const { footer, close } = buildModal({
     title: 'Open this shared diagram',
     className: 'df-drive-open-modal',
@@ -3384,8 +3767,8 @@ function showNoDirectAccessModal(fileId = null) {
   });
   footer.querySelector('[data-act="cancel"]')?.addEventListener('click', close);
   footer.querySelector('[data-act="open"]')?.addEventListener('click', () => {
-    close();
-    openFromDrive({ sharedFirst: true, fileId, title: "Open your shared diagram - look under 'Shared with me'" });
+    close();   // the modal held a pending update reload; the Picker must too (S1-4)
+    holdUpdateReload(openFromDrive({ sharedFirst: true, fileId, title: "Open your shared diagram - look under 'Shared with me'" }));
   });
 }
 
@@ -3395,8 +3778,14 @@ let _pickHintDismiss = null;
 function showEditViaPickerHint(fileId, name) {
   const label = String(name || 'This diagram').replace(/\.dgf$/i, '');
   _pickHintDismiss?.();
+  if (isInSlot()) {   // no Pick button: the Picker cannot sign in inside Slot (Slot's review, 2026-10-15)
+    _pickHintDismiss = showToast(`"${label}" opened as a view. If you were invited to edit it, open it once from this `
+      + "account's Drive tab: Shared with me, right-click it, then Open with > Diagramforce.", 'info', { sticky: true });
+    return;
+  }
   _pickHintDismiss = showToast(`"${label}" opened as a view. If you were invited to edit it, pick it in Google Drive once to edit the original.`,
-    'info', { sticky: true, action: { label: 'Pick in Google Drive', onClick: () => openFromDrive({ sharedFirst: true, fileId, title: `Pick "${label}" to edit the original` }) } });
+    'info', { sticky: true, action: { label: 'Pick in Google Drive',
+      onClick: () => holdUpdateReload(openFromDrive({ sharedFirst: true, fileId, title: `Pick "${label}" to edit the original` })) } });
 }
 
 /** Authenticated read of a file the signed-in user can access (private share / app-created). */
@@ -3504,15 +3893,22 @@ export async function pushTemplates(templates, deleted = []) {
         body: multipartBody({ name: TEMPLATES_DRIVE_NAME, appProperties }, payload, boundary),   // name rides along: heals a pre-'[App Data]' file on its next push
       });
     } else {
+      const create = (folderId) => {
+        const metadata = { name: TEMPLATES_DRIVE_NAME, mimeType: 'application/json', appProperties };
+        if (folderId) metadata.parents = [folderId];
+        return fetch(`${UPLOAD}?uploadType=multipart&fields=id,headRevisionId,trashed&supportsAllDrives=true`, {
+          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary },
+          body: multipartBody(metadata, payload, boundary),
+        });
+      };
+      // As createInMyFolder does for diagrams: a create that comes back `trashed` went into a folder in Drive's trash,
+      // so forget it and create once more in a live one (review round 2, S1-7 follow-up).
       const folderId = await ensureFolder(token);
-      const metadata = { name: TEMPLATES_DRIVE_NAME, mimeType: 'application/json', appProperties };
-      if (folderId) metadata.parents = [folderId];
-      res = await fetch(`${UPLOAD}?uploadType=multipart&fields=id,headRevisionId&supportsAllDrives=true`, {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary },
-        body: multipartBody(metadata, payload, boundary),
-      });
+      res = await create(folderId);
+      if (folderId && res.ok && (await res.clone().json()).trashed) { forgetFolder(); res = await create(await ensureFolder(token)); }
     }
-    if (!res.ok) { if (res.status === 404) setTemplatesFileId(null); return false; }
+    // A create that 404s: the cached folder is gone, so the next push finds or makes a live one.
+    if (!res.ok) { if (res.status === 404) { setTemplatesFileId(null); if (!id) forgetFolder(); } return false; }
     const j = await res.json();
     if (j.id) setTemplatesFileId(j.id);
     _templatesHash = contentHash;
@@ -3521,10 +3917,11 @@ export async function pushTemplates(templates, deleted = []) {
   } catch (e) { console.warn('Diagramforce: pushTemplates failed', e); return false; }
 }
 
-/** Does the ACTIVE tab map to a Drive file — an own master OR an upstream shared source it was opened from? */
-export function activeHasDriveFile() {
+/** Does the ACTIVE tab have a Drive file of its OWN (its master, or a shared file it edits directly)? A view of
+ *  someone's file has none: Version history listed nothing for it and said "save this diagram" (review 2026-10-15, A9). */
+export function activeHasOwnFile() {
   const s = driveByTab.get(activeTabId());
-  return !!(s && (s.fileId || (s.sharedSource && s.sharedSource.fileId)));
+  return !!(s && s.fileId);
 }
 
 /** Was the ACTIVE diagram OPENED from a SHARED file (a `#gd=` link)? Gates "Refresh from sender" — refreshing
@@ -3541,12 +3938,60 @@ export function activeIsImported() {
  *  BEFORE the content). It used to null the baseline "so the next sweep re-seeds silently" - but a null baseline also
  *  switched doSave's lost-update guard OFF until the next poll, and that poll then baselined to whatever the head was
  *  by then, never loaded here: a collaborator's save in that window was overwritten unseen (audit 2026-09-23). */
-function clearUpstreamRefresh(id, s, baseHead = null) {
+// `loaded: false` = the latest opened in ANOTHER tab, so this one has not seen it: a baseline this tab writes against
+// (its own file, a source it writes back to) stays put, or the next write overwrote the version it only opened
+// elsewhere (review 2026-10-15, A3). A refresh-only pointer still records that the latest was seen.
+// A source it writes back to that has moved can never be caught up with: no Refresh pulls into a fork, so the poll raised
+// Refresh again every cycle and each push paused for good (RA5). It becomes what a fork's link to its original is
+// (sync-model §3), a refresh-only pointer, baselined on the head that was opened.
+// A null `baseHead` (the head could not be read: no token, a 503) never replaces a known baseline. The lost-update guard
+// runs only with one, so a null let the next save write blind; the worst case of keeping the old one is a Review (A4).
+function clearUpstreamRefresh(id, s, baseHead = null, { loaded = true } = {}) {
   if (!s) return;
   let changed = false;
-  if (s.sharedSource && s.sharedSource.upstreamChanged) { s.sharedSource.upstreamChanged = false; s.sharedSource.lastRevisionId = baseHead; changed = true; }
-  if (s.upstreamChanged) { s.upstreamChanged = false; s.upstreamAuthor = null; s.headRevisionId = baseHead; changed = true; }
+  const src = s.sharedSource;
+  const writeBack = !!src && !loaded && src.canEdit === true;
+  if (writeBack && baseHead != null && (src.upstreamChanged || src.conflict || revisionMoved(src.lastRevisionId, baseHead))) {
+    s.sharedSource = { ...src, canEdit: false, conflict: false, upstreamChanged: false, lastRevisionId: baseHead };   // a new object: the glyph re-renders
+    changed = true;
+  } else if (src && src.upstreamChanged && !writeBack) {
+    src.upstreamChanged = false;
+    if (baseHead != null) src.lastRevisionId = baseHead;
+    changed = true;
+  }
+  if (s.upstreamChanged) { s.upstreamChanged = false; s.upstreamAuthor = null; if (loaded && baseHead != null) s.headRevisionId = baseHead; changed = true; }
   if (changed) { persistState(id, s); notify(); }
+}
+
+/** The head revision of `fileId`, but only while its content is still `data` (read again after the head, so a save
+ *  in between reads as a change, not as a baseline). Null without a token or on any failure. */
+async function headIfStill(fileId, data) {
+  if (!tokenValid()) return null;
+  try {
+    const head = (await remoteMeta(fileId, _accessToken)).headRevisionId || null;
+    const again = await fetchGraphAuthed(fileId);
+    return again && again.graph && dataHash(again) === dataHash(data) ? head : null;
+  } catch { return null; }
+}
+
+/** Does Refresh pull the original INTO this tab? Only when nothing of yours would be replaced: no fork of your own
+ *  (s.fileId + s.sharedSource; a fork is "clean" right after its auto-save, so the dirty flag alone does not protect
+ *  it), and no edit Drive lacks. The dirty dot is not that signal: Save to Browser clears it, and a signed-out view's
+ *  edits never reach Drive, so Refresh replaced them (review 2026-10-15, A10). `s.dirty` is cleared only by a Drive
+ *  save, and `viewEdited` marks a view you changed. Anything else gets the latest in a NEW tab. `viewEdited` counts only
+ *  while the tab has no file of its own: it is never cleared on a create, so a tab that became your own master kept it,
+ *  and its Refresh opened Review on a clean diagram (review round 2, S1-5 follow-up). */
+function refreshesInPlace(id, s) {
+  const tab = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t && t.id === id);
+  const clean = !!tab && !tab.dirty && !(s && (s.dirty || (s.viewEdited && !s.fileId)));
+  const hasOwnFork = !!(s && s.fileId && s.sharedSource && s.sharedSource.fileId);
+  return clean && !hasOwnFork;
+}
+/** The Drive menu names its Refresh item from this: in place it is "Refresh from the original", in a new tab "Open the
+ *  original shared diagram". It used to ask whether the tab had any Drive file, true on every tab that shows the item (A9). */
+export function activeRefreshesInPlace() {
+  const id = activeTabId();
+  return refreshesInPlace(id, driveByTab.get(id));
 }
 
 export async function reopenLatestFromDrive() {
@@ -3572,11 +4017,17 @@ export async function reopenLatestFromDrive() {
     catch { showError('Could not read the latest version from Google Drive.'); return; }
   }
   if (!data || !data.graph || !data.type) { showError('Could not read the latest version from Google Drive.'); return; }
+  // Signed out at the start, the head was not read; the authed read may have signed in since. Take the head now, but
+  // only if the file still holds what was just read (A4).
+  if (baseHead == null) baseHead = await headIfStill(srcId, data);
   if (!stillHere()) return;
   const mine = currentDiagramData();   // snapshot of YOUR current version, BEFORE any overwrite (for the diff + "Keep both")
-  // Changed since what's open? Same content ⇒ nothing to import (just clear the nag).
-  const same = strongHash(JSON.stringify(mine.graph)) === strongHash(JSON.stringify(data.graph));
-  if (same) { clearUpstreamRefresh(id, s, baseHead); showToast('You already have the latest version ✓', 'info'); return; }
+  // Changed since what's open? Same content ⇒ nothing to import (just clear the nag). A tab that IS this file (your
+  // master, a directly edited share) writes its name into it, so a rename there is a change too: reported as "already
+  // the latest", the old name was saved back over it (review 2026-10-15, A1). A view or a fork has a name of its own.
+  const sameGraph = strongHash(JSON.stringify(mine.graph)) === strongHash(JSON.stringify(data.graph));
+  const isTheFile = !!(s && s.fileId === srcId);
+  if (sameGraph && (!isTheFile || (data.name || 'Diagram') === mine.name)) { clearUpstreamRefresh(id, s, baseHead); showToast('You already have the latest version', 'info'); return; }
   pctx.sanitizeGraphJSON(data.graph);
   const ok = await pctx.checkVersionWarning(data.av || null, data.name || 'Diagram', data);
   if (!ok || !stillHere()) return;
@@ -3587,19 +4038,20 @@ export async function reopenLatestFromDrive() {
   // sharer's overwrite-Drive option.) Best-effort side-by-side diff preview, like the sharer's Review modal.
   if (s && s.sharedInEdit && pctx.onReplaceActive) {
     let preview = {};
-    if (pctx.renderThumbnail) {
+    if (!sameGraph && pctx.renderThumbnail) {
       const noGhost = (d) => ({ added: d.added, removed: d.removed, changed: d.changed });
       preview = {
         localPreview: { graph: mine.graph, shapes: countDiagramShapes(mine.graph.cells), by: 'you', when: '', diff: noGhost(diffGraphs(data.graph, mine.graph)) },
         remotePreview: { graph: data.graph, shapes: countDiagramShapes(data.graph.cells), by: s.upstreamAuthor || '', when: '', diff: noGhost(diffGraphs(mine.graph, data.graph)) },
       };
     }
-    const choice = await showConflictModal({ ...conflictActions('refresh'), ...preview });
+    // Only the name changed: nothing of yours to keep apart, so no choice to make.
+    const choice = sameGraph ? 'pull' : await showConflictModal({ ...conflictActions('refresh'), ...preview });
     if (!choice) return;   // dismissed → leave the refresh signal up for later
     if (!stillHere()) return;
-    pctx.onReplaceActive(data.name || 'Diagram', type, data.graph, data.viewport || null, data.mappingMode);
+    pctx.onReplaceActive(data.name || 'Diagram', type, data.graph, data.viewport || null, data.mappingMode, { adoptName: true });
     clearUpstreamRefresh(id, s, baseHead);
-    if (s) { s.lastHash = dataHash(data); persistState(id, s); }   // the canvas now IS Drive's content - no no-op write
+    if (s) { keepDriveName(id, s, data.name); s.lastHash = loadedHash(id, data); persistState(id, s); }   // the canvas now IS Drive's content - no no-op write
     if (choice === 'fork') {
       // Keep both: the latest now fills THIS (linked) tab; re-open your prior version as a NEW independent diagram.
       pctx.onImport(`${mine.name || 'Diagram'} (your version)`, pctx.normalizeDiagramType(mine.type), mine.graph, mine.viewport || null, mine.mappingMode);
@@ -3610,34 +4062,51 @@ export async function reopenLatestFromDrive() {
     return;
   }
 
-  // Other cases (a view you only READ, or a fork that's your OWN file): keep the existing behaviour. A pure clean view
-  // pulls IN PLACE (nothing of yours to preserve); a fork (s.fileId + s.sharedSource) or unsaved edits open the latest
-  // in a NEW tab so your own work is never clobbered. (A fork is "clean" right after its auto-save, so the dirty flag
-  // alone isn't enough - the own-master check protects a saved fork.)
-  clearUpstreamRefresh(id, s, baseHead);
-  const activeTab = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t.isActive);
-  const clean = activeTab ? !activeTab.dirty : false;
-  const hasOwnFork = !!(s && s.fileId && s.sharedSource && s.sharedSource.fileId);
-  if (clean && !hasOwnFork && pctx.onReplaceActive) {
-    pctx.onReplaceActive(data.name || 'Diagram', type, data.graph, data.viewport || null, data.mappingMode);
+  // Other cases (a view you only READ, or a fork that's your OWN file): a clean one pulls IN PLACE, anything else gets
+  // the latest in a NEW tab (refreshesInPlace).
+  const inPlace = !!(refreshesInPlace(id, s) && pctx.onReplaceActive);
+  // Your OWN diagram with edits Drive lacks: the newer version is your file, not someone's original. Opened as a view
+  // of it, its first edit forked a copy stamped as shared from your master, hid the master in Load, and the copy's push
+  // wrote "(original)" over it (review round 2, S1-2). Edited and changed elsewhere is a conflict, so Review asks:
+  // Keep mine, Keep both or Keep Google Drive. The save's guard sees the moved head; `conflict` stops its dedupe from
+  // answering "up to date" when the edits were undone. Not a legacy imported tab: its file is the SENDER's, and an
+  // interactive save there wrote your edits into it with no Review when its head had not moved.
+  if (isTheFile && !s.imported && !inPlace) {
+    s.conflict = true; notify();
+    await doSave(id, { interactive: true });
+    return;
+  }
+  const wroteBack = !!(s && s.sharedSource && s.sharedSource.canEdit === true);
+  clearUpstreamRefresh(id, s, baseHead, { loaded: inPlace });
+  const stoppedWriteBack = wroteBack && s.sharedSource.canEdit === false;   // RA5: say so, the push toast promised a resume
+  const noWriteBack = stoppedWriteBack ? ' Your copy no longer updates the original.' : '';
+  if (inPlace) {
+    pctx.onReplaceActive(data.name || 'Diagram', type, data.graph, data.viewport || null, data.mappingMode, { adoptName: isTheFile });
+    // Your own master pulled in place (A5): the canvas IS Drive's head now, so the next sweep has nothing to write.
+    if (isTheFile) { keepDriveName(id, s, data.name); s.lastHash = loadedHash(id, data); s.dirty = false; persistState(id, s); notify(); }
     showToast('Refreshed to the latest version ✓', 'success');
   } else {
-    // The original is someone's file (or your own master), so its new tab is a VIEW of it (Mode C): no file until
-    // its first edit. As a plain tab it was saved as a new master on open, on every click (drive review, A3).
+    // The original is someone's file (your own master went to Review above), so its new tab is a VIEW of it (Mode C):
+    // no file until its first edit. As a plain tab it was saved as a new master on open, on every click (drive review, A3).
     const other = tabHolding(srcId, id);
     if (other != null) {
       pctx.activateTab?.(other);
-      showToast('The original is already open in another tab - use Refresh there for the latest.', 'info');
+      showToast(`The original is already open in another tab - use Refresh there for the latest.${noWriteBack}`, 'info');
       return;
     }
+    // No head read (signed out, or the read failed): the poll checks the content against what was opened before it
+    // takes a baseline, as the group link does (S1-10). Without it, today's head was taken as seen, and the write-back
+    // went out over a collaborator's save. Hashed before the import, which takes the graph.
+    const openedHash = baseHead ? null : dataHash(data);
     pctx.onImport(`${data.name || 'Diagram'} (original)`, type, data.graph, data.viewport || null, data.mappingMode);
     const nid = activeTabId();
     const ns = tabState(nid);
     const src = (s && s.sharedSource) || {};
     ns.fileId = null; ns.imported = false; ns.headRevisionId = null; ns.lastHash = null; ns.lastSavedAt = Date.now();
-    ns.sharedSource = { fileId: srcId, canEdit: null, lastRevisionId: baseHead, lastPushedAt: 0, conflict: false, sharedBy: src.sharedBy };
+    ns.sharedSource = { fileId: srcId, canEdit: null, lastRevisionId: baseHead, lastPushedAt: 0, conflict: false, sharedBy: src.sharedBy,
+      ...(openedHash ? { openedHash } : {}) };
     persistState(nid, ns); notify();
-    showToast('Opened the original in a new tab - your copy is kept ✓', 'success');
+    showToast(stoppedWriteBack ? `Opened the original in a new tab - your copy is kept.${noWriteBack}` : 'Opened the original in a new tab - your copy is kept ✓', stoppedWriteBack ? 'info' : 'success');
   }
 }
 
@@ -3696,7 +4165,10 @@ export async function readRevision(revisionId) {
     const data = await fetchRevisionData(fileId, revisionId, token);
     if (!data || !data.graph || !data.type) return null;
     pctx.sanitizeGraphJSON(data.graph);
-    return { name: data.name || null, type: pctx.normalizeDiagramType(data.type), graph: data.graph, viewport: data.viewport || null };
+    // isActiveFile: is the active tab still linked to the file this revision came from? The fetch awaited, and a
+    // caller that compares the revision with the live canvas (Change Review) must not use another diagram's.
+    return { name: data.name || null, type: pctx.normalizeDiagramType(data.type), graph: data.graph, viewport: data.viewport || null,
+      isActiveFile: activeFileId() === fileId };
   } catch (e) {
     if (e && e.status === 401) { _accessToken = null; notify(); }   // surface re-auth via the navbar, then degrade
     return null;
@@ -3719,7 +4191,7 @@ export async function viewRevision(revisionId, fallbackName) {
     // Look-only: set BEFORE the import's deferred boundary save runs, so no master is minted for it.
     { const nid = activeTabId(); const ns = tabState(nid); ns.localOnly = true; persistState(nid, ns); }
     notify();   // a new (unlinked) tab is active — refresh the navbar
-    showToast('Opened an older version (read-only copy) ✓', 'success');
+    showToast('Opened an older version to look at ✓', 'success');   // the navbar's words (S1-11): the canvas is editable
     return true;
   } catch (e) {
     showError('Could not open that version: ' + (e?.message || 'see console.'));
@@ -3737,6 +4209,9 @@ export async function restoreRevision(revisionId) {
   const id = activeTabId();
   const fileId = activeFileId();
   if (!fileId) { showError("This diagram isn't linked to a Google Drive file."); return false; }
+  // The diagram keeps its CURRENT name: the restore brings back content, and the Drive file keeps its name too. The
+  // linked tab used to be "<name> (restored)", which the next sweep wrote into the file (review 2026-10-15, A1).
+  const tabName = (pctx.getAllTabs ? pctx.getAllTabs() : []).find((t) => t && t.id === id)?.name || null;
   try {
     const token = await ensureToken();
     const data = await fetchRevisionData(fileId, revisionId, token);
@@ -3746,10 +4221,14 @@ export async function restoreRevision(revisionId) {
     pctx.sanitizeGraphJSON(data.graph);
     const proceed = await pctx.checkVersionWarning(data.av || null, data.name || 'Diagram', data);
     if (!proceed) return false;
+    if (tabName) data.name = saveName(id, tabName);   // the file's own name when the tab shows another ("Plan 2", RA2)
     const written = await writeFile(fileId, data, null, token);   // old content → new head revision
     const s = tabState(id);
+    // The tab kept as a local backup takes the label, so the restored one opens under the plain name.
+    const name = tabName || data.name || 'Diagram';
+    pctx.renameTabLocal?.(id, `${name} (before restore)`);
     // Baseline = the revision the restore just WROTE (it carries exactly this content).
-    const ok = await adoptDriveFileIntoNewTab({ oldTabId: id, data, fileId, copies: s.copies, label: `${data.name || 'Diagram'} (restored)`, token, alreadyValidated: true, headRevisionId: (written && written.headRevisionId) || null });
+    const ok = await adoptDriveFileIntoNewTab({ oldTabId: id, data, fileId, copies: s.copies, label: name, token, alreadyValidated: true, headRevisionId: (written && written.headRevisionId) || null });
     if (ok) showToast('Restored an earlier version - your previous version is kept in history ✓', 'success');
     return ok;
   } catch (e) {

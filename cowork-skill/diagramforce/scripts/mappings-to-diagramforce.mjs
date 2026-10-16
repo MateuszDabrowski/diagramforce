@@ -27,29 +27,37 @@
 // Measured on a real Data Cloud org: 154 object mappings and 3661 field mappings, one DLO fanning out to 7
 // DMOs. `MAX_CELL_COUNT` is 2000, so "the whole org" is not a diagram - it is a crash. Pick the DLOs the
 // diagram is ABOUT. The Connect path needs no flag: asking for one DMO IS the selection.
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readdirSync, realpathSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { buildDiagram, parseMappingXml, fromConnectPayload, looksLikeMappingJson, fieldCatalogue,
+import { buildDiagram, parseMappingXmlAll, fromConnectPayload, looksLikeMappingJson, fieldCatalogue,
   normaliseCategory, entityRelationships, entityFieldTypes, streamLineage } from './mapping-convert.js';
+import { runSf, readText } from './sf-cli.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
-/** Read a set of `*.objectSourceTargetMap-meta.xml` files into normalised maps. */
+/** Read a set of `*.objectSourceTargetMap-meta.xml` files into normalised maps. Each file goes through
+ *  parseMappingXmlAll, as the app's Paste does: a file of several concatenated documents is several maps, and a
+ *  cut-off one throws, with `e.file` naming it. parseMappingXml on the whole text folded every field block into the
+ *  first document's object pair and read a truncated file as nothing (review 2026-10-15, S7-6). */
 export function parseMappingFiles(paths) {
   const maps = [];
   for (const p of paths) {
-    const m = parseMappingXml(readFileSync(p, 'utf8'));
-    if (m) maps.push(m);
+    try { maps.push(...parseMappingXmlAll(readText(p))); }
+    catch (e) { e.file = p; throw e; }
   }
   return maps;
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+// Entry point: compare REAL paths. The module URL is symlink-resolved and percent-encoded while argv[1] is as typed,
+// and on Windows it uses backslashes, so a name or URL comparison skipped main() (skill-cli-paths.test.js).
+const isMain = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
 if (isMain) {
   const args = process.argv.slice(2);
-  const target = args.find((a) => !a.startsWith('--'));
+  // The flags that take a value: their value is not the path, wherever the flag sits.
+  const VALUED = new Set(['--only', '--with-fields', '--org', '--categories', '--streams', '--title', '--max-cells']);
+  const target = args.find((a, i) => !a.startsWith('--') && !VALUED.has(args[i - 1]));
   const val = (f) => { const i = args.indexOf(f); return i > -1 ? args[i + 1] : null; };
   if (!target) die('usage: node scripts/mappings-to-diagramforce.mjs <dir|file> [--only A,B] [--no-lineage] [--with-fields dmos.json] [--org <alias> | --categories metadata.json] [--streams data-streams.json] [--title T] [--max-cells N]');
 
@@ -64,10 +72,11 @@ if (isMain) {
         .filter((f) => f.endsWith('.objectSourceTargetMap-meta.xml')).map((f) => join(target, f));
       maps = parseMappingFiles(paths);
     } else {
-      const text = readFileSync(target, 'utf8');
+      const text = readText(target);
       maps = looksLikeMappingJson(text) ? fromConnectPayload(JSON.parse(text)) : parseMappingFiles([target]);
     }
-  } catch (e) { die(`Could not read ${target}: ${e.message}`); }
+  // The shared converter words its errors for the app's Paste; nothing was pasted here (S7-6 review).
+  } catch (e) { die(`Could not read ${e.file || target}: ${e.message.replace(/Copy the whole file and paste again\.$/, 'Retrieve the file again.')}`); }
 
   // Everything that was read, before --only narrows it. Kept so the report below can say where a DLO's other
   // fields GO - the canvas alone cannot distinguish "feeds a DMO you did not select" from "read by nothing".
@@ -128,7 +137,7 @@ if (isMain) {
   const catPath = val('--with-fields');
   if (catPath) {
     try {
-      const raw = readFileSync(catPath, 'utf8');
+      const raw = readText(catPath);
       catalogue = fieldCatalogue(JSON.parse(raw.slice(Math.max(0, raw.indexOf('{')))));
     } catch (e) { die(`Could not read the field catalogue ${catPath}: ${e.message}`); }
   }
@@ -159,8 +168,8 @@ if (isMain) {
     // `dataspace` with the space's NAME - `dataSpace` is ignored and the prefix (`bu2`) matches nothing.
     let spaces = [null];
     try {
-      const out = execFileSync('sf', ['api', 'request', 'rest', '/services/data/v64.0/ssot/data-spaces', '-o', orgAlias],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 8 * 1024 * 1024 });
+      const out = runSf(['api', 'request', 'rest', '/services/data/v64.0/ssot/data-spaces', '-o', orgAlias],
+        { maxBuffer: 8 * 1024 * 1024 });
       const named = (JSON.parse(out).dataSpaces || []).map((d) => d?.name).filter((n) => n && n !== 'default');
       spaces = [null, ...named];
     } catch { /* no data-space list: the default space alone, as before */ }
@@ -168,13 +177,11 @@ if (isMain) {
       for (const entity of ['DataModelObject', 'DataLakeObject']) {
         const q = `entityType=${entity}${space ? `&dataspace=${encodeURIComponent(space)}` : ''}`;
         try {
-          const out = execFileSync('sf',
-            ['api', 'request', 'rest', `/services/data/v64.0/ssot/metadata?${q}`, '-o', orgAlias],
-            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 * 1024 * 1024 });
-          takeMeta(JSON.parse(out));
-        } catch {
+          takeMeta(JSON.parse(runSf(['api', 'request', 'rest', `/services/data/v64.0/ssot/metadata?${q}`, '-o', orgAlias])));
+        } catch (e) {
+          // The reason is sf's own (sf-cli.js), so the agent can tell an expired login from a missing CLI.
           console.error(`  note: could not fetch ${entity} metadata${space ? ` for data space ${space}` : ''} from ${orgAlias}`
-            + ' - those cards stay uncategorised and untyped');
+            + ` (${e.message}) - those cards stay uncategorised and untyped`);
         }
       }
     }
@@ -182,7 +189,7 @@ if (isMain) {
   const catFile = val('--categories');
   if (catFile) {
     try {
-      const parsed = JSON.parse(readFileSync(catFile, 'utf8'));
+      const parsed = JSON.parse(readText(catFile));
       (Array.isArray(parsed) ? parsed : [parsed]).forEach(takeMeta);
     } catch { console.error(`  note: could not read ${catFile} - cards stay uncategorised`); }
   }
@@ -208,21 +215,20 @@ if (isMain) {
       const pages = [];
       let url = '/services/data/v64.0/ssot/data-streams';
       for (let guard = 0; url && guard < 40; guard++) {
-        const page = JSON.parse(execFileSync('sf', ['api', 'request', 'rest', url, '-o', orgAlias],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 * 1024 * 1024 }));
+        const page = JSON.parse(runSf(['api', 'request', 'rest', url, '-o', orgAlias]));
         pages.push(page);
         url = page.nextPageUrl || null;
       }
       streamPayloads = pages;
-    } catch {
+    } catch (e) {
       streamPayloads = null;
-      console.error(`  note: could not fetch /ssot/data-streams from ${orgAlias} - the Source lane stays name-matched`);
+      console.error(`  note: could not fetch /ssot/data-streams from ${orgAlias} (${e.message}) - the Source lane stays name-matched`);
     }
   }
   const streamsFile = val('--streams');
   if (streamsFile) {
     try {
-      const parsed = JSON.parse(readFileSync(streamsFile, 'utf8'));
+      const parsed = JSON.parse(readText(streamsFile));
       streamPayloads = (streamPayloads || []).concat(Array.isArray(parsed) ? parsed : [parsed]);
     } catch { console.error(`  note: could not read ${streamsFile} - the Source lane stays name-matched`); }
   }

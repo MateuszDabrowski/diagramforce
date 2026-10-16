@@ -10,7 +10,8 @@
 // _isLoadingJSON guard (via cctx.isLoadingJSON) keeps graph.fromJSON() from clobbering
 // saved z values on reload. Reads the live graph via cctx; the constants + tierNameForType
 // are re-exported by canvas.js for properties.js / properties/widgets.js (reorder controls).
-import { cctx } from './context.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { isUndoRedoActive } from '../history.js?v=1.26.1';
 
 export const Z_BASE = Object.assign(Object.create(null), {
   'sf.Zone':           0,
@@ -55,6 +56,21 @@ const Z_LINK_BASE  = 3000;
 // crossing a row tucks BEHIND the bars instead of overlaying them. Exempt from the normal link tier (3000+).
 export const Z_GANTT_DEP  = 1900;
 
+/** The z band a type lives in: the one Bring to Front / Send to Back reorder it within, and the one the add and
+ *  change:z listeners below keep it in. A type with no Z_BASE entry (df.Pill, df.Legend, df.Table, df.Placeholder, the
+ *  df.Flow* cards, sf.Image, sf.Link) takes the 500-wide band its own default z sits in: sf.Image 1500, the rest 2000.
+ *  The order buttons fell back to 20000, which put the shape above every connector, and a flat 2000 would lift an
+ *  Image off its 1500 default (review S4-1). The listeners skipped these types until port 132d1fde7, so a drag's
+ *  toFront() left a Flow card, Image, Pill or Table above every connector. */
+export function zTierBase(type) {
+  if (Z_BASE[type] !== undefined) return Z_BASE[type];
+  const [ns, name] = String(type || '').split('.');
+  const proto = (ns && name) ? globalThis.joint?.shapes?.[ns]?.[name]?.prototype : null;
+  const defaults = typeof proto?.defaults === 'function' ? proto.defaults() : proto?.defaults;
+  const z = defaults?.z;
+  return Number.isFinite(z) ? Math.floor(z / 500) * 500 : 2000;
+}
+
 // Plain-language tier names used by the property-panel reorder controls.
 // One source of truth so per-renderer call sites don't have to memorise the
 // "Node layer" / "Container layer" / "Zone layer" jargon (which also drifted
@@ -66,7 +82,7 @@ export const Z_GANTT_DEP  = 1900;
 //   z >= 2000  → "shapes"        (every regular cell — SimpleNode, Note,
 //                                 BpmnTask, OrgPerson, DataObject, etc.)
 export function tierNameForType(type) {
-  const base = Z_BASE[type] ?? 2000;
+  const base = zTierBase(type);
   if (base < 500) return 'backgrounds';
   if (base < 2000) return 'containers';
   return 'shapes';
@@ -81,8 +97,9 @@ export function registerZTiers(cctx) {
   // cell already carries its saved z, so the isLoadingJSON guard leaves it alone.
   graph.on('add', (cell) => {
     // When restoring from JSON every cell already carries its correct saved z —
-    // skip all reassignment so we never clobber the persisted layer order.
-    if (cctx.isLoadingJSON) return;
+    // skip all reassignment so we never clobber the persisted layer order. The same for undo of a delete and redo of
+    // an add: the cell's JSON carries its old z, and re-stamping it put a restored card above the one it sat under.
+    if (cctx.isLoadingJSON || isUndoRedoActive()) return;
 
     if (cell.isLink()) {
       // Gantt dependency links sit BELOW the bars (e.g. a pasted dep) — keep them out of the link tier.
@@ -96,8 +113,7 @@ export function registerZTiers(cctx) {
     }
 
     if (!cell.isElement()) return;
-    const base = Z_BASE[cell.get('type')];
-    if (base === undefined) return;
+    const base = zTierBase(cell.get('type'));
 
     // Unconditionally assign the correct tier z for every freshly dropped element.
     // (The isLoadingJSON guard above already protects JSON-restored cells.)
@@ -134,8 +150,7 @@ export function registerZTiers(cctx) {
       return;
     }
     if (!cell.isElement()) return;
-    const base = Z_BASE[cell.get('type')];
-    if (base === undefined) return;
+    const base = zTierBase(cell.get('type'));
     const z = cell.get('z');
     if (z >= base && z < base + Z_TIER_SPAN) return; // already in tier
     // Restore previous z if it was within this tier (drag didn't intend reorder)

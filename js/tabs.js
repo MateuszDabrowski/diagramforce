@@ -1,28 +1,28 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, classifyVersionDiff, normalizeDiagramType, isQuotaError, getStorageFootprint, STORAGE_WARNING_BYTES, evictRedundantArchives, compactGraphForSave, triggerDownload, dateSuffix } from './persistence.js?v=1.25.9';
-import { tbctx } from './tabs/context.js?v=1.25.9';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.25.9';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.25.9';
-import { showCloseConfirmModal, showCloseTabsModal } from './tabs/close-manager.js?v=1.25.9';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent } from './tabs/session-store.js?v=1.25.9';
+import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.1';
+import { tbctx } from './tabs/context.js?v=1.26.1';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.1';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.1';
+import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.1';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.1';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
+export { reofferIfStranded };   // re-export: the Load Manager's Google Picker handoff re-offers New Diagram when it ends with no tab
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.25.9';
-import { escHtml, formatRelativeTime, countDiagramShapes, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, sanitizeCssColor, sanitizeFilenamePart, contrastInk } from './util.js?v=1.25.9';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHtml, bindSplitHeads, setTriStateCheckbox, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.25.9';
-import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, serializeDriveFields, forkName, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.25.9';
-import { showError, showToast, buildModal, confirmModal } from './feedback.js?v=1.25.9';
-import { wireMenuDismiss } from './menu.js?v=1.25.9';
-import { createElementFromComponent, createGanttTimelineSeed, SVG } from './components.js?v=1.25.9';
-import { applyGanttGeometry, layoutTimelineTasks } from './gantt-layout.js?v=1.25.9';
-import { getPalette } from './brand-palette.js?v=1.25.9';
-import { getAllIcons } from './icons.js?v=1.25.9';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.25.9';
-import { noteError } from './diagnostics.js?v=1.25.9';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.1';
+import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.1';
+import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.1';
+import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.1';
+import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.1';
+import { wireMenuDismiss } from './menu.js?v=1.26.1';
+import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.1';
+import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.1';
+import { getPalette } from './brand-palette.js?v=1.26.1';
+import { getAllIcons } from './icons.js?v=1.26.1';
+import { noteError } from './diagnostics.js?v=1.26.1';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -76,6 +76,22 @@ function buildShareGlyph(tab) {
   return glyph;
 }
 
+/** The device-only marker (Slot's brief, 2026-10-16): a diagram with no copy in Google Drive. It takes the share glyph's
+ *  slot and styling (a device-only tab never has a share glyph), so it swaps with the close button the same way. */
+function buildDeviceGlyph(tab) {
+  if (!tabIsDeviceOnly(tab)) return null;
+  const glyph = document.createElementNS(SVG_NS, 'svg');
+  glyph.setAttribute('class', 'df-tab__shared df-tab__shared--device');
+  glyph.setAttribute('width', '12');
+  glyph.setAttribute('height', '12');
+  glyph.setAttribute('aria-hidden', 'true');   // decorative; the tab's aria-label says it too
+  glyph.innerHTML = '<use href="#desktop"></use>';
+  const titleEl = document.createElementNS(SVG_NS, 'title');
+  titleEl.textContent = `Only on this device. ${DEVICE_ONLY_RISK} Save it to Google Drive or export it.`;
+  glyph.insertBefore(titleEl, glyph.firstChild);
+  return glyph;
+}
+
 const { tabs, groups } = tbctx;   // shared array refs; live in js/tabs/context.js (tbctx), mutated in place
 // Synthetic "Ungrouped" tab-bar group (v1.17.0): when ≥1 real group exists, the groupless tabs render inside a
 // collapsible gray "Ungrouped" tray so the user can fold them away to focus on a group. It is NOT a real group
@@ -90,6 +106,13 @@ const onChangeCallbacks = [];
 // the supplied continuation once the user resolves (e.g. Save/Discard a table edit).
 let _switchGuard = null;
 export function setSwitchGuard(fn) { _switchGuard = fn; }
+/** A close that keeps the ACTIVE tab's diagram is a navigation like a switch: an open Edit-in-Table session gets the
+ *  same Save / Discard prompt first. Without it the close's graph swap fired 'reset', which drops the table draft
+ *  silently (review C3). Returns true to close now; false when the guard blocked it, and `retry` runs once the user
+ *  answers. Delete-closes skip it: the draft goes with the diagram the user is deleting. */
+function guardActiveClose(ids, retry) {
+  return !_switchGuard || !ids.includes(tbctx.activeTabId) || _switchGuard(retry);
+}
 // Set by app.js to toolbar.compareActiveWithTab — the tab right-click "Compare" diffs the ACTIVE tab against
 // the right-clicked one, in place (no tab switch).
 let _compareTabHandler = null;
@@ -140,6 +163,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   tbctx.setTabGroup = setTabGroup; tbctx.showNewDiagramModal = showNewDiagramModal; tbctx.importDiagramAsTab = importDiagramAsTab;
   tbctx.createDiagramOfType = createDiagramOfType; tbctx.getGroup = getGroup;
   tbctx.deleteBrowserArchive = deleteBrowserArchive; tbctx.doCloseTab = doCloseTab; tbctx.forgetBrowserSaveName = forgetBrowserSaveName;
+  tbctx.guardActiveClose = guardActiveClose;
   tbctx.getGroups = getGroups; tbctx.getTabGraphJSON = getTabGraphJSON; tbctx.groupBadgeHtml = groupBadgeHtml;
   tbctx.generateId = generateId; tbctx.markDirty = markDirty; tbctx.notifyChange = notifyChange;
   tbctx.renameTab = renameTab; tbctx.render = render; tbctx.reorderTabsByGroup = reorderTabsByGroup;
@@ -158,6 +182,8 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   new ResizeObserver(() => { sizeTabsUniform(); updateScrollButtons(); measurePins(); }).observe(tabListEl);
   // First-render check after the initial tab render lands.
   setTimeout(() => { sizeTabsUniform(); updateScrollButtons(); measurePins(); }, 0);
+
+  wireTabListKeys();
 
   // Dropping a tab on the tab-list's empty area (not on a tab/chip) ungroups it (it sits at the end).
   tabListEl.addEventListener('dragover', (e) => { if (e.target === tabListEl) e.preventDefault(); });
@@ -189,8 +215,6 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   document.getElementById('btn-close-tabs')?.addEventListener('click', () => showCloseTabsModal());
 
   // Wire up persistence hooks
-  persistenceModule.onNamedSave((name) => renameActiveTab(name));
-  persistenceModule.onSaveComplete((type) => markSaved(type));
   persistenceModule.onDriveTabSaved?.((id) => markTabDriveSaved(id));
   persistenceModule.setDiagramTypeGetter(() => getActiveTabType());
   persistenceModule.setTabNameGetter(() => getActiveTabName());
@@ -215,10 +239,12 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     t.driveOutgoingGrants = meta.driveOutgoingGrants || 0;   // direct view/edit invites on the master → "shared out" glyph
     t.driveLocalOnly = !!meta.driveLocalOnly;   // a look-only copy (an older version) - never auto-synced
     t.driveViewEdited = !!meta.driveViewEdited;   // a master-less view share the user edited (the sweep's Mode C guard)
+    t.drivePendingRename = !!meta.drivePendingRename;   // renamed while signed out: the Drive file follows at the next sweep
+    t.driveName = meta.driveName || null;   // the file's own name while this tab shows another ("Plan 2"): saves carry it (RA2)
     scheduleSaveTabs();   // debounced: a sign-in sweep sets this for every tab in quick succession
     // Only re-render the tab bar when the share state actually flipped (a new copy shared, a source
     // gained edit rights), NOT on every routine Drive save — so the glyph appears live without flicker.
-    if (tabShareSignature(t) !== prevShareSig) render();
+    if (tabShareSignature(t) !== prevShareSig || tabIsDeviceOnly(t) !== !!t._deviceMarked) render();
   });
   persistenceModule.setAllTabsGetter(() => getAllTabs());
   persistenceModule.setTabGraphGetter((id) => getTabGraphJSON(id));
@@ -228,7 +254,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   persistenceModule.setActiveMappingModeGetter(() => getActiveMappingMode());
   persistenceModule.setImportHandler((name, type, graphJSON, viewport, mappingMode, driveMeta = null, group = null) => {
     // Dismiss the new-diagram modal if it's open (e.g. first visit via share URL)
-    document.querySelector('.df-new-modal')?.remove();
+    dismissNewDiagramModal();
     // driveMeta (item 1.3): a loaded browser archive that was also in My Drive re-links to its master + shares.
     // group (#7): a single diagram saved from a tab group recreate-or-rejoins it.
     importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { driveMeta, group });
@@ -236,11 +262,19 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   });
 
   // Refresh-in-place: load the pulled latest INTO the active tab (no new tab) - only called when the tab is CLEAN
-  // (no local edits), so there is nothing of the user's to preserve. Keeps the tab's name/type/Drive link; just
+  // (no local edits), so there is nothing of the user's to preserve. Keeps the tab's type/Drive link; just
   // swaps the content + re-baselines (dirty off). Avoids the "every Refresh spawns a duplicate tab" clutter.
-  persistenceModule.setReplaceActiveHandler((name, type, graphJSON, viewport, mappingMode) => {
+  // `adoptName`: the tab IS the pulled file (your master, a directly edited share), so it takes the file's name too.
+  // Kept, the old name went into the next save and undid a rename made elsewhere (review 2026-10-15, A1). This is not
+  // the user's rename, so the Drive file name is left alone.
+  persistenceModule.setReplaceActiveHandler((name, type, graphJSON, viewport, mappingMode, { adoptName = false } = {}) => {
     const tab = tabs.find(t => t.id === tbctx.activeTabId);
     if (!tab) return;
+    // fromJSON detaches every cell: a kept selection left the properties panel editing a detached cell (typing there
+    // changed nothing) and Delete removing a same-id shape nothing showed as selected (review C11). Its onChange also
+    // closes the panel.
+    selectionModule.clearSelection();
+    if (adoptName && name && name !== tab.name) tab.name = uniqueTabName(name, tab.id);
     canvasModule.setLoadingJSON(true);
     try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
     tab.loadFailed = false;
@@ -252,6 +286,17 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     render();
     requestAnimationFrame(() => canvasModule.fitContent());
     saveTabs();
+  });
+
+  // A name the app gives a tab itself (Restore labels the tab it keeps as a backup). Unlike the user's rename
+  // (renameTab), the linked Drive file keeps its name. Returns the name the tab got.
+  persistenceModule.setRenameTabHandler((id, name) => {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab || !name) return null;
+    tab.name = uniqueTabName(name, id);
+    render();
+    saveTabs();
+    return tab.name;
   });
 
   // Replace from the Paste pane: the user's own edit, unlike the pull above (session-store replaceActiveContent).
@@ -276,15 +321,16 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
   persistenceModule.setTypedNewDiagramHandler((type) => { createDiagramOfType(type); });
   persistenceModule.setActivateTabHandler((id) => { switchTab(id); });
   persistenceModule.setImportGroupHandler((groupMetas, diagrams) => {
-    document.querySelector('.df-new-modal')?.remove();
+    dismissNewDiagramModal();
     // Re-create each group (deduped name) and map the export-time group name → new id.
     const nameToId = new Map();
     for (const gm of groupMetas) {
       const gid = createGroup(uniqueGroupName(gm.name || 'Group'), { icon: gm.icon || null, color: gm.color || null });
       nameToId.set(gm.name, gid);
     }
-    // Single-group bundles tag nothing per-diagram — fall back to the lone group.
-    const soleGroup = groupMetas.length === 1 ? nameToId.get(groupMetas[0].name) : null;
+    // A legacy single-group bundle tags nothing per-diagram: fall back to the lone group. Only then - when any
+    // diagram is tagged, an untagged one is not in a group (review D1).
+    const soleGroup = groupMetas.length === 1 && !diagrams.some(d => d.group) ? nameToId.get(groupMetas[0].name) : null;
     for (const d of diagrams) {
       const id = importDiagramAsTab(d.name, d.diagramType, d.graph, d.viewport, d.mappingMode, { fit: false, driveMeta: d.driveMeta || null });
       const t = tabs.find(x => x.id === id);
@@ -325,9 +371,9 @@ function generateId() {
   return `tab-${tbctx.nextId++}`;
 }
 
-/** Return a name that doesn't clash with any existing tab. */
-function uniqueTabName(base) {
-  const existing = new Set(tabs.map(t => t.name));
+/** Return a name that doesn't clash with any existing tab (other than `exceptId`, when a tab is renamed). */
+function uniqueTabName(base, exceptId = null) {
+  const existing = new Set(tabs.filter(t => t.id !== exceptId).map(t => t.name));
   if (!existing.has(base)) return base;
   for (let n = 2; ; n++) {
     const candidate = `${base} ${n}`;
@@ -370,8 +416,9 @@ export function newTab(name = 'Draft', diagramType = 'architecture') {
 /**
  * Open one imported diagram as a fresh tab and load its graph. Shared by the
  * single-diagram import handler and the group-import handler (which opens many
- * in a loop, suppressing the per-diagram fit via `{ fit: false }` and fitting
- * once at the end). Returns the new tab id. Does NOT call saveTabs — the caller
+ * in a loop: `{ fit: false }` swaps the deferred fit for a synchronous one, so each
+ * tab stores its own fitted view, and the handler re-fits the last tab after a frame).
+ * Returns the new tab id. Does NOT call saveTabs — the caller
  * persists once it's done (one diagram, or the whole group).
  */
 function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit = true, driveMeta = null, group = null } = {}) {
@@ -379,7 +426,9 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   // a first-class "Data Mapping" diagram (mapping is now its own type).
   let importType = type;
   if (mappingMode && normalizeDiagramType(type) === 'datamodel') importType = 'datamapping';
-  const id = newTab(uniqueTabName(name), importType);
+  // String(): every import path lands here, and a numeric name (an LLM file's `"title": 2026`) made the tab bar's
+  // `.trim()` throw and left a broken empty tab (review 2026-10-15, B6).
+  const id = newTab(uniqueTabName(String(name ?? 'Imported')), importType);
   // Carry the legacy flag forward too (harmless — the type already drives mapping).
   const importedTab = tabs.find(t => t.id === id);
   if (importedTab) importedTab.mappingMode = !!mappingMode;
@@ -387,6 +436,12 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   // The new tab is now active — load the graph into it.
   canvasModule.setLoadingJSON(true);
   try { graph.fromJSON(graphJSON); canvasModule.migrateLinks(); canvasModule.migrateNodes(); } finally { canvasModule.setLoadingJSON(false); }
+  // A group import opens the next diagram before a frame passes, so a deferred fit would only ever reach the last
+  // tab: every other tab stored newTab's reset view (100% at 0,0, content often off-screen) and switchTab restores
+  // it. Fit NOW, before the snapshot below, so the fitted view is what this tab keeps (the next newTab re-captures
+  // the same live view). fitContent measures model geometry, so it needs no rendered frame. The exported `viewport`
+  // is not applied: it was sized to the exporter's window, and a #dfg= member often has none.
+  if (!fit) canvasModule.fitContent();
   // CRITICAL: newTab() created this tab with `graphJSON: null` and the load above only populated the LIVE
   // graph — so flush the live graph into THIS (now active) tab's stored snapshot immediately. Without it the
   // tab's graphJSON stays empty until the first tab-switch, and any activateTab() on it (a clone exported via
@@ -505,11 +560,12 @@ export function closeDeletedTab(id) {
 export function closeTab(id) {
   const tab = tabs.find(t => t.id === id);
   if (!tab) return;
+  if (!guardActiveClose([id], () => closeTab(id))) return;
 
   // Unsaved changes: when signed in to Drive we just SAVE on close (doCloseTab flushes to Drive below) - no data
   // loss, so no prompt, per the "closing always saves" directive. Only when NOT signed in (browser-only, real loss
-  // risk) do we still ask Save / Close Anyway.
-  if (tab.dirty && !persistenceModule.isSignedIn?.()) {
+  // risk) do we still ask Save / Close Anyway, and only when there is something to decide (closeNeedsPrompt).
+  if (closeNeedsPrompt(tab) && !persistenceModule.isSignedIn?.()) {
     showCloseConfirmModal(id, tab.name);
     return;
   }
@@ -552,6 +608,7 @@ function doCloseTab(id, { archive = true } = {}) {
     tabs.splice(0, 1);
     tbctx.activeTabId = null;
     selectionModule.clearSelection();
+    historyModule.clear();   // the closed tab's commands must not replay onto the empty, tab-less canvas (review C5)
     canvasModule.setLoadingJSON(true);
     try { graph.fromJSON({ cells: [] }); } finally { canvasModule.setLoadingJSON(false); }
     canvasModule.setViewport({ zoom: 1, translate: { tx: 0, ty: 0 } });
@@ -564,9 +621,10 @@ function doCloseTab(id, { archive = true } = {}) {
   tabs.splice(idx, 1);
 
   if (tbctx.activeTabId === id) {
-    // Switch to the closest remaining tab
+    // Switch to the closest remaining tab, with the tab-switch canvas fade: it is the same content swap.
     const newIdx = Math.min(idx, tabs.length - 1);
     activateTab(tabs[newIdx].id, false);
+    flashCanvasSwitch();
   }
 
   render();
@@ -585,10 +643,7 @@ function updateClosingArchive(id, meta) {
     const raw = localStorage.getItem(key);
     if (!raw) return;
     const d = JSON.parse(raw);
-    for (const k of ['driveFileId', 'driveLastSavedAt', 'driveImported', 'driveFolderId', 'driveDriveId', 'driveHeadRevisionId',
-      'driveLastHash', 'driveCopies', 'driveSharedSource', 'driveSharedInEdit', 'driveOutgoingGrants', 'driveLocalOnly']) {
-      if (k in meta) d[k] = meta[k] ?? null;
-    }
+    for (const k of ARCHIVE_DRIVE_FIELDS) if (k in meta) d[k] = meta[k] ?? null;
     localStorage.setItem(key, JSON.stringify(d));
   } catch (e) { noteError('tabs:archive-drive-meta', e); /* best-effort: the archive still holds the diagram itself */ }
 }
@@ -643,6 +698,7 @@ function archiveTabToBrowser(id) {
     const grp = tab.groupId ? getGroup(tab.groupId) : null;
     const data = {
       name, timestamp: Date.now(), version: 1, appVersion: APP_VERSION,
+      tabName: tab.name,   // a Drive-linked archive reopens under this, not the dated archive name (S1-3, loadNamedSave)
       diagramType: tab.diagramType, graph: compactGraphForSave(graphJSON), viewport: getTabViewport(id),
       group: grp ? { name: grp.name, icon: grp.icon || null, color: grp.color || null } : null,   // #7: reopen back into its group
       driveFileId: tab.driveFileId || null,
@@ -665,6 +721,11 @@ function archiveTabToBrowser(id) {
       // archive made it an ordinary diagram, and the next sweep saved the older version to Drive as a new master -
       // the very thing the flag exists to stop (audit 2026-09-23, left open there; fixed 2026-09-24).
       driveLocalOnly: !!tab.driveLocalOnly,
+      // An edited view share with no file yet. Without it the reopened tab read as clean, and Refresh replaced the
+      // edits with the original (review round 2, S1-1).
+      driveViewEdited: !!tab.driveViewEdited,
+      drivePendingRename: !!tab.drivePendingRename,   // a rename Drive has not got yet follows the reopened archive
+      driveName: tab.driveName || null,   // the file's own name, which a reopened "Plan 2" keeps saving under (RA2)
     };
     write = () => localStorage.setItem('sfdiag::save::' + name, JSON.stringify(data));
     write();
@@ -750,7 +811,8 @@ export function switchTab(id) {
   suppressTabHover();
 }
 
-/** A quick opacity fade on the canvas when switching tabs, so the content change registers. */
+/** A quick opacity fade on the canvas when switching tabs (or closing the active one), so the content change
+ *  registers. */
 function flashCanvasSwitch() {
   const el = document.getElementById('paper');
   if (!el) return;
@@ -840,21 +902,11 @@ function markDirty() {
   }
 }
 
-function markSaved(saveType) {
-  const tab = tabs.find(t => t.id === tbctx.activeTabId);
-  if (tab) {
-    tab.dirty = false;
-    tab.lastSavedAt = Date.now();
-    tab.lastSaveType = saveType;
-    render();
-  }
-}
-
 // A SPECIFIC tab (not necessarily the active one) finished syncing to Google Drive - clear its dirty dot. The
 // autosave SWEEP saves many tabs in quick succession, so coalesce the re-render into one rAF instead of
 // thrashing the tab bar per save. Drive is now a first-class "save" for the dot: before this, only browser
-// saves (markSaved / markTabsBrowserSaved) ever cleared `dirty`, so a Drive-synced diagram looked permanently
-// unsaved (and made the user think auto-sync wasn't running).
+// saves (the Save-to-Browser modal, removed in review D13) ever cleared `dirty`, so a Drive-synced diagram looked
+// permanently unsaved (and made the user think auto-sync wasn't running).
 let _driveSavedRenderTimer = null;
 function markTabDriveSaved(id) {
   const tab = tabs.find(t => t.id === id);
@@ -877,6 +929,14 @@ function markTabDriveSaved(id) {
  */
 export function hasAnyDirty() {
   return tabs.some(t => t.dirty);
+}
+
+/** Whether any tab has an undo or redo step. A reload drops them all, so an update reload asks first (B2). The active
+ *  tab's steps are on the live stacks; every other tab's are in the snapshot taken when it was left. */
+export function hasAnyHistory() {
+  if (historyModule?.hasSteps?.()) return true;
+  return tabs.some(t => t.id !== tbctx.activeTabId && !!t.historyState
+    && ((t.historyState.undo || []).length > 0 || (t.historyState.redo || []).length > 0));
 }
 
 /** Return lightweight info for every open tab (used by save modal). */
@@ -914,29 +974,6 @@ export function setTabBrowserSaveName(tabId, name) {
   if (!tab) return;
   tab.browserSaveName = name || null;
   saveCurrentTabState();
-}
-
-/**
- * A batch of tabs was just saved to the browser under given names. Stamp browserSaveName + clear `dirty` +
- * record the save time/type on EACH, then persist + re-render ONCE. Clearing dirty for every saved tab (not
- * just the active one) prevents inactive saved tabs from being left spuriously dirty — which otherwise
- * triggers a stray beforeunload prompt and a sticky dirty dot across reloads (adversarial-review finding).
- * `entries`: [{ id, name }].
- */
-export function markTabsBrowserSaved(entries) {
-  if (!Array.isArray(entries) || !entries.length) return;
-  const now = Date.now();
-  let any = false;
-  for (const { id, name } of entries) {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) continue;
-    tab.browserSaveName = name || tab.browserSaveName || null;
-    tab.dirty = false;
-    tab.lastSavedAt = now;
-    tab.lastSaveType = 'browser';
-    any = true;
-  }
-  if (any) { saveCurrentTabState(); render(); }
 }
 
 /**
@@ -1149,6 +1186,7 @@ function deleteGroupWithTabs(id) {
   const active = tbctx.activeTabId;
   // Close the active tab LAST, so each earlier close doesn't bounce the canvas onto another doomed tab.
   const doomed = tabs.filter(t => t.groupId === id).map(t => t.id).sort((a, b) => (a === active) - (b === active));
+  if (!guardActiveClose(doomed, () => deleteGroupWithTabs(id))) return;
   for (const tid of doomed) doCloseTab(tid);
   const gi = groups.findIndex(g => g.id === id);
   if (gi !== -1) groups.splice(gi, 1);
@@ -1208,6 +1246,18 @@ function openFloating(anchorEl, className, build) {
   // survives). Same behaviour as before - now one implementation shared with the canvas right-click menu.
   const teardown = wireMenuDismiss(panel, closeFloating, { event: 'mousedown' });
   _floatClose = () => { teardown(); panel.remove(); };
+  // Up / Down step through the menu's items (review R3: Safari's Tab skips buttons). Escape is handled here too:
+  // the shared dismissal above arms its document listener a task later, and an Escape pressed before then (a
+  // keyboard-opened menu, scripted input) left the menu open.
+  panel.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeFloating(); return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...panel.querySelectorAll('.df-tab-pop__item')];
+    const i = items.indexOf(document.activeElement);
+    if (i === -1 || !items.length) return;
+    e.preventDefault();
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  });
 }
 function menuItem(label, onClick, opts = {}) {
   const b = document.createElement('button');
@@ -1284,7 +1334,11 @@ function openGroupMenu(anchorEl, group) {
     panel.appendChild(menuSep());
     panel.appendChild(menuItem(group.collapsed ? 'Expand group' : 'Collapse group', () => toggleGroupCollapsed(group.id), { icon: group.collapsed ? 'chevronright' : 'chevrondown' }));
     panel.appendChild(menuItem('Rename group', () => {
-      const chip = tabListEl.querySelector(`.df-tab-group[data-group-id="${group.id}"]`);
+      // Edit on the chip that was right-clicked, as tab Rename does: a PINNED chip's proxy overlays the real chip,
+      // which sits scrolled under the opaque rail, so an input there was invisible (review C9).
+      const chip = anchorEl?.classList?.contains('df-tab-group--pinned')
+        ? anchorEl
+        : tabListEl.querySelector(`.df-tab-group[data-group-id="${group.id}"]`);
       const nameEl = chip?.querySelector('.df-tab-group__name');
       if (chip && nameEl) startGroupRename(chip, nameEl, group);
     }, { icon: 'edit' }));
@@ -1450,7 +1504,7 @@ function openTabGroupMenu(anchorEl, tab) {
     // no handler is wired or you right-clicked the active tab itself (can't diff against itself).
     panel.appendChild(menuItem('Compare', () => {
       if (_compareTabHandler) _compareTabHandler(tab);
-      else { switchTab(tab.id); requestAnimationFrame(() => document.getElementById('btn-review-changes')?.click()); }
+      else { switchTab(tab.id); if (tbctx.activeTabId === tab.id) requestAnimationFrame(() => document.getElementById('btn-review-changes')?.click()); }
     }, { iconSvg: COMPARE_GLYPH }));
     panel.appendChild(menuSep());
     // Per-diagram export / share actions.
@@ -1475,16 +1529,21 @@ function openTabGroupMenu(anchorEl, tab) {
     // graph.fromJSON(tab.graphJSON), silently REVERTING the canvas to the stale stored snapshot. copyCellsAsPng
     // copies the whole tab (all elements) to the OS clipboard; `deferToNextFrame` lets the just-switched views render
     // before the raster (the clipboard write still registers inside this click gesture via the promise).
+    // An Edit-in-Table prompt can veto the switch: then the canvas still shows ANOTHER diagram, so do nothing
+    // rather than copy or share it (review C4). The prompt's own answer completes only the switch.
     panel.appendChild(menuItem('Copy as PNG', () => {
       switchTab(tab.id);
+      if (tbctx.activeTabId !== tab.id) return;
       persistenceModule.copyCellsAsPng(graph.getElements(), { deferToNextFrame: true });
     }, { icon: 'image' }));
     panel.appendChild(menuItem('Copy as PNG (transparent)', () => {
       switchTab(tab.id);
+      if (tbctx.activeTabId !== tab.id) return;
       persistenceModule.copyCellsAsPng(graph.getElements(), { deferToNextFrame: true, transparent: true });
     }, { icon: 'image' }));
     panel.appendChild(menuItem('Share diagram', () => {
       switchTab(tab.id);                   // same guard as PNG export: never fromJSON-revert the active tab to a stale snapshot before sharing
+      if (tbctx.activeTabId !== tab.id) return;
       persistenceModule.shareAsURL();
     }, { icon: 'share_link' }));
     panel.appendChild(menuSep());
@@ -1516,7 +1575,7 @@ function openTabGroupMenu(anchorEl, tab) {
         // goes. 'failed' changed nothing, so the tab and its archive stay.
         const outcome = await persistenceModule.deleteDiagramFromDrive?.(tab.driveFileId);
         if (outcome === 'trashed' || outcome === 'unlinked') {
-          if (outcome === 'trashed') showToast('Moved to Google Drive trash ✓', 'info');
+          if (outcome === 'trashed') showToast('Moved to Google Drive trash ✓', 'success');
           const t = tabs.find(x => x.id === tab.id);
           if (t) {
             t.dirty = false;          // already confirmed → don't re-prompt the unsaved-changes guard
@@ -1594,8 +1653,27 @@ function paintGroupChip(chip, group) {
   if (ink) { chip.style.setProperty('--group-ink', ink); chip.classList.add('df-tab-group--solid'); }
 }
 
+// The open tab or group rename input (startInlineRename / startGroupRename). render() rebuilds the bar from scratch,
+// and background paths call it (a Drive save landing re-renders 60 ms later, a share-state flip). That destroyed the
+// input mid-typing, losing the name (WebKit) or committing half of it (Chromium blurs on removal). render() waits
+// while the input is in the DOM and focused. The rename's finish clears it, and its own renameTab / updateGroup
+// render catches up. Tracked by reference, because a window blur runs finish yet leaves the input as activeElement.
+// The focus check stops an input that never got focus (so never blurs) from holding the bar stale for good.
+let _renameInput = null;
+let _renderPending = false;
+
 function render() {
+  if (_renameInput?.isConnected && document.activeElement === _renameInput) { _renderPending = true; return; }
+  _renderPending = false;
   syncDocumentTitle();
+  // The rebuild below destroys the focused tab or chip. Remember which one held keyboard focus, so it gets it back
+  // (the active tab if it is gone, e.g. just closed) - review R3. Only the tab or chip ITSELF: focus in a rename input
+  // or on a clicked close button goes back to the page as before, so a later Delete still reaches the canvas.
+  const ae = document.activeElement;
+  const held = tabListEl.contains(ae) && ae.matches('.df-tab, .df-tab-group') ? ae : null;
+  const heldSel = !held ? null : held.dataset.tabId
+    ? `.df-tab[data-tab-id="${CSS.escape(held.dataset.tabId)}"]`
+    : `.df-tab-group[data-group-id="${CSS.escape(held.dataset.groupId)}"]`;
   tabListEl.innerHTML = '';
 
   // v1.12.1 safety net — if rendering hits zero tabs AND the new-diagram
@@ -1606,10 +1684,12 @@ function render() {
   // missed if doCloseTab itself throws mid-execution). Deferred one
   // tick so any in-flight state mutation settles before the modal
   // grabs focus.
-  if (tabs.length === 0 && !document.querySelector('.df-new-modal') && !persistenceModule.hasPendingUrlLoad?.()) {
+  if (tabs.length === 0 && !document.querySelector('.df-new-modal') && !persistenceModule.hasPendingUrlLoad?.() && !isHoldingForVersionPrompt()) {
     // ...but not while an Open-with / share launch is still mid-flight (A2) — its own sign-in / load modal owns the
     // screen. Once loadFromURL() has run it strips the URL, so a genuinely-stranded blank app (load failed, 0 tabs)
-    // still re-offers New Diagram on the next render.
+    // still re-offers New Diagram on the next render. Nor under the major-version prompt: its unclosable modal took
+    // the keyboard from the prompt and stayed over the tabs "Try Anyway" restored (review S2-2). "Don't load" offers
+    // New Diagram itself when no tab is left.
     setTimeout(showNewDiagramModal, 0);
   }
 
@@ -1620,6 +1700,11 @@ function render() {
       (tab.dirty ? ' df-tab--dirty' : '') +
       (tab.groupId ? ' df-tab--grouped' : '');
     el.dataset.tabId = tab.id;
+    // Keyboard (review R3): a tab in the #tab-list tablist. Only the ACTIVE tab is a Tab stop; the arrows move across
+    // tabs and chips (wireTabListKeys). Its close button stays out of the Tab order: Delete closes the focused tab.
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', String(tab.id === tbctx.activeTabId));
+    el.tabIndex = tab.id === tbctx.activeTabId ? 0 : -1;
     // A grouped tab carries its group's accent colour (for the top strip linking it to the chip).
     if (tab.groupId) { const g = getGroup(tab.groupId); if (g?.color) el.style.setProperty('--group-accent', g.color); }
 
@@ -1647,16 +1732,20 @@ function render() {
     // R7 — collaboration glyph: only when edits here reach OTHER people. Two glyphs by direction (out vs in);
     // see buildShareGlyph. Local-only + view-only shared sources show nothing.
     const shareGlyph = buildShareGlyph(tab);
+    const deviceGlyph = shareGlyph ? null : buildDeviceGlyph(tab);
+    tab._deviceMarked = !!deviceGlyph;   // runtime only (never persisted): noteContentEdit re-draws when this flips
 
     // Compose the row title so the dirty hint reaches both pointer-hover
     // and screen-reader announcements via the same channel.
-    const sharedSuffix = shareGlyph ? ' - shared (your edits reach others)' : '';
+    const sharedSuffix = shareGlyph ? ' - shared (your edits reach others)' : deviceGlyph ? ' - only on this device' : '';
     el.setAttribute('title', tab.dirty ? `${tab.name} (unsaved)` : tab.name);
     el.setAttribute('aria-label', (tab.dirty ? `${tab.name} - unsaved changes` : tab.name) + sharedSuffix);
 
     const close = document.createElement('button');
     close.className = 'df-tab__close';
     close.title = 'Close tab';
+    close.setAttribute('aria-label', `Close ${tab.name}`);
+    close.tabIndex = -1;
     close.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>';
     close.addEventListener('click', (evt) => {
       evt.stopPropagation();
@@ -1676,6 +1765,7 @@ function render() {
     const end = document.createElement('div');
     end.className = 'df-tab__end';
     if (shareGlyph) end.appendChild(shareGlyph);
+    else if (deviceGlyph) end.appendChild(deviceGlyph);
     end.appendChild(close);
 
     el.appendChild(typeIcon);
@@ -1697,7 +1787,11 @@ function render() {
       hideInsertionLine();
       tabListEl.querySelectorAll('.df-tab-group-tray--drag-over').forEach(t => t.classList.remove('df-tab-group-tray--drag-over'));
     });
+    // An OS file drag is not ours: let it bubble to the window handler that opens it and hides the "Drop to open"
+    // overlay. Stopping it here swallowed the file and left the overlay on screen (review C7).
+    const isFileDrag = (evt) => [...(evt.dataTransfer?.types || [])].includes('Files');
     el.addEventListener('dragover', (evt) => {
+      if (isFileDrag(evt)) return;
       evt.preventDefault();
       evt.dataTransfer.dropEffect = 'move';
       if (_dragKind !== 'tab') return;   // a group drag shows the tray border, not a tab insertion line
@@ -1707,6 +1801,7 @@ function render() {
       showInsertionLine(el, after);
     });
     el.addEventListener('drop', (evt) => {
+      if (isFileDrag(evt)) return;
       evt.preventDefault();
       evt.stopPropagation();   // we handle the precise insertion here; don't let the tray also "join group"
       const rect = el.getBoundingClientRect();
@@ -1750,6 +1845,11 @@ function render() {
     const chip = document.createElement('div');
     chip.className = 'df-tab-group' + (collapsed ? ' df-tab-group--collapsed' : '') + (count === 0 ? ' df-tab-group--empty' : '') + (isUngrouped ? ' df-tab-group--ungrouped' : '');
     chip.dataset.groupId = group.id;
+    // Keyboard (review R3): reached with the arrows from the tabs, Enter / Space toggles it, Shift+F10 opens its menu.
+    chip.setAttribute('role', 'button');
+    chip.tabIndex = -1;
+    chip.setAttribute('aria-label', `${group.name} group, ${count} diagram${count === 1 ? '' : 's'}`);
+    if (count > 0) chip.setAttribute('aria-expanded', String(!collapsed));
     paintGroupChip(chip, group);
 
     // Icon — always present; defaults to 'tabset' so a group never renders icon-less.
@@ -1780,6 +1880,7 @@ function render() {
     menuBtn.className = 'df-tab-group__menu';
     menuBtn.title = 'Group options';
     menuBtn.setAttribute('aria-label', 'Group options');
+    menuBtn.tabIndex = -1;   // Shift+F10 on the chip opens the same menu
     menuBtn.innerHTML = '<svg width="12" height="4" viewBox="0 0 12 4" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="10" cy="2" r="1.4"/></svg>';
     menuBtn.addEventListener('click', (e) => { e.stopPropagation(); isUngrouped ? openUngroupedMenu(menuBtn) : openGroupMenu(menuBtn, group); });
     lead.appendChild(menuBtn);
@@ -1910,6 +2011,60 @@ function render() {
   sizeTabsUniform();
   updateScrollButtons();
   measurePins();
+  if (heldSel) (tabListEl.querySelector(heldSel) || tabListEl.querySelector('.df-tab--active'))?.focus();
+}
+
+// ── Keyboard access (review R3) ──────────────────────────────────────
+// #tab-list is a tablist. Only the active tab is a Tab stop. Left / Right (wrapping), Home and End move focus across
+// every rendered tab and group chip; Enter / Space does what a click does (switch, or collapse a group); Delete or
+// Backspace closes the focused tab; Shift+F10 or the ContextMenu key opens the right-click menu with focus on its
+// first item. Handled keys stop here, and keyboard.js ignores the rest for the canvas selection (no delete, nudge or
+// type-to-rename from a focused tab or chip); chords with Ctrl, Cmd or Alt pass through to the app. A pointer
+// press never leaves focus on a tab or chip: the click behaves as before (focus on the page), so Delete after a
+// click still deletes shapes rather than closing the tab.
+function wireTabListKeys() {
+  tabListEl.setAttribute('role', 'tablist');
+  tabListEl.setAttribute('aria-label', 'Open diagrams');
+  let pointerPress = false;
+  tabListEl.addEventListener('pointerdown', () => { pointerPress = true; setTimeout(() => { pointerPress = false; }, 0); }, true);
+  tabListEl.addEventListener('focusin', (e) => {
+    if (pointerPress && e.target.matches('.df-tab, .df-tab-group')) e.target.blur();
+  });
+  tabListEl.addEventListener('keydown', (e) => {
+    const el = e.target;
+    if (!el.matches?.('.df-tab, .df-tab-group')) return;   // the rename input and anything else keep their keys
+    // App chords pass through: Cmd+Enter was taken as a tab click (no Present, review S3-6) and Cmd+Backspace closed the tab (S2-3).
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const items = [...tabListEl.querySelectorAll('.df-tab, .df-tab-group')];
+    const i = items.indexOf(el);
+    let to = null;
+    if (e.key === 'ArrowRight') to = items[(i + 1) % items.length];
+    else if (e.key === 'ArrowLeft') to = items[(i - 1 + items.length) % items.length];
+    else if (e.key === 'Home') to = items[0];
+    else if (e.key === 'End') to = items[items.length - 1];
+    else if (e.key === 'Enter' || e.key === ' ') el.click();
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && el.dataset.tabId) closeTab(el.dataset.tabId);
+    else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) openMenuFromKeyboard(el);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    to?.focus();
+  });
+}
+
+// The same menu a right-click opens (the element's own contextmenu listener), focused on its first item. Escape or
+// a chosen item gives focus back to the tab or chip when it still exists.
+function openMenuFromKeyboard(el) {
+  el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  const panel = document.querySelector('.df-tab-pop');
+  if (!panel || !_floatClose) return;
+  panel.querySelector('button, input')?.focus();
+  const close = _floatClose;
+  _floatClose = () => {
+    const back = panel.contains(document.activeElement);
+    close();
+    if (back && el.isConnected) el.focus();
+  };
 }
 
 // ── Uniform tab widths ───────────────────────────────────────────────
@@ -2058,6 +2213,7 @@ function buildActivePin(a, revealTo) {
   const close = document.createElement('button');
   close.className = 'df-tab__close';
   close.title = 'Close tab';
+  close.tabIndex = -1;   // the rail is aria-hidden: nothing in it may take focus (review R3)
   close.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>';
   close.addEventListener('click', (evt) => { evt.stopPropagation(); closeTab(tab.id); });
   el.appendChild(close);
@@ -2110,9 +2266,11 @@ function updatePins() {
     pinned.push({ g, hasActive });
     leftW += trayW + GAP;
   }
-  // Ungrouped active (or active whose group didn't pin): pin to the LEFT once its left edge touches.
+  // Ungrouped active (or active whose group didn't pin): pin to the LEFT once its left edge passes the rail. Strict,
+  // as for groups: with `<=` the leftmost tab pinned at scroll 0 and the proxy sat over the real tab, eating its
+  // double-click rename and drag (Q3).
   const activeStandalone = !!a && !activeLeft && (a.groupId === null || !pinned.some(p => p.g.id === a.groupId));
-  if (activeStandalone && a.base <= s + leftW) { activeLeft = true; leftW += a.w + GAP; }
+  if (activeStandalone && a.base < s + leftW) { activeLeft = true; leftW += a.w + GAP; }
   let activeRight = false;
   if (a && !activeLeft && a.base + a.w >= s + clientW) activeRight = true;   // off the right edge
 
@@ -2230,23 +2388,15 @@ function startInlineRename(tabEl, labelEl, tab) {
   input.type = 'text';
   input.className = 'df-tab__rename-input';
   input.value = tab.name;
-  input.style.cssText = `
-    width: ${Math.max(60, labelEl.offsetWidth + 8)}px;
-    font-size: var(--font-size-sm);
-    font-family: var(--font-family);
-    font-weight: 500;
-    border: 1px solid var(--color-primary);
-    border-radius: 3px;
-    background: var(--bg-app);
-    color: var(--text-primary);
-    padding: 0 4px;
-    outline: none;
-    height: 20px;
-  `;
+  input.style.width = `${Math.max(60, labelEl.offsetWidth + 8)}px`;   // the rest is css/tabs.css (an inline font size beat the iOS floor)
 
+  const restoreHost = holdRenameHost(tabEl, input);
   const finish = () => {
+    restoreHost();
+    if (_renameInput === input) _renameInput = null;
     const newName = input.value.trim() || 'Draft';
     renameTab(tab.id, newName);
+    if (_renderPending) render();   // renameTab draws nothing when the tab is gone, so run the deferred render here
   };
 
   input.addEventListener('blur', finish);
@@ -2257,8 +2407,20 @@ function startInlineRename(tabEl, labelEl, tab) {
   });
 
   labelEl.replaceWith(input);
+  _renameInput = input;
   input.focus();
   input.select();
+}
+
+// A rename input lives inside a host that reacts to clicks and drags: a tab switches on click (and re-renders), a
+// group chip toggles collapse, a pinned proxy scrolls the list. A click to place the caret reached the host and the
+// re-render destroyed the editor (review C9). Keep pointer events in the input and stop the host dragging (so a
+// drag selects text) until the edit ends. Returns the function that gives the host its draggable state back.
+function holdRenameHost(hostEl, input) {
+  for (const type of ['click', 'dblclick', 'mousedown', 'pointerdown']) input.addEventListener(type, (evt) => evt.stopPropagation());
+  const wasDraggable = hostEl.draggable;
+  hostEl.draggable = false;
+  return () => { hostEl.draggable = wasDraggable; };
 }
 
 function startGroupRename(chipEl, nameEl, group) {
@@ -2266,8 +2428,14 @@ function startGroupRename(chipEl, nameEl, group) {
   input.type = 'text';
   input.className = 'df-tab-group__rename-input';
   input.value = group.name;
-  input.style.cssText = `width:${Math.max(60, nameEl.offsetWidth + 8)}px;font-size:var(--font-size-sm);font-family:var(--font-family);font-weight:600;border:1px solid var(--color-primary);border-radius:3px;background:var(--bg-app);color:var(--text-primary);padding:0 4px;outline:none;height:18px;`;
-  const finish = () => updateGroup(group.id, { name: input.value.trim() || group.name });
+  input.style.width = `${Math.max(60, nameEl.offsetWidth + 8)}px`;   // the rest is css/tabs.css
+  const restoreHost = holdRenameHost(chipEl, input);
+  const finish = () => {
+    restoreHost();
+    if (_renameInput === input) _renameInput = null;
+    updateGroup(group.id, { name: input.value.trim() || group.name });
+    if (_renderPending) render();   // as for a tab: a group deleted meanwhile draws nothing
+  };
   input.addEventListener('blur', finish);
   input.addEventListener('keydown', (evt) => {
     if (evt.key === 'Enter') { evt.preventDefault(); input.blur(); }
@@ -2275,6 +2443,7 @@ function startGroupRename(chipEl, nameEl, group) {
     evt.stopPropagation();
   });
   nameEl.replaceWith(input);
+  _renameInput = input;
   input.focus();
   input.select();
 }

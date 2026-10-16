@@ -77,6 +77,29 @@ export function hasVerifiedMyDriveBackup(copies) {
   return (Array.isArray(copies) ? copies : []).some((c) => c && c.kind === 'mydrive-backup' && c.verifiedAt);
 }
 
+/** A diagram that exists only on this device: it has shapes and no copy in Google Drive - no own file, no shared
+ *  source, not on a Shared Drive, no verified My Drive backup. A look-only older version is excluded: Drive holds it.
+ *  Safari and every Slot account clear a site's storage after weeks without a click or key press on it, so the tab
+ *  marker and the one prompt read this (Slot's brief, owner decision 2026-10-16). Pure. */
+export function isDeviceOnly(t, shapes) {
+  if (!t || !(shapes > 0)) return false;
+  if (t.driveFileId || t.driveDriveId || t.driveLocalOnly) return false;
+  if (t.driveSharedSource && t.driveSharedSource.fileId) return false;
+  return !hasVerifiedMyDriveBackup(t.driveCopies);
+}
+
+export const DEVICE_ONLY_PROMPT_AFTER_MS = 10 * 60 * 1000;
+
+/** One step of the device-only prompt clock, run on each content edit. `since`: when this diagram's first
+ *  device-only edit happened; `prompted`: the prompt has shown once. The prompt shows once per diagram, while the
+ *  person works, ten minutes after that first edit; a Drive copy stops the clock. Returns the next state. Pure. */
+export function deviceOnlyStep({ deviceOnly, since = null, prompted = false, now }) {
+  if (!deviceOnly) return { since: null, prompted: !!prompted, prompt: false };
+  const start = since ?? now;
+  const prompt = !prompted && now - start >= DEVICE_ONLY_PROMPT_AFTER_MS;
+  return { since: start, prompted: !!prompted || prompt, prompt };
+}
+
 /**
  * Title + plain-language framing + per-option descriptions for the 3-way Pull / Keep / Fork dialog, by
  * divergence context. Written for non-technical users (e.g. business analysts): the labels say what HAPPENS,
@@ -169,6 +192,23 @@ export function healDecision(status, { imported = false, sharedInEdit = false, r
 export function sourceAccessLost(status, reason = null) {
   if (status === 404) return true;
   return status === 403 && !!reason && !TRANSIENT_403_REASONS.has(reason);
+}
+
+/** The navbar's words for a background save Drive did not take (review 2026-10-15, A2: it read "Unsaved changes - they
+ *  will sync" while every save failed). `status`/`reason` come from the failed call; `network` = the request got no
+ *  answer (a fetch TypeError); `offline` is the browser's own report. With auto-sync on each case retries on its own,
+ *  and only a full Drive needs the user. `auto` false: nothing retries until Try again (Sync now) or a tab boundary,
+ *  so the text says so instead of promising a sync (RA6). An exception with no status that is not a network error is
+ *  not "Offline" (RA6). Pure; unit-tested. */
+export function saveFailureText({ status = null, reason = null, offline = false, network = false, auto = true } = {}) {
+  if (reason === 'storageQuotaExceeded') {
+    return auto ? 'Your Google Drive is full - free up space there and this diagram will sync.'
+      : 'Your Google Drive is full - free up space there, then use Try again.';
+  }
+  if (offline || (status == null && network)) {
+    return auto ? 'Offline - your changes will sync when the connection is back.' : 'Offline - use Try again when the connection is back.';
+  }
+  return auto ? 'Google Drive did not take the last save - it will try again.' : 'Google Drive did not take the last save - use Try again.';
 }
 
 export const TRANSIENT_403_REASONS = new Set([
@@ -450,7 +490,17 @@ export const DRIVE_TAB_FIELDS = [
   ['driveOutgoingGrants', 0],
   ['driveLocalOnly', false],   // 1.24.1: a copy the user opened to LOOK at (an older Drive version) - never auto-synced
   ['driveViewEdited', false],  // 1.24.12: a master-less VIEW share the user really EDITED - only then may a sweep mint its copy
+  ['drivePendingRename', false],   // 2026-10-15: renamed while signed out - the next sweep with a token renames the Drive file
+  ['driveName', null],   // 2026-10-15 (RA2): the file's own name while the tab shows another ("Plan 2") - saves carry it
 ];
+
+/** The Drive linkage a close-archive keeps (archiveTabToBrowser in js/tabs.js), so an archive written from a tab of
+ *  an OLD session (the domain move, the major-version "Don't load") reopens linked to its file instead of minting a
+ *  second one. driveClean is not carried: such an archive stays out of the redundant-archive eviction until this
+ *  build has seen its file. Every DRIVE_TAB_FIELDS entry but driveSync belongs here (drive-sync-logic.test.js). */
+export const ARCHIVE_DRIVE_FIELDS = ['driveFileId', 'driveSharedSource', 'driveSharedInEdit', 'driveCopies', 'driveHeadRevisionId',
+  'driveLastHash', 'driveLastSavedAt', 'driveImported', 'driveFolderId', 'driveDriveId', 'driveOutgoingGrants', 'driveLocalOnly',
+  'driveViewEdited', 'drivePendingRename', 'driveName'];
 
 /** A plain object of `o`'s Drive linkage fields with each default applied — the `o.x || default` semantics every
  *  mirror site already uses (an empty driveCopies array is truthy, so it's preserved, matching the old inline code).
@@ -476,9 +526,10 @@ export function driveIdentityOf(o) {
  *  source REMOVED and each surviving working-copy master tagged `_sharedInWorkingCopy: { canEdit }` (so the Load
  *  pane re-homes it under "Shared with you" + shows a Shared-File chip + Copy/Collab pill, keeping the plain Load
  *  button since it's yours). The master→source link is read two ways: a durable appProperty `dfSharedFrom`
- *  (+`dfSharedEdit`) stamped on the master at create (survives a closed tab), OR an OPEN tab pairing its
- *  `driveSharedSource.fileId` to its own `driveFileId` (covers masters saved before the stamp existed). A source is
- *  hidden ONLY when its working copy is actually present in `files`, so nothing vanishes without a replacement row.
+ *  stamped on the master at create (survives a closed tab), OR an OPEN tab pairing its `driveSharedSource.fileId`
+ *  to its own `driveFileId` (covers masters saved before the stamp existed). Only the open tab can tag: the stamp's
+ *  `dfSharedEdit` is not read. A source is hidden ONLY when its working copy is actually present in `files`, so
+ *  nothing vanishes without a replacement row.
  *  Pure — new objects, inputs untouched. */
 export function dedupeSharedInWorkingCopies(files, openTabs = []) {
   const list = Array.isArray(files) ? files.filter(Boolean) : [];
@@ -493,8 +544,10 @@ export function dedupeSharedInWorkingCopies(files, openTabs = []) {
     // Only an EDITABLE (Collab) working copy keeps the "Shared with you" treatment (the Copy/Collab pill + chip).
     if (canEdit) workingCopyOf.set(masterId, { canEdit: true });
   };
-  // Durable: the stamped appProperty wins (works even when no tab is open).
-  for (const f of list) { const from = f.appProperties && f.appProperties.dfSharedFrom; if (from) mark(f.id, from, f.appProperties.dfSharedEdit === '1'); }
+  // Durable: the stamped appProperty hides the original even when no tab is open. It never tags the copy Collab, whatever
+  // its `dfSharedEdit`: a closed working copy re-opens as a fork that never writes back (importDriveFileById), so a
+  // legacy Collab copy stamped '1' listed under "Shared with you" with the Collab pill while its edits stayed with you.
+  for (const f of list) { const from = f.appProperties && f.appProperties.dfSharedFrom; if (from) mark(f.id, from, false); }
   // Live: an open shared-in tab whose own master is in the list.
   for (const t of (Array.isArray(openTabs) ? openTabs : [])) { const src = t && t.driveSharedSource && t.driveSharedSource.fileId; if (src && t.driveFileId) mark(t.driveFileId, src, t.driveSharedSource.canEdit); }
   return list

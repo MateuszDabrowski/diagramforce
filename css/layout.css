@@ -75,6 +75,26 @@ select:focus-visible {
   }
 }
 
+/* ── Motion system (2026-10-15) ─────────────────────────────────────────────────────────────────────
+   Enter-only keyframes for UI chrome. Durations and the curve are tokens (variables.css), which reduced
+   motion sets to 0ms. Rules:
+   - opacity plus the INDIVIDUAL `translate` / `scale` properties only. They compose with an element's own
+     `transform` (the review bar centres itself with translateX(-50%)), and no layout
+     property is ever animated.
+   - Never on the JointJS paper or anything inside it (cells, links, markers, selection overlays): Safari's
+     marker cache and the paper transform make that a correctness risk, not only a cost.
+   - No `to` frame and no fill-mode, so the element lands on its own computed style and nothing lingers.
+   - Content is in the DOM and clickable from the first frame; nothing waits on an animation. */
+@keyframes df-motion-fade { from { opacity: 0; } }
+/* Popovers, menus, modals: a short fade with a gentle scale from the element's transform-origin. */
+@keyframes df-motion-pop { from { opacity: 0; scale: 0.98; } }
+/* Content revealed under its header (properties sections, stencil categories, menus under the toolbar). */
+@keyframes df-motion-reveal { from { opacity: 0; translate: 0 -4px; } }
+/* Surfaces that arrive from the bottom edge (the review bar). */
+@keyframes df-motion-rise { from { opacity: 0; translate: 0 8px; } }
+/* A checkbox tick as it is turned on. */
+@keyframes df-motion-tick { from { opacity: 0; scale: 0.6; } }
+
 /* A8 (v1.12.0) — visually-hidden utility for content that should be
    announced by screen readers but not painted. Standard "sr-only" pattern.
    Clip method is used over `display:none` so the element stays in the
@@ -206,7 +226,7 @@ body.df-presenting #tab-bar { display: none; }
   gap: 6px;
   z-index: 60;
 }
-body.df-presenting .df-present-pills { display: flex; }
+body.df-presenting .df-present-pills { display: flex; animation: df-motion-fade var(--df-motion-base) var(--df-ease-out); }
 .df-present-pill {
   font: 500 12px/1 var(--font-family, system-ui, sans-serif);
   color: var(--text-primary);

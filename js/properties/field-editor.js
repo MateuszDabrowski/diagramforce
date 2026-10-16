@@ -1,18 +1,20 @@
 // DataObject field editor (CLEANUP S2, slice 4) — the field-schema editor extracted from properties.js:
 // SF_FIELD_TYPES (the type allowlist, also imported by table-view.js via the facade re-export), the inline
 // renderFieldEditor row list, and the staged "Edit in Table" openFieldEditorModal (Save/Cancel, history-locked)
-// plus its CSV import/export helpers. Operates on the passed cell/parent + history batching (no graph/paper/
-// selection ref); never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
+// plus its CSV import/export helpers. Operates on the passed cell/parent + history batching; reads the live graph
+// (prctx) only to replay the modal's undo entry by id. Never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
 // handler import renderFieldEditor / openFieldEditorModal back; table-view.js keeps importing SF_FIELD_TYPES
 // from properties.js (facade re-export).
-import * as history from '../history.js?v=1.25.9';
-import { resizeDataObjectToFit } from '../components.js?v=1.25.9';
-import { buildModal, confirmModal } from '../feedback.js?v=1.25.9';
-import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.25.9';
-import { triggerDownload } from '../persistence.js?v=1.25.9';
-import { newFid } from '../shapes.js?v=1.25.9';
-import { getActiveTabName } from '../tabs.js?v=1.25.9';
-import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.25.9';
+import * as history from '../history.js?v=1.26.1';
+import { prctx } from './context.js?v=1.26.1';
+import { resizeDataObjectToFit } from '../components.js?v=1.26.1';
+import { buildModal, confirmModal } from '../feedback.js?v=1.26.1';
+import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.26.1';
+import { triggerDownload } from '../persistence.js?v=1.26.1';
+import { newFid } from '../shapes.js?v=1.26.1';
+import { getActiveTabName } from '../tabs.js?v=1.26.1';
+import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.26.1';
+import { typingBatch } from './widgets.js?v=1.26.1';
 
 export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',
@@ -60,11 +62,15 @@ export function renderFieldEditor(parent, cell) {
       apiInput.className = 'df-field-input df-field-input--api';
       apiInput.value = field.apiName || '';
       apiInput.placeholder = 'API Name';
+      // One undo step per typing run; through the 80 ms merge alone, normal typing was one step per key (review J2-7).
+      const typing = typingBatch();
       apiInput.addEventListener('input', () => {
+        typing.touch();
         const updated = [...cell.get('fields')];
         updated[i] = { ...updated[i], apiName: apiInput.value };
         cell.set('fields', updated);
       });
+      apiInput.addEventListener('blur', typing.close);
 
       // Type select
       const typeSelect = document.createElement('select');
@@ -92,8 +98,15 @@ export function renderFieldEditor(parent, cell) {
       delBtn.addEventListener('click', () => {
         const updated = [...cell.get('fields')];
         updated.splice(i, 1);
-        cell.set('fields', updated);
-        resizeDataObjectToFit(cell);
+        // One batch: dropping the field's port makes JointJS delete its connector at once, while the fields change
+        // lands through the 80 ms merge. Unbatched, the first Cmd+Z restored the field and only a second one the
+        // connector (review J2-2).
+        history.startBatch();
+        try {
+          cell.set('fields', updated);
+          resizeDataObjectToFit(cell);
+          history.flushPendingDragCommit();
+        } finally { history.endBatch(); }
         rebuild();
       });
 
@@ -170,7 +183,38 @@ export function openFieldEditorModal(cell, onClose) {
   // never reach the stack) and playback LOCKED (a stray Cmd+Z can't change fields under the rows' indexes); the same
   // pattern as the df.Table editor. Done, ✕, Escape and the backdrop keep the edits; Cancel reverts them.
   const snapFields = () => ({ fields: JSON.parse(JSON.stringify(cell.get('fields') || [])), size: { ...cell.size() } });
-  const applyFields = (st) => { cell.set('fields', JSON.parse(JSON.stringify(st.fields))); cell.resize(st.size.width, st.size.height); };
+  // By id: the undo entry outlives this instance (tab switch, undone delete), as in the df.Table editor (review J1-3).
+  // Deleting a field drops its port, and JointJS deletes the connector on it - a removal the suppressed session never
+  // records. Keep the connectors the session started with and re-add any that are missing once the fields are back,
+  // so Cancel and the undo half restore the field WITH its connector (review J2-2). The redo half needs nothing:
+  // re-dropping the field deletes the connector again.
+  // A connector is re-added only when both its ends exist (review J2-2).
+  const cellId = cell.id;
+  const linksAtStart = prctx.graph ? prctx.graph.getConnectedLinks(cell).map(l => l.toJSON()) : [];
+  const endOk = (g, end) => !end?.id || !!(g.getCell(end.id) && (!end.port || g.getCell(end.id).getPort?.(end.port)));
+  const applyFields = (st, restoreLinks) => {
+    const graph = prctx.graph;
+    const c = graph?.getCell(cellId);
+    if (!c) return;
+    // A non-key field has a port only while a connector uses it (the field-port sync in data-object.js), so its
+    // connector goes back BEFORE the fields: the sync then sees the live link and builds the port. An end on this
+    // object qualifies when its port names a field being restored. The far end is often in the same state: removing
+    // the connector made the other object drop its non-key port, so an end there qualifies when that object still
+    // has the field (review S4-2). Any other far end must exist.
+    const fids = (st.fields || []).map(f => f.fid);
+    const namesField = (port, fid) => port === `field-left-${fid}` || port === `field-right-${fid}`;
+    const ownEnd = (end) => end?.id === cellId && !!end.port && fids.some(fid => namesField(end.port, fid));
+    const fieldEnd = (end) => {
+      const o = end?.port && end.id !== cellId ? graph.getCell(end.id) : null;
+      return o?.get('type') === 'sf.DataObject' && (o.get('fields') || []).some(f => namesField(end.port, f.fid));
+    };
+    const endFits = (end) => ownEnd(end) || fieldEnd(end) || endOk(graph, end);
+    if (restoreLinks) linksAtStart.forEach(j => {
+      if (!graph.getCell(j.id) && endFits(j.source) && endFits(j.target)) graph.addCell(JSON.parse(JSON.stringify(j)));
+    });
+    c.set('fields', JSON.parse(JSON.stringify(st.fields)));
+    c.resize(st.size.width, st.size.height);
+  };
   const before = snapFields();
   history.flushPendingDragCommit();
   history.setSuppressed(true);
@@ -180,14 +224,14 @@ export function openFieldEditorModal(cell, onClose) {
     if (ended) return; ended = true;
     let after = null;
     try {
-      if (cancelled) applyFields(before); else after = snapFields();
+      if (cancelled) applyFields(before, true); else after = snapFields();
       history.flushPendingDragCommit();   // while suppressed: drops the pending merge instead of recording it
     } finally {
       history.setSuppressed(false);
       history.setLocked(false);
     }
     if (after && JSON.stringify(after) !== JSON.stringify(before)) {
-      history.recordCommand(() => applyFields(before), () => applyFields(after));
+      history.recordCommand(() => applyFields(before, true), () => applyFields(after, false));
     }
   };
 
@@ -205,6 +249,8 @@ export function openFieldEditorModal(cell, onClose) {
     onClose: () => { endSession(); onClose?.(); },
   });
   overlay.id = 'field-editor-modal';
+
+  let dragFromIdx = null;   // the row whose handle is being dragged; set on its dragstart, read once by the drop
 
   function rebuildModal() {
     bodyEl.innerHTML = '';
@@ -229,9 +275,10 @@ export function openFieldEditorModal(cell, onClose) {
       handle.addEventListener('dragstart', (e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(i));
+        dragFromIdx = i;
         row.classList.add('df-field-modal__row--dragging');
       });
-      handle.addEventListener('dragend', () => row.classList.remove('df-field-modal__row--dragging'));
+      handle.addEventListener('dragend', () => { dragFromIdx = null; row.classList.remove('df-field-modal__row--dragging'); });
 
       // Key toggle
       const keyBtn = document.createElement('button');
@@ -384,10 +431,14 @@ export function openFieldEditorModal(cell, onClose) {
         bodyEl.querySelectorAll('.df-field-modal__row').forEach(r => {
           r.classList.remove('df-field-modal__row--drop-above', 'df-field-modal__row--drop-below');
         });
-        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        // The source is the handle drag this modal started, never the drop's text: dragged text "Email" parsed as
+        // NaN and moved field 0, and "255" inserted `undefined` into the fields (review J2-8).
+        const fromIdx = dragFromIdx;
+        dragFromIdx = null;
+        const updated = [...cell.get('fields')];
+        if (!Number.isInteger(fromIdx) || fromIdx < 0 || fromIdx >= updated.length) return;
         let toIdx = dropBelow ? i + 1 : i;
         if (fromIdx === toIdx || fromIdx + 1 === toIdx) { /* no-op: same position */ return; }
-        const updated = [...cell.get('fields')];
         const [moved] = updated.splice(fromIdx, 1);
         // Adjust target index after removal
         if (fromIdx < toIdx) toIdx--;
@@ -468,9 +519,17 @@ export function openFieldEditorModal(cell, onClose) {
       if (!parsed.length) { setStatus('No valid rows found - check the format (see Sample CSV).', true); return; }
       const prevCount = prevFields.length;
       const kept = new Set(parsed.map(f => f.fid));
-      const dropped = prevFields.filter(f => f && f.fid && !kept.has(f.fid)).length;
+      const droppedFids = new Set(prevFields.filter(f => f && f.fid && !kept.has(f.fid)).map(f => f.fid));
+      const dropped = droppedFids.size;
+      // A dropped field's port goes, and JointJS deletes the connector on it. The old text promised the opposite
+      // (review J2-2). Count them so the confirm says what is lost; Cancel or undo brings them back.
+      const onDroppedPort = (end) => end?.id === cell.id && typeof end.port === 'string'
+        && droppedFids.has(end.port.replace(/^field-(left|right)-/, ''));
+      const lostLinks = dropped && cell.graph
+        ? cell.graph.getConnectedLinks(cell).filter(l => onDroppedPort(l.get('source')) || onDroppedPort(l.get('target'))).length : 0;
       const dupNote = parsed.duplicates ? ` ${parsed.duplicates} repeated API name${parsed.duplicates === 1 ? ' was' : 's were'} skipped.` : '';
-      const dropNote = dropped ? ` ${dropped} field${dropped === 1 ? ' is' : 's are'} not in the file and will be removed, with any connector attached to ${dropped === 1 ? 'it' : 'them'} left on the object.` : '';
+      const lostNote = lostLinks ? `, with the ${lostLinks} connector${lostLinks === 1 ? '' : 's'} attached to ${dropped === 1 ? 'it' : 'them'}` : '';
+      const dropNote = dropped ? ` ${dropped} field${dropped === 1 ? ' is' : 's are'} not in the file and will be removed${lostNote}.` : '';
       const ok = await confirmModal({
         title: 'Overwrite fields?',
         message: `This replaces all ${prevCount} field${prevCount === 1 ? '' : 's'} on “${objLabel}” with ${parsed.length} imported field${parsed.length === 1 ? '' : 's'}. Fields with the same API name keep their connectors.${dropNote}${dupNote} You can undo it afterwards.`,
@@ -575,11 +634,13 @@ export function parseBulkFields(text, existing = []) {
   const byApi = new Map((existing || []).filter(f => f && f.apiName).map(f => [String(f.apiName).toLowerCase(), f]));
   const takenApi = new Set();
   const typeOf = v => SF_FIELD_TYPES.find(t => t.toLowerCase() === String(v).toLowerCase());
+  // Exact tokens only. A substring match (/primary/) read field NAMES as keys: the app's own export re-imported
+  // Primary_Contact__c and IsPrimary as required PKs (review J2-3).
   const keyOf = v => {
-    const k = String(v).toLowerCase().trim();
-    if (k === 'pk' || /primary/.test(k)) return 'pk';
-    if (k === 'fk' || /foreign/.test(k)) return 'fk';
-    if (k === 'fqk' || /qualified/.test(k)) return 'fqk';
+    const k = String(v ?? '').toLowerCase().trim().replace(/[\s_-]+/g, ' ');
+    if (k === 'pk' || k === 'primary' || k === 'primary key') return 'pk';
+    if (k === 'fk' || k === 'foreign' || k === 'foreign key') return 'fk';
+    if (k === 'fqk' || k === 'qualified' || k === 'qualified key' || k === 'fully qualified key') return 'fqk';
     return null;
   };
   const truthy = v => /^(y|yes|true|1|x|✓)$/i.test(String(v).trim());
@@ -614,10 +675,21 @@ export function parseBulkFields(text, existing = []) {
     if (!type) { for (let j = 0; j < cols.length; j++) { if (j === map.api) continue; const m = typeOf(cols[j]); if (m) { type = m; break; } } }
     if (!type) type = 'Text';
     const label = sanitizeFieldValue((map.label >= 0 && cols[map.label]) ? cols[map.label] : api);
-    const length = sanitizeFieldValue((map.length >= 0 && cols[map.length]) ? cols[map.length] : '', 32);
     const deprecated = map.decom >= 0 ? truthy(cols[map.decom]) : false;
+    // The scan is for a header that has NO Key column. With one (always, in positional mode: column 7) an empty
+    // cell means "not a key", and scanning the other columns is what turned names into keys. A headerless row too
+    // short to reach column 7 (`Id, Record ID, ID, PK`) is scanned past its API Name and Label, and the cell read as
+    // the key is not also its Length.
+    const shortRow = start === 0 && cols.length <= map.key;
     let keyType = map.key >= 0 ? keyOf(cols[map.key]) : null;
-    if (!keyType) { for (let j = 0; j < cols.length; j++) { const k = keyOf(cols[j]); if (k) { keyType = k; break; } } }
+    let keyCol = -1;
+    if (map.key < 0 || shortRow) {
+      for (let j = 0; j < cols.length; j++) {
+        if (j === map.api || (shortRow && j === map.label)) continue;
+        const k = keyOf(cols[j]); if (k) { keyType = k; keyCol = j; break; }
+      }
+    }
+    const length = sanitizeFieldValue((map.length >= 0 && !(shortRow && map.length === keyCol) && cols[map.length]) ? cols[map.length] : '', 32);
     // A PK / FQK is inherently mandatory; otherwise honour the Required column.
     const required = keyImpliesRequired(keyType) ? true : (map.required >= 0 ? truthy(cols[map.required]) : false);
     const sampleValues = sanitizeFieldValue((map.sample >= 0 && cols[map.sample]) ? cols[map.sample] : '');

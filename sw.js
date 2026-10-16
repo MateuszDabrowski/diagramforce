@@ -12,13 +12,11 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.25.9';
+const CACHE_VERSION = '1.26.1';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
 // fetched on demand and cached opportunistically (still same-origin only).
-// We deliberately do NOT pre-cache every SLDS sprite (~30 files / >1MB) —
-// they're cached lazily as the user encounters icons.
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -43,11 +41,13 @@ const PRECACHE_URLS = [
   // omitting any one reintroduces the silent offline-crash this list prevents.
   `./js/a11y.js?v=${CACHE_VERSION}`,
   `./js/theme-boot.js?v=${CACHE_VERSION}`,   // classic <head> script, not in app.js's import graph
+  `./js/boot-watchdog.js?v=${CACHE_VERSION}`,   // classic <head> script, not in app.js's import graph
   `./js/app.js?v=${CACHE_VERSION}`,
   `./js/brand-palette.js?v=${CACHE_VERSION}`,
   `./js/canvas.js?v=${CACHE_VERSION}`,
   `./js/canvas/context.js?v=${CACHE_VERSION}`,
   `./js/canvas/focus-state.js?v=${CACHE_VERSION}`,
+  `./js/canvas/join-lanes.js?v=${CACHE_VERSION}`,
   `./js/canvas/router.js?v=${CACHE_VERSION}`,
   `./js/canvas/z-tiers.js?v=${CACHE_VERSION}`,
   `./js/canvas/icon-refresh.js?v=${CACHE_VERSION}`,
@@ -64,6 +64,7 @@ const PRECACHE_URLS = [
   `./js/canvas/diagram-check.js?v=${CACHE_VERSION}`,
   `./js/canvas/capture-overlay.js?v=${CACHE_VERSION}`,
   `./js/canvas/overlay-layer.js?v=${CACHE_VERSION}`,
+  `./js/canvas/lifeline-undo.js?v=${CACHE_VERSION}`,
   `./js/canvas/viewport.js?v=${CACHE_VERSION}`,
   `./js/canvas/line-style.js?v=${CACHE_VERSION}`,
   `./js/canvas/mobile.js?v=${CACHE_VERSION}`,
@@ -136,6 +137,7 @@ const PRECACHE_URLS = [
   `./js/shapes/fields.js?v=${CACHE_VERSION}`,
   `./js/shapes/markdown-fo.js?v=${CACHE_VERSION}`,
   `./js/shapes/ports.js?v=${CACHE_VERSION}`,
+  `./js/shapes/raci.js?v=${CACHE_VERSION}`,
   `./js/shapes/task-sequence.js?v=${CACHE_VERSION}`,
   `./js/shapes/org.js?v=${CACHE_VERSION}`,
   `./js/shapes/gantt.js?v=${CACHE_VERSION}`,
@@ -159,9 +161,11 @@ const PRECACHE_URLS = [
   `./js/tabs/diagram-types.js?v=${CACHE_VERSION}`,
   `./js/tabs/new-diagram-modal.js?v=${CACHE_VERSION}`,
   `./js/tabs/close-manager.js?v=${CACHE_VERSION}`,
+  `./js/tabs/device-only.js?v=${CACHE_VERSION}`,
   `./js/tabs/session-store.js?v=${CACHE_VERSION}`,
   `./js/tabs/single-window.js?v=${CACHE_VERSION}`,
   `./js/diagnostics.js?v=${CACHE_VERSION}`,
+  `./js/update-reload.js?v=${CACHE_VERSION}`,
   `./js/toolbar/diagnostics-report.js?v=${CACHE_VERSION}`,
   `./js/templates.js?v=${CACHE_VERSION}`,
   `./js/theme.js?v=${CACHE_VERSION}`,
@@ -180,6 +184,13 @@ const PRECACHE_URLS = [
   `./assets/vendor/joint.min.js?v=${CACHE_VERSION}`,
   `./assets/vendor/pako.min.js?v=${CACHE_VERSION}`,
   `./assets/vendor/gifenc.esm.js?v=${CACHE_VERSION}`,
+  // SLDS icon sprites: icons.init() fetches all five on every boot, before the canvas exists, so they are boot-critical
+  // (about 1 MB raw, 340 KB transferred). No `?v=` (icons.js fetches the bare path); the versioned cache name busts them.
+  './assets/icons/standard-sprite.svg',
+  './assets/icons/utility-sprite.svg',
+  './assets/icons/action-sprite.svg',
+  './assets/icons/custom-sprite.svg',
+  './assets/icons/doctype-sprite.svg',
   // Static images
   './assets/logo.png',
   './assets/favicon.png',
@@ -236,15 +247,21 @@ self.addEventListener('fetch', (event) => {
   // entirely so we never store opaque responses.
   if (url.origin !== self.location.origin) return;
 
+  // A NAVIGATION's query never changes the page: `?state=` (Drive Open with), `?fbclid=`, utm tags. Matching it
+  // exactly missed the precached shell, stored one more copy of index.html per unique URL (Drive's carries file and
+  // user ids) and answered a plain 504 offline. Navigations ignore the query and are never stored under one;
+  // subresources keep the exact match their `?v=` key needs (limits/gotchas-storage-tabs.md 3.2).
+  const isNav = req.mode === 'navigate';
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
+    const cached = await cache.match(req, isNav ? { ignoreSearch: true } : undefined);
     if (cached) return cached;
 
     try {
       const response = await fetch(req);
       // Only cache successful, non-opaque responses.
-      if (response && response.ok && response.type !== 'opaque') {
+      if (response && response.ok && response.type !== 'opaque' && !(isNav && url.search)) {
         // Clone before consuming — Response bodies are single-use.
         cache.put(req, response.clone()).catch(() => { /* quota errors are non-fatal */ });
       }

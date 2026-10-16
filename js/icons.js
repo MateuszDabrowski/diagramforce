@@ -2,7 +2,7 @@
 // Loads self-hosted SVG sprite files, inlines them into the page,
 // and provides a searchable catalog of all available icons.
 
-import { sanitizeCssColor } from './util.js?v=1.25.9';
+import { sanitizeCssColor } from './util.js?v=1.26.1';
 
 const SPRITE_CATEGORIES = ['standard', 'utility', 'action', 'custom', 'doctype'];
 const iconRegistry = []; // [{ category, name, id }]
@@ -10,14 +10,21 @@ const iconRegistry = []; // [{ category, name, id }]
 export async function init() {
   const container = document.getElementById('slds-icons');
 
-  for (const category of SPRITE_CATEGORIES) {
+  // Request every sprite at once, then register them in category order (K12, 2026-10-15). The duplicate-id skip below
+  // keeps the FIRST sprite's symbol, so standard must still register first; awaiting each fetch in turn cost a first
+  // visit five round trips in a row before the canvas initialised.
+  const texts = SPRITE_CATEGORIES.map((category) => fetch(`assets/icons/${category}-sprite.svg`)
+    .then((resp) => {
+      if (resp.ok) return resp.text();
+      console.warn(`SF Diagrams: Failed to load ${category} sprite (${resp.status})`);
+      return null;
+    })
+    .catch((err) => { console.warn(`SF Diagrams: Error loading ${category} sprite:`, err); return null; }));
+
+  for (const [i, category] of SPRITE_CATEGORIES.entries()) {
     try {
-      const resp = await fetch(`assets/icons/${category}-sprite.svg`);
-      if (!resp.ok) {
-        console.warn(`SF Diagrams: Failed to load ${category} sprite (${resp.status})`);
-        continue;
-      }
-      const svgText = await resp.text();
+      const svgText = await texts[i];
+      if (svgText == null) continue;
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(svgText, 'image/svg+xml');
@@ -96,24 +103,36 @@ export function registerStencilIcons(stencilSvgs) {
 // appear the same visual size when rendered at the same pixel dimensions.
 const normalizedViewBoxes = new Map();
 
+// Writes, then reads, then writes: every clone goes in first and every getBBox runs after, so the browser lays the
+// clones out once. Measuring one clone at a time (via innerHTML) forced a fresh layout per icon, about 1,500 at boot
+// before the canvas exists. Each clone sits in its own nested <svg> with its symbol's viewBox, the viewport the
+// one-at-a-time loop gave it, so percentage lengths resolve as before. getBBox reads the group's own user space
+// either way. Guard: icon-normalize.spec.js.
 export function normalizeViewBoxes() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', '200');
   svg.setAttribute('height', '200');
   svg.style.cssText = 'position:absolute;left:-9999px;top:-9999px;overflow:hidden';
-  document.body.appendChild(svg);
 
+  const probes = [];
   for (const icon of iconRegistry) {
     const sym = document.getElementById(icon.id);
     if (!sym) continue;
-    const vb = sym.getAttribute('viewBox') || '0 0 52 52';
-    const [,, vbW, vbH] = vb.split(' ').map(Number);
+    const box = document.createElementNS(NS, 'svg');
+    box.setAttribute('width', '200');
+    box.setAttribute('height', '200');
+    box.setAttribute('viewBox', sym.getAttribute('viewBox') || '0 0 52 52');
+    const g = document.createElementNS(NS, 'g');
+    for (const c of sym.childNodes) g.appendChild(c.cloneNode(true));
+    box.appendChild(g);
+    svg.appendChild(box);
+    probes.push({ id: icon.id, sym, g });
+  }
+  document.body.appendChild(svg);
 
-    svg.setAttribute('viewBox', vb);
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.innerHTML = sym.innerHTML;
-    svg.appendChild(g);
-
+  const measured = [];
+  for (const { id, sym, g } of probes) {
     try {
       const bbox = g.getBBox();
       if (bbox.width > 0 && bbox.height > 0) {
@@ -122,17 +141,17 @@ export function normalizeViewBoxes() {
         const side = maxDim + pad * 2;
         const cx = bbox.x + bbox.width / 2;
         const cy = bbox.y + bbox.height / 2;
-        const normalizedVB = `${(cx - side / 2).toFixed(1)} ${(cy - side / 2).toFixed(1)} ${side.toFixed(1)} ${side.toFixed(1)}`;
-        normalizedViewBoxes.set(icon.id, normalizedVB);
-        // Apply directly to the symbol so all <use> references render normalized
-        sym.setAttribute('viewBox', normalizedVB);
+        measured.push({ id, sym, vb: `${(cx - side / 2).toFixed(1)} ${(cy - side / 2).toFixed(1)} ${side.toFixed(1)} ${side.toFixed(1)}` });
       }
     } catch (e) { /* skip icons that fail measurement */ }
-
-    svg.removeChild(g);
   }
-
   svg.remove();
+
+  for (const { id, sym, vb } of measured) {
+    normalizedViewBoxes.set(id, vb);
+    // Apply directly to the symbol so all <use> references render normalized
+    sym.setAttribute('viewBox', vb);
+  }
 
   // Re-render existing <use> instances so they adopt the freshly-cropped symbol viewBoxes. Some
   // engines snapshot a referenced <symbol> at first paint and DON'T re-read a later `viewBox`

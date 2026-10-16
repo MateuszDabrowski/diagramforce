@@ -3,20 +3,24 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.25.9';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.1';
+import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.1';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation } from './layout-core.js?v=1.25.9';
-import { startBatch, endBatch } from '../history.js?v=1.25.9';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns } from './layout-core.js?v=1.26.1';
+import { startBatch, endBatch } from '../history.js?v=1.26.1';
+import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.1';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.25.9';
-import { flowConnectorType } from './link-styles.js?v=1.25.9';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.25.9';
+import { computeFlowLayout } from './flow-layout.js?v=1.26.1';
+import { flowConnectorType } from './link-styles.js?v=1.26.1';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.1';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
 // Groups (containers, zones, pools) are treated as single layout units —
 // their embedded children move with them and maintain relative positions.
+// Returns the number of top-level units it placed: 0 when there was nothing to arrange (fewer than two), so the
+// caller can skip the port snap and label passes, which would otherwise rewrite connectors on a no-op (review H2-5).
 export function autoLayout(direction, opts = {}) {
   const { graph, paper, fitContent } = cctx;
   // v2 "Layered" (opts.align==='barycenter'): same ranks + crossing-minimised order as the default,
@@ -32,21 +36,14 @@ export function autoLayout(direction, opts = {}) {
     fitContent();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { cctx.fitContent?.(); });
   };
-  // Settle every frame at its resting (content-hug) size BEFORE the units below are measured. fitAfterLayout
-  // re-hugs them anyway, so a frame saved tighter than the 48 px wrap padding (any diagram from before 1.22.4)
-  // grew 32 px per side AFTER it had been placed, into its neighbour. Measured on the stage-c fixtures: the
-  // vertical-lanes Layer 3 zone overlapped Legacy Martech Stack by 32 px and horizontal-lanes' lanes each other by
-  // 16 px, against 0 before 1.22.4 (bisected with the D0 route probe, 2026-10-12).
-  cctx.refitAllParents?.();
+  // Nothing to arrange (fewer than two top-level units) returns BEFORE the frame settle below, so a no-op run
+  // changes no geometry at all; it only frames the camera (review H2-5).
   const elements = graph.getElements();
-  if (elements.length < 2) { if (elements.length) fitAfterLayout(); return; }
+  if (elements.length < 2) { if (elements.length) fitContent(); return 0; }
 
 
   const links = graph.getLinks();
   const grid = paper.options.gridSize || 16;
-
-  // Identify parent types that act as groups
-  const GROUP_TYPES = new Set(['sf.Container', 'sf.Zone', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
 
   // Build a set of embedded child IDs — these are excluded from top-level layout
   const embeddedIds = new Set();
@@ -75,7 +72,20 @@ export function autoLayout(direction, opts = {}) {
     if (isParkable(el)) return false;
     return true;
   });
-  if (layoutEls.length < 2) { fitAfterLayout(); return; }
+  // Count UNITS, not elements: two or more pools of one orientation are one unit (the pool stack below). Two stacked
+  // pools with everything inside counted as two, so the run went on to the port snap and label passes and moved
+  // nothing (review S3-1). Membership does not depend on sizes, so this can run before the frame settle.
+  const poolCount = { h: 0, v: 0 };
+  for (const el of layoutEls) if (el.get('type') === 'sf.BpmnPool') poolCount[el.prop('poolDirection') === 'vertical' ? 'v' : 'h']++;
+  const unitCount = layoutEls.length - Math.max(poolCount.h - 1, 0) - Math.max(poolCount.v - 1, 0);
+  if (unitCount < 2) { fitContent(); return 0; }
+
+  // Settle every frame at its resting (content-hug) size BEFORE the units below are measured. fitAfterLayout
+  // re-hugs them anyway, so a frame saved tighter than the 48 px wrap padding (any diagram from before 1.22.4)
+  // grew 32 px per side AFTER it had been placed, into its neighbour. Measured on the stage-c fixtures: the
+  // vertical-lanes Layer 3 zone overlapped Legacy Martech Stack by 32 px and horizontal-lanes' lanes each other by
+  // 16 px, against 0 before 1.22.4 (bisected with the D0 route probe, 2026-10-12).
+  cctx.refitAllParents?.();
 
   // Park the unconnected annotations in the right margin, stacked top-to-bottom (preserving their order), clear
   // of the laid-out content. Called AFTER content positions settle. Position changes are captured by the
@@ -93,13 +103,51 @@ export function autoLayout(direction, opts = {}) {
     });
   }
 
+  // POOL STACKS (review P2, 2026-10-15). BPMN pools are swimlanes, so they stay stacked ACROSS the flow whatever the
+  // direction: horizontal pools top to bottom, vertical pools side by side, in their current order, left (top) edges
+  // aligned. As separate units the engine ranked them along the flow: Horizontal lined stacked horizontal pools up end
+  // to end, and a flow from a lower pool to an upper one could swap the lanes on Vertical. Each stack is ONE rigid unit
+  // to the engine, so the rest of the diagram is laid out around it and cannot land on it (a frame left where it was is
+  // what got the zone exclusion reverted, approaches/auto-layout.md). A gap the author left between two pools is kept
+  // up to POOL_STACK_GAP, so touching lanes stay touching; overlapping pools close up to touch.
+  const POOL_STACK_GAP = 64;
+  const stackOf = new Map();   // pool id -> { id, vertical, w, h, off: Map<pool id, offset along the stack> }
+  for (const vertical of [false, true]) {
+    const stack = layoutEls.filter((el) => el.get('type') === 'sf.BpmnPool' && (el.prop('poolDirection') === 'vertical') === vertical);
+    if (stack.length < 2) continue;
+    const along = vertical ? 'x' : 'y', across = vertical ? 'y' : 'x', len = vertical ? 'width' : 'height';
+    stack.sort((a, b) => a.position()[along] - b.position()[along] || a.position()[across] - b.position()[across]);
+    const st = { id: `__poolstack-${vertical ? 'v' : 'h'}`, vertical, w: 0, h: 0, off: new Map() };
+    let at = 0;
+    stack.forEach((p, i) => {
+      if (i) {
+        const prev = stack[i - 1];
+        at += Math.min(Math.max(p.position()[along] - (prev.position()[along] + prev.size()[len]), 0), POOL_STACK_GAP);
+      }
+      st.off.set(p.id, at);
+      at += p.size()[len];
+      if (vertical) st.h = Math.max(st.h, p.size().height); else st.w = Math.max(st.w, p.size().width);
+    });
+    if (vertical) st.w = at; else st.h = at;
+    for (const p of stack) stackOf.set(p.id, st);
+  }
+  const unitIdOf = (id) => stackOf.get(id)?.id ?? id;
+
   // Layout UNITS: each top-level element as a box. Sizes are the element's own size —
   // embedded children ride along with their parent (groups are rigid units on this path).
-  const units = layoutEls.map((el) => {
+  // A pool stack takes the place of its first pool in the order (the engine's determinism contract).
+  const units = [];
+  const placed = new Set();
+  for (const el of layoutEls) {
+    const st = stackOf.get(el.id);
+    if (st) {
+      if (!placed.has(st)) { placed.add(st); units.push({ id: st.id, w: st.w, h: st.h }); }
+      continue;
+    }
     const s = el.size();
-    return { id: el.id, w: s.width, h: s.height };
-  });
-  const unitIds = new Set(units.map((u) => u.id));
+    units.push({ id: el.id, w: s.width, h: s.height });
+  }
+  const unitIds = new Set(layoutEls.map((el) => el.id));
 
   // Helper: resolve an element ID to its top-level layout ID
   function toLayoutId(cellId) {
@@ -122,10 +170,11 @@ export function autoLayout(direction, opts = {}) {
 
   // Resolve every link onto the units it connects. Self-edges and links whose endpoints don't
   // resolve are dropped (layoutGraphSubset also guards, but keep the intent visible here).
+  // A flow between two pools of one stack is internal to that unit, so it drops out as a self-edge too.
   const edges = [];
   for (const link of links) {
-    const sId = toLayoutId(link.get('source')?.id);
-    const tId = toLayoutId(link.get('target')?.id);
+    const sId = unitIdOf(toLayoutId(link.get('source')?.id));
+    const tId = unitIdOf(toLayoutId(link.get('target')?.id));
     if (sId && tId && sId !== tId) edges.push({ source: sId, target: tId });
   }
 
@@ -181,8 +230,9 @@ export function autoLayout(direction, opts = {}) {
   // sub-rows. Both numbers are MEASURED, not guessed (dev/scripts/measure-layout.mjs): on mixed-hub
   // the cap takes aspect 2.92 → 1.38 and total connector skew 8497 → 3786, and it fires on no other
   // fixture. The plan's original 3× factor was tried and is worse on every metric (1.67 / 5211).
+  // gridSingletons: unlinked units pack into a grid after the connected components instead of one column (review H2-7).
   const pos = layoutGraphSubset(units, edges, {
-    isHorizontal, align, breakCycles: true,
+    isHorizontal, align, breakCycles: true, gridSingletons: true,
     maxRankExtent: opts.maxRankExtent ?? 1400, rankMedianFactor: opts.rankMedianFactor ?? 2,
     // `crossGap`: the gap between neighbouring cards of one rank (columns, on a top-down layout). Data models pass
     // DATAMODEL_COLUMN_GAP; everything else keeps DEFAULT_GAPS.
@@ -197,15 +247,19 @@ export function autoLayout(direction, opts = {}) {
   }
   const PAD = grid * 4;
   layoutEls.forEach(el => {
-    const p = pos.get(el.id);
+    const st = stackOf.get(el.id);
+    const p = pos.get(st ? st.id : el.id);
     if (!p) return;
+    // A stacked pool sits at its offset along the stack (y for horizontal pools, x for vertical ones).
+    const at = st ? st.off.get(el.id) : 0;
+    const ax = st?.vertical ? at : 0, ay = st && !st.vertical ? at : 0;
     // Translate the whole layout to a grid-aligned origin (PAD) but keep EXACT relative positions - round to
     // INTEGER, not to the grid. A per-node grid-snap (`round(x/grid)*grid`) rounds two centre-aligned nodes of
     // DIFFERENT widths to DIFFERENT centres (e.g. a 120-wide Process at 384 and its aligned 60-wide child land on
     // 384 and 416 -> centres 444 vs 446), which jogs an otherwise-straight connector. Integer rounding shifts both
     // by the same fractional amount, so aligned centres stay aligned and the connector renders dead-straight.
-    const newX = Math.round(p.x - globalMinX + PAD);
-    const newY = Math.round(p.y - globalMinY + PAD);
+    const newX = Math.round(p.x - globalMinX + PAD + ax);
+    const newY = Math.round(p.y - globalMinY + PAD + ay);
     const oldPos = el.position();
     const dx = newX - oldPos.x;
     const dy = newY - oldPos.y;
@@ -216,21 +270,33 @@ export function autoLayout(direction, opts = {}) {
   parkAnnotations();   // re-park unconnected Note/TextLabel/Legend/Image to the right margin (Stage A)
 
   fitAfterLayout();
+  return units.length;
 }
 
 // ── Data Mapping Auto Layout ─────────────────────────────────────────
-// One COLUMN per layer TYPE — every Source zone shares a column, every DLO zone the
-// next, etc. — with the Data Cloud flow running left→right:
-//   Custom → Source → DLO → DMO → Activation, then flow-depth columns of free objects.
-// Same-type zones stack vertically within their column. All columns top-align at TOP.
+// One COLUMN per Data Cloud layer TYPE — every Source zone shares a column, every DLO zone the
+// next, etc. — and one column per GENERIC layer (no Data Cloud layerStage: a lineage's Raw / Staging / Mart), with
+// the flow running left→right:
+//   generic layers (in mapping-flow order) → Source → DLO → DMO → Activation, then flow-depth columns of free objects.
+// Same-type zones stack vertically within their column; an EMPTY layer zone keeps its height and sits at the
+// foot of its type's column, while a zone holding only other shapes stays put. All columns top-align at TOP, and
+// the whole layout is anchored at the current top-left of the laid-out zones and objects (it restarted at the
+// canvas origin and left empty zones where they were, under a re-flowed column - review H2-9). A lane is moved with
+// translate(), so a note or label inside it keeps its place in the lane, and the lane keeps room for it. One the
+// re-stacked cards would cover moves below them instead.
 // Object + zone order WITHIN a column is chosen by a barycentre sweep that shortens the
 // total connector length (connected objects line up across columns). Unzoned objects each
 // form a singleton unit in a flow-depth column appended at the right.
-export function applyDataMappingLayout() {
+export function applyDataMappingLayout() {   // false when there was nothing to arrange (review H2-5)
   const { graph, fitContent } = cctx;
   const objects = graph.getElements().filter(e => e.get('type') === 'sf.DataObject');
-  if (objects.length < 2) return;
-  const zones = graph.getElements().filter(e => e.get('type') === 'sf.Zone');
+  if (objects.length < 2) return false;
+  // A zone that holds other shapes but no object (a note, a label, an icon) is decoration, not a lane: it stays where
+  // it is, with its contents. A zone with no layerStage would open a column of its own. Only a truly EMPTY zone
+  // joins its type's column, or takes a column of its own when it is a generic layer (review H2-9).
+  const objectsIn = z => (z.get('embeds') || []).map(id => graph.getCell(id)).filter(c => c && c.get('type') === 'sf.DataObject');
+  const zones = graph.getElements().filter(e => e.get('type') === 'sf.Zone'
+    && (!(e.get('embeds') || []).length || objectsIn(e).length));
 
   const OBJ_GAP = 36;   // vertical gap between objects within a zone
   const ZONE_GAP = 56;  // vertical gap between stacked zones in one column
@@ -241,7 +307,11 @@ export function applyDataMappingLayout() {
   // neighbours (owner call 2026-09-25, 1.22.4 for the frame rule itself). 48 also clears the layer label on top.
   const PAD = ROUTER_STUB + ROUTER_PAD;   // 48: zone inner side / bottom padding
   const HEAD = PAD;                       // zone inner top inset
-  const TOP = 0;        // shared upper edge for every column
+  // Shared upper edge for every column and the first column's left edge: the current top-left of what is laid out,
+  // as applyFlowLayout anchors, so a title above the lanes stays above them.
+  const laidOut = [...objects, ...zones];
+  const TOP = Math.round(Math.min(...laidOut.map((e) => e.position().y)));
+  const LEFT = Math.round(Math.min(...laidOut.map((e) => e.position().x)));
 
   // Undirected object↔object mapping adjacency (for the barycentre).
   const objIds = new Set(objects.map(o => o.id));
@@ -255,7 +325,8 @@ export function applyDataMappingLayout() {
   }
 
   // Classify zones into type-columns. A unit = one zone + its objects (or, for a free
-  // object, a zone-less singleton). Column order = TYPE_ORDER, free columns appended.
+  // object, a zone-less singleton). Column order = TYPE_ORDER, free columns appended. 'custom' is every zone without a
+  // Data Cloud layerStage, and each of those is a column of its own (below).
   const TYPE_ORDER = ['custom', 'source', 'dlo', 'dmo', 'activation'];
   // `datastream` shares the SOURCE band (same blue): it lays out in the leftmost column,
   // stacked directly below the Source zone(s) — see the source-column sort below.
@@ -263,18 +334,45 @@ export function applyDataMappingLayout() {
     if (s === 'datastream') return 'source';
     return (s === 'source' || s === 'dlo' || s === 'dmo' || s === 'activation') ? s : 'custom';
   };
+  // A lane's OTHER shapes (a note, a label), each with its offset from the lane's top-left. The lane is translated, so
+  // they keep that offset (owner decision on review H2-9: it was moved with position(), which left them behind, over a
+  // card of the re-flowed column), unless the re-stacked cards would cover one (placeDecor below). `toY` is the
+  // offset it ends at.
+  const decorOf = (z) => {
+    const zp = z.position();
+    return z.getEmbeddedCells().filter((c) => c.isElement() && c.get('type') !== 'sf.DataObject').map((c) => {
+      const b = c.getBBox();
+      return { cell: c, dx: b.x - zp.x, dy: b.y - zp.y, w: b.width, h: b.height, toY: b.y - zp.y };
+    });
+  };
   const unitsByType = new Map();
   const laned = new Set();
+  const zoneOf = new Map();   // object id -> its lane's zone id
   for (const z of zones) {
-    const kids = (z.get('embeds') || []).map(id => graph.getCell(id)).filter(c => c && c.get('type') === 'sf.DataObject');
-    if (!kids.length) continue;
-    kids.forEach(k => laned.add(k.id));
+    const kids = objectsIn(z);
+    kids.forEach(k => { laned.add(k.id); zoneOf.set(k.id, z.id); });   // an empty zone is still a unit: it takes its place in its column
     const t = typeOf(z.get('layerStage'));
     if (!unitsByType.has(t)) unitsByType.set(t, []);
-    unitsByType.get(t).push({ zone: z, objects: kids });
+    unitsByType.get(t).push({ zone: z, objects: kids, decor: decorOf(z), reach: { right: 0, bottom: 0 } });
   }
   const columns = [];
-  for (const t of TYPE_ORDER) if (unitsByType.has(t)) columns.push({ units: unitsByType.get(t) });
+  for (const t of TYPE_ORDER) {
+    if (!unitsByType.has(t)) continue;
+    if (t !== 'custom') { columns.push({ units: unitsByType.get(t) }); continue; }
+    // Generic layers: a column each, ordered by the mappings between them (orderLayerColumns: a layer after every
+    // layer that maps into it, the leftmost first among the rest). They shared one column until 2026-10-15, so a
+    // Raw -> Staging -> Mart lineage (SQL Studio) collapsed into a single stack on Auto Layout.
+    const generic = unitsByType.get(t);
+    const byId = new Map(generic.map((u) => [u.zone.id, u]));
+    const edges = [];
+    for (const l of graph.getLinks()) {
+      if (l.prop('linkKind') !== 'mapping') continue;
+      const s = zoneOf.get(l.get('source')?.id), d = zoneOf.get(l.get('target')?.id);
+      if (byId.has(s) && byId.has(d) && s !== d) edges.push({ source: s, target: d });
+    }
+    const order = orderLayerColumns(generic.map((u) => ({ id: u.zone.id, ...u.zone.position() })), edges);
+    for (const id of order) columns.push({ units: [byId.get(id)] });
+  }
 
   // Free (unzoned) objects → flow-depth pseudo-columns appended after the typed ones.
   const free = objects.filter(o => !laned.has(o.id));
@@ -295,7 +393,31 @@ export function applyDataMappingLayout() {
     [...byDepth.keys()].sort((a, b) => a - b).forEach(d =>
       columns.push({ units: byDepth.get(d).map(o => ({ zone: null, objects: [o] })) }));
   }
-  if (!columns.length) return;
+  if (!columns.length) return false;
+
+  // The cards re-stack HEAD below the lane's top at OBJ_GAP, so a note kept at its offset can land under a card: one
+  // between two cards, or one just below a lane packed tighter than OBJ_GAP. A shape whose box meets the cards' x-range
+  // and y-span moves below the cards and the shapes that stay, in its old top-to-bottom order, at its own x. The span
+  // does not depend on the card order, so this is decided once. `reach`: how far the shapes reach right and down from
+  // the lane's top-left. The lane is sized past it.
+  const placeDecor = (u, maxW) => {
+    const objW = Math.max(...u.objects.map((o) => o.size().width));
+    const x0 = PAD + (maxW - objW) / 2, x1 = x0 + objW;   // cards are centred on the column (final placement)
+    const y1 = HEAD + u.objects.reduce((s, o) => s + o.size().height + OBJ_GAP, -OBJ_GAP);
+    const inWay = (d) => d.dx < x1 && x0 < d.dx + d.w && d.dy < y1 && HEAD < d.dy + d.h;
+    let y = Math.max(y1, ...u.decor.filter((d) => !inWay(d)).map((d) => d.dy + d.h)) + OBJ_GAP;
+    for (const d of u.decor.filter(inWay).sort((a, b) => a.dy - b.dy)) { d.toY = Math.round(y); y = d.toY + d.h + OBJ_GAP; }
+    for (const d of u.decor) {
+      u.reach.right = Math.max(u.reach.right, d.dx + d.w);
+      u.reach.bottom = Math.max(u.reach.bottom, d.toY + d.h);
+    }
+  };
+  for (const col of columns) {
+    const allObjs = col.units.flatMap((u) => u.objects);
+    if (!allObjs.length) continue;
+    const maxW = Math.max(...allObjs.map((o) => o.size().width));
+    for (const u of col.units) if (u.zone && u.objects.length) placeDecor(u, maxW);
+  }
 
   // Live centre-y per object, seeded from current positions; restack() rewrites it.
   const cy = new Map(objects.map(o => [o.id, o.position().y + o.size().height / 2]));
@@ -305,6 +427,8 @@ export function applyDataMappingLayout() {
     let y = TOP;
     for (const u of col.units) {
       u._objY = new Map();
+      if (!u.objects.length) { u._top = y; y += u.zone.size().height + ZONE_GAP; continue; }   // empty layer
+      u._top = y;
       if (u.zone) y += HEAD;
       for (const o of u.objects) {
         const h = o.size().height;
@@ -313,7 +437,7 @@ export function applyDataMappingLayout() {
         y += h + OBJ_GAP;
       }
       y -= OBJ_GAP;
-      if (u.zone) y += PAD;
+      if (u.zone) y = Math.max(y + PAD, u._top + u.reach.bottom + PAD);   // room for the lane's note
       y += ZONE_GAP;
     }
   };
@@ -329,6 +453,10 @@ export function applyDataMappingLayout() {
       for (const u of col.units) u.objects.sort((a, b) => bary(a.id) - bary(b.id));
       const uMean = u => u.objects.reduce((s, o) => s + bary(o.id), 0) / u.objects.length;
       col.units.sort((a, b) => {
+        // Empty layers go to the foot of the column: they have no barycentre to sort by.
+        const ea = a.objects.length ? 0 : 1, eb = b.objects.length ? 0 : 1;
+        if (ea !== eb) return ea - eb;
+        if (ea) return 0;
         // Pin Data Stream zones BELOW Source zones in the shared leftmost band (same blue,
         // conceptually "below Source") — regardless of barycentre, which would otherwise let a
         // Data Stream lane float above Source.
@@ -341,30 +469,67 @@ export function applyDataMappingLayout() {
     }
   }
 
+  // Room for the join lanes (join-lanes.js; SQL Studio's lineage, 2026-10-16): the zone's side padding fits one lane, and
+  // each further lane on that side needs JOIN_LANE_GAP more, or the outer lanes draw on or past the dashed border.
+  // Counted on the final card heights, as the router will see them.
+  const laneRoom = (col) => {
+    const yOf = new Map();
+    for (const u of col.units) for (const o of u.objects) yOf.set(o.id, u._objY.get(o.id));
+    const sideOf = (port) => (/^(field-left-|er-left$)/.test(String(port || '')) ? 'left' : /^(field-right-|er-right$)/.test(String(port || '')) ? 'right' : null);
+    const portY = (cell, port) => (cell?.get('ports')?.items || []).find((q) => q.id === port)?.args?.y ?? null;
+    const items = [];
+    for (const l of graph.getLinks()) {
+      if (l.get('linkKind') === 'mapping' || l.get('router')?.name !== 'sfManhattan' || (l.get('vertices') || []).length) continue;
+      const s = l.get('source'), t = l.get('target');
+      if (!yOf.has(s?.id) || !yOf.has(t?.id) || s.id === t.id) continue;
+      const side = sideOf(s.port);
+      if (!side || side !== sideOf(t.port)) continue;
+      const sy = portY(graph.getCell(s.id), s.port), ty = portY(graph.getCell(t.id), t.port);
+      if (typeof sy !== 'number' || typeof ty !== 'number') continue;
+      const y1 = yOf.get(s.id) + sy, y2 = yOf.get(t.id) + ty;
+      items.push({ id: l.id, side, edge: 0, ports: [`${s.id}::${s.port}`, `${t.id}::${t.port}`], y1: Math.min(y1, y2), y2: Math.max(y1, y2) });
+    }
+    return joinLaneCounts(assignJoinLanes(items, { stub: ROUTER_STUB }), items);
+  };
+
   // Final placement: assign x per column, then position/resize zones + objects.
-  let cursorX = 0;
+  let cursorX = LEFT;
   for (const col of columns) {
     const allObjs = col.units.flatMap(u => u.objects);
-    const maxW = Math.max(...allObjs.map(o => o.size().width));
+    // A column of empty layers only keeps the widest one's content width.
+    const maxW = allObjs.length ? Math.max(...allObjs.map(o => o.size().width))
+      : Math.max(...col.units.map(u => u.zone.size().width - PAD * 2));
     const hasZone = col.units.some(u => u.zone);
-    const colW = maxW + (hasZone ? PAD * 2 : 0);
-    const contentX = cursorX + (hasZone ? PAD : 0);
+    const room = hasZone && allObjs.length ? laneRoom(col) : { left: 0, right: 0 };
+    const extraL = JOIN_LANE_GAP * Math.max(0, room.left - 1), extraR = JOIN_LANE_GAP * Math.max(0, room.right - 1);
+    const colW = Math.max(maxW + (hasZone ? PAD * 2 : 0), ...col.units.filter(u => u.zone).map(u => u.reach.right + PAD)) + extraL + extraR;
+    const contentX = cursorX + (hasZone ? PAD : 0) + extraL;
+    // translate(), not position(): a note or label inside the lane comes along (review H2-9).
+    const moveZone = (z, x, y) => { const p = z.position(); z.translate(Math.round(x) - p.x, Math.round(y) - p.y); };
     for (const u of col.units) {
+      if (!u.objects.length) {
+        moveZone(u.zone, cursorX, u._top);
+        u.zone.resize(Math.round(colW), Math.round(u.zone.size().height));
+        continue;
+      }
       if (u.zone) {
-        const firstO = u.objects[0], lastO = u.objects[u.objects.length - 1];
-        const top = u._objY.get(firstO.id) - HEAD;
-        const bottom = u._objY.get(lastO.id) + lastO.size().height + PAD;
-        u.zone.position(Math.round(cursorX), Math.round(top));
+        const lastO = u.objects[u.objects.length - 1];
+        const top = u._top;
+        const bottom = Math.max(u._objY.get(lastO.id) + lastO.size().height, top + u.reach.bottom) + PAD;
+        moveZone(u.zone, cursorX, top);
         u.zone.resize(Math.round(colW), Math.round(bottom - top));
       }
       for (const o of u.objects) {
         o.position(Math.round(contentX + (maxW - o.size().width) / 2), Math.round(u._objY.get(o.id)));
       }
+      // A shape the cards would cover goes below them (placeDecor). The rest rode along with the lane.
+      for (const d of u.decor || []) if (d.toY !== d.dy) d.cell.translate(0, d.toY - d.dy);
     }
     cursorX += colW + LANE_GAP;
   }
 
   fitContent();
+  return true;
 }
 
 // ── Flow Auto Layout (S3) ────────────────────────────────────────────
@@ -374,10 +539,10 @@ export function applyDataMappingLayout() {
 // barycentre core), and writes element positions ONLY (never link vertices). Anchored at the current top-left so
 // the layout doesn't teleport; the toolbar wraps this in recordPositionsBatch (one undo entry) + snapLinksToPorts
 // (facing-port attach) + a re-fit. Links re-route through sfManhattan on the next render.
-export function applyFlowLayout() {
+export function applyFlowLayout() {   // false when there was nothing to arrange (review H2-5)
   const { graph } = cctx;
   const elements = graph.getElements().filter((e) => String(e.get('type')).startsWith('df.Flow'));
-  if (elements.length < 2) return;
+  if (elements.length < 2) return false;
   const ids = new Set(elements.map((e) => e.id));
   // Pass each node's CURRENT centre-x so the layout keeps sibling branches in the left-to-right order the user
   // arranged them (rather than re-ordering by link-creation order).
@@ -394,13 +559,32 @@ export function applyFlowLayout() {
       flowLinks.push(l);
     }
   }
-  const pos = computeFlowLayout({ nodes, edges });
+  // Stage bands and Group zones are un-embedded sf.Zone rectangles, so nothing moved them: after a layout they framed
+  // empty space or the wrong cards (review H2-4). Snapshot what each frames now; a single-entry, single-exit chain
+  // (a stage and its steps) is placed as one stacked unit, as the converter does; every zone refits after placing.
+  const boxOf = (c) => { const p = c.position(), s = c.size(); return { x: p.x, y: p.y, width: s.width, height: s.height }; };
+  const zones = graph.getElements().filter((e) => e.get('type') === 'sf.Zone' && !e.get('parent')).map((z) => ({ id: z.id, box: boxOf(z) }));
+  const cardsBefore = elements.map((e) => ({ id: e.id, box: boxOf(e) }));
+  const chains = planFlowZoneChains(zones, cardsBefore, edges);
+  const headOf = new Map();
+  for (const [head, rest] of chains) for (const id of rest) headOf.set(id, head);
+  const sizeById = new Map(nodes.map((n) => [n.id, n]));
+  const layoutNodes = nodes.filter((n) => !headOf.has(n.id))
+    .map((n) => (chains.has(n.id) ? { ...n, stack: chains.get(n.id).map((id) => ({ id, h: sizeById.get(id).h })) } : n));
+  const layoutEdges = edges.map((e) => ({ ...e, source: headOf.get(e.source) || e.source, target: headOf.get(e.target) || e.target }));
+  const pos = computeFlowLayout({ nodes: layoutNodes, edges: layoutEdges });
   // Anchor at the current bounding-box top-left so the tree lands roughly where the flow already is.
   let ox = Infinity, oy = Infinity;
   for (const e of elements) { const p = e.position(); if (p.x < ox) ox = p.x; if (p.y < oy) oy = p.y; }
   for (const e of elements) {
     const p = pos.get(e.id);
     if (p) e.position(Math.round(ox + p.x), Math.round(oy + p.y));
+  }
+  const refit = planFlowZoneRefit(zones, cardsBefore.map((c) => ({ id: c.id, before: c.box, after: boxOf(graph.getCell(c.id)) })));
+  for (const [id, b] of refit) {
+    const z = graph.getCell(id);
+    z.position(Math.round(b.x), Math.round(b.y));
+    z.resize(Math.round(b.width), Math.round(b.height));
   }
   // Re-snap each flow link's ports + clear stale vertices + re-centre its label. A flow is a strict TOP-DOWN
   // tree, so a link snaps by VERTICAL direction (parent above child → source-bottom / target-top), NOT by the
@@ -439,6 +623,7 @@ export function applyFlowLayout() {
   const fit = () => { const bb = graph.getCellsBBox(elements); if (bb && cctx.fitToCells) cctx.fitToCells(bb); };
   fit();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fit);
+  return true;
 }
 
 /**
@@ -586,11 +771,12 @@ export function applySequenceAutoLayout(plan) {
     if (Math.abs(curSize.height - newH) > 0.5) {
       l.cell.resize(curSize.width, newH);
     }
-    if (l.type === 'sf.SequenceParticipant') {
-      joint.shapes.sf.rebuildSeqParticipantPorts(l.cell, targetCount);
-    } else {
-      joint.shapes.sf.rebuildSeqActorPorts(l.cell, targetCount);
-    }
+    // The rebuild rewrites `ports` and drops custom spacing, which history does not record: run it as one snapshot
+    // command, so the layout's undo restores the ports and ratios too, not only the count (review H2-1).
+    undoableLifelineOp(l.cell, () => {
+      if (l.type === 'sf.SequenceParticipant') joint.shapes.sf.rebuildSeqParticipantPorts(l.cell, targetCount);
+      else joint.shapes.sf.rebuildSeqActorPorts(l.cell, targetCount);
+    });
   }
 
   // ── X-spacing (v1.15.1) ─────────────────────────────────────────────
@@ -601,7 +787,10 @@ export function applySequenceAutoLayout(plan) {
   // intervals. Messages need NO dx compensation (unlike the dy case): a message's
   // `topLeft` anchor dx is relative to the lane's left edge, so the endpoint rides the
   // lifeline as the lane moves. position() is non-cascading, so embedded activations
-  // stay put here and are re-centred (below) onto the lane's new lifeline.
+  // stay put here and are re-centred (below) onto the lane's new lifeline. The one
+  // exception is a self-message's vertices (a Mermaid import draws its loop with two):
+  // they are absolute, so they move with their lane, or the loop's corners stayed at the
+  // old X and drew two diagonals (review 2026-10-15, S7-2).
   const centerX = (cell) => cell.position().x + cell.size().width / 2;
   const ordered = [...lanes].sort((a, b) => centerX(a.cell) - centerX(b.cell));
 
@@ -628,7 +817,12 @@ export function applySequenceAutoLayout(plan) {
     const step = (lastC - firstC) / (ordered.length - 1);
     ordered.forEach((l, i) => {
       const dx = (firstC + i * step) - centerX(l.cell);
-      if (Math.abs(dx) > 0.5) { const p = l.cell.position(); l.cell.position(p.x + dx, p.y); }
+      if (Math.abs(dx) <= 0.5) return;
+      const p = l.cell.position();
+      l.cell.position(p.x + dx, p.y);
+      for (const link of graph.getConnectedLinks(l.cell)) {
+        if (link.source().id === l.id && link.target().id === l.id && link.vertices().length) link.translate(dx, 0);
+      }
     });
   }
 
@@ -709,12 +903,14 @@ export function matchContainerHeights(laneIds = null) {
       // the uniform height survives exactly until the user drags any card.
       lane.set('manualSize', true);
       // position()/resize() on a parent do NOT cascade to embeds (only an interactive drag does), so each card
-      // is moved explicitly to the absolute y the plan computed.
+      // is moved explicitly to the absolute y the plan computed. translate(), not position(): a card that is
+      // itself a frame (a Subprocess in a lane) must carry its own children, which position() left behind
+      // (review H2-2, the audit P0-5 class). translate tags translateBy, which the embedding auto-fit skips.
       lane.position(lane.position().x, lp.y);
       lane.resize(lane.size().width, lp.height);
       for (const c of lp.cards) {
         const card = graph.getCell(c.id);
-        if (card) card.position(card.position().x, c.y);
+        if (card) card.translate(0, c.y - card.position().y);
       }
     }
   } finally { endBatch(); }

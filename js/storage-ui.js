@@ -2,8 +2,8 @@
 // split-table + tri-state helpers, mutate) DOM for the Save / Load / Close managers' rows, chips, collapsible
 // split tables, and select-alls (including the V4/V5 helpers). Depends only on the genuinely-pure helpers that
 // stay in util.js + the zero-dep drive-sync-logic leaf (hasVerifiedMyDriveBackup — the chip's honesty rule).
-import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.25.9';
-import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.25.9';
+import { escHtml, getDiagramTypeIcon, isViewForkTab } from './util.js?v=1.26.1';
+import { hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.1';
 
 export function storageRowHtml({ tag = 'div', rowClass = '', rowAttrs = '', active = false, checkbox = '',
   diagramType = '', typeTitle = '', icon: iconOverride = '', leadingIcon = false, name = '', nameSuffix = '', groupBadge = '', count = null,
@@ -82,7 +82,7 @@ export function sharePillHtml(canEdit, { sm = false, workingCopy = false, title 
  * builder shared by the Save Manager, Load Manager, AND Close & Delete so all three read identically. `t` is a
  * tab-like object carrying driveFileId / driveSharedCopies / driveSharedSource. `browserOn` lets a Drive-library
  * row that isn't open locally turn the browser chip off. */
-const DRIVE_CHIP_CHECK = '<svg class="df-save-mgr__check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const DRIVE_CHIP_CHECK = '<svg class="df-save-mgr__check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function driveChip(label, on, title, cls = '', icon = null) {
   const glyph = on ? (icon || DRIVE_CHIP_CHECK) : '';
   return `<span class="df-save-mgr__chip${on ? ' is-on' : ''}${cls ? ' ' + cls : ''}"${title ? ` title="${escHtml(title)}"` : ''}>${glyph}${escHtml(label)}</span>`;
@@ -149,6 +149,14 @@ export function driveChipsHtml(t, { driveOn = false, browserOn, browserTitle, sh
     }
   }
   return out.join('');
+}
+
+/** "This device only" on a Load > Browser archive with no copy in Google Drive (Slot's brief, 2026-10-16): the browser
+ *  can clear it. Amber like the shared chips: a heads-up, not an error. */
+export function deviceOnlyChipHtml() {
+  const title = 'Only on this device. Your browser can clear it after a few weeks without a visit. Load it and save it to Google Drive, or back it up to JSON.';
+  // Not .is-on (that means "this storage holds it") and no check mark: a warning, not a place it is kept.
+  return `<span class="df-save-mgr__chip df-save-mgr__chip--device" title="${escHtml(title)}">This device only</span>`;
 }
 
 /**

@@ -9,9 +9,11 @@
 //
 // ── Where the input comes from ──────────────────────────────────────────────────────────────────────────────
 //   core sObjects (CSV):
-//     sf data query -o <org> -t -r csv -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, \
-//        ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
+//     sf data query -o <org> -t -r csv -q "SELECT EntityDefinition.QualifiedApiName, QualifiedApiName, Label, \
+//        DataType, ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
 //        WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact')" > fields.csv
+//   (Not EntityDefinitionId: for a custom object that is its 01I id, not its name. An older CSV with only that
+//   column still reads, keyed by the id, and stderr says so.)
 //   Data Cloud DMOs (JSON), ONE GET per DMO - the list endpoint is paged with no page token:
 //     sf api request rest "/services/data/v67.0/ssot/data-model-objects/ssot__Individual__dlm" -o <org> > ind.json
 //   ...plus that DMO's relationships, which the definition does not carry (limit=500: the endpoint's
@@ -48,8 +50,11 @@
 // reason this is a draft rather than an import. 4 core objects came back as 612 fields in the org this was
 // built against; the hand-built MCN Consent Data Model uses 3-14 fields per object. `--keys-only` gets you most
 // of the way (keys + required), but read the result before drawing it.
-import { readFileSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { DF_ACCENT_CYCLE } from './diagram-palette.js';
+import { normaliseCategory } from './mapping-convert.js';
+import { readText } from './sf-cli.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
@@ -154,11 +159,14 @@ function refTarget(raw) {
   } catch { return null; }
 }
 
-/** FieldDefinition rows -> objects. */
+/** FieldDefinition rows -> objects. The object's NAME comes from `EntityDefinition.QualifiedApiName`:
+ *  `EntityDefinitionId` is the durable id, which is the API name only for a standard object. For a custom object it
+ *  is the CustomObject id (`01I...`), while ReferenceTo names targets by API name, so keyed by it a custom object's
+ *  relationships, `--only`, `--fields` and badges all missed. The id is the fallback for an older saved query. */
 function fromFieldDefinition(rows) {
   const byObj = new Map();
   for (const r of rows) {
-    const obj = r.EntityDefinitionId || r.EntityDefinition || r.SobjectType;
+    const obj = r['EntityDefinition.QualifiedApiName'] || r.EntityDefinitionId || r.EntityDefinition || r.SobjectType;
     const api = r.QualifiedApiName;
     if (!obj || !api) continue;
     if (!byObj.has(obj)) byObj.set(obj, []);
@@ -213,9 +221,9 @@ function fromDataCloud(json) {
   }
   const objects = dmoList(json).map((o) => ({
     name: o.name, label: o.label || o.name,
-    // PROFILE / ENGAGEMENT / OTHER is the DMO's own category and is exactly the datamodel card's vocabulary.
-    category: o.category && o.category !== 'UNASSIGNED'
-      ? o.category[0] + o.category.slice(1).toLowerCase() : undefined,
+    // The card's vocabulary is Profile / Engagement / Other (spec §2). A DMO can say more (RELATED,
+    // SEGMENT_MEMBERSHIP), so take mapping-convert's rule: anything else is Other. UNASSIGNED stays unset.
+    category: o.category && o.category !== 'UNASSIGNED' ? normaliseCategory(o.category) || undefined : undefined,
     fields: (o.fields || []).map((f) => {
       const out = refs.get(`${o.name}.${f.name}`.toLowerCase());
       return {
@@ -442,6 +450,8 @@ export function buildSelection(input, opts = {}) {
       relationships: kept.length,
       droppedRels, oneToOne, prunedFields, lostToPruning, pinnedFields, missingFields,
       annotatedSharing, annotatedRecords, unmatched,
+      // Objects still keyed by a CustomObject id: the CSV lacked EntityDefinition.QualifiedApiName.
+      opaqueObjects: objects.map((o) => o.name).filter((n) => /^01I[A-Za-z0-9]{12,15}$/.test(n)),
     },
   };
 }
@@ -493,7 +503,9 @@ export function parseFieldList(raw) {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+// Entry point: compare REAL paths. The module URL is symlink-resolved and percent-encoded while argv[1] is as typed,
+// and on Windows it uses backslashes, so a name or URL comparison skipped main() (skill-cli-paths.test.js).
+const isMain = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
 if (isMain) {
   const args = process.argv.slice(2);
   const VALUED = new Set(['--only', '--max-fields', '--fields', '--owd', '--volume', '--title']);
@@ -507,15 +519,22 @@ if (isMain) {
   let truncated = 0;
   for (const file of files) {
     let raw;
-    try { raw = readFileSync(file, 'utf8'); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
-    const i = raw.indexOf('{');
+    try { raw = readText(file); } catch (e) { die(`Could not read ${file}: ${e.message}`); }
+    // From the first `[` OR `{`: dmoList and dmoRelationships take an array (of definitions, of pages), and slicing
+    // from the first `{` made an array file fail to parse and fall through to the CSV reader. Each start is tried,
+    // so a bracket in a banner line cannot hide the payload.
     let doc = null;
-    if (i > -1) { try { doc = JSON.parse(raw.slice(i)); } catch { doc = null; } }
+    for (const i of [raw.indexOf('['), raw.indexOf('{')].filter((n) => n > -1).sort((a, b) => a - b)) {
+      try { doc = JSON.parse(raw.slice(i)); break; } catch { doc = null; }
+    }
+    const pages = doc ? [].concat(doc).filter((p) => Array.isArray(p?.relationships)) : [];
     if (doc && dmoList(doc).length) dmoDocs.push(doc);
-    else if (doc && Array.isArray(doc.relationships)) {
+    else if (pages.length) {
       relDocs.push(doc);
       // The endpoint pages with a nextPageUrl that points back at the same page, so a short page is lost data.
-      if (Number(doc.totalSize) > doc.relationships.length) truncated++;
+      // Each page is checked on its own: an array is one page per DMO, and summing rows across pages let one
+      // DMO's complete page hide another's shortfall. A second page of the same DMO repeats the first.
+      truncated += pages.filter((p) => Number(p.totalSize) > p.relationships.length).length;
     } else csv.push(raw);
   }
   if (csv.length && dmoDocs.length) die('Mix of a FieldDefinition CSV and DMO JSON - pass one kind at a time.');
@@ -532,7 +551,7 @@ if (isMain) {
     const path = val(flag);
     if (!path) return null;
     let text;
-    try { text = readFileSync(path, 'utf8'); } catch (e) { return die(`Could not read ${path}: ${e.message}`); }
+    try { text = readText(path); } catch (e) { return die(`Could not read ${path}: ${e.message}`); }
     const start = text.search(/[[{]/);
     if (start < 0) return die(`${path} contains no JSON - ${flag} takes the raw org response.`);
     try { return parse(JSON.parse(text.slice(start))); } catch (e) { return die(`Could not parse ${path}: ${e.message}`); }
@@ -554,15 +573,18 @@ if (isMain) {
     + `${stats.missingFields?.length ? `\n  NOT FOUND in the org: ${stats.missingFields.join(', ')}`
       + ' - check the spelling, or the field has been removed' : ''}`
     + `${stats.prunedFields ? `\n  pruned ${stats.prunedFields} field(s)` : ''}`
-    + `${stats.lostToPruning ? ` — which cost ${stats.lostToPruning} relationship(s); re-run with a larger --max-fields to keep them` : ''}`
+    + `${stats.lostToPruning ? ` - which cost ${stats.lostToPruning} relationship(s); re-run with a larger --max-fields to keep them` : ''}`
     // --only FILTERS the input, it cannot add to it: a FieldDefinition CSV holds only the objects its query named.
     + `${stats.droppedRels ? `\n  ${stats.droppedRels} relationship(s) point outside the selection and were dropped (${typeof input === 'string'
       ? 'add those objects to the FieldDefinition query\'s IN list and re-export to keep them'
       : 'fetch those DMOs and their /relationships too, to keep them'})` : ''}`
+    + `${stats.opaqueObjects?.length ? `\n  ${stats.opaqueObjects.length} object(s) named by a CustomObject id`
+      + ` (${stats.opaqueObjects.join(', ')}): add EntityDefinition.QualifiedApiName to the FieldDefinition query's`
+      + ' SELECT and re-export, or their cards carry the id and their relationships are dropped' : ''}`
     + `${stats.oneToOne ? `\n  ${stats.oneToOne} one-to-one relationship(s) not drawn - the ERD marks only many-to-one` : ''}`
     + `${typeof input !== 'string' && !relDocs.length ? '\n  NO RELATIONSHIPS: a DMO definition carries none - also pass each DMO\'s'
       + ' /relationships?limit=500 response to draw them' : ''}`
-    + `${truncated ? `\n  ${truncated} relationships file(s) hold fewer rows than their totalSize - re-fetch with a larger limit` : ''}`
+    + `${truncated ? `\n  ${truncated} relationships page(s) hold fewer rows than their totalSize - re-fetch with a larger limit` : ''}`
     + `${stats.annotatedSharing ? `\n  sharing model on ${stats.annotatedSharing} object(s)` : ''}`
     + `${stats.annotatedRecords ? `\n  record count on ${stats.annotatedRecords} object(s)` : ''}`
     + `${stats.unmatched?.length ? `\n  NOT ANNOTATED: ${stats.unmatched.join(', ')}`

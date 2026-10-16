@@ -59,6 +59,9 @@ const _clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
 // note in GOTCHAS); and the Gantt Display-menu view prefs `weekStartDay` /
 // `showWeekNumber` / `weekendStartDay` / `showProjectSummary` (intentionally
 // non-undoable preferences — persisted as model props, just not on the undo stack).
+// Week Starts and Timeline Summary are the exceptions: they move recorded geometry
+// (the End Date and axis growth, every bar's row), so applyToAllGanttTimelines
+// records `weekStartDay` / `showProjectSummary` with its own recordCommand.
 const CONTENT_PROPS = [
   // DataObject
   'objectName', 'category', 'headerColor',
@@ -69,6 +72,10 @@ const CONTENT_PROPS = [
   // change and this one land in the same idle window (and inside the toggle's own startBatch/endBatch).
   // `df.Table` reuses the same prop name, so it inherits the fix rather than repeating it.
   'collapsed',
+  // ...and the View menu's DataObject toggles, for the same reason. Key Fields Only resizes the card, so only its
+  // height was undone (a tall card listing the key rows); API Names / Field Lengths recorded nothing, so Cmd+Z after
+  // them undid the user's previous edit instead. Unlike the Gantt view prefs below, they change what the card shows.
+  'keyFieldsOnly', 'showLabels', 'showFieldLengths',
   // Task (RACI card)
   'taskName', 'taskDescription', 'descriptionWidth',
   // OrgPerson (mirrors OrgPersonView's change-listener set)
@@ -266,7 +273,7 @@ export function init(_graph) {
           c.remove();
         }
       },
-      redo: () => graph.addCell(capturedJson),
+      redo: () => { graph.addCell(capturedJson); relinkEmbeds(id); },
     });
   });
 
@@ -339,8 +346,9 @@ export function init(_graph) {
     schedulePendingDragCommit();
   });
 
-  graph.on('change:attrs', (cell) => {
+  graph.on('change:attrs', (cell, _attrs, opt) => {
     if (isUndoRedoing || loadingGuard?.()) return;
+    if (opt?.dfCosmetic) return;   // a theme repaint of icon colours (icon-refresh.js), not an edit
     const oldAttrs = cell.previous('attrs');
     if (!oldAttrs) return;
     // Record only the SELECTORS that changed. Copying the whole attrs twice per change kept an Image cell's data URI
@@ -583,8 +591,9 @@ export function init(_graph) {
   // (child `parent` + parent `embeds`) stay consistent. Discrete (one finalizeEmbedding
   // per drop) → immediate push (lands in the open pointer/selection batch alongside the
   // position change). SUPPRESSED for add-then-embed flows (stencil drop, conversions)
-  // where the `add` command already round-trips the embed via its captured JSON — see
-  // suppressEmbedTracking; recording there would split the drop into two undo steps.
+  // where the `add` command's captured JSON carries the child's `parent` and its redo repairs
+  // the parent's `embeds` (relinkEmbeds) — see suppressEmbedTracking; recording there would
+  // split the drop into two undo steps.
   graph.on('change:parent', (cell) => {
     // loadingGuard like every other recorder: embeds made DURING a load (fromJSON, the Gantt seed, the legacy-timeline
     // migration, the dangling-parent cleanup) are not user actions. Recording them gave a brand-new Gantt 11 undo
@@ -865,16 +874,36 @@ function restoreParent(childId, targetParentId) {
   const child = graph.getCell(childId);
   if (!child) return;
   const currentParentId = child.get('parent') ?? null;
-  if (currentParentId === targetParentId) return;
+  if (currentParentId === targetParentId) { relinkEmbeds(childId); return; }   // named already: repair a one-sided embed
   if (currentParentId) { const cp = graph.getCell(currentParentId); if (cp) cp.unembed(child); }
   if (targetParentId) { const tp = graph.getCell(targetParentId); if (tp) tp.embed(child); }
 }
 
+// Make both sides of an embed agree for a cell an undo/redo just re-added. The add command's undo removes the cell, and
+// JointJS's remove() unembeds it from its parent first, so the parent's `embeds` loses the id while the captured JSON
+// keeps `parent`: redo of a paste, Cmd+D, stencil drop or template insert left a container that no longer carried its
+// child (review C1). `set('embeds')`, not embed(): embed() throws on a child that already names its parent.
+function relinkEmbeds(id) {
+  const cell = graph.getCell(id);
+  if (!cell) return;
+  const parentId = cell.get('parent');
+  const parent = parentId ? graph.getCell(parentId) : null;
+  if (parent) {
+    const embeds = parent.get('embeds') || [];
+    if (!embeds.includes(id)) parent.set('embeds', [...embeds, id]);
+  }
+  // The other direction: cells re-added earlier in the same replay that name this one as their parent.
+  const own = cell.get('embeds') || [];
+  const orphans = graph.getCells().filter(c => c.get('parent') === id && !own.includes(c.id)).map(c => c.id);
+  if (orphans.length) cell.set('embeds', [...own, ...orphans]);
+}
+
 /**
  * Run `fn` without recording change:parent. For add-then-embed flows (stencil drop,
- * shape conversions) where the cell's `add` command already captures the final embedded
- * state in its JSON — recording the embed separately would split one drop into two undo
- * steps. Drags / multi-select capture do NOT use this, so their embeds stay undoable.
+ * shape conversions) where the cell's `add` command already captures the child's `parent`
+ * in its JSON and its redo re-links the parent's `embeds` (relinkEmbeds) — recording the
+ * embed separately would split one drop into two undo steps. Drags / multi-select capture
+ * do NOT use this, so their embeds stay undoable.
  */
 export function suppressEmbedTracking(fn) {
   const prev = _suppressParentTracking;
@@ -979,6 +1008,8 @@ export function restore(state) {
 
 export function canUndo() { return !locked && undoStack.length > 0; }
 export function canRedo() { return !locked && redoStack.length > 0; }
+/** Any step on the live stacks, a drag merge still pending included, whatever the lock: what a page reload drops. */
+export function hasSteps() { return undoStack.length > 0 || redoStack.length > 0 || pendingChanges.size > 0; }
 
 // Lock / unlock undo+redo. notifyChange() fires so the toolbar refreshes the
 // button disabled-state immediately (it reads canUndo()/canRedo()).

@@ -6,11 +6,12 @@
 // draft-session state machine (_barDraft/_barOrig), which this module never touches. Reads the live
 // graph + facade callbacks via initGanttPlan; never imports table-view.js back (acyclic).
 
-import { escHtml } from '../util.js?v=1.25.9';
-import { startBatch, endBatch } from '../history.js?v=1.25.9';
-import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.25.9';
-import { applyGanttDepLinkStyle } from '../canvas.js?v=1.25.9';
-import { buildModal } from '../feedback.js?v=1.25.9';
+import { escHtml } from '../util.js?v=1.26.1';
+import { startBatch, endBatch } from '../history.js?v=1.26.1';
+import { ganttTimelineFor, timelineBars, resequenceGanttOrders, layoutTimelineTasks, applyGanttGeometry, orderToY } from '../gantt-layout.js?v=1.26.1';
+import { localISODate } from '../gantt-scale.js?v=1.26.1';
+import { applyGanttDepLinkStyle } from '../canvas.js?v=1.26.1';
+import { buildModal } from '../feedback.js?v=1.26.1';
 
 // ── Injected context (wired by table-view.init → initGanttPlan). Read at CALL time. `graph` is the
 // live JointJS graph; syncGanttDraft/render/isEditSession are facade functions the structural ops
@@ -28,22 +29,24 @@ export function initGanttPlan(ctx) {
 export function addGanttTask(tlId) {
   const tl = tlId && graph.getCell(tlId);
   if (!tl) return;
-  const pad = (n) => String(n).padStart(2, '0');
-  const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   // A malformed timeline start ("TBD") gave the new bar endDate "NaN-NaN-NaN" (audit 2026-09-23): fall back to today.
   const tlStart = tl.get('startDate');
-  const startStr = (tlStart && !isNaN(new Date(tlStart + 'T00:00:00'))) ? tlStart : isoOf(new Date());
+  const startStr = (tlStart && !isNaN(new Date(tlStart + 'T00:00:00'))) ? tlStart : localISODate(new Date());
   const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
   const order = timelineBars(tl).length;
+  const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: localISODate(ed), attrs: { label: { text: 'New Task' } } });
   startBatch();
   try {
-    const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: isoOf(ed), attrs: { label: { text: 'New Task' } } });
     graph.addCell(bar);
     tl.embed(bar);
     if (!applyGanttGeometry(bar, tl)) bar.position(tl.position().x + (tl.get('taskListWidth') || 200), orderToY(tl, order), { gantt: true });
   } finally { endBatch(); }
   syncGanttDraft();
   render();
+  // The new row is appended at the bottom, often below the fold: bring it into view and put the caret in its Name,
+  // ready to type over "New Task" (review L3).
+  const name = document.querySelector(`.df-tbl__input[data-bk="${CSS.escape(String(bar.id))}"][data-bprop="taskLabel"]`);
+  if (name) { name.scrollIntoView({ block: 'nearest' }); name.focus({ preventScroll: true }); name.select(); }
 }
 
 // Delete a task row → remove the bar cell + close the order gap. Immediate + undoable (matches the panel).
@@ -57,19 +60,22 @@ export function deleteGanttBar(barId) {
   render();
 }
 
-// Reorder: move the dragged bar to before `toBarId` (drop target), rewrite `order`, re-layout. Immediate +
-// undoable, mirroring the panel's drag-reorder (splice in timelineBars order, renumber, re-snap).
-export function reorderGanttBar(fromBarId, toBarId) {
+// Reorder: move the dragged bar next to `toBarId` (drop target): AFTER it by default, BEFORE it when `after` is false
+// (a drop on the target row's top half, or Alt+Up). Rewrite `order`, re-layout. Immediate + undoable, mirroring the
+// panel's drag-reorder (splice in timelineBars order, renumber, re-snap). Always inserting after made row 1 unreachable
+// by a drop (review L12). Returns true when it moved the bar.
+export function reorderGanttBar(fromBarId, toBarId, after = true) {
   const moved = fromBarId && graph.getCell(fromBarId);
   const target = toBarId && graph.getCell(toBarId);
-  if (!moved || !target || moved === target) return;
+  if (!moved || !target || moved === target) return false;
   const tl = ganttTimelineFor(moved);
-  if (!tl || ganttTimelineFor(target) !== tl) return;   // only reorder within one timeline
+  if (!tl || ganttTimelineFor(target) !== tl) return false;   // only reorder within one timeline
   const ordered = timelineBars(tl);
-  const fromIdx = ordered.indexOf(moved), toIdx = ordered.indexOf(target);
-  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  const fromIdx = ordered.indexOf(moved);
+  if (fromIdx < 0 || ordered.indexOf(target) < 0) return false;
   const [m] = ordered.splice(fromIdx, 1);
-  ordered.splice(toIdx > fromIdx ? toIdx : toIdx + 1, 0, m);   // insert AFTER the drop target (matches the below-indicator)
+  const toIdx = ordered.indexOf(target);
+  ordered.splice(after ? toIdx + 1 : toIdx, 0, m);   // matches the below / above drop indicator
   startBatch();
   try {
     // A drop across groups also adopts the target's group (so the bar lands where it visually dropped).
@@ -81,6 +87,7 @@ export function reorderGanttBar(fromBarId, toBarId) {
   } finally { endBatch(); }
   syncGanttDraft();
   render();
+  return true;
 }
 
 // ── Dependencies editor (Phase 5c) — predecessor ganttDep links ─────────────

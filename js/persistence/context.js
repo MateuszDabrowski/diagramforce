@@ -30,28 +30,28 @@ export const pctx = {
   onReplaceContent: null,  // (graphJSON, done) => boolean — a user's Replace from the Paste pane: swap the active tab's content as ONE undo step + a real edit
   onImportGroup: null,     // (groupMetas, diagrams) => void  (kind:'group' bundle)
   onNewDiagram: null,      // (type) => void  (a `#new=<type>` address - the manifest shortcuts, Slot's right-click)
+  leaveGuard: null,        // (proceed) => boolean  (table-view.guardLeave: true = go now, false = it asks first and runs proceed after Save / Discard)
   getAllTabs: null,        // () => tab[]              (all open tabs, incl. groupId)
   getGroups: null,         // () => group[]            ([{id,name,icon,color}] — so a full backup carries group data)
   getTabGraph: null,       // (tabId) => graphJSON     (a tab's graph)
   showLoadModal: null,     // (importStats) => void    (reveal Load-from-Browser)
   showPasteImport: null,   // (opts?) => void          (open the unified Load-from-Paste modal — New-Diagram "Open" tab; {replace:true} from the tab menu)
+  showFileImport: null,    // () => void               (open Load on its File tab — the New-Diagram "Open" tab's File card)
   templatesBackupApi: null,// { getTemplates, exportFn, importMerge }
   renderThumbnail: null,   // (template, size, height, diff) => HTMLElement — mini-paper preview (templates.js); diff highlights added/changed cells. Used by the Review conflict modal's side-by-side cards.
   getTabViewport: null,    // (tabId) => viewport
   getTabDiagramType: null, // (tabId) => type
-  showSaveModal: null,     // () => void              (open Save-to-Browser)
-  onNamedSave: null,       // (name) => void          (tab marked saved)
-  onSaveComplete: null,    // (kind) => void          (post-save hook)
   onDriveTabSaved: null,   // (tabId) => void         (a SPECIFIC tab finished syncing to Drive → clear its dirty dot)
   // Storage primitives (still defined in persistence.js until Slice 3; read here).
   namedSavePrefix: null,   // localStorage key prefix for named saves
   getNamedSaves: null,     // () => save[]
-  readNamedSave: null,     // (key) => { name, diagramType, graph, viewport } | null
+  readNamedSave: null,     // (key) => { name, diagramType, mappingMode, graph, viewport, appVersion?, group? } | null
   // Drive-aware backup gate (remote-store fns, wired in persistence.init) — storage.js skips the export nag
   // when synced and offers "Connect to Google Drive" on the reminder.
   isDriveConnected: null,  // () => boolean
   isDriveConfigured: null, // () => boolean
   driveSignIn: null,       // () => Promise<void>  (open the Drive sign-in flow)
+  driveTabHolding: null,   // (fileId, { anyRole }) => tabId | null  (the open tab whose own Drive file this is - loadNamedSave)
 
   // Cross-cutting helpers shared with persistence.js, wired in init() so the
   // sub-modules don't import persistence.js (which would be circular).

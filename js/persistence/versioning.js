@@ -4,9 +4,9 @@
 // persistence runtime context (`pctx`: appVersion + triggerDownload/dateSuffix
 // for the backup button), util, and feedback — never on another sub-module.
 
-import { compareSemver, escHtml, stableStringify, sanitizeFilenamePart } from '../util.js?v=1.25.9';
-import { buildModal } from '../feedback.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
+import { compareSemver, escHtml, stableStringify, sanitizeFilenamePart } from '../util.js?v=1.26.1';
+import { buildModal } from '../feedback.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
 
 /** Content signature of a cell array (a diagram's `graph.cells` or a template's
  *  `cells`). Two imports with the same signature are exact duplicates. Exported
@@ -22,7 +22,7 @@ export function contentSignature(cells) {
 export function classifyVersionDiff(savedVersion) {
   const { appVersion: APP_VERSION } = pctx;
   if (!savedVersion) return 'major'; // no version at all — treat as major
-  const saved = savedVersion.split('.').map(Number);
+  const saved = String(savedVersion).split('.').map(Number);   // a numeric appVersion (LLM-authored) must not throw
   const current = APP_VERSION.split('.').map(Number);
   if (saved[0] !== current[0]) return 'major';
   if (saved[1] !== current[1]) return 'minor';

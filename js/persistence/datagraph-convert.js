@@ -111,13 +111,28 @@ function fromDefinition(doc) {
   return { root, name: doc.label || doc.name || root.label, kind: 'definition', meta: doc };
 }
 
+/** Merge one sample row into `into`, at every depth: a nested array concatenates and a nested object merges, so a
+ *  later row's shorter or empty related-object array no longer wipes the fields earlier rows showed (review
+ *  2026-10-15, E6: `Object.assign` left a Contact Point Email card with zero fields). A scalar keeps its first
+ *  non-null value, so the field's inferred type does not flip on a later row. */
+const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+function mergeRow(into, row) {
+  for (const [k, v] of Object.entries(row)) {
+    const cur = into[k];
+    if (Array.isArray(v) && Array.isArray(cur)) into[k] = cur.concat(v);
+    else if (isPlain(v) && isPlain(cur)) into[k] = mergeRow({ ...cur }, v);
+    else if (cur === undefined || cur === null) into[k] = v;
+  }
+  return into;
+}
+
 function fromPreview(doc, rootName) {
   const build = (obj, name, label) => {
     const fields = [], children = [];
     for (const [k, v] of Object.entries(obj || {})) {
       if (Array.isArray(v)) {
         const merged = {};
-        for (const row of v) if (row && typeof row === 'object' && !Array.isArray(row)) Object.assign(merged, row);
+        for (const row of v) if (isPlain(row)) mergeRow(merged, row);
         children.push(build(merged, k, humaniseDmo(k)));
       } else if (v && typeof v === 'object') {
         children.push(build(v, k, humaniseDmo(k)));          // a to-ONE related object
@@ -251,12 +266,17 @@ export function buildDataGraphDiagram(parsed, { appVersion = '1.22.0', title = n
   const kids = flat.map((_, i) => flat.reduce((acc, e, j) => (e.parent === i ? acc.concat(j) : acc), []));
   const y = new Array(flat.length).fill(0);
   let cursor = 0;
+  // A parent lines up its HEADER with its children's, not its box with their span: every edge runs er-right ->
+  // er-left, and both ports sit HEADER_H/2 below a card's top, so equal tops draw a straight link. Centring the box
+  // stepped the link 11 px per field of difference (2026-10-15 review). Odd count: the middle child's top; even:
+  // midway between the two middle ones. A parent taller than its children's block moves the cursor past it, so
+  // the next subtree starts below it.
   const place = (i) => {
     if (!kids[i].length) { y[i] = cursor; cursor += h(i) + ROW_GAP; return; }
     for (const k of kids[i]) place(k);
-    const kk = kids[i];
-    const top = y[kk[0]], bottom = y[kk[kk.length - 1]] + h(kk[kk.length - 1]);
-    y[i] = top + (bottom - top) / 2 - h(i) / 2;
+    const kk = kids[i], m = kk.length >> 1;
+    y[i] = kk.length % 2 ? y[kk[m]] : (y[kk[m - 1]] + y[kk[m]]) / 2;
+    cursor = Math.max(cursor, y[i] + h(i) + ROW_GAP);
   };
   place(0);
   const minY = Math.min(...y);

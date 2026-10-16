@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.25.9';
-import { buildModal } from './feedback.js?v=1.25.9';
+import { compareSemver } from './util.js?v=1.26.1';
+import { buildModal } from './feedback.js?v=1.26.1';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,27 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.26.0 - covers EVERYTHING since 1.25.0: the 1.25.1-1.25.9 patches (never announced - the overlay fires on
+  // major/minor only) and the 2026-10-15 full review. Owner calls at the cut (2026-10-15): connectors, Auto Layout,
+  // Data Mapping for any pipeline, the skill's layout checks and the inclusive Gantt End Date. Left out: the
+  // interface animations (a good change, not a highlight), the ~300 review fixes, the Slot changes (the release
+  // check is untested in the real app), the update-reload toast, the per-tab Drive name, Help's Tabs group, labels
+  // placed on open and the Mermaid ER layout. The speed figure is the router benchmark's worst case.
+  // 1.26.0 never reached production, so 1.26.1 is where users first see this entry (the overlay keys on major.minor):
+  // owner call at the 1.26.1 cut (2026-10-16) - add the device-only mark and the join lanes, the visible 1.26.1 work.
+  {
+    version: '1.26.0',
+    title: "What's new in Diagramforce",
+    intro: 'Connectors that read at a glance, an Auto Layout that tidies more of the canvas, and Data Mapping for any data pipeline. Plus a Claude skill that checks its own layout, and a heads-up for diagrams that live only on this device.',
+    highlights: [
+      { icon: 'merge', text: '<strong>Connectors that read at a glance.</strong> Links leaving one shape share a single trunk and split near their targets, on architecture, process and data model diagrams. Links of different colours or styles never run on top of each other, even with Distributed Connectors off. Large diagrams settle much faster: a 300-card test diagram went from about 40 seconds to under one.' },
+      { icon: 'layout', text: '<strong>Auto Layout tidies more.</strong> Cards with no connectors are packed into a grid after the connected ones, instead of staying where they were. Shapes sitting inside a container or zone become its members first, so they move with it.' },
+      { icon: 'data_mapping', text: '<strong>Data Mapping for any pipeline.</strong> Map how fields flow through any pipeline, not only Data Cloud: a warehouse\'s Raw, Staging and Mart layers, an ETL job, or a SQL view and the tables it reads. Name each layer yourself, and Auto Layout gives each one its own column in the order the data flows. Joins between source tables get their own lines, and joins on the same field share one, so you can see which fields join. The spec and the Claude skill draw lineage this way too.' },
+      { icon: 'icon-claude', text: '<strong>The Claude skill checks its own layout.</strong> Its validator flags diagrams that load but read wrong: a label drawn through a connector, a fan-out too tight to draw, cards a few pixels off one grid, a frame too tight for its connectors. It tells you when diagramforce.com has a newer skill, and Data Cloud ERDs draw your org\'s object relationships. <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Get the skill</a>.' },
+      { icon: 'desktop', text: '<strong>Know what lives only on this device.</strong> A diagram not saved to Google Drive shows a small laptop mark on its tab, and after ten minutes of work Diagramforce offers once to save it to Drive, or to export it. Your browser can clear such diagrams after a few weeks without a visit.' },
+      { icon: 'date_time', text: '<strong>Gantt End Date means the last day.</strong> A timeline\'s End Date is now the last day it draws, as you would read a plan, not the day after.' },
+    ],
+  },
   // 1.25.0 - Winter '27 Flow elements and the skill's image render lead, then the three features that shipped in
   // 1.24.x PATCHES and so were never announced (the overlay fires on major/minor only): role hierarchy import and
   // Flow CSV export (1.24.5), Replace current tab (1.24.7). Owner calls at the cut (2026-10-06): fixes stay out

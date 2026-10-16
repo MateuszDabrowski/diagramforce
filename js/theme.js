@@ -36,9 +36,6 @@ export function toggle() {
   apply();
 }
 
-export function getChoice() { return choice; }
-export function getTheme() { return resolved; }
-
 // Called with the resolved theme whenever it changes - from the button OR from the OS in system mode - so the
 // canvas can repaint what CSS cannot reach (grid colour, baked icon colours).
 export function onChange(fn) {

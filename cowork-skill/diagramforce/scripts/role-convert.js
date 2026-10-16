@@ -38,26 +38,36 @@ const ROOT_GAP = 120;                  // between separate trees (an org can hav
  *  the 1.24.5 tag CI at 15% wider than the table ("Omega Financial Services Customer Executive": 338.6 px against
  *  293.7) - which overflowed a 400 px card on all three engines there while fitting on macOS. */
 const FONT_SPREAD = 1.2;
+// CJK ideographs, kana, Hangul and full-width forms (U+2E80 up) are about one em wide in every font, so they are
+// charged at the em, outside FONT_SPREAD (a difference between LATIN default fonts). Charged as a Latin letter, an
+// 18-character Japanese name got 176 px for ~234 px of text.
+const isWide = (ch) => ch.codePointAt(0) >= 0x2E80;
 function nameWidth(s) {
-  let w = 0;
+  let w = 0, wide = 0;
   for (const ch of String(s || '')) {
-    if (/[ijl.,'|!:;]/.test(ch) || ch === ' ') w += 3.8;
+    if (isWide(ch)) wide += 13.5;
+    else if (/[ijl.,'|!:;]/.test(ch) || ch === ' ') w += 3.8;
     else if (/[frt()\-]/.test(ch)) w += 5;
     else if (/[mw]/.test(ch)) w += 11;
     else if (/[MW]/.test(ch)) w += 12.5;
     else if (/[A-Z&@%]/.test(ch)) w += 9;
     else w += 7.5;
   }
-  return w * FONT_SPREAD;
+  return w * FONT_SPREAD + wide;
 }
+/** The 11px holder line: a flat 6.5 px a Latin character, one em a wide one. */
+const holderWidth = (s) => [...String(s || '')].reduce((w, ch) => w + (isWide(ch) ? 11.5 : 6.5 * FONT_SPREAD), 0);
 
+/** The object that holds `records` (and `done` / `totalSize`): the REST response itself, or the CLI's `result`. */
+function bodyOf(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null;
+  if (Array.isArray(doc.records)) return doc;
+  if (doc.result && Array.isArray(doc.result.records)) return doc.result;
+  return null;
+}
 function recordsOf(doc) {
   if (Array.isArray(doc)) return doc;
-  if (doc && typeof doc === 'object') {
-    if (Array.isArray(doc.records)) return doc.records;
-    if (doc.result && Array.isArray(doc.result.records)) return doc.result.records;
-  }
-  return null;
+  return bodyOf(doc)?.records || null;
 }
 
 const isRoleRecord = (r) => !!r && typeof r === 'object' && !Array.isArray(r)
@@ -110,7 +120,12 @@ export function parseRoles(doc) {
       holders: holdersKnown ? { count: Number(u?.totalSize ?? names.length) || 0, names } : null,
     });
   }
-  return { roles, holdersKnown };
+  // ONE PAGE of a longer result: a REST /query response stops at a page and says `done: false` (`sf data query`
+  // follows every page itself). Still drawn - a partial chart is useful - but carried, so the caller can say so.
+  const body = bodyOf(doc);
+  const partial = body && body.done === false
+    ? { received: recs.length, total: Number(body.totalSize) || null } : null;
+  return { roles, holdersKnown, partial };
 }
 
 const initials = (name) => {
@@ -179,9 +194,13 @@ export function buildRoleDiagram(parsed, { appVersion = '1.24.6', title = null, 
   const order = [];
   const walk = (r) => { order.push(r); kids.get(r.id).forEach(walk); };
   roots.forEach(walk);
+  // A role whose parent is not in the payload at all (a later page, or a WHERE clause) is drawn as a top role, which
+  // is a wrong hierarchy unless someone says so. A parent skipped as a PORTAL role is in `all`, so it is not missing.
+  const allIds = new Set(all.map((r) => r.id));
+  const missingParents = order.filter((r) => r.parentId && !allIds.has(r.parentId)).length;
   let W = MIN_W;
   for (const r of order) {
-    W = Math.max(W, TEXT_X + nameWidth(r.name) + 16, TEXT_X + holderLine(r).length * 6.5 * FONT_SPREAD + 16);
+    W = Math.max(W, TEXT_X + nameWidth(r.name) + 16, TEXT_X + holderWidth(holderLine(r)) + 16);
   }
   W = Math.ceil(W / 10) * 10;
 
@@ -277,6 +296,7 @@ export function buildRoleDiagram(parsed, { appVersion = '1.24.6', title = null, 
       vacant: parsed.holdersKnown ? vacant : null,
       held: parsed.holdersKnown ? held : null,
       portalSkipped, cycles: root ? 0 : loopRoots.length,
+      missingParents, partial: parsed.partial || null,
       width: Math.round(x - ROOT_GAP), cardWidth: W,
     },
   };

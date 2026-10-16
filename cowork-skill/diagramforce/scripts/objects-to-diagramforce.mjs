@@ -40,18 +40,21 @@
 //
 // ── Getting the raw material out of an org ──────────────────────────────────────────────────────────────────
 //   core objects:  sf data query -t -r csv -o <org> \
-//                    -q "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, ReferenceTo, \
-//                        RelationshipName, IsNillable FROM FieldDefinition \
+//                    -q "SELECT EntityDefinition.QualifiedApiName, QualifiedApiName, Label, DataType, \
+//                        ReferenceTo, RelationshipName, IsNillable FROM FieldDefinition \
 //                        WHERE EntityDefinition.QualifiedApiName IN ('Account','Contact')"
-//                  (EntityDefinitionId is what org-to-selection.mjs groups fields by.) `DataType` reads
+//                  (EntityDefinition.QualifiedApiName is what org-to-selection.mjs groups fields by; the
+//                  EntityDefinitionId of a custom object is its 01I id, not its name.) `DataType` reads
 //                  `Lookup(Account)` and `ReferenceTo` resolves the target, so a relationship needs no extra lookup.
 //   Data Cloud:    one GET per DMO, /services/data/v67.0/ssot/data-model-objects/<name> (the list is paged
 //                  with no page token). DMO definitions carry no relationships - add those by hand.
 //   Both go through org-to-selection.mjs first, which drafts the selection this script draws.
 //
 // Emits the standard single-diagram envelope, validated by scripts/validate-diagram.mjs.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { DF_COLORS, DF_SEVERITY_RAMP, DF_NEUTRAL_LINK, onAccentInk } from './diagram-palette.js';
+import { readText } from './sf-cli.js';
 
 // Verbatim from js/er-markers.js. A pure ER relationship carries NO `linkKind` - its absence is what marks it as
 // one (a `linkKind` of 'mapping' would make it a Data Cloud field mapping instead), and the app does not derive
@@ -68,11 +71,12 @@ const ER_MANY = 'M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0';
 // but a hand-edited selection is not policed here - the rule lives in DIAGRAM_JSON_SPEC.md for that author.
 const LINK_COLOR = DF_COLORS.blue;
 
-// Card geometry. Height tracks the field count because the app sizes a DataObject from its rows; getting this
-// roughly right means the imported diagram does not need an Auto Size pass to be readable.
+// Card geometry. Height is the app's own DataObject sizing rule (32 + 22 per field + 18, js/shapes/data-object.js),
+// which it re-measures on load: the old 44 + 22n + 12 shrank every card 6 px on open, so a zone sized around the
+// authored cards re-fitted on the first nudge (the same fix mapping-convert.js took).
 // 480 wide, measured off the official data model rather than chosen: an ERD card carries `Label (ApiName)`
 // plus a type column, and at 260 (the DATA MAPPING width) every row truncates mid-name.
-const CARD_W = 480, HEADER_H = 44, ROW_H = 22, CARD_PAD = 12;
+const CARD_W = 480, HEADER_H = 32, ROW_H = 22, TOGGLE_H = 18;
 // COL_GAP: 128 px between columns, the app's DATAMODEL_COLUMN_GAP (1.25.8). A link turns 32 px out of a field row,
 // so in a gap under 128 the turns of two neighbouring columns crowd onto the same lines.
 const COL_GAP = 128, ROW_GAP = 80;
@@ -117,6 +121,8 @@ const VOLUME_COLOR = DF_NEUTRAL_LINK;
 const owdColor = (v) => (/^ControlledBy/i.test(String(v)) ? INHERIT_COLOR : (OWD_COLOR[v] || VOLUME_COLOR));
 
 // Mirrors df.Pill._fitWidth (js/shapes/core.js) EXACTLY: max(h, round(len * fontSize * 0.62) + round(h * 0.55)).
+// The shape counts a CJK character as a full em (textUnits); every pill and legend text here is ASCII, where that
+// count is the length.
 // The shape re-fits at CONSTRUCTION, so a width authored to any other formula is silently overwritten on load -
 // and because the strip is right-aligned to the card edge, one wrong width shifts every pill beside it. Same
 // discipline the card height above already applies, and the reason both are stated rather than guessed.
@@ -241,7 +247,7 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     const cell = {
       id, type: 'sf.DataObject', z: 2000,
       position: { x: 0, y: 0 },                                   // laid out below
-      size: { width: CARD_W, height: HEADER_H + fields.length * ROW_H + CARD_PAD },
+      size: { width: CARD_W, height: HEADER_H + Math.max(fields.length, 1) * ROW_H + TOGGLE_H },
       objectName: o.label || o.name,
       // BOTH are required. `objectName` is the prop the panel and table view read; `attrs.headerLabel.text` is
       // what the CARD actually renders, and nothing syncs one to the other on load - authoring only the prop
@@ -299,14 +305,33 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   // Objects in the same zone stack in one column, so a zone is a clean vertical band and its box never has to
   // enclose scattered cards. Ungrouped objects follow in their own columns. Same reasoning as the mermaid
   // subgraph banding: group membership decides the CROSS axis, never the reading order.
+  // Matched CASE-INSENSITIVELY, as Salesforce API names are (and as org-to-selection.mjs matches --only and
+  // --fields). An exact lookup turned `account` into a silently loose card. Every miss is named, because SKILL.md
+  // tells the agent to check the zone count, and an empty zone is not drawn. An object named in two zones goes in
+  // the later one, and that is named too: otherwise the earlier zone could read "matched no object" when it had.
+  const warnings = [];
   const zoneOf = new Map();
-  (spec.zones || []).forEach((z, zi) => (z.objects || []).forEach((n) => zoneOf.set(n, zi)));
+  const lc = (n) => String(n).toLowerCase();
+  const known = new Set(objects.map((o) => lc(o.name)));
+  const zoneName = (zi) => `zones[${zi}] (${spec.zones[zi].label || 'Zone'})`;
+  (spec.zones || []).forEach((z, zi) => (z.objects || []).forEach((n) => {
+    if (!known.has(lc(n))) {
+      warnings.push(`zones[${zi}] names "${n}", which is not an object in the selection - left out of the zone.`);
+      return;
+    }
+    const prev = zoneOf.get(lc(n));
+    if (prev !== undefined && prev !== zi) {
+      warnings.push(`"${n}" is named in ${zoneName(prev)} and ${zoneName(zi)} - drawn in ${zoneName(zi)} only.`);
+    }
+    zoneOf.set(lc(n), zi);
+  }));
   const columns = [];
   (spec.zones || []).forEach((z, zi) => {
-    const members = objects.filter((o) => zoneOf.get(o.name) === zi);
+    const members = objects.filter((o) => zoneOf.get(lc(o.name)) === zi);
     if (members.length) columns.push({ zone: z, members });
+    else warnings.push(`zones[${zi}] (${z.label || 'Zone'}) matched no object - not drawn.`);
   });
-  const loose = objects.filter((o) => !zoneOf.has(o.name));
+  const loose = objects.filter((o) => !zoneOf.has(lc(o.name)));
   // Ungrouped cards are split into columns balanced BY HEIGHT, not three at a time.
   //
   // A fixed three-per-column ignores both how many cards there are and how tall each one is. Four objects came
@@ -375,7 +400,20 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   }
 
   let x = LEFT_MARGIN;
-  const ZONE_PAD = 20, ZONE_TOP = 48;
+  const zoneById = new Map();
+  // A zone OWNS what sits in it: its cards, the badge strips above them and the links between them (spec Layout
+  // rule 5, and what the app does once either end is dragged). Both halves, `parent` on the child and its id in
+  // the zone's `embeds`, or the validator flags the zone and a zone drag leaves the badges behind.
+  const embedIn = (zid, cell) => {
+    const zone = zid && zoneById.get(zid);
+    if (!zone) return;
+    cell.parent = zid;
+    zone.embeds.push(cell.id);
+  };
+  // 48 on every side: the app's frame fit (PARENT_FIT_PADDING, js/canvas/embedding.js) and the spec's frame padding.
+  // A link turns 32 px out of its port and keeps 16 px clear, so at the old 20 an in-zone relationship ran on the
+  // border, and the zone jumped 28 px wider on the first card drag.
+  const ZONE_PAD = 48, ZONE_TOP = 48;
   columns.forEach((col) => {
     const inZone = !!col.zone;
     let y = 60 + (inZone ? ZONE_TOP : 0);
@@ -389,14 +427,16 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     if (inZone) {
       const zid = `zone-${cells.length}`;
       const height = (y - ROW_GAP) - top + ZONE_TOP + ZONE_PAD;
-      cells.push({
+      const zone = {
         id: zid, type: 'sf.Zone', z: 0,
         position: { x, y: top - ZONE_TOP },
         size: { width: CARD_W + ZONE_PAD * 2, height },
         attrs: { label: { text: col.zone.label || 'Zone' } },
-        embeds: col.members.map((o) => byName.get(o.name).cell.id),
-      });
-      col.members.forEach((o) => { byName.get(o.name).cell.parent = zid; });
+        embeds: [],
+      };
+      cells.push(zone);
+      zoneById.set(zid, zone);
+      col.members.forEach((o) => embedIn(zid, byName.get(o.name).cell));
     }
     x += CARD_W + (inZone ? ZONE_PAD * 2 : 0) + COL_GAP;
   });
@@ -422,7 +462,6 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   //
   // Side is picked from relative POSITION, the same rule the flow converter uses, so the two stubs face each
   // other instead of doubling back. `to` is the ONE end, `from` the MANY end - the direction a lookup reads.
-  const warnings = [];
   // How many self-relationships have already been drawn on each card, so the next one takes the other edge.
   const selfCount = new Map();
   (spec.relationships || []).forEach((r, i) => {
@@ -504,7 +543,7 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     // The child's accent, matching its card header. Markers take it too, or a crow's foot reads as a separate
     // object from the line it terminates.
     const accent = a.cell.headerColor || LINK_COLOR;
-    cells.push({
+    const link = {
       id: `rel-${i}`, type: 'standard.Link', z: 3000,
       // Field ports render a `rect` and the ER / top groups a `circle` (js/shapes/ports.js), so naming one
       // magnet for both ends would leave the source unresolvable. Omitting it on the field end is what every
@@ -528,7 +567,9 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
         sourceMarker: { d: ER_MANY, fill: 'none', stroke: accent, 'stroke-width': 2, 'stroke-dasharray': 'none' },
         targetMarker: { d: ER_ONE, fill: 'none', stroke: accent, 'stroke-width': 2, 'stroke-dasharray': 'none' },
       } },
-    });
+    };
+    cells.push(link);
+    if (a.cell.parent && a.cell.parent === b.cell.parent) embedIn(a.cell.parent, link);
   });
 
   // ── Badges: org-wide default + record volume ───────────────────────────────
@@ -539,7 +580,8 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   // The strip sits in the ROW_GAP above the card (y - 28 to y - 6), which is empty by construction: the layout
   // stacks cards 80px apart in columns and relationships route through the COLUMN gutters. For a card inside a
   // zone that lands in the bottom 22px of the zone's 48px header band, clear of the zone label, which renders
-  // left-aligned at the zone's own x + 10 while the strip ends 20px short of the zone's right edge.
+  // left-aligned at the zone's own x + 10 while the strip ends 48px short of the zone's right edge. The zone
+  // embeds the strip, so it moves with the zone.
   const tiersUsed = new Set();
   let inheritSeen = false, volumeSeen = false, badges = 0;
   objects.forEach((o, i) => {
@@ -570,7 +612,9 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     // Keyed off the OBJECT index, not a running badge counter, so `owd-3` always belongs to `obj-3` even when
     // the object before it had no annotation at all.
     strip.forEach(([kind, text, fill], k) => {
-      cells.push(pill(`${kind}-${i}`, px, py, text, fill));
+      const badge = pill(`${kind}-${i}`, px, py, text, fill);
+      cells.push(badge);
+      embedIn(cell.parent, badge);
       px += widths[k] + PILL_GAP;
       badges++;
     });
@@ -620,7 +664,7 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
       // COUNTED, not derived by subtracting `warnings` from the relationship count - the badge pass below can
       // warn too, and that subtraction would have silently under-reported the links because of it.
       links: cells.filter((c) => c.type === 'standard.Link').length,
-      zones: (spec.zones || []).length,
+      zones: zoneById.size,   // DRAWN, not declared: a zone that matched nothing is skipped and warned about
       badges,
       warnings,
     },
@@ -628,12 +672,14 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+// Entry point: compare REAL paths. The module URL is symlink-resolved and percent-encoded while argv[1] is as typed,
+// and on Windows it uses backslashes, so a name or URL comparison skipped main() (skill-cli-paths.test.js).
+const isMain = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
 if (isMain) {
   const [inPath, outPath] = process.argv.slice(2);
   if (!inPath) die('usage: node scripts/objects-to-diagramforce.mjs <selection.json> [out.json]');
   let spec;
-  try { spec = JSON.parse(readFileSync(inPath, 'utf8')); }
+  try { spec = JSON.parse(readText(inPath)); }
   catch (e) { die(`Could not read ${inPath}: ${e.message}`); }
   const { diagram, stats } = buildDiagram(spec);
   const json = JSON.stringify(diagram, null, 2);

@@ -19,6 +19,8 @@
 // window and Escape leaves through keyboard.js. Nothing here is Slot-specific; the reason it fits Slot is
 // that WebKit hosts a full-screen element in a window of its own, which a call's "share a window" picks up
 // with no Slot chrome and no account name around it.
+import { kbd } from './keyboard.js?v=1.26.1';
+
 let modules = {};
 let presenting = false;
 let stencilWasHidden = false;
@@ -118,7 +120,7 @@ function ensurePills() {
   shapes.type = 'button';
   shapes.className = 'df-present-pill';
   shapes.textContent = 'Shapes';
-  shapes.title = 'Show or hide the shape stencil (Ctrl+B)';
+  shapes.title = `Show or hide the shape stencil (${kbd('Ctrl+B')})`;   // built after boot's tooltip rewrite (S8-10)
   shapes.addEventListener('click', () => modules.stencil?.toggle?.());
   const leave = document.createElement('button');
   leave.type = 'button';

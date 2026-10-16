@@ -3,7 +3,7 @@
 // table / LLM-authored JSON) and the bar moves to the right column. Shared by the shapes views (live edits +
 // timeline re-layout) and the load migration (migrateNodes). Back-compat: a task with no dates, or no resolvable
 // timeline, keeps its manual pixel position untouched.
-import { dateToX, spanWidth, xToDate, durationDays, addDaysISO } from './gantt-scale.js?v=1.25.9';
+import { dateToX, spanWidth, xToDate, durationDays, addDaysISO, leftOffset, periodsToReach, originDate, localISODate, axisEdgeDate, axisEndDate, grownPeriods } from './gantt-scale.js?v=1.26.1';
 
 /** The timeline a task belongs to: its embed parent if that's a timeline, else the SINGLE timeline in the graph (so
  *  an LLM/table needn't set embedding when there's only one). Null when ambiguous (multiple, none) and not embedded. */
@@ -16,18 +16,8 @@ export function ganttTimelineFor(task) {
   return tls.length === 1 ? tls[0] : null;
 }
 
-/** How many dated/undated GanttTask BARS are bound to this timeline (embedded in it, or — when it's the sole
- *  timeline — every bar in the graph; same binding rule as ganttTimelineFor). Phase 4.0: the axis left-panel
- *  reserves space when there are label rows OR bars, so bars become first-class without needing `tasks[]`. */
-function timelineBarCount(tl) {
-  const graph = tl && tl.graph;
-  if (!graph) return 0;
-  let n = 0;
-  for (const e of graph.getElements()) {
-    if (e.get('type') === 'sf.GanttTask' && ganttTimelineFor(e) === tl) n++;
-  }
-  return n;
-}
+/** The Gantt items a timeline owns by embedding (ganttTimelineFor falls back to the sole timeline only). */
+export const GANTT_TIMELINE_ITEMS = new Set(['sf.GanttTask', 'sf.GanttMilestone', 'sf.GanttMarker']);
 
 /** Phase 4.2: project the timeline's left-panel ROWS from its BARS — the bars own the record, the panel is
  *  derived. Each bound GanttTask becomes a row { id, label, color, cy } where `cy` is the bar's centre Y RELATIVE
@@ -118,21 +108,26 @@ export function ganttDependencies(task) {
     .filter(d => d.predecessorId);
 }
 
-/** The timeline-axis props bag gantt-scale needs, read from the timeline MODEL. */
-function axisProps(tl) {
+/** The timeline-axis props bag gantt-scale needs, read from the timeline MODEL. `rowsLen` comes from the same row
+ *  layout the view draws, so the axis reserves the task list exactly when the panel does. Pass the layout when the
+ *  caller already built it (one layout per pass, not one per bar). */
+function axisProps(tl, layout = ganttRowLayout(tl)) {
   return {
     x: tl.position().x, width: tl.size().width,
     taskListWidth: tl.get('taskListWidth'), numPeriods: tl.get('numPeriods'),
     viewMode: tl.get('viewMode'), startDate: tl.get('startDate'),
-    weekStartDay: tl.get('weekStartDay'), tasksLen: (tl.get('tasks') || []).length,
-    barCount: timelineBarCount(tl),
+    weekStartDay: tl.get('weekStartDay'), rowsLen: layout.length,
   };
 }
 
-// Row-layout constants — MUST match GanttTimelineView._renderColumns (shapes.js): the header is dateH(48) +
-// phaseRow(40); a 32-tall bar is centred in a 48-tall row by +8. Shared so the seed, the Y-from-order geometry,
-// and the panel projection never drift apart.
-export const GANTT_HEADER_H = 88;
+/** Width (px) the timeline's task list takes: `taskListWidth` (default 200) when it draws any row, else 0. The ONE
+ *  rule for the view, the axis and the inspector's Periods / End Date resize. */
+export function ganttTaskListWidth(tl, layout = ganttRowLayout(tl)) {
+  return leftOffset({ taskListWidth: tl.get('taskListWidth'), rowsLen: layout.length });
+}
+
+// A 32-tall bar is centred in a 48-tall row by +8. The header height above the first row is ganttHeaderH(tl), which
+// GanttTimelineView._renderColumns reads too, so the Y-from-order geometry and the panel rows never drift apart.
 export const GANTT_BAR_DY = 8;
 // Phase 6: the optional "Project Summary" overview lane (Display menu toggle → timeline.showProjectSummary). When
 // on it sits between the header and the first row, so the WHOLE header band — and every bar/panel-row below —
@@ -171,17 +166,23 @@ export function recolorGroupTasks(tl) {
   }
 }
 
+// Growth never takes a timeline past the Periods control's own maximum (also the Mermaid import's cap): a typed date
+// with a wrong year would otherwise build thousands of columns.
+const GANTT_MAX_PERIODS = 104;
+
 /** Issue 5: grow a timeline so it covers every bound element's date. When a task (or milestone/marker) is dragged or
  *  resized so its end falls past the axis, extend `numPeriods` (and the timeline WIDTH by the same number of columns,
  *  so column width stays constant - the timeline physically grows to the right, it doesn't just cram more columns in).
- *  GROW-only: pulling a task back in never shrinks the timeline. Returns true when it grew. */
-export function growTimelineToFitDates(tl) {
+ *  GROW-only: pulling a task back in never shrinks the timeline. The End Date moves with the right edge.
+ *  `leftTo` is a date the user TYPED (a Start, a milestone or marker date: Edit Plan, the inspector): the start moves
+ *  back to cover that one date (growTimelineLeft). Scanning every element instead pulled the axis back to an old Day
+ *  Marker on a rename-only Save (review L5 follow-up). `spare` is the room left past the last element (grownPeriods):
+ *  Week Starts passes 0, as it moves the edge by days and a spare column widened a fresh chart by two columns (review
+ *  S6-6 follow-up). Returns true when it grew. */
+export function growTimelineToFitDates(tl, { leftTo = null, spare = 1 } = {}) {
   if (!tl) return false;
-  const vm = tl.get('viewMode') || 'week';
   const start = tl.get('startDate');
   if (!start) return false;
-  const base = new Date(start + 'T00:00:00');
-  if (isNaN(base)) return false;
   let maxEnd = null;
   // Real YYYY-MM-DD dates only. One "TBD" or "2026-6-30" won the STRING comparison against real dates and then set
   // numPeriods - and the timeline width, and every bar's geometry - to NaN (audit 2026-09-23).
@@ -196,20 +197,43 @@ export function growTimelineToFitDates(tl) {
     else if (t === 'sf.GanttMilestone') consider(e.get('milestoneDate'));
     else if (t === 'sf.GanttMarker') consider(e.get('markerDate'));
   }
-  if (!maxEnd) return false;
-  const end = new Date(maxEnd + 'T00:00:00');
-  const dayMs = 86400000;
-  let needed;
-  if (vm === 'day') needed = Math.ceil((end - base) / dayMs);
-  else if (vm === 'month') needed = (end.getFullYear() - base.getFullYear()) * 12 + (end.getMonth() - base.getMonth()) + (end.getDate() > base.getDate() ? 1 : 0);
-  else needed = Math.ceil((end - base) / (7 * dayMs));
-  needed += 1;   // one column of breathing room past the last element
+  const grewLeft = !!(isDate(leftTo) && growTimelineLeft(tl, leftTo));
+  if (!maxEnd) return grewLeft;
+  // Counted like the columns (periodsToReach): from the SNAPPED origin, in calendar days. Elapsed milliseconds added
+  // a spurious column across the autumn DST change, and the unsnapped start could leave a mid-week end off the axis.
+  // Grows only when a date is PAST the right edge, then with a column of room past the last element (grownPeriods).
+  const t = axisProps(tl);
+  const needed = grownPeriods(t, maxEnd, GANTT_MAX_PERIODS, spare);
+  if (needed == null) return grewLeft;
   const cur = tl.get('numPeriods') || 12;
-  if (!Number.isFinite(needed) || needed <= cur) return false;
-  const taskListWidth = tl.get('taskListWidth') || 200;
+  const taskListWidth = leftOffset(t);
   const colW = (tl.size().width - taskListWidth) / cur;
-  tl.set('numPeriods', needed);
+  // The End Date is the last day the axis draws (axisEndDate): left alone, the inspector showed the old one.
+  tl.set({ numPeriods: needed, endDate: axisEndDate({ ...t, numPeriods: needed }) });
   tl.resize(Math.round(taskListWidth + needed * colW), tl.size().height);
+  return true;
+}
+
+/** Review L5: a Start typed before the axis moves the timeline's start back by whole periods, so the bar is drawn on
+ *  its column instead of over the task list. The right edge keeps its date: `numPeriods` and the width grow by the
+ *  same count, so the column width is unchanged and every element stays on its date. Typed dates only: a drag never
+ *  moves the origin. */
+function growTimelineLeft(tl, minStart) {
+  const t = axisProps(tl);
+  const origin = originDate(t), wanted = originDate({ ...t, startDate: minStart });
+  if (!origin || !wanted || wanted >= origin) return false;
+  const cur = tl.get('numPeriods') || 12;
+  const back = Math.min(periodsToReach({ ...t, startDate: localISODate(wanted) }, localISODate(origin)), GANTT_MAX_PERIODS - cur);
+  if (!(back > 0)) return false;
+  const vm = t.viewMode || 'week';
+  const newStart = new Date(origin);
+  if (vm === 'day') newStart.setDate(newStart.getDate() - back);
+  else if (vm === 'month') newStart.setMonth(newStart.getMonth() - back);
+  else newStart.setDate(newStart.getDate() - 7 * back);
+  const taskListWidth = ganttTaskListWidth(tl);
+  const colW = (tl.size().width - taskListWidth) / cur;
+  tl.set({ startDate: localISODate(newStart), numPeriods: cur + back });
+  tl.resize(Math.round(taskListWidth + (cur + back) * colW), tl.size().height);
   return true;
 }
 
@@ -301,7 +325,7 @@ export function ganttGroupInsertSlotY(tl, pointerY) {
 export function applyGanttGeometryWithLayout(task, tl, layout) {
   const start = task.get('startDate'), end = task.get('endDate');
   if (!start || !end || !tl) return false;
-  const t = axisProps(tl);
+  const t = axisProps(tl, layout);
   const x = dateToX(t, start);
   const w = spanWidth(t, start, end);
   if (x == null || w == null) return false;
@@ -316,19 +340,21 @@ export function applyGanttGeometry(task, tl = ganttTimelineFor(task)) {
 }
 
 /** Re-derive every dated bar that belongs to `tl` — called when the timeline's axis (start / viewMode / numPeriods /
- *  width / groups) changes, so the bars track the ruler. Builds the row layout ONCE (avoids O(n^2)). */
+ *  width / groups) changes, so the bars track the ruler. Builds the row layout and the axis bag ONCE (avoids O(n^2)):
+ *  a pass moves bars, never the timeline or its row count, so both stay valid for the whole loop. */
 export function layoutTimelineTasks(tl) {
   const graph = tl.graph;
   if (!graph) return;
   const layout = ganttRowLayout(tl);
+  const t = axisProps(tl, layout);
   for (const e of graph.getElements()) {
     const type = e.get('type');
     if (type === 'sf.GanttTask' && ganttTimelineFor(e) === tl) applyGanttGeometryWithLayout(e, tl, layout);
     // Milestones + dated markers track the same axis (dates → x), so a ruler change slides them too.
-    else if (type === 'sf.GanttMilestone' && ganttTimelineFor(e) === tl) applyGanttMilestoneGeometry(e, tl);
-    else if (type === 'sf.GanttMarker' && ganttTimelineFor(e) === tl) applyGanttMarkerGeometry(e, tl);
+    else if (type === 'sf.GanttMilestone' && ganttTimelineFor(e) === tl) applyGanttMilestoneGeometry(e, tl, t);
+    else if (type === 'sf.GanttMarker' && ganttTimelineFor(e) === tl) applyGanttMarkerGeometry(e, tl, t);
     // A linked summary bar spans its group's tasks (date-based → order-independent vs the bars above).
-    else if (type === 'sf.GanttGroup' && ganttTimelineFor(e) === tl) applyGanttGroupGeometry(e, tl);
+    else if (type === 'sf.GanttGroup' && ganttTimelineFor(e) === tl) applyGanttGroupGeometry(e, tl, t);
   }
 }
 
@@ -380,6 +406,29 @@ export function deriveGanttDates(task, tl = ganttTimelineFor(task)) {
   return (start && end) ? { start, end } : null;
 }
 
+/** A date read from a DROP point can fall before the axis (xToDate does not clamp): a 240 px bar dropped on the first
+ *  column started 90 px over the task list (review S6-2). These move it onto the axis start, the snapped origin, and
+ *  a span keeps its duration, as a drag never moves the start. `toEnd` also moves a date past the right edge back onto
+ *  that edge (axisEdgeDate, the day after the End Date), for an element added OFF its timeline: a quick add at a
+ *  canvas centre far right of the sole timeline grew it up to 104 columns to reach that point (review S6-2
+ *  follow-up). Unchanged when the timeline has no axis. */
+export function clampGanttDateToAxis(tl, iso, { toEnd = false } = {}) {
+  const t = tl && axisProps(tl);
+  const o = t && originDate(t);
+  const first = o && localISODate(o);
+  if (first && iso && iso < first) return first;
+  const last = toEnd && first && axisEdgeDate(t);
+  return last && iso && iso > last ? last : iso;
+}
+export function clampGanttSpanToAxis(tl, span, { toEnd = false } = {}) {
+  const dur = durationDays(span.start, span.end);
+  let start = clampGanttDateToAxis(tl, span.start);
+  const last = toEnd && dur != null && tl && axisEdgeDate(axisProps(tl));
+  if (last && addDaysISO(start, dur) > last) start = clampGanttDateToAxis(tl, addDaysISO(last, -dur));
+  if (start === span.start) return span;
+  return { start, end: dur == null ? span.end : addDaysISO(start, dur) };
+}
+
 /** Dates for a bar that was MOVED (not resized): the new start from its x, and the SAME duration as before. Reading
  *  the end back from the pixel width changed short tasks: a bar is drawn at least 8 px wide, so a 0-day task in week
  *  view (or a 2-day one in month view) came back from a one-column drag with a longer span (audit 2026-09-23). */
@@ -405,10 +454,10 @@ export function backfillGanttDates(task, tl = ganttTimelineFor(task)) {
 /** A milestone is a point-in-time marker: its `milestoneDate` is the source of truth, just like a bar's start/end.
  *  Position the diamond so its CENTRE sits on that date's column; Y stays MANUAL (the user picks the row). Returns
  *  true when it derived geometry. {gantt:true} marks the move layout-driven so the drag write-back ignores it. */
-export function applyGanttMilestoneGeometry(ms, tl = ganttTimelineFor(ms)) {
+export function applyGanttMilestoneGeometry(ms, tl = ganttTimelineFor(ms), t = tl && axisProps(tl)) {
   const date = ms.get('milestoneDate');
   if (!date || !tl) return false;
-  const x = dateToX(axisProps(tl), date);
+  const x = dateToX(t, date);
   if (x == null) return false;
   ms.position(Math.round(x - ms.size().width / 2), ms.position().y, { gantt: true });
   return true;
@@ -423,10 +472,10 @@ export function deriveGanttMilestoneDate(ms, tl = ganttTimelineFor(ms)) {
 
 /** Phase 6: a GanttMarker triangle is a point-in-time marker too — its `markerDate` drives the column (centre on
  *  the date); Y stays manual. Mirrors applyGanttMilestoneGeometry. */
-export function applyGanttMarkerGeometry(mk, tl = ganttTimelineFor(mk)) {
+export function applyGanttMarkerGeometry(mk, tl = ganttTimelineFor(mk), t = tl && axisProps(tl)) {
   const date = mk.get('markerDate');
   if (!date || !tl) return false;
-  const x = dateToX(axisProps(tl), date);
+  const x = dateToX(t, date);
   if (x == null) return false;
   mk.position(Math.round(x - mk.size().width / 2), mk.position().y, { gantt: true });
   return true;
@@ -451,10 +500,9 @@ export function dateToLocalX(tl, date) {
  *  spanWidth, so it never depends on bar-processing order). Y stays MANUAL (the user's row). Returns true when it
  *  spanned; false (manual pixels kept) for an UNLINKED group (no groupId, back-compat), no dated members, or no
  *  axis. */
-export function applyGanttGroupGeometry(grp, tl = ganttTimelineFor(grp)) {
+export function applyGanttGroupGeometry(grp, tl = ganttTimelineFor(grp), t = tl && axisProps(tl)) {
   const gid = grp.get('groupId');
   if (!gid || !tl) return false;
-  const t = axisProps(tl);
   let left = null, right = null;
   for (const b of timelineBars(tl)) {
     if ((b.get('groupId') || null) !== gid) continue;
@@ -504,12 +552,16 @@ export function ganttGroupSummary(tl, gid) {
  *  ordered — and its legacy GROUP rows become `groups[]` (the task rows carry their `groupId` onto the bar). So old
  *  diagrams (flat OR grouped) get the unified bar+group behaviour, and 4.6 can drop the `tasks[]` fallback.
  *  IDEMPOTENT (skips the moment any bar is bound → re-load never duplicates), and NO-MOVE (only ever CREATES on a
- *  0-bar timeline; existing bars/timelines untouched). `tasks[]` is left in place (the panel/editor prefer bars).
+ *  0-bar timeline; existing bars/timelines untouched). `tasks[]` is then CLEARED, and so is a stale one beside bars:
+ *  nothing reads it once bars exist, and a kept copy recreated every deleted bar on the next load (review L7).
  *  Called only from migrateNodes (under the load guard → no history / no markDirty). Returns the bars created. */
 export function migrateGanttTimeline(tl) {
   if (!tl || tl.get('type') !== 'sf.GanttTimeline' || !tl.graph) return [];
-  if (timelineBars(tl).length > 0) return [];                        // (b)+(c): already has bars → skip (idempotent)
   const tasks = tl.get('tasks') || [];
+  if (timelineBars(tl).length > 0) {                                  // (b)+(c): already has bars → skip (idempotent)
+    if (tasks.length) tl.set('tasks', []);
+    return [];
+  }
   const taskRows = tasks.filter(r => r && r.type !== 'group');
   if (!taskRows.length) return [];
 
@@ -520,16 +572,14 @@ export function migrateGanttTimeline(tl) {
     tl.set('groups', groupRows.map((g, gi) => ({ id: g.id, label: g.label || 'Group', color: g.color || '#5B5FC7', order: gi })));
   }
 
-  const pad = (n) => String(n).padStart(2, '0');
-  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const vm = tl.get('viewMode') || 'week';
-  const base = new Date((tl.get('startDate') || iso(new Date())) + 'T00:00:00');   // empty startDate → today
+  const base = new Date((tl.get('startDate') || localISODate(new Date())) + 'T00:00:00');   // empty startDate → today
   const span = (k) => {
     const s = new Date(base), e = new Date(base);
     if (vm === 'day')        { s.setDate(base.getDate() + k);     e.setDate(base.getDate() + k + 1); }
     else if (vm === 'month') { s.setMonth(base.getMonth() + k);   e.setMonth(base.getMonth() + k + 1); }
     else                     { s.setDate(base.getDate() + k * 7); e.setDate(base.getDate() + (k + 1) * 7); }
-    return { start: iso(s), end: iso(e) };
+    return { start: localISODate(s), end: localISODate(e) };
   };
 
   const created = [];
@@ -545,7 +595,21 @@ export function migrateGanttTimeline(tl) {
     if (!applyGanttGeometry(bar, tl)) bar.position(tl.position().x + (tl.get('taskListWidth') || 200), orderToY(tl, k), { gantt: true });
     created.push(bar);
   });
+  tl.set('tasks', []);
   return created;
+}
+
+/** Load heal (review L2, 2026-10-15): a timeline's End Date is the last day its axis draws (axisEndDate). It was the
+ *  right edge, and before that the date typed or the unsnapped start plus the periods, so a saved End Date can be a
+ *  day or more past the drawn axis. The axis itself comes from `startDate` + `numPeriods`, never `endDate`, so an
+ *  old save draws the same columns; this only re-derives the field from them. No-op without a valid start. Called
+ *  only from migrateNodes (under the load guard: no history, no markDirty). Returns true when it changed the date. */
+export function healTimelineEndDate(tl) {
+  if (!tl || tl.get('type') !== 'sf.GanttTimeline') return false;
+  const end = axisEndDate(axisProps(tl));
+  if (!end || tl.get('endDate') === end) return false;
+  tl.set('endDate', end);
+  return true;
 }
 
 /** Pasted / duplicated / template-dropped Gantt bars arrive with their source's `order`, and nothing re-laid the
@@ -564,4 +628,33 @@ export function reslotInsertedGanttBars(graph, cellJsons) {
     timelines.add(tl);
   }
   for (const tl of timelines) resequenceGanttOrders(tl);
+}
+
+/** The Clone and Cmd+D half of the above (review D4, 2026-10-15; insertSubtreeClones in js/clipboard.js runs it for
+ *  each cloned root). A cloned bar, milestone or marker whose timeline was not copied arrives unparented, so with more
+ *  than one timeline ganttTimelineFor could not find its timeline: embed it in its SOURCE's timeline first (unless the
+ *  clone already sits in a cloned one). A bar then re-slots; a milestone or marker is dated where it landed
+ *  (redateGanttPoint). No-op for any other type. Call inside the clone's history batch. */
+export function reslotClonedGanttItem(source, clone) {
+  const type = clone?.get('type');
+  if (!GANTT_TIMELINE_ITEMS.has(type) || !clone.graph) return;
+  const tl = source?.getParentCell?.();
+  if (!clone.get('parent') && tl && tl.get('type') === 'sf.GanttTimeline') tl.embed(clone);
+  if (type === 'sf.GanttTask') reslotInsertedGanttBars(clone.graph, [{ type, id: clone.id }]);
+  else redateGanttPoint(clone);
+}
+
+/** A milestone or day marker that arrives at an offset (a Clone or Cmd+D copy) takes the date where it sits, centres on
+ *  that date's column and snaps to the nearest row centre, as a dragged one does; a date past the right edge grows the
+ *  timeline, as a drag does. A cloned point kept its source's date while it sat a width to the right, off the column
+ *  its dashed line marks (port 1d4edbe1b). */
+export function redateGanttPoint(el, tl = ganttTimelineFor(el)) {
+  if (!tl) return;
+  const isMs = el.get('type') === 'sf.GanttMilestone';
+  const d = isMs ? deriveGanttMilestoneDate(el, tl) : deriveGanttMarkerDate(el, tl);
+  if (d) el.set(isMs ? 'milestoneDate' : 'markerDate', d);
+  growTimelineToFitDates(tl);
+  if (isMs) applyGanttMilestoneGeometry(el, tl); else applyGanttMarkerGeometry(el, tl);
+  const sy = snapGanttRowCentreY(tl, el.position().y + el.size().height / 2);
+  if (sy != null) el.position(el.position().x, Math.round(sy - el.size().height / 2), { gantt: true });
 }

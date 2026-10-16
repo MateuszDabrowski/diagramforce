@@ -1,10 +1,11 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.25.9';
-import { portGroups, portItems } from './ports.js?v=1.25.9';
-import { sanitizeCssColor } from '../util.js?v=1.25.9';
-import { getIconDataUri } from '../icons.js?v=1.25.9';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.26.1';
+import { portGroups, portItems } from './ports.js?v=1.26.1';
+import { sanitizeCssColor, textUnits } from '../util.js?v=1.26.1';
+import { getIconDataUri } from '../icons.js?v=1.26.1';
+import { raciPillsWidth, renderRaciPills } from './raci.js?v=1.26.1';
 
 // The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
 // than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a
@@ -189,49 +190,7 @@ export function registerCore() {
       // RACI: top-right corner of the accent bar. White-outlined pills so the
       // colour-coded fills stay legible against the coloured header.
       const raciGroupEl = this.el.querySelector('[joint-selector="raciGroup"]');
-      if (raciGroupEl) {
-        raciGroupEl.innerHTML = '';
-        const RACI_COLORS = Object.assign(Object.create(null), { R: '#1D73C9', A: '#DA4E55', C: '#F6B355', I: '#8A9099' });
-        const RACI_NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
-        const active = ['R', 'A', 'C', 'I'].filter(k => raci[k]);
-        if (active.length > 0) {
-          const PILL = 16;
-          const GAP = 3;
-          let xPos = width - 10 - active.length * PILL - (active.length - 1) * GAP;
-          const yPos = 12;
-          for (const key of active) {
-            const g = document.createElementNS(ns, 'g');
-            const rect = document.createElementNS(ns, 'rect');
-            rect.setAttribute('x', String(xPos));
-            rect.setAttribute('y', String(yPos));
-            rect.setAttribute('width', String(PILL));
-            rect.setAttribute('height', String(PILL));
-            rect.setAttribute('rx', '4');
-            rect.setAttribute('ry', '4');
-            rect.setAttribute('fill', RACI_COLORS[key]);
-            rect.setAttribute('stroke', '#FFFFFF');
-            rect.setAttribute('stroke-width', '1.2');
-            g.appendChild(rect);
-            const text = document.createElementNS(ns, 'text');
-            text.setAttribute('x', String(xPos + PILL / 2));
-            text.setAttribute('y', String(yPos + PILL / 2 + 0.5));
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('dominant-baseline', 'central');
-            text.setAttribute('fill', '#FFFFFF');
-            text.setAttribute('font-size', '10');
-            text.setAttribute('font-weight', '700');
-            text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
-            text.setAttribute('pointer-events', 'none');
-            text.textContent = key;
-            g.appendChild(text);
-            const title = document.createElementNS(ns, 'title');
-            title.textContent = RACI_NAMES[key];
-            g.appendChild(title);
-            raciGroupEl.appendChild(g);
-            xPos += PILL + GAP;
-          }
-        }
-      }
+      if (raciGroupEl) renderRaciPills(raciGroupEl, raci, width, { y: 12, outline: true });
 
       // Tags: header row, RIGHT-aligned. The pill group sits flush against
       // the right edge of the header (carving out space for any active RACI
@@ -247,16 +206,18 @@ export function registerCore() {
           const FONT = 10;
           const yPos = 21 - PILL_H / 2;
           // Right-edge anchor — RACI pills (if any) shift the anchor leftward.
-          const raciActive = ['R', 'A', 'C', 'I'].filter(k => raci[k]).length;
-          const raciW = raciActive ? raciActive * 16 + (raciActive - 1) * 3 + 8 : 0;
+          const raciPillsW = raciPillsWidth(raci);
+          const raciW = raciPillsW ? raciPillsW + 8 : 0;
           const rightAnchor = width - 10 - raciW;
           // Reserve enough space so pills don't crash into the title — start
           // no closer than 80 px from the left edge.
           const titleText = m.attr('headerLabel/text') || '';
-          const titleEstW = Math.min(titleText.length * 7, width * 0.5);
+          // Code points, a CJK or other wide character as two (14 px bold is ~7 px a Latin character and a full em a CJK
+          // one): a UTF-16 count put the pills over a Japanese title (review S6-9, limits 2.15).
+          const titleEstW = Math.min(textUnits(titleText, 2) * 7, width * 0.5);
           const minStartX = 44 + titleEstW + 12;
           // Pre-compute total width of all pills so we can right-align them.
-          const widths = tags.map(t => Math.ceil(t.length * 5.5) + PILL_PAD * 2);
+          const widths = tags.map(t => Math.ceil(textUnits(t, FONT / 5.5) * 5.5) + PILL_PAD * 2);   // a wide char is 1 em
           // Try fitting all tags. If they overflow the available band, drop
           // the LEAST-recent tags (left side) until they fit, replaced by a
           // "+N" overflow pill.
@@ -471,7 +432,6 @@ export function registerCore() {
       // refresh, so df.Placeholder has a branch there too, and an e2e reload test pinning it.
       initialize() {
         joint.dia.Element.prototype.initialize.apply(this, arguments);
-        this.on('change:name', () => this._syncSubtitle());
         this._syncSubtitle();
         if (!this.attr('icon/href')) {
           const href = getIconDataUri('question_mark', PLACEHOLDER_INK, 32);
@@ -522,6 +482,13 @@ export function registerCore() {
       initialize() {
         joint.dia.Element.prototype.initialize.apply(this, arguments);
         this.on('change:pillText', () => this._fitWidth());
+        // The Font size control writes label/fontSize (an attrs change): re-fit on that, and only that, so a fill or
+        // colour edit leaves the width alone (K4, the df.Legend guard below).
+        this.on('change:attrs', () => {
+          const pf = ((this.previous('attrs') || {}).label || {}).fontSize;
+          const nf = ((this.get('attrs') || {}).label || {}).fontSize;
+          if (pf !== nf) this._fitWidth();
+        });
         this._fitWidth();
       },
       _fitWidth() {
@@ -529,7 +496,7 @@ export function registerCore() {
         this.attr('label/text', txt, { silent: true });
         const h = this.size().height || 32;
         const fs = this.attr('label/fontSize') || 15;
-        const w = Math.max(h, Math.round(txt.length * fs * 0.62) + Math.round(h * 0.55));
+        const w = Math.max(h, Math.round(textUnits(txt, 1 / 0.62) * fs * 0.62) + Math.round(h * 0.55));   // a CJK char is 1 em (K10)
         if (Math.abs(this.size().width - w) > 0.5) this.resize(w, h);
       },
     }
@@ -605,7 +572,7 @@ export function registerCore() {
         const txt = String(this.attr('label/text') ?? '');
         const fs = this.attr('label/fontSize') || 14;
         const lead = 28;   // swatch (x:2 + 18) + an 8px gap before the label
-        const w = Math.max(48, lead + Math.round(txt.length * fs * 0.6) + 10);
+        const w = Math.max(48, lead + Math.round(textUnits(txt, 1 / 0.6) * fs * 0.6) + 10);   // a CJK char is 1 em (K10)
         const h = this.size().height || 28;
         if (Math.abs(this.size().width - w) > 0.5) this.resize(w, h);
       },
@@ -715,8 +682,11 @@ export function registerCore() {
       // `:first-child` rule made it flicker with the label). Corners alone signal selection; a Shape-state border
       // (on `body`) stays visible because the selection override no longer hides it.
       this.el.classList.add('df-table-el');
+      // No `change:size` here (K7, 2026-10-15): JointJS's RESIZE flag already calls update() -> _renderTable on the
+      // next frame, so listening too rebuilt every cell twice per size change, and three times when the fit's own
+      // resize re-entered. A 100x4 table cost about 14 ms a render on desktop Chromium, per handle-drag pointermove.
       this.listenTo(this.model,
-        'change:rows change:size change:tableLabel change:highlightFirstRow change:highlightFirstCol change:plainCells change:fontSize change:tableFill change:tableBorder change:tableTextColor change:collapsed',
+        'change:rows change:tableLabel change:highlightFirstRow change:highlightFirstCol change:plainCells change:fontSize change:tableFill change:tableBorder change:tableTextColor change:collapsed',
         () => this._renderTable());
       // Hover cross-highlight: a delegated handler (one listener for the whole table) tints the hovered cell's
       // row + column. Cheap — just toggles opacity + repositions two cached rects; no re-render.
@@ -747,6 +717,14 @@ export function registerCore() {
       this._renderTable();
     },
     _renderTable() {
+      // Re-entrancy guard (K7): the fit below resizes the model mid-render, and a synchronous listener on that resize
+      // would rebuild the whole table again before this pass finished. The render reads only the width, which the fit
+      // keeps, so the nested pass had nothing new to draw.
+      if (this._renderingTable) return;
+      this._renderingTable = true;
+      try { this._renderTableNow(); } finally { this._renderingTable = false; }
+    },
+    _renderTableNow() {
       const model = this.model;
       const ns = SVG_NS_SHAPES;
       const old = this.el.querySelector(':scope > g.df-table-g');

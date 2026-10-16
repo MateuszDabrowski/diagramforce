@@ -6,30 +6,33 @@
 // action-provider, style, capture) live here now; selection.js re-exports their setters + copySelectionAsPng
 // so app.js / keyboard.js wiring is unchanged.
 
-import * as clipboard from '../clipboard.js?v=1.25.9';
-import * as history from '../history.js?v=1.25.9';
-import { wireMenuDismiss } from '../menu.js?v=1.25.9';
-import { saveSelectionAsTemplate } from '../templates.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import * as clipboard from '../clipboard.js?v=1.26.1';
+import * as history from '../history.js?v=1.26.1';
+import { wireMenuDismiss } from '../menu.js?v=1.26.1';
+import { saveSelectionAsTemplate } from '../templates.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
 
 // ── Injected selection context (wired by selection.init → initContextMenu). Read at CALL time; the
 // selectedIds Set is shared BY REFERENCE with selection.js so the menu sees the live selection. ──
 let graph;
 let selectedIds;
-let getSelectedElements, selectOnly, addToSelection, selectAll, deleteSelected;
+let getSelectedElements, selectOnly, selectMany, selectAll, deleteSelected;
 export function initContextMenu(ctx) {
   graph = ctx.graph;
   selectedIds = ctx.selectedIds;
   getSelectedElements = ctx.getSelectedElements;
   selectOnly = ctx.selectOnly;
-  addToSelection = ctx.addToSelection;
+  selectMany = ctx.selectMany;
   selectAll = ctx.selectAll;
   deleteSelected = ctx.deleteSelected;
 }
 
 // ── Long-press context menu (touch / mobile) ──────────────────────
 const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP = 10;   // px a finger may wander before the press counts as a drag or pan
 let longPressTimer = null;
+let longPressOrigin = null;       // the press point while the press that may open (or opened) the menu is down
+let longPressMenuOpened = false;  // the open menu came from that press's timer
 let longPressMenu = null;
 let longPressMenuDismiss = null;   // wireMenuDismiss teardown for the open context menu (V3)
 
@@ -43,20 +46,37 @@ export function startLongPressMenu(cellView, evt) {
   const clientX = evt.clientX;
   const clientY = evt.clientY;
   const model = cellView ? cellView.model : null;
+  longPressOrigin = { x: clientX, y: clientY };
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
     // Ensure the element is selected so actions apply to it (no-op for a blank long-press).
     if (model && !selectedIds.has(model.id)) selectOnly(model.id);
     if (navigator.vibrate) navigator.vibrate(20);
     showContextMenu(clientX, clientY, model, { placement: 'above' });
+    longPressMenuOpened = true;
   }, LONG_PRESS_MS);
 }
 
+/** A move of the pressing finger (element or blank pointermove). Within LONG_PRESS_SLOP it is tremor and changes
+ *  nothing; past it the press is a drag or pan: the pending timer is cancelled and a menu that timer already opened is
+ *  closed. Every move used to cancel, so only a perfectly still finger got the menu, and an opened menu stayed over
+ *  the canvas after the drag (review S3-4). */
+export function trackLongPressMove(evt) {
+  if (!longPressOrigin) return;
+  if (Math.hypot(evt.clientX - longPressOrigin.x, evt.clientY - longPressOrigin.y) <= LONG_PRESS_SLOP) return;
+  const opened = longPressMenuOpened;
+  cancelLongPressMenu();
+  if (opened) closeContextMenu();
+}
+
+/** The press ended (lift, cancel) or a new one began: stop the timer. A menu it opened stays open. */
 export function cancelLongPressMenu() {
   if (longPressTimer) {
     clearTimeout(longPressTimer);
     longPressTimer = null;
   }
+  longPressOrigin = null;
+  longPressMenuOpened = false;
 }
 
 // Per-element auto-size handler, registered by app.js (properties.autoSizeCell) — a callback so selection.js
@@ -308,7 +328,7 @@ export function showContextMenu(clientX, clientY, model, opts = {}) {
     const prev = (opts.prevSelection || []).filter((id) => id !== model.id);
     if (prev.length) {
       // Re-add the previously-selected cells alongside this one → a growing multi-select built by right-clicking.
-      addItem('Add to selection', () => { prev.forEach((id) => addToSelection(id)); addToSelection(model.id); }, { icon: CTX_ICON.addSel });
+      addItem('Add to selection', () => selectMany([...prev, model.id]), { icon: CTX_ICON.addSel });
       addSep();   // set "Add to selection" apart from the per-shape actions below (#1)
     }
     if (model.isLink()) {
@@ -338,18 +358,28 @@ export function showContextMenu(clientX, clientY, model, opts = {}) {
       }
       if (acts.length) addSep();
     } else {
-      // Multi-select: the common whole-selection actions PLUS the per-shape actions that make sense uniformly
-      // when EVERY selected element is the same type (clone-with-connectors variants, Convert, Order), each applied
-      // to every element in one undo step (#8). A mixed-type selection keeps the reduced set. Copy style is offered
-      // only for a single-type selection (mixing styles has no one source); Paste style always applies to all.
+      // Multi-select: the common whole-selection actions, the two connector clones (selection-wide, offered when the
+      // selection has connectors to clone), PLUS the per-shape actions that make sense uniformly when EVERY selected
+      // element is the same type (Convert, Order), each applied to every element in one undo step (#8). A mixed-type
+      // selection keeps the reduced set. Copy style is offered only for a single-type selection (mixing styles has no
+      // one source); Paste style always applies to all.
       const els = getSelectedElements().filter((c) => c.isElement && c.isElement());
       const homogeneous = els.length > 0 && new Set(els.map((c) => c.get('type'))).size === 1;
       const repActs = (homogeneous && _actionProvider) ? (_actionProvider(els[0]) || []) : [];
       addItem('Clone', () => clipboard.duplicate(), { icon: CTX_ICON.clone });
-      // Mirror clone-variant / convert / order actions across the uniform selection. The plain Clone + Copy are
-      // already in this menu, so they're skipped here.
-      const multiActs = repActs.filter((a) => ['clone', 'convert', 'order'].includes(a.group) && a.label !== 'Clone' && a.label !== 'Copy');
-      let lastGroup = null;
+      // The connector variants clone the selection as ONE unit, as the multi-select panel does: one shared offset,
+      // links inside the selection rewired clone to clone, every clone selected. Running each element's own clone
+      // put every copy one width right of its original (on its neighbour), copied the links the earlier copies had
+      // just made, and left only the last copy selected (review I8).
+      if (clipboard.countExternalConnectors(els) > 0) {
+        addItem('Clone with Connectors', () => clipboard.cloneSelectionWithMode('dangling'), { icon: CTX_ICON.clone });
+      }
+      if (clipboard.countExternalConnectedConnectors(els) > 0) {
+        addItem('Clone with connected Connectors', () => clipboard.cloneSelectionWithMode('connected'), { icon: CTX_ICON.clone });
+      }
+      // Mirror the convert / order actions across the uniform selection.
+      const multiActs = repActs.filter((a) => ['convert', 'order'].includes(a.group));
+      let lastGroup = 'clone';   // so the first mirrored group gets its separator
       for (const a of multiActs) {
         if (lastGroup !== null && a.group !== lastGroup) addSep();
         lastGroup = a.group;
@@ -447,12 +477,48 @@ export function showContextMenu(clientX, clientY, model, opts = {}) {
   longPressMenu = menu;
   // Shared dismissal lifecycle (V3): persistent outside-press close + Escape-closes-without-clearing-selection.
   longPressMenuDismiss = wireMenuDismiss(menu, closeContextMenu);
+
+  // Keyboard (review I12): a real menu. Up / Down / Home / End move through the enabled items, also when it was
+  // opened with the mouse, and Left / Right do nothing (all four arrows used to nudge the selection behind it);
+  // Enter / Space press the focused item; Tab closes it; Escape is wireMenuDismiss's. Opened from the keyboard
+  // (`opts.keyboard`), it starts on its first item, and closing it returns focus to where it was opened.
+  menu.setAttribute('role', 'menu');
+  menu.querySelectorAll('.df-ctx-menu__item').forEach((b) => b.setAttribute('role', 'menuitem'));
+  menu.querySelectorAll('.df-ctx-menu__sep').forEach((s) => s.setAttribute('role', 'separator'));
+  menu.addEventListener('contextmenu', (e) => e.preventDefault());   // no browser menu on top of this one
+  longPressMenuOpener = document.activeElement;
+  longPressMenuKeys = (e) => {
+    if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;   // a field keeps its keys
+    const items = [...menu.querySelectorAll('.df-ctx-menu__item:not(:disabled)')];
+    const i = items.indexOf(document.activeElement);
+    let next;
+    if (e.key === 'ArrowDown') next = items[(i + 1) % items.length];
+    else if (e.key === 'ArrowUp') next = items[i < 0 ? items.length - 1 : (i - 1 + items.length) % items.length];
+    else if (e.key === 'Home') next = items[0];
+    else if (e.key === 'End') next = items[items.length - 1];
+    else if (e.key === 'Tab') { closeContextMenu(); return; }
+    else if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;   // Left / Right: no submenu, but no nudge either
+    e.preventDefault();
+    e.stopPropagation();
+    next?.focus();
+  };
+  document.addEventListener('keydown', longPressMenuKeys, true);
+  if (opts.keyboard) menu.querySelector('.df-ctx-menu__item:not(:disabled)')?.focus();
 }
 
+let longPressMenuKeys = null;     // the open menu's capture keydown (arrows / Home / End / Tab)
+let longPressMenuOpener = null;   // the element focused when the menu opened
+
 function closeContextMenu() {
+  longPressMenuOpened = false;
   if (longPressMenuDismiss) { longPressMenuDismiss(); longPressMenuDismiss = null; }
+  if (longPressMenuKeys) { document.removeEventListener('keydown', longPressMenuKeys, true); longPressMenuKeys = null; }
   if (longPressMenu) {
+    // Focus inside the menu would fall to the page when it goes: hand it back to where the menu was opened.
+    const hadFocus = longPressMenu.contains(document.activeElement);
     longPressMenu.remove();
     longPressMenu = null;
+    if (hadFocus && longPressMenuOpener?.isConnected) longPressMenuOpener.focus?.({ preventScroll: true });
   }
+  longPressMenuOpener = null;
 }

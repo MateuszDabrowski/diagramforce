@@ -7,8 +7,9 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.25.9';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.1';
+import { assignJoinLanes } from './join-lanes.js?v=1.26.1';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -37,9 +38,10 @@ const CHANNEL_HEIGHT = 16;
 const SHARED_BUS_TYPES = new Set(['architecture', 'process', 'datamodel']);
 
 // ── Per-reroute-pass cache (P1) ──────────────────────────────────────────────
-// rerouteAllLinks (link-runtime.js) re-routes EVERY link per animation frame while an element is dragged.
+// A reroute pass (link-runtime.js routePass: rerouteAllLinks, and the cascade after every move or link change) routes
+// a batch of links; during a drag one runs every animation frame over the links around the moved cells.
 // Without this, each link's router run rebuilt the FULL obstacle list (getBBox over all elements) and
-// gatherPortEnds rescanned all links for port-ends (up to ~6x per link) → O(L·E + L²) per frame.
+// gatherPortEnds rescanned all links for port-ends (up to ~6x per link) → O(L·E + L²) per pass.
 // beginRoutePass snapshots the obstacle bboxes + a portId→ends index ONCE; the router reads them for every
 // link in the pass; the caller MUST call endRoutePass in a `finally` — a leaked pass would feed stale
 // geometry to later single-link reroutes. Module-level because the router body is a per-call closure. The
@@ -65,7 +67,7 @@ const FRAME_TYPES = new Set([
  *  lands inside another obstacle's PAD-padded box. orthoRoute then has no clear candidate and falls back to its
  *  least-overlap route, a line straight through that card. Mirrors the router's obstacle set: pass-through types, the
  *  cell, the `ignore` cells (normally the link's other end) and every ancestor of either do not block. */
-export function portExitBlocked(graph, cell, side, ignore = []) {
+export function portExitBlocked(graph, cell, side, ignore = [], boxes = null) {
   const bb = cell.getBBox();
   const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
   const p = side === 'top' ? { x: cx, y: bb.y - STUB } : side === 'bottom' ? { x: cx, y: bb.y + bb.height + STUB }
@@ -74,11 +76,26 @@ export function portExitBlocked(graph, cell, side, ignore = []) {
   for (const c of [cell, ...ignore]) {
     for (let a = c, seen = 0; a && seen < 64; a = a.getParentCell?.(), seen++) skip.add(a.id);
   }
-  return graph.getElements().some((el) => {
-    if (skip.has(el.id) || OBSTACLE_SKIP_TYPES.has(el.get('type'))) return false;
-    const b = el.getBBox();
-    return p.x > b.x - PAD && p.x < b.x + b.width + PAD && p.y > b.y - PAD && p.y < b.y + b.height + PAD;
-  });
+  const inside = (b) => p.x > b.x - PAD && p.x < b.x + b.width + PAD && p.y > b.y - PAD && p.y < b.y + b.height + PAD;
+  // `boxes` (from obstacleBoxes) spares a caller asking per link end from re-reading every element's bbox: Auto Layout's
+  // port snap did 2600 calls over 700 elements in 211 ms that way (review 2026-10-15, E14). Same set, same answer.
+  if (boxes) return boxes.some(({ id, box }) => !skip.has(id) && inside(box));
+  return graph.getElements().some((el) => !skip.has(el.id) && !OBSTACLE_SKIP_TYPES.has(el.get('type')) && inside(el.getBBox()));
+}
+
+/** Every obstacle's bbox, read once: the open route pass's snapshot when there is one for `gr`, else a fresh one.
+ *  Valid while nothing moves, so a port snap or re-face reads it once for all its links. */
+export function obstacleBoxes(gr) {
+  return (_routePass && _routePass.graph === gr) ? _routePass.boxes : snapshotBoxes(gr);
+}
+function snapshotBoxes(gr) {
+  const boxes = [];
+  for (const el of gr.getElements()) {
+    if (OBSTACLE_SKIP_TYPES.has(el.get('type'))) continue;
+    const bb = el.getBBox();
+    if (bb) boxes.push({ id: el.id, box: { x: bb.x, y: bb.y, width: bb.width, height: bb.height } });
+  }
+  return boxes;
 }
 
 let _routePass = null;   // { graph, boxes: [{id, box}], portEnds: Map<"cellId::portId", [{link,end}]> } | null
@@ -89,13 +106,14 @@ export function beginRoutePass(gr) {
   _avoidRuns.clear();   // every pass routes plainly first; separateForeignRuns then re-applies what is still needed
   _noCrossedZ.clear();
   _passNo++;
+  routeStats.passes++;
   if (!gr) { _routePass = null; return; }
-  const boxes = [];
-  for (const el of gr.getElements()) {
-    if (OBSTACLE_SKIP_TYPES.has(el.get('type'))) continue;
-    const bb = el.getBBox();
-    if (bb) boxes.push({ id: el.id, box: { x: bb.x, y: bb.y, width: bb.width, height: bb.height } });
-  }
+  _routePass = { graph: gr, ...snapshotRouteCaches(gr) };
+}
+
+// The obstacle boxes, the port -> link-ends index and the empty per-port caches the router reads for `gr`.
+function snapshotRouteCaches(gr) {
+  const boxes = snapshotBoxes(gr);
   const portEnds = new Map();
   const add = (id, port, link, end) => {
     if (!id || !port) return;
@@ -103,7 +121,8 @@ export function beginRoutePass(gr) {
     let arr = portEnds.get(k); if (!arr) portEnds.set(k, arr = []);
     arr.push({ link, end });
   };
-  for (const l of gr.getLinks()) {
+  const links = gr.getLinks();
+  for (const l of links) {
     const s = l.get('source'), t = l.get('target');
     add(s?.id, s?.port, l, 'source');
     add(t?.id, t?.port, l, 'target');
@@ -111,11 +130,38 @@ export function beginRoutePass(gr) {
   // trunk / channels: per-port results of trunkAnchorOffset / linkChannelIndex. Both depend only on the PORT's link
   // ends (not on which link asks), so inside a pass they are computed once per port instead of once per link end -
   // the O(k^2) per hub port the P1 fix left behind (200 links on one port: 212 ms per pass; audit 2026-09-23).
-  _routePass = { graph: gr, boxes, portEnds, trunk: new Map(), channels: new Map() };
+  // Outside a pass only `trunk` is used (routeCaches below). `links` is the list the index was built from, in graph
+  // order: columnNeedsTargetLead scans it rather than read the graph a second time per flush.
+  return { boxes, portEnds, links, trunk: new Map(), channels: new Map() };
 }
 
 /** Close the current reroute pass. MUST run in a `finally` around the batch (a leaked pass poisons later reroutes). */
 export function endRoutePass() { _routePass = null; }
+
+// Outside a pass the paper routes links one at a time: every load and tab switch routes every link that way before
+// the pass routes them again, and every drag frame routes the moved card's links. Each of those calls rebuilt the
+// obstacle list from every element, scanned every link for its port's ends and re-sorted the port's trunk order:
+// routing 400 links that way took 76 ms against 31 ms inside a pass (review P4, 2026-10-15). _oopCaches holds the
+// same snapshot outside a pass (32 ms; routes identical on the held-out corpus). It is good for one graph revision,
+// which any graph event bumps, and for the current task only (a view render may resize a card silently), so a flush
+// builds it once. Channel ranks stay per call outside a pass: they only read the port's own ends.
+let _oopCaches = null;
+const _graphRevs = new WeakMap();   // graph -> { n }: bumped by every event the graph fires
+function graphRevision(gr) {
+  let r = _graphRevs.get(gr);
+  if (!r) { r = { n: 0 }; _graphRevs.set(gr, r); gr.on('all', () => { r.n++; }); }
+  return r.n;
+}
+/** The caches the router reads for `gr`: the open pass's, else a snapshot for the current revision and task. */
+function routeCaches(gr) {
+  if (_routePass && _routePass.graph === gr) return _routePass;
+  const rev = graphRevision(gr), type = cctx.getDiagramType?.();   // endSignature reads the diagram type
+  const c = _oopCaches;
+  if (c && c.graph === gr && c.rev === rev && c.type === type) return c;
+  const fresh = _oopCaches = { graph: gr, rev, type, ...snapshotRouteCaches(gr) };
+  queueMicrotask(() => { if (_oopCaches === fresh) _oopCaches = null; });
+  return fresh;
+}
 
 // ── Pure geometry helpers (exported for tests) ──
 // Best-effort calc() evaluator covering the handful of forms used by our
@@ -243,8 +289,14 @@ function linksConflict(a, b) {
 export function separateForeignRuns(gr, paper) {
   if (!gr || !paper || !SHARED_BUS_TYPES.has(cctx.getDiagramType?.())) return 0;
   const links = gr.getLinks();
-  const ids = new Set(links.map((l) => l.id));
+  // Only links sfManhattan routes take part. A link switched to another router (a data-model link set to Mapping) never
+  // reaches sfManhattan again, so its last orthogonal route stayed here and other links were moved off a line that had
+  // become a bezier, until a reload (review S5-5).
+  const ids = new Set(links.filter((l) => l.router()?.name === 'sfManhattan').map((l) => l.id));
   for (const id of [..._lastRuns.keys()]) if (!ids.has(id)) { _lastRuns.delete(id); _avoidRuns.delete(id); }
+  // Runs with Distributed Connectors off too (the owner's call, 2026-10-15): without it different-looking lines shared
+  // runs, worse by eye on 5 of 8 random corpus diagrams. On these types the cascade runs in that mode as well, so a
+  // pass follows every edit and load and edits route alike (link-runtime scheduleReroute).
   // A move can put a link onto a third link's line, so sweep again while anything moved (bounded).
   let total = 0;
   for (let sweep = 0; sweep < SEPARATION_SWEEPS; sweep++) {
@@ -350,8 +402,18 @@ export function dropBacktrackingStub(route, dir, atEnd) {
 /** True when the active diagram routes with the shared trunk and bus (and so wants separateForeignRuns). */
 export function isSharedBusDiagram() { return SHARED_BUS_TYPES.has(cctx.getDiagramType?.()); }
 
+/** True when moving a link end from `prev` to `next` can change OTHER links' routes: the end was or is on a cell. A
+ *  point end (an arrowhead dragged over empty canvas, which JointJS re-sets on every pointermove) routes straight and
+ *  sits on no port, so a point-to-point move changes only its own link. Pure; exported for tests. */
+export function endChangeMovesOthers(prev, next) { return !!(prev?.id || next?.id); }
+
 /** Forget remembered routes and avoid-sets, e.g. when a different diagram loads into the paper. */
-export function resetRouteMemory() { _lastRuns.clear(); _avoidRuns.clear(); _noCrossedZ.clear(); }
+export function resetRouteMemory() { _lastRuns.clear(); _avoidRuns.clear(); _noCrossedZ.clear(); _oopCaches = null; }
+
+/** Forget the last pass's avoid sets and Z give-ups once another pass is queued (link-runtime scheduleReroute): that
+ *  pass starts plain anyway, and until it runs the sets only made each route outside a pass run a strict search. Not
+ *  inside a pass, whose separation is using them. */
+export function forgetSeparation() { if (!_routePass) { _avoidRuns.clear(); _noCrossedZ.clear(); } }
 
 /** True when `p` lies strictly inside an obstacle's PAD-padded box: a route starting there is trapped. */
 export function insidePadded(p, obstacles) {
@@ -386,8 +448,36 @@ export function orthoRoute(a, b, obstacles, avoid = null, prefer = null) {
   // Leave the line only by a route about as short as the plain one. With nothing in the way, a straight link on
   // another link's line found a U-detour (40 px out and back): the awkward-angle artefact that got Stage E reverted.
   // A route that stays on course is the same length (Manhattan), so the allowance only rejects detours.
-  const strict = orthoSearch(a, b, obstacles, avoid, false);
+  const strict = strictSearch(a, b, obstacles, avoid);
   return strict && pathLength(a, strict, b) <= pathLength(a, plain, b) + DETOUR_ALLOWANCE ? strict : plain;
+}
+
+// The strict search's last answer per avoid set (review P4-avoid, 2026-10-15). A link keeps its avoid set until the next
+// pass, and each of its routes until then ran the same strict search again: separation's final re-route of the move it
+// kept, and every route outside a pass (a flush of 400 links: 734 ms, 36 ms with this). The search depends only on its
+// two ends, the obstacle boxes and the avoid set, so a call with all four unchanged returns the stored answer. Avoid
+// sets are never edited (a change builds a new array), so the array is the key.
+const _strictMemo = new WeakMap();   // avoid array -> { ax, ay, bx, by, boxes: Float64Array, mid }
+/** Strict searches actually run (memo misses), and reroute passes opened. Read by the perf guards in shared-bus.spec.js. */
+export const routeStats = { strictSearches: 0, passes: 0 };
+function strictSearch(a, b, obstacles, avoid) {
+  const m = _strictMemo.get(avoid);
+  if (m && m.ax === a.x && m.ay === a.y && m.bx === b.x && m.by === b.y && sameBoxes(m.boxes, obstacles)) return copyPts(m.mid);
+  routeStats.strictSearches++;
+  const mid = orthoSearch(a, b, obstacles, avoid, false);
+  const boxes = new Float64Array(obstacles.length * 4);
+  obstacles.forEach((o, i) => { boxes[i * 4] = o.x; boxes[i * 4 + 1] = o.y; boxes[i * 4 + 2] = o.width; boxes[i * 4 + 3] = o.height; });
+  _strictMemo.set(avoid, { ax: a.x, ay: a.y, bx: b.x, by: b.y, boxes, mid: copyPts(mid) });
+  return mid;
+}
+const copyPts = (pts) => pts && pts.map((p) => ({ x: p.x, y: p.y }));
+function sameBoxes(vals, obstacles) {
+  if (vals.length !== obstacles.length * 4) return false;
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (vals[i * 4] !== o.x || vals[i * 4 + 1] !== o.y || vals[i * 4 + 2] !== o.width || vals[i * 4 + 3] !== o.height) return false;
+  }
+  return true;
 }
 
 const ADOPT_DIST = 64;   // a same-looking sibling's line this close (two stubs) is the same corridor: merge onto it
@@ -493,12 +583,8 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
   }
 
   // --- 5-segment S-route fallback: combine x and y detours ---
-  for (const dy of yCandidates) {
-    for (const dx of xCandidates) {
-      const mid = [{ x: dx, y: a.y }, { x: dx, y: dy }, { x: b.x, y: dy }];
-      if (clear(mid)) return mid;
-    }
-  }
+  const s = firstClearS(a, b, obstacles, yCandidates, xCandidates, avoid);
+  if (s) return s;
   }   // !trapped
 
   // Last resort: nothing is clear. Return the LEAST-overlap short candidate (L/Z) rather than a blind
@@ -514,6 +600,59 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
     if (ov < bestOv) { bestOv = ov; best = mid; }
   }
   return best;
+}
+
+/** The S-route search: the first row `dy` of `ys`, and in it the first column `dx` of `xs`, whose route
+ *  a -> (dx, a.y) -> (dx, dy) -> (b.x, dy) -> b clears every PAD-padded box and, given `avoid`, every avoided run.
+ *  Testing each pair with pathClear and hitsRuns cost rows x columns x boxes: a strict search that found nothing took
+ *  350-750 ms on a 300-card diagram, 34 s of a 36 s pass (review PERF-SEP, 2026-10-15). The first leg depends only on
+ *  the column and the last only on the row; the two middle legs clear a box exactly when the row (column) stays on the
+ *  near side of one bound read per column (row), with the comparisons segHitsBox makes. So each column and row is
+ *  measured once, on first use, and every pair after that costs O(1) - the same answer as the pairwise loop
+ *  (dev/tests/canvas-router.test.js checks it against that loop). Pure; exported for tests. */
+export function firstClearS(a, b, obstacles, ys, xs, avoid = null) {
+  const n = obstacles.length;
+  const x1 = new Float64Array(n), y1 = new Float64Array(n), x2 = new Float64Array(n), y2 = new Float64Array(n);
+  obstacles.forEach((o, i) => { x1[i] = o.x - PAD; y1[i] = o.y - PAD; x2[i] = right(o) + PAD; y2[i] = bottom(o) + PAD; });
+  const segClear = (ax, ay, bx, by) => { for (const o of obstacles) if (segHitsBox(ax, ay, bx, by, o)) return false; return true; };
+  const legHits = (p, q) => { const r = axisRun(p, q); return !!r && avoid.some((v) => sharesLine(r, v)); };
+  // Column j: 0 = not measured, 1 = usable, 2 = its first leg is blocked. Its second leg (vertical at dx, from a.y)
+  // enters a box once it passes `down` (going down) or `up` (going up).
+  const colState = new Uint8Array(xs.length), down = new Float64Array(xs.length), up = new Float64Array(xs.length);
+  const column = (j) => {
+    if (colState[j]) return colState[j] === 1;
+    const dx = xs[j];
+    if (!segClear(a.x, a.y, dx, a.y) || (avoid && legHits(a, { x: dx, y: a.y }))) { colState[j] = 2; return false; }
+    let d = Infinity, u = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (dx <= x1[i] || dx >= x2[i]) continue;
+      if (a.y < y2[i] && y1[i] < d) d = y1[i];
+      if (a.y > y1[i] && y2[i] > u) u = y2[i];
+    }
+    colState[j] = 1; down[j] = d; up[j] = u;
+    return true;
+  };
+  for (const dy of ys) {
+    // The row: its last leg is clear, and its third leg (horizontal at dy, to b.x) enters a box once its far end
+    // passes `toRight` (right of b.x) or `toLeft` (left of it).
+    if (!segClear(b.x, dy, b.x, b.y) || (avoid && legHits({ x: b.x, y: dy }, b))) continue;
+    let toRight = Infinity, toLeft = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (dy <= y1[i] || dy >= y2[i]) continue;
+      if (b.x < x2[i] && x1[i] < toRight) toRight = x1[i];
+      if (b.x > x1[i] && x2[i] > toLeft) toLeft = x2[i];
+    }
+    for (let j = 0; j < xs.length; j++) {
+      const dx = xs[j];
+      if (dx >= b.x ? dx > toRight : dx < toLeft) continue;
+      if (!column(j)) continue;
+      if (dy >= a.y ? dy > down[j] : dy < up[j]) continue;
+      const mid = [{ x: dx, y: a.y }, { x: dx, y: dy }, { x: b.x, y: dy }];
+      if (avoid && (legHits(mid[0], mid[1]) || legHits(mid[1], mid[2]))) continue;
+      return mid;
+    }
+  }
+  return null;
 }
 
 /** Crossed stubs: facing ports (bottom->top, top->bottom, right->left, left->right) closer than two STUBs put each stub
@@ -609,6 +748,15 @@ export function registerSfRouter() {
   // imported link with the same marker shape but slightly different `d`
   // formatting would refuse to bundle.
   function endSignature(link, end) {
+    const sig = baseEndSignature(link, end);
+    // A loop from one port back to the SAME port (a Data Model self-relationship drawn top to top) whose two ends
+    // look alike: as one group both ends sat on one point and the loop drew as a 32 px tick above the port. Each
+    // end gets its own group, so the loop draws the converter's bracket. Ends that differ already split.
+    if (isSamePortLoop(link) && sig === baseEndSignature(link, end === 'source' ? 'target' : 'source')) return `${sig}|${end}`;
+    return sig;
+  }
+
+  function baseEndSignature(link, end) {
     const style = link.prop('lineStyle') || 'none';
     const marker = end === 'source'
       ? link.attr('line/sourceMarker')
@@ -619,6 +767,54 @@ export function registerSfRouter() {
     // link left one port from one point and shared their first stretch, or the whole line when straight: 71% of the
     // remaining clash as loaded, 55% after Auto Layout (held-out corpus, 2026-10-13).
     return isSharedBusDiagram() ? `${linkLook(link)}|${d}` : `${style}|${d}`;
+  }
+
+  /** Both ends on one port of one cell. Such a loop has no drawable shape unless its ends take two anchors, so its
+   *  port spreads even with Spread Overlapping Connectors off (spreadsAtPort). */
+  // Join lanes (Data Mapping only; SQL Studio's lineage brief, owner decision 2026-10-16). A relationship between two
+  // cards of one column with both ends on one side runs on its bus's own vertical (join-lanes.js): every such link
+  // turned STUB out of its port, so all of them shared one line. Built once per pass or graph revision.
+  function joinLaneX(gr, link) {
+    if (cctx.getDiagramType?.() !== 'datamapping') return null;
+    const caches = routeCaches(gr);
+    if (!caches.joinLanes) caches.joinLanes = buildJoinLanes(gr);
+    return caches.joinLanes.get(link.id)?.x ?? null;
+  }
+  function buildJoinLanes(gr) {
+    const items = [];
+    for (const l of gr.getLinks()) {
+      if (l.get('linkKind') === 'mapping' || l.get('router')?.name !== 'sfManhattan' || (l.get('vertices') || []).length) continue;
+      const s = l.get('source'), t = l.get('target');
+      const sc = s?.id && gr.getCell(s.id), tc = t?.id && gr.getCell(t.id);
+      if (!sc || !tc || sc === tc || !sc.isElement?.() || !tc.isElement?.()) continue;
+      const sb = sc.getBBox(), tb = tc.getBBox();
+      const si = getPortInfo(sc, s.port, sb), ti = getPortInfo(tc, t.port, tb);
+      if (!si || !ti || si.dir !== ti.dir || (si.dir !== 'left' && si.dir !== 'right')) continue;
+      if (Math.max(sb.x, tb.x) >= Math.min(right(sb), right(tb))) continue;   // not one column: an ordinary route
+      items.push({ id: l.id, side: si.dir, edge: si.dir === 'left' ? Math.min(sb.x, tb.x) : Math.max(right(sb), right(tb)),
+        ports: [`${s.id}::${s.port}`, `${t.id}::${t.port}`], y1: Math.min(si.stub.y, ti.stub.y), y2: Math.max(si.stub.y, ti.stub.y) });
+    }
+    return assignJoinLanes(items, { stub: STUB });
+  }
+
+  function isSamePortLoop(link) {
+    const s = link.get('source'), t = link.get('target');
+    return !!(s?.id && s.id === t?.id && s.port && s.port === t.port);
+  }
+
+  /** True when the link ends at this port spread along the edge: Spread Overlapping Connectors on, or the port carries a
+   *  same-port loop. The router and the connection point must agree, or the line and its stub part and the end draws
+   *  diagonally. Per PORT, not per link: spreading only the loop's ends ranked them among ends left at the centre, so
+   *  one loop end sat where another link started and that link ran along the bracket's top line (review S5-7). */
+  function spreadsAtPort(gr, cellId, portId) {
+    if (cctx.isConnectorGroupingEnabled()) return true;
+    if (!gr || !cellId || !portId) return false;
+    const caches = routeCaches(gr);
+    if (!caches.loopPorts) {
+      caches.loopPorts = new Set();
+      for (const l of gr.getLinks()) if (isSamePortLoop(l)) caches.loopPorts.add(`${l.get('source').id}::${l.get('source').port}`);
+    }
+    return caches.loopPorts.has(`${cellId}::${portId}`);
   }
 
   // All link ends touching a physical port (cell id + port id), regardless of
@@ -632,25 +828,28 @@ export function registerSfRouter() {
     const edge = side === 'left' ? bb.x : side === 'right' ? bb.x + bb.width : side === 'top' ? bb.y : bb.y + bb.height;
     return { key: `${side}:${Math.round(edge)}:${linkLook(link)}`, cell: tc, side };
   }
-  // True when a same-looking link entering the same column edge has a crowded (trunk-offset) target port. Pass-only:
-  // one scan per pass builds every column's answer, and outside a pass it would cost a scan per link (quadratic on a
-  // load). Loading a shared-bus diagram runs a full pass for this (migrateNodes).
+  // True when a same-looking link entering the same column edge has a crowded (trunk-offset) target port. One scan
+  // builds every column's answer, kept with the route caches: per pass, and outside a pass per graph revision (P4), so a
+  // flush scans once, not once per link. It was pass-only: a link re-routed alone, outside a pass, lost the 24 px
+  // lead-out and got it back on reload. With Distributed Connectors off no pass followed an edit, so it stayed lost
+  // (review S5-2).
   function columnNeedsTargetLead(link) {
     const gr = link.graph;
-    if (!_routePass || _routePass.graph !== gr) return false;
+    if (!gr) return false;
     const me = targetEdgeKey(link);
     if (!me) return false;
-    let cols = _routePass.columnLead;
+    const caches = routeCaches(gr);
+    let cols = caches.columnLead;
     if (!cols) {
       cols = new Map();
-      for (const l of gr.getLinks()) {
+      for (const l of caches.links) {
         const k = targetEdgeKey(l);
         if (!k) continue;
         const off = trunkAnchorOffset(l, 'target', k.cell, k.side);
         if (off != null && Math.abs(off) > 1) cols.set(k.key, true);
         else if (!cols.has(k.key)) cols.set(k.key, false);
       }
-      _routePass.columnLead = cols;
+      caches.columnLead = cols;
     }
     return cols.get(me.key) === true;
   }
@@ -673,19 +872,9 @@ export function registerSfRouter() {
   }
 
   function gatherPortEnds(gr, cellId, portId) {
-    // P1: served from the pass index when one is open for THIS graph (built identically, in gr.getLinks()
-    // order, so the returned set + ordering match the scan exactly).
-    if (_routePass && _routePass.graph === gr) {
-      return _routePass.portEnds.get(cellId + '::' + portId) || [];
-    }
-    const ends = [];
-    for (const l of gr.getLinks()) {
-      const s = l.get('source');
-      const t = l.get('target');
-      if (s?.id === cellId && s.port === portId) ends.push({ link: l, end: 'source' });
-      if (t?.id === cellId && t.port === portId) ends.push({ link: l, end: 'target' });
-    }
-    return ends;
+    // P1: served from the port index (built in gr.getLinks() order, so the set + ordering match a scan of every
+    // link exactly), the open pass's or, outside a pass, the snapshot routeCaches keeps per revision (P4).
+    return routeCaches(gr).portEnds.get(cellId + '::' + portId) || [];
   }
 
   // Map a port group to a top/right/bottom/left side. Only standard four-side
@@ -768,8 +957,8 @@ export function registerSfRouter() {
     // largely parallel and prevents the auto-layout-creates-crossings issue
     // that pure alphabetical signature-sort produced.
     const tangentAxis = (side === 'top' || side === 'bottom') ? 'x' : 'y';
-    const passKey = (_routePass && _routePass.graph === gr) ? `${cell.id}::${portId}::${side}` : null;
-    let order = passKey ? _routePass.trunk.get(passKey) : null;
+    const caches = routeCaches(gr), trunkKey = `${cell.id}::${portId}::${side}`;
+    let order = caches.trunk.get(trunkKey);
     if (!order) {
     const buckets = new Map(); // signature → { coords: [], linkKey }
     for (const e of ends) {
@@ -809,7 +998,7 @@ export function registerSfRouter() {
       || (a.linkKey < b.linkKey ? -1 : a.linkKey > b.linkKey ? 1 : 0)
       || a.sig.localeCompare(b.sig));
     order = sigEntries.map(e => e.sig);
-    if (passKey) _routePass.trunk.set(passKey, order);
+    caches.trunk.set(trunkKey, order);
     }
     const N = order.length;
     const G = order.indexOf(endSignature(link, end));
@@ -966,7 +1155,10 @@ export function registerSfRouter() {
     // a simple normal (straight-line) router. The manhattan router is too
     // expensive to call on every pointermove and can freeze the UI.
     // Proper routing kicks in once the arrowhead snaps to a port.
+    // Every exit below that does not draw an sfManhattan route forgets the link's last one: separateForeignRuns reads the
+    // memory, and a stale record kept "clashing" at a line that was gone, so the OTHER link of the pair moved off it.
     if (!srcDef?.id || !tgtDef?.id) {
+      _lastRuns.delete(link.id);
       return joint.routers.normal(vertices, args, linkView);
     }
 
@@ -974,15 +1166,12 @@ export function registerSfRouter() {
     const tgtCell = gr.getCell(tgtDef.id);
 
     // If cells have been removed from the graph (e.g. undo), bail out
-    if (!srcCell || !tgtCell) return vertices;
+    if (!srcCell || !tgtCell) { _lastRuns.delete(link.id); return vertices; }
 
     function getParent(cell) {
       const pid = cell?.get('parent');
       return pid ? gr.getCell(pid) : null;
     }
-
-    const srcParent = getParent(srcCell);
-    const tgtParent = getParent(tgtCell);
 
     const srcBBox = srcCell.getBBox();
     const tgtBBox = tgtCell.getBBox();
@@ -1023,6 +1212,7 @@ export function registerSfRouter() {
     }
 
     if (!srcInfo || !tgtInfo) {
+      _lastRuns.delete(link.id);
       return joint.routers.normal(vertices, args, linkView);
     }
 
@@ -1052,9 +1242,9 @@ export function registerSfRouter() {
       srcCell.get('type') === 'sf.SequenceActivation'
     );
     let sOff = null, tOff = null;
-    if (cctx.isConnectorGroupingEnabled() && !_isSequenceSelfLoop) {
-      const sSide = getSideForPort(srcCell, srcDef.port);
-      const tSide = getSideForPort(tgtCell, tgtDef.port);
+    if (!_isSequenceSelfLoop) {
+      const sSide = spreadsAtPort(gr, srcCell.id, srcDef.port) ? getSideForPort(srcCell, srcDef.port) : null;
+      const tSide = spreadsAtPort(gr, tgtCell.id, tgtDef.port) ? getSideForPort(tgtCell, tgtDef.port) : null;
       sOff = sSide ? endAnchorOffset(link, 'source', srcCell, sSide) : null;
       tOff = tSide ? endAnchorOffset(link, 'target', tgtCell, tSide) : null;
       srcInfo = applyTrunkOffset(srcInfo, sSide, sOff);
@@ -1092,26 +1282,27 @@ export function registerSfRouter() {
       }
     }
 
-    // P1: inside a reroute pass, reuse the snapshotted bboxes (getBBox already run once for the whole batch)
-    // and just apply this link's per-link exclusions. OBSTACLE_SKIP_TYPES was applied when the snapshot was
-    // built, so it's the SAME set the fallback loop skips below — see the note on OBSTACLE_SKIP_TYPES for why
-    // Zone/TextLabel/Note/BPMN-pool/Gantt/Sequence shapes are pass-through for routing.
-    if (_routePass && _routePass.graph === gr) {
-      for (const o of _routePass.boxes) if (!excludeIds.has(o.id)) obstacles.push(o.box);
-    } else {
-      for (const el of gr.getElements()) {
-        const type = el.get('type');
-        if (OBSTACLE_SKIP_TYPES.has(type)) continue;
-        if (excludeIds.has(el.id)) continue;
-        const bb = el.getBBox();
-        if (bb) obstacles.push({ x: bb.x, y: bb.y, width: bb.width, height: bb.height });
-      }
-    }
+    // P1: reuse the snapshotted bboxes (getBBox run once for the whole pass, or outside a pass once per graph
+    // revision, P4) and just apply this link's per-link exclusions. OBSTACLE_SKIP_TYPES was applied when the snapshot
+    // was built, in graph order - see the note on OBSTACLE_SKIP_TYPES for why Zone/TextLabel/Note/BPMN-pool/Gantt/
+    // Sequence shapes are pass-through for routing.
+    for (const o of routeCaches(gr).boxes) if (!excludeIds.has(o.id)) obstacles.push(o.box);
 
     // Dead-straight snap (v1.19.0.28): pull a near-collinear opposing-side pair onto one shared axis so the link
     // renders with ZERO jog. Only LOCAL stub copies are nudged - no cell moves, nothing persists, it re-runs every
     // paint (self-heals after a drag). See snapStubsStraight.
     const { from, to } = snapStubsStraight(srcInfo.stub, tgtInfo.stub, srcInfo.dir, tgtInfo.dir);
+
+    // A Data Mapping join on its own lane (joinLaneX): out to the lane, along it, back in. Taken only when nothing
+    // stands in the way (a wider card further out in the column); otherwise the ordinary search below routes it.
+    if (!vertices.length) {
+      const lx = joinLaneX(gr, link);
+      if (lx != null) {
+        const lane = [from, { x: lx, y: from.y }, { x: lx, y: to.y }, to]
+          .filter((p, i, a) => i === 0 || p.x !== a[i - 1].x || p.y !== a[i - 1].y);
+        if (pathClear(lane, obstacles)) { remember(link, lane, false); return lane; }
+      }
+    }
 
     // --- Trunk lead-out -----------------------------------------------
     // When a stub is shifted along the cell edge by a non-zero trunk offset,
@@ -1249,6 +1440,9 @@ export function registerSfRouter() {
           route.push(...orthoRoute(waypoints[i], waypoints[i + 1], obstacles));
         }
         route.push(to);
+        // Remember the real vertex route. Separation cannot move this link (avoid sets do not apply here), so a clash
+        // with it moves the other link, off the line that is really drawn.
+        remember(link, route, false);
         return route;
       }
 
@@ -1268,13 +1462,18 @@ export function registerSfRouter() {
       route.push(to);
       dropBacktrackingStub(route, tgtInfo.dir, true);
       dropBacktrackingStub(route, srcInfo.dir, false);
-      _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0, z: mid === z });
+      remember(link, route, mid === z);
       return route;
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors
+      _lastRuns.delete(link.id);
       return vertices;
     }
   };
+
+  function remember(link, route, z) {
+    _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0, z });
+  }
 
   // ── Custom connection point (CR-5.1) ─────────────────────────────
   // When connector grouping is enabled and a physical port is congested
@@ -1286,17 +1485,17 @@ export function registerSfRouter() {
   // perpendicular and straight.
   //
   // Falls back to JointJS's standard `anchor` connection point (offset 16,
-  // matching the original paper option) when grouping is off, the port
+  // matching the original paper option) when grouping is off (a port carrying a same-port loop excepted), the port
   // isn't congested, or the side isn't one of top/right/bottom/left.
   joint.connectionPoints.sfConnectionPoint = function(line, view, magnet, opt, type, linkView) {
     const fallback = () => joint.connectionPoints.anchor(line, view, magnet, { offset: CP_PERP_OFFSET });
     try {
-      if (!cctx.isConnectorGroupingEnabled()) return fallback();
       const link = linkView?.model;
       const cell = view?.model;
       if (!link || !cell) return fallback();
       const end = link.get(type); // 'source' | 'target'
       if (!end?.port) return fallback();
+      if (!spreadsAtPort(link.graph, cell.id, end.port)) return fallback();
       const side = getSideForPort(cell, end.port);
       if (!side) return fallback();
       const offset = endAnchorOffset(link, type, cell, side);

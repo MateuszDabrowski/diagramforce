@@ -1,9 +1,9 @@
 // Per-type colour-field schema + icon recolour (CLEANUP S2, slice 1) — extracted from properties.js so the
 // style-clip helpers (copyCellStyle/pasteCellStyle, which read COLOR_SCHEMA) can later move to properties/widgets.js
 // without a cycle back to the facade. Never imports properties.js.
-import { getIconDataUri } from '../icons.js?v=1.25.9';
-import { sanitizeCssColor } from '../util.js?v=1.25.9';
-import { contrastTextColor } from '../components.js?v=1.25.9';
+import { getIconDataUri } from '../icons.js?v=1.26.1';
+import { sanitizeCssColor } from '../util.js?v=1.26.1';
+import { contrastTextColor } from '../components.js?v=1.26.1';
 
 /** Re-colour a cell's icon to match a new colour (used for fill/label colour changes). */
 export function recolorCellIcon(cell, newColor) {
@@ -29,6 +29,8 @@ export function recolorCellIcon(cell, newColor) {
 // selected types support are shown. Getters return the current value (or
 // a type default); setters apply the same side-effects as the single-
 // element renderer (e.g. SimpleNode Fill also updates text contrast).
+// copy-paste-style.spec.js compares every slot with the panel control of the same label (review S4-3), so a side
+// effect added to a panel setter must be added here too.
 export const COLOR_SCHEMA = Object.assign(Object.create(null), {
   'sf.SimpleNode': [
     { label: 'Fill',
@@ -63,7 +65,8 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       set: (c, v) => c.attr('body/stroke', v) },
     { label: 'Label color',
       get: c => c.attr('headerLabel/fill'),
-      set: (c, v) => c.attr('headerLabel/fill', v) },
+      // The header icon follows the label colour, as in the single panel (gotcha 2.13a; review J2-16).
+      set: (c, v) => { c.attr('headerLabel/fill', v); recolorCellIcon(c, v); } },
   ],
   'sf.TextLabel': [
     { label: 'Label color',
@@ -98,8 +101,10 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       // The dog-ear fold tracks the border colour (fill + stroke) so the user controls the flipped corner (#8).
       set: (c, v) => { c.attr('body/stroke', v); c.attr('fold/stroke', v); c.attr('fold/fill', v); } },
   ],
+  // 'Color', as the single panel calls it. Slots match BY LABEL, and as 'Label color' a node's text colour pasted
+  // onto a Line became its stroke - white text made the line invisible on the light canvas (review J2-16).
   'sf.Line': [
-    { label: 'Label color',
+    { label: 'Color',
       get: c => c.attr('line/stroke'),
       set: (c, v) => c.attr('line/stroke', v) },
   ],
@@ -131,7 +136,12 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       set: (c, v) => { c.attr('progressBar/fill', v); c.set('colorManual', true); } },   // manual → stops following the group
     { label: 'Label color',
       get: c => c.get('userTextColor') || c.attr('label/fill') || '#FFFFFF',
-      set: (c, v) => { c.set('userTextColor', v); c.attr('label/fill', v); } },
+      set: (c, v) => {
+        c.set('userTextColor', v);
+        c.attr('label/fill', v);
+        c.attr('percentLabel/fill', v);
+        c.attr('assigneeLabel/fill', v);
+      } },
     { label: 'Fill',
       get: c => c.attr('body/fill'),
       set: (c, v) => c.attr('body/fill', v) },
@@ -170,25 +180,21 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       set: (c, v) => c.attr('topRow/fill', v) },
     { label: 'Border',
       get: c => c.attr('body/stroke'),
-      set: (c, v) => c.attr('body/stroke', v) },
+      set: (c, v) => { c.attr('body/stroke', v); c.attr('divider/stroke', v); } },
   ],
   'sf.GanttGroup': [
     { label: 'Bar color',
       get: c => c.attr('body/fill'),
-      set: (c, v) => c.attr('body/fill', v) },
+      set: (c, v) => { c.attr('body/fill', v); c.attr('leftProng/fill', v); c.attr('rightProng/fill', v); } },
     { label: 'Label color',
       get: c => c.attr('label/fill'),
       set: (c, v) => c.attr('label/fill', v) },
   ],
+  // The panel's Accent paints only the accent bar; the header border, lifeline and underline keep their theme colours.
   'sf.SequenceParticipant': [
     { label: 'Accent',
       get: c => c.attr('headerAccent/fill'),
-      set: (c, v) => {
-        c.attr('headerAccent/fill', v);
-        c.attr('header/stroke', v);
-        c.attr('lifeline/stroke', v);
-        c.attr('underline/stroke', v);
-      } },
+      set: (c, v) => c.attr('headerAccent/fill', v) },
     { label: 'Fill',
       get: c => c.attr('header/fill'),
       set: (c, v) => c.attr('header/fill', v) },
@@ -196,8 +202,9 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       get: c => c.attr('label/fill'),
       set: (c, v) => c.attr('label/fill', v) },
   ],
+  // 'Color', as the panel calls it, and the figure only: the lifeline keeps its theme colour.
   'sf.SequenceActor': [
-    { label: 'Accent',
+    { label: 'Color',
       get: c => c.attr('actorHead/stroke'),
       set: (c, v) => {
         c.attr('actorHead/stroke', v);
@@ -205,7 +212,6 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
         c.attr('actorArms/stroke', v);
         c.attr('actorLegLeft/stroke', v);
         c.attr('actorLegRight/stroke', v);
-        c.attr('lifeline/stroke', v);
       } },
     { label: 'Label color',
       get: c => c.attr('label/fill'),
@@ -225,6 +231,7 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       set: (c, v) => {
         c.attr('body/stroke', v);
         c.attr('titleTab/stroke', v);
+        c.attr('dividerLine/stroke', v);
       } },
     { label: 'Fill',
       get: c => c.attr('body/fill'),
@@ -234,35 +241,54 @@ export const COLOR_SCHEMA = Object.assign(Object.create(null), {
       set: (c, v) => {
         c.attr('titleText/fill', v);
         c.attr('conditionText/fill', v);
+        c.attr('elseText/fill', v);
       } },
   ],
 });
 
-// Default schema for BPMN / Flow shapes — Fill, Border, Label color.
-const BASIC_COLOR_SCHEMA = [
+// BPMN / Flow shapes: Fill, Border, Label color, with each type's own side effects as in its panel
+// (renderers-process.js). `contrast`: Fill also sets a readable label colour. `border(c, v)`: the parts that follow
+// the outline (an event's inner ring and glyph, a data object's fold, a cylinder's top, the predefined bars).
+const basicColorSchema = ({ contrast = false, border = null } = {}) => [
   { label: 'Fill',
     get: c => c.attr('body/fill'),
-    set: (c, v) => c.attr('body/fill', v) },
+    set: (c, v) => {
+      c.attr('body/fill', v);
+      const tc = contrast ? contrastTextColor(v) : null;
+      if (tc) c.attr('label/fill', tc);
+    } },
   { label: 'Border',
     get: c => c.attr('body/stroke'),
-    set: (c, v) => c.attr('body/stroke', v) },
+    set: (c, v) => { c.attr('body/stroke', v); border?.(c, v); } },
   { label: 'Label color',
     get: c => c.attr('label/fill'),
     set: (c, v) => c.attr('label/fill', v) },
 ];
-
-// Shapes that share the basic (Fill / Border / Label color) schema.
-[
-  'sf.BpmnEvent', 'sf.BpmnTask', 'sf.BpmnGateway', 'sf.BpmnSubprocess',
-  'sf.BpmnLoop', 'sf.BpmnDataObject',
-  'sf.FlowProcess', 'sf.FlowDecision', 'sf.FlowTerminator', 'sf.FlowDatabase',
-  'sf.FlowDocument', 'sf.FlowIO', 'sf.FlowPredefined', 'sf.FlowOffPage',
-].forEach(t => { if (!COLOR_SCHEMA[t]) COLOR_SCHEMA[t] = BASIC_COLOR_SCHEMA; });
-
-// Pool has an extra "Header fill".
-COLOR_SCHEMA['sf.BpmnPool'] = [
-  ...BASIC_COLOR_SCHEMA,
-  { label: 'Header fill',
-    get: c => c.attr('header/fill'),
-    set: (c, v) => c.attr('header/fill', v) },
-];
+const PLAIN = basicColorSchema();
+const CONTRAST = basicColorSchema({ contrast: true });
+Object.assign(COLOR_SCHEMA, {
+  'sf.BpmnEvent': basicColorSchema({ contrast: true, border: (c, v) => {
+    c.attr('innerRing/stroke', c.get('eventType') === 'intermediate' ? v : 'none');
+    c.attr('icon/fill', v);
+  } }),
+  'sf.BpmnTask':       CONTRAST,
+  'sf.BpmnGateway':    PLAIN,
+  'sf.BpmnSubprocess': PLAIN,
+  'sf.BpmnLoop':       PLAIN,
+  'sf.BpmnDataObject': basicColorSchema({ border: (c, v) => c.attr('fold/stroke', v) }),
+  'sf.FlowProcess':    CONTRAST,
+  'sf.FlowDecision':   CONTRAST,
+  'sf.FlowTerminator': CONTRAST,
+  'sf.FlowDatabase':   basicColorSchema({ contrast: true, border: (c, v) => c.attr('top/stroke', v) }),
+  'sf.FlowDocument':   CONTRAST,
+  'sf.FlowIO':         CONTRAST,
+  'sf.FlowPredefined': basicColorSchema({ contrast: true, border: (c, v) => { c.attr('lineLeft/stroke', v); c.attr('lineRight/stroke', v); } }),
+  'sf.FlowOffPage':    CONTRAST,
+  // Pool has an extra "Header fill".
+  'sf.BpmnPool': [
+    ...PLAIN,
+    { label: 'Header fill',
+      get: c => c.attr('header/fill'),
+      set: (c, v) => c.attr('header/fill', v) },
+  ],
+});

@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.25.9';
-import { showToast, showError } from '../feedback.js?v=1.25.9';
-import { sanitizeFilenamePart } from '../util.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.26.1';
+import { showToast, showError } from '../feedback.js?v=1.26.1';
+import { sanitizeFilenamePart } from '../util.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -22,6 +22,20 @@ const EXPORT_MAX_SIDE = 8192;        // widest dimension any mainstream canvas r
 const IS_IOS = typeof navigator !== 'undefined'
   && (/iP(hone|ad|od)/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 const EXPORT_MAX_AREA = IS_IOS ? 16777216 : 33554432;
+// Editor chrome every export strips from its clone of the live SVG: the grid pattern, ports, resize handles,
+// selection tools, a focused link's halo, and every transient overlay layer (capture halos and the Group pill, the
+// loose-connector check, Change Review, the drop ghost, alignment guides, Gantt drop lines, the canvas text caret),
+// which all carry `df-transient`, and the Animate Connectors copy of each line (`.df-flow-overlay`: its colour and dash
+// are page CSS, so in a file it was a solid copy over a dashed line, review S8-2). One list for all three clone paths,
+// so a new path cannot miss an overlay (gotchas-rendering 2.35).
+const EXPORT_CHROME = 'pattern, .joint-port, .df-resize-handle, .joint-tools, .df-link-halo, .df-transient, .df-flow-overlay';
+function stripEditorChrome(svgClone) {
+  svgClone.querySelectorAll(EXPORT_CHROME).forEach(el => el.remove());
+}
+
+// An animated GIF quantizes and encodes 12 frames on the main thread (about 0.5 s per 10 Mpx frame, measured): its
+// frames aim for 2x below this many pixels, and never below 1x for this budget's sake (only the canvas cap above can).
+const GIF_MAX_AREA = 6 * 1024 * 1024;
 function clampExportScale(w, h, desired = 2) {
   if (!(w > 0) || !(h > 0)) return desired;
   const sideCap = Math.min(EXPORT_MAX_SIDE / w, EXPORT_MAX_SIDE / h);
@@ -114,6 +128,33 @@ function labelsLayerBBox(paper, linkId = null) {
   } catch { return null; }   // no labels layer, or a node not measurable (detached / display:none)
 }
 
+/** Copy into the export's <defs> only the SLDS symbols it references through <use href="#id"> (and the symbols
+ *  those reference). Canvas icons are baked data: URIs, so most diagrams need none; copying the whole #slds-icons
+ *  library (~1 MB, ~1,800 symbols) made every export a megabyte. Some ids exist in several sprites: the first match
+ *  in document order wins, which is what the old full copy (inserted first) resolved to. */
+function inlineReferencedSprites(svgRoot) {
+  const sprites = document.getElementById('slds-icons');
+  if (!sprites) return;
+  const XLINK = 'http://www.w3.org/1999/xlink';
+  const wanted = new Set();
+  const queue = [];
+  const collect = (root) => root.querySelectorAll('use').forEach((u) => {
+    const href = u.getAttribute('href') || u.getAttributeNS(XLINK, 'href') || '';
+    if (href.startsWith('#') && !wanted.has(href.slice(1))) { wanted.add(href.slice(1)); queue.push(href.slice(1)); }
+  });
+  collect(svgRoot);
+  if (!queue.length) return;
+  const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  while (queue.length) {
+    const symbol = sprites.querySelector(`[id="${CSS.escape(queue.shift())}"]`);
+    if (!symbol) continue;   // not a sprite (or an id the clone defines itself)
+    const copy = symbol.cloneNode(true);
+    defsEl.appendChild(copy);
+    collect(copy);
+  }
+  if (defsEl.firstChild) svgRoot.insertBefore(defsEl, svgRoot.firstChild);
+}
+
 /** The full-export crop: the cells layer's content area unioned with the labels layer. */
 function contentAreaWithLabels(paper) {
   let area = paper.getContentArea();
@@ -156,16 +197,15 @@ function renderCellsToPngBlob(renderCells, idSet, transparent = false) {
       // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
       // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
       svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
-      svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
+      stripEditorChrome(svgClone);
       // Keep only the selected cells (+ their connectors): drop every other [model-id] group from the crop.
       svgClone.querySelectorAll('[model-id]').forEach(el => { if (!idSet.has(el.getAttribute('model-id'))) el.remove(); });
+      // A crossing's hop (crossing-bumps.js) names its two links, not a model-id: keep it only when both are copied.
+      svgClone.querySelectorAll('.df-link-bumps [data-under-id]').forEach((el) => {
+        if (!idSet.has(el.getAttribute('data-under-id')) || !idSet.has(el.getAttribute('data-over-id'))) el.remove();
+      });
 
-      const spritesContainer = document.getElementById('slds-icons');
-      if (spritesContainer) {
-        const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defsEl.innerHTML = spritesContainer.innerHTML;
-        svgClone.insertBefore(defsEl, svgClone.firstChild);
-      }
+      inlineReferencedSprites(svgClone);
       replaceForeignObjects(svgClone);
       resolveCssVars(svgClone);
       applyLineStyleInline(svgClone, transparent);   // transparent → inline dasharray; opaque → bg-overlay (matches exportRaster)
@@ -226,16 +266,11 @@ function buildStandaloneSvg(transparent, { svgFile = false } = {}) {
   // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
   // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
   svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
-  // Hide grid pattern and port circles for clean export
-  svgClone.querySelectorAll('pattern, .joint-port, .df-resize-handle, .joint-tools').forEach(el => el.remove());
+  // Hide grid pattern, port circles and transient overlays for a clean export
+  stripEditorChrome(svgClone);
 
-  // Inline the SLDS icon sprites so they render in the exported SVG
-  const spritesContainer = document.getElementById('slds-icons');
-  if (spritesContainer) {
-    const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    defsEl.innerHTML = spritesContainer.innerHTML;
-    svgClone.insertBefore(defsEl, svgClone.firstChild);
-  }
+  // Inline the SLDS icon symbols the diagram uses so they render in the exported SVG
+  inlineReferencedSprites(svgClone);
 
   // Opaque SVG variant bakes in the canvas background as a full-bleed rect behind everything.
   if (svgFile && !transparent) {
@@ -323,20 +358,22 @@ export function exportSVG(transparent = true) {
   }
 }
 
+/** Resolves once the file is downloaded or the failure reported (never rejects), so Export Selected can await each
+ *  diagram before switching to the next. The name is read NOW: the encode is async, and the active tab can change. */
 function exportRaster(transparent, format) {
   const { triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   const ext = format === 'webp' ? 'webp' : 'png';
   const fmtLabel = format.toUpperCase();
+  const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
   let pending;
   try { pending = rasterBlob(transparent, format); }
   catch (err) {   // buildStandaloneSvg throws synchronously (empty diagram, a DOM failure)
     showError(/empty/.test(err.message || '') ? err.message : `${fmtLabel} export failed: ` + err.message);
     if (!/empty/.test(err.message || '')) console.error(`SF Diagrams: ${fmtLabel} export failed:`, err);
-    return;
+    return Promise.resolve();
   }
-  pending.then(({ blob, scale }) => {
+  return pending.then(({ blob, scale }) => {
     if (scale < 1) showToast(`Diagram is large - ${fmtLabel} exported at ${Math.round(scale * 100)}% scale. Use SVG export for full resolution.`, 'info');
-    const baseName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
     triggerDownload(URL.createObjectURL(blob), `df_${baseName}_${dateSuffix()}.${ext}`);
     showToast(`${fmtLabel} downloaded ✓`, 'success');
   }, (err) => showError(err.message));
@@ -389,7 +426,7 @@ function setGifEncoding(state) {
 }
 
 export async function exportGIF(transparent = false) {
-  const { paper, graph, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
+  const { paper, triggerDownload, dateSuffix, tabNameCb: getTabNameCallback } = pctx;
   if (_gifEncodingInProgress) {
     showToast('A GIF export is already running.', 'warning');
     return;
@@ -404,24 +441,32 @@ export async function exportGIF(transparent = false) {
       showError('Diagram is empty - nothing to export.');
       return;
     }
+    // The name is read NOW, as exportRaster does: the encode awaits between frames, and the active tab can change.
+    const gifName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
 
-    // Mark encoding active so the Save dropdown items grey out. The toast
-    // sits until the encoding finishes (8s upper bound — gifenc can be
-    // slow on large diagrams; we'd rather have the toast linger than
-    // disappear mid-encode).
+    // Mark encoding active so the Save dropdown items grey out. The toast is STICKY: it stays until the encode ends
+    // (a fixed 12 s closed it mid-encode on big diagrams while Save and Share stayed locked), and its Cancel stops the
+    // encode after the current frame. A click on its body does nothing and its x cancels too: either one used to hide
+    // the toast while the encode ran on (review S8-3).
     setGifEncoding(true);
+    let cancelled = false;
+    const cancel = () => { cancelled = true; };
     // Gap 27 (v1.12.0) — toast carries an `.update(msg)` channel so we
     // can rewrite the frame counter in place without flashing the toast
     // in and out per frame. Initial copy is the static fallback for the
     // brief window before the first frame finishes rendering.
-    progressToastDismiss = showToast('Generating GIF… 0/12', 'info', { duration: 12000 });
+    progressToastDismiss = showToast('Generating GIF… 0/12', 'info',
+      { sticky: true, dismissOnClick: false, onClose: cancel, action: { label: 'Cancel', onClick: cancel } });
 
     const padding = 32;
     const exportW = contentBBox.width + padding * 2;
     const exportH = contentBBox.height + padding * 2;
-    // 2× for retina, clamped to the canvas size budget (a per-frame GIF canvas blanks past the same limits as a
-    // PNG; gifenc would then encode empty frames). Warn once if the diagram is too large to hold full 2×.
-    const scale = clampExportScale(exportW, exportH, 2);
+    // 2× for retina on small diagrams, dropping toward 1× as the frame passes GIF_MAX_AREA: every frame is quantized
+    // and encoded on the main thread, and a 2× frame of a big diagram (up to 32 Mpx) froze the tab for 10 s or more.
+    // Then clamped to the canvas size budget (a per-frame GIF canvas blanks past the same limits as a PNG; gifenc
+    // would then encode empty frames). Warn once if the diagram is too large to hold 1×.
+    const desired = Math.max(1, Math.min(2, Math.sqrt(GIF_MAX_AREA / (exportW * exportH))));
+    const scale = clampExportScale(exportW, exportH, desired);
     if (scale < 1) showToast(`Diagram is large - GIF rendered at ${Math.round(scale * 100)}% scale.`, 'info');
     const canvasW = Math.round(exportW * scale);
     const canvasH = Math.round(exportH * scale);
@@ -431,10 +476,25 @@ export async function exportGIF(transparent = false) {
     const DASH_TOTAL = 12; // stroke-dasharray: 8 4 → total repeat = 12
     const FRAME_DELAY = 50; // ms per frame (12 frames × 50ms = 600ms = one cycle)
 
-    // Prepare a base SVG clone (same pipeline as exportPNG)
-    function prepareBaseSvg() {
-      const svgEl = paper.svg;
-      const svgClone = svgEl.cloneNode(true);
+    // Determine background color
+    const theme = document.documentElement.getAttribute('data-theme');
+    const bgColor = transparent ? null : (theme === 'dark' ? '#1A1A1A' : '#FAFAFA');
+
+    // Build the frame SVG ONCE, synchronously, before the first await (same pipeline as exportPNG). Each frame used
+    // to re-clone the LIVE canvas after the previous frame's await, so a tab switch, an edit or a theme flip during
+    // the encode leaked into the later frames. Only the dash offset differs per frame: a token, replaced per frame.
+    // The token names how far that dash travels in one loop (a whole number of its periods, so the loop is seamless).
+    const offsetToken = (travel) => `__df_gif_dash_offset_${travel}__`;
+    const OFFSET_TOKEN_RE = /__df_gif_dash_offset_([\d.]+)__/g;
+    // A dasharray's period: the sum of its lengths, twice that for an odd count (SVG repeats the list). 0 = solid.
+    const dashPeriod = (dash) => {
+      const parts = String(dash || '').trim().split(/[\s,]+/).map(parseFloat);
+      if (!parts.length || parts.some((n) => !(n >= 0))) return 0;
+      const sum = parts.reduce((a, b) => a + b, 0);
+      return parts.length % 2 ? sum * 2 : sum;
+    };
+    function buildFrameTemplate() {
+      const svgClone = paper.svg.cloneNode(true);
       svgClone.setAttribute('width', exportW);
       svgClone.setAttribute('height', exportH);
       svgClone.setAttribute('viewBox',
@@ -443,46 +503,50 @@ export async function exportGIF(transparent = false) {
       // JointJS v4 carries the pan/zoom matrix on .joint-layers (v3 used .joint-viewport); strip BOTH so the
       // export renders at MODEL scale regardless of the current zoom/pan (else a panned/zoomed canvas crops wrong).
       svgClone.querySelectorAll('.joint-layers, .joint-viewport').forEach((el) => el.removeAttribute('transform'));
-      svgClone.querySelectorAll('pattern, .joint-port, .df-flow-overlay, .df-resize-handle, .joint-tools').forEach(el => el.remove());
-      const spritesContainer = document.getElementById('slds-icons');
-      if (spritesContainer) {
-        const defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defsEl.innerHTML = spritesContainer.innerHTML;
-        svgClone.insertBefore(defsEl, svgClone.firstChild);
-      }
+      stripEditorChrome(svgClone);
+      inlineReferencedSprites(svgClone);
       replaceForeignObjects(svgClone);
       resolveCssVars(svgClone);
       applyLineStyleInline(svgClone, transparent);
-      return svgClone;
-    }
 
-    // Determine background color
-    const theme = document.documentElement.getAttribute('data-theme');
-    const bgColor = transparent ? null : (theme === 'dark' ? '#1A1A1A' : '#FAFAFA');
-
-    // Render a single frame: clone SVG, set dash offset, rasterise to canvas
-    function renderFrame(frameIndex) {
-      return new Promise((resolve, reject) => {
-        const svgClone = prepareBaseSvg();
-
+      svgClone.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
+        if (transparent) {
+          // No background to erase to: dash the line itself, so the gaps are truly transparent (the eraser below
+          // painted them white). Same trade-off as the transparent PNG: Safari can leak the dash into open-stroke
+          // markers (applyLineStyleInline). A line with its own style (dashed, dotted: applyLineStyleInline above)
+          // keeps it and moves only its offset, about as far per frame as the 8 4 dash; the 8 4 overwrote it, so a
+          // dotted reply animated like a solid call (review S8-6).
+          const period = dashPeriod(line.getAttribute('stroke-dasharray'));
+          if (period > 0) {
+            line.setAttribute('stroke-dashoffset', offsetToken(period * Math.max(1, Math.round(DASH_TOTAL / period))));
+          } else {
+            line.setAttribute('stroke-dasharray', '8 4');
+            line.setAttribute('stroke-dashoffset', offsetToken(DASH_TOTAL));
+          }
+          return;
+        }
         // Inverse-masking approach: clone each link line ON TOP without markers,
         // paint background-coloured dashes that "erase" sections of the solid
         // original line underneath.  This avoids Safari's marker inheritance bug.
-        const offset = DASH_TOTAL - (frameIndex * (DASH_TOTAL / TOTAL_FRAMES));
-        const eraseFill = bgColor || '#FFFFFF';
-        svgClone.querySelectorAll('.joint-link [joint-selector="line"]').forEach(line => {
-          const overlay = line.cloneNode(false);
-          overlay.removeAttribute('marker-start');
-          overlay.removeAttribute('marker-end');
-          overlay.removeAttribute('marker-mid');
-          overlay.removeAttribute('joint-selector');
-          overlay.setAttribute('stroke', eraseFill);
-          overlay.setAttribute('stroke-dasharray', '4 8');
-          overlay.setAttribute('stroke-dashoffset', String(offset));
-          line.parentNode.insertBefore(overlay, line.nextSibling);
-        });
+        const overlay = line.cloneNode(false);
+        overlay.removeAttribute('marker-start');
+        overlay.removeAttribute('marker-end');
+        overlay.removeAttribute('marker-mid');
+        overlay.removeAttribute('joint-selector');
+        overlay.setAttribute('stroke', bgColor);
+        overlay.setAttribute('stroke-dasharray', '4 8');
+        overlay.setAttribute('stroke-dashoffset', offsetToken(DASH_TOTAL));
+        line.parentNode.insertBefore(overlay, line.nextSibling);
+      });
+      return new XMLSerializer().serializeToString(svgClone);
+    }
+    const frameTemplate = buildFrameTemplate();
 
-        const svgStr = new XMLSerializer().serializeToString(svgClone);
+    // Render a single frame: set the dash offset, rasterise to canvas
+    function renderFrame(frameIndex) {
+      return new Promise((resolve, reject) => {
+        // travel -> 0 over the loop (DASH_TOTAL 12 gives 12, 11, ... 1, as the CSS keyframes run 12 -> 0).
+        const svgStr = frameTemplate.replace(OFFSET_TOKEN_RE, (_, travel) => String((Number(travel) * (TOTAL_FRAMES - frameIndex)) / TOTAL_FRAMES));
         const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
         const svgUrl = URL.createObjectURL(svgBlob);
 
@@ -525,6 +589,7 @@ export async function exportGIF(transparent = false) {
 
     for (let i = 0; i < TOTAL_FRAMES; i++) {
       const rgba = await renderFrame(i);
+      if (cancelled) break;   // the Cancel click lands while a frame decodes
       const palette = quantize(rgba, 256, { format: 'rgba4444' });
       const index = applyPalette(rgba, palette, 'rgba4444');
 
@@ -534,7 +599,7 @@ export async function exportGIF(transparent = false) {
         let tIdx = 0;
         let minDist = Infinity;
         for (let p = 0; p < palette.length; p++) {
-          const r = palette[p][0], g = palette[p][1], b = palette[p][2], a = palette[p][3];
+          const a = palette[p][3];
           // Prefer fully transparent pixels
           if (a === 0) { tIdx = p; minDist = 0; break; }
           const dist = a; // lower alpha = more transparent
@@ -554,6 +619,11 @@ export async function exportGIF(transparent = false) {
       // mid-loop. Update is a single textContent write, ~microseconds.
       progressToastDismiss?.update?.(`Generating GIF… ${i + 1}/${TOTAL_FRAMES}`);
     }
+    if (cancelled) {
+      progressToastDismiss?.();
+      showToast('GIF export cancelled.', 'info');
+      return;   // the finally releases the Save / Share lock
+    }
 
     // Final palette + container assembly step. Quick, but worth telling
     // the user something's still happening so the last counter doesn't
@@ -562,7 +632,6 @@ export async function exportGIF(transparent = false) {
     gif.finish();
     const bytes = gif.bytes();
     const blob = new Blob([bytes], { type: 'image/gif' });
-    const gifName = sanitizeFilenamePart(getTabNameCallback?.(), 'diagram');
     triggerDownload(URL.createObjectURL(blob), `df_${gifName}_${dateSuffix()}.gif`);
     progressToastDismiss?.();
     showToast('GIF downloaded ✓', 'success');

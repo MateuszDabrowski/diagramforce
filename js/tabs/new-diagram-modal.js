@@ -3,25 +3,63 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.25.9';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.25.9';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.25.9';
-import { normalizeDiagramType } from '../persistence.js?v=1.25.9';
-import { showError } from '../feedback.js?v=1.25.9';
+import { tbctx } from './context.js?v=1.26.1';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.1';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.26.1';
+import { normalizeDiagramType } from '../persistence.js?v=1.26.1';
+import { showError, trapFocus } from '../feedback.js?v=1.26.1';
+
+/** Close the open New Diagram modal the way its own close does (focus trap released, focus restored). Use this, not
+ *  `.remove()`: a removed overlay whose trap stayed on the stack would keep Tab wrapping into a detached dialog. */
+export function dismissNewDiagramModal() {
+  const el = document.querySelector('.df-new-modal');
+  if (el) (el.__dfDismiss || (() => el.remove()))();
+}
+
+/** No tab and nothing else on screen: offer New Diagram again (review C5). render()'s zero-tab safety net does the
+ *  offering; this only adds the "no other dialog is open" check, so it never stacks over the Load Manager. */
+export function reofferIfStranded() {
+  if (tbctx.tabs.length || document.querySelector('.df-new-modal, .df-modal:not(.df-modal--hidden)')) return;
+  tbctx.render();
+}
+
+// With no tab open the modal cannot be dismissed, yet its Load cards hand off to an opener that can end with no tab:
+// the Load Manager (File / Browser / Paste / Google Drive) closed, including after a cancelled file picker. Bring the modal back then, or
+// the user is left on a tab-less canvas whose edits never save (review C5). The first edit there is the backstop
+// (session-store noteContentEdit) for the paths this cannot see.
+function reofferWhenOpenerEnds() {
+  const obs = new MutationObserver((records) => {
+    if (tbctx.tabs.length) { obs.disconnect(); return; }
+    if (document.querySelector('.df-load-manager-modal')) return;
+    obs.disconnect();
+    // The Drive pane's Google Picker button closes the manager first (marking it `data-handoff`): the picker would
+    // sit under this modal, so the Load Manager re-offers it once the Picker is done (review R10).
+    const handoff = records.some(r => [...r.removedNodes].some(n => n.dataset?.handoff));
+    if (!handoff) setTimeout(reofferIfStranded, 0);
+  });
+  obs.observe(document.body, { childList: true });
+}
 
 export function showNewDiagramModal(targetGroupId = null) {
   const { tabs } = tbctx;                                            // shared array ref (read length for dismiss-guard)
   const { paper, persistence: persistenceModule } = tbctx.modules;   // module refs (wired in tabs.init)
   const { importDiagramAsTab, setTabGroup, createDiagramOfType, getGroup } = tbctx;  // forward-refs to facade functions
-  // Remove any existing modal
-  document.querySelector('.df-new-modal')?.remove();
+  // Close any existing modal (releasing its focus trap)
+  dismissNewDiagramModal();
+  // Only allow dismissal when at least one tab already exists
+  const canDismiss = tabs.length > 0;
+  const prevFocus = document.activeElement;
 
   const overlay = document.createElement('div');
   overlay.className = 'df-new-modal';
+  // A real dialog (review C8): keyboard.js treats it as a modal, so canvas shortcuts no longer reach the tab behind it.
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'df-new-modal-title');
   overlay.innerHTML = `
     <div class="df-new-modal__backdrop"></div>
-    <div class="df-new-modal__dialog">
-      <h2 class="df-new-modal__title">New Diagram</h2>
+    <div class="df-new-modal__dialog" tabindex="-1">
+      <h2 class="df-new-modal__title" id="df-new-modal-title">New Diagram</h2>
       <div class="df-new-modal__tabs" role="tablist">
         <button class="df-new-modal__tab is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
         <button class="df-new-modal__tab" data-tab="open" role="tab" aria-selected="false">Load</button>
@@ -71,7 +109,7 @@ export function showNewDiagramModal(targetGroupId = null) {
             <path d="M25 32 L36 32 M32.5 28.5 L36 32 L32.5 35.5" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-linejoin="round" opacity="0.55"/>
           </svg>
           <span class="df-new-modal__card-title">Data Mapping</span>
-          <span class="df-new-modal__card-desc">Map end-to-end data journey from source systems through Data Cloud pipelines to Activations.</span>
+          <span class="df-new-modal__card-desc">Map how fields flow from source to target, in Data Cloud or any other pipeline.</span>
         </button>
         <button class="df-new-modal__card" data-type="flow">
           <svg class="df-new-modal__icon" viewBox="0 0 64 48">
@@ -189,6 +227,21 @@ export function showNewDiagramModal(targetGroupId = null) {
 
   document.body.appendChild(overlay);
 
+  // ONE close for every exit (x, backdrop, Escape, a card, a re-open, an import): it releases the focus trap and
+  // gives focus back. The Escape listener used to be removed only on Escape, so each other exit leaked one (C13).
+  let releaseTrap = () => {};
+  const dismiss = () => {
+    releaseTrap();
+    overlay.remove();
+    if (prevFocus?.isConnected && typeof prevFocus.focus === 'function') {
+      try { prevFocus.focus({ preventScroll: true }); } catch { /* focus restore is best-effort */ }
+    }
+  };
+  overlay.__dfDismiss = dismiss;
+  // Unclosable (no tab yet): Escape does nothing rather than fall through to the canvas.
+  releaseTrap = trapFocus(overlay, { onEscape: canDismiss ? dismiss : () => {} });
+  overlay.querySelector('.df-new-modal__dialog').focus({ preventScroll: true });
+
   // Cross-device restore: when Drive is available on this origin, append a card that opens
   // "Your Drive diagrams" so a fresh device can pull the user's masters (signs in on click if needed).
   if (persistenceModule.isDriveConfigured?.()) {
@@ -221,15 +274,19 @@ export function showNewDiagramModal(targetGroupId = null) {
   // routes to the matching opener (all of which open the result as a new tab).
   const OPEN_ACTIONS = Object.assign(Object.create(null), {
     paste: () => persistenceModule.openPasteImport?.(),
-    'import-json': () => persistenceModule.importJSON(),
+    'import-json': () => persistenceModule.openFileImport?.(),
     load: () => persistenceModule.openLoadModal?.(),
     drive: () => persistenceModule.openDriveLibrary?.(),
   });
   overlay.querySelectorAll('.df-new-modal__card').forEach(card => {
     card.addEventListener('click', () => {
-      overlay.remove();
+      dismiss();
       const action = card.dataset.action;
-      if (action && OPEN_ACTIONS[action]) { OPEN_ACTIONS[action](); return; }
+      if (action && OPEN_ACTIONS[action]) {
+        if (!canDismiss) reofferWhenOpenerEnds();
+        OPEN_ACTIONS[action]();
+        return;
+      }
       createDiagramOfType(card.dataset.type, targetGroupId);
     });
   });
@@ -302,12 +359,14 @@ export function showNewDiagramModal(targetGroupId = null) {
         if (card.dataset.busy) return;            // guard a double-tap during the fetch
         card.dataset.busy = '1';
         const loaded = await loadOfficialTemplate(meta.id);
+        // Closed while the template loaded (Escape, x, backdrop): the user changed their mind, so open nothing (C13).
+        if (!overlay.isConnected) { delete card.dataset.busy; return; }
         if (!loaded || !loaded.cells.length) {
           showError('Could not open this template. Check your connection and try again.');
           delete card.dataset.busy;
           return;
         }
-        overlay.remove();
+        dismiss();
         // Deep-copy the cached cells so a repeat open (or fromJSON's reads) never mutates the cache.
         const cells = JSON.parse(JSON.stringify(loaded.cells));
         const id = importDiagramAsTab(meta.name, loaded.diagramType, { cells }, loaded.viewport, loaded.mappingMode, { fit: true });
@@ -342,23 +401,16 @@ export function showNewDiagramModal(targetGroupId = null) {
     };
   }
 
-  // Only allow dismissal when at least one tab already exists
-  const canDismiss = tabs.length > 0;
-
   if (canDismiss) {
     // Add close button
     const closeBtn = document.createElement('button');
     closeBtn.className = 'df-new-modal__close';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-    closeBtn.addEventListener('click', () => { overlay.remove(); });
+    closeBtn.addEventListener('click', dismiss);
     overlay.querySelector('.df-new-modal__dialog').appendChild(closeBtn);
 
-    // Close on backdrop click
-    overlay.querySelector('.df-new-modal__backdrop').addEventListener('click', () => { overlay.remove(); });
-
-    // Close on Escape
-    const onKey = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); } };
-    document.addEventListener('keydown', onKey);
+    // Close on backdrop click (Escape: the focus trap above)
+    overlay.querySelector('.df-new-modal__backdrop').addEventListener('click', dismiss);
   }
 }

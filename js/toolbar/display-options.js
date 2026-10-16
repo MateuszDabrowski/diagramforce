@@ -1,6 +1,8 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.25.9';
-import { btn, tctx } from './context.js?v=1.25.9';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.26.1';
+import { btn, tctx } from './context.js?v=1.26.1';
+import { axisEndDate } from '../gantt-scale.js?v=1.26.1';
+import { growTimelineToFitDates } from '../gantt-layout.js?v=1.26.1';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
 
@@ -163,15 +165,14 @@ export function updateDisplayMenuVisibility() {
   if (dmSep) dmSep.style.display = '';
 
   // Object Relationships toggle — Data Mapping only. It's a view-only filter, so reset
-  // it to visible (default ON) on each tab change and reflect that in the checkmark.
-  // (updateDisplayMenuVisibility only runs on tab change / init, never on menu open.)
+  // it to visible (default ON) on EVERY tab change, whatever the incoming type: left off,
+  // the link add-hider would hide each connector drawn on a non-mapping tab, where the
+  // toggle is not shown. (updateDisplayMenuVisibility only runs on tab change / init.)
   const relsBtn = document.getElementById('btn-display-object-rels');
   if (relsBtn) {
     relsBtn.style.display = isDataMapping ? '' : 'none';
-    if (isDataMapping) {
-      tctx.modules.canvas?.setObjectRelationshipsVisible?.(true);
-      relsBtn.classList.add('is-checked');
-    }
+    if (tctx.modules.canvas?.isObjectRelationshipsVisible?.() === false) tctx.modules.canvas.setObjectRelationshipsVisible(true);
+    relsBtn.classList.add('is-checked');
   }
 
   // Sequence-specific toggles — diagram-wide bottom participant label toggle,
@@ -221,7 +222,9 @@ export function updateDisplayMenuVisibility() {
 // checkbox icon whose check state is driven by a `.is-checked` class on the
 // button. These helpers just toggle that class — the SVG (empty box + tick
 // path) is pre-rendered in index.html and CSS shows/hides the tick.
-export function updateDisplayToggleLabels() {
+// Each set*Checks sets one group's checkmarks without the dot; each update*ToggleLabels adds the dot. That lets
+// refreshViewMenuState scan the graph for the dot once, not once per group.
+function setDataObjectChecks() {
   document.getElementById('btn-display-api')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showLabels'));
   document.getElementById('btn-display-lengths')
@@ -230,6 +233,13 @@ export function updateDisplayToggleLabels() {
     ?.classList.toggle('is-checked', isDisplayFlagOn('keyFieldsOnly'));
   document.getElementById('btn-display-collapse')
     ?.classList.toggle('is-checked', dataObjectsAllCollapsed());   // checked only when EVERY object is collapsed
+  // A graph reset (import, revision view) turns the Object Relationships filter back on without a tab change.
+  document.getElementById('btn-display-object-rels')
+    ?.classList.toggle('is-checked', tctx.modules.canvas?.isObjectRelationshipsVisible?.() !== false);
+}
+
+export function updateDisplayToggleLabels() {
+  setDataObjectChecks();
   refreshDisplayDotIndicator();
 }
 
@@ -244,18 +254,41 @@ export function getGanttTimelineSetting(prop, fallback) {
   return tl ? (tl.get(prop) ?? fallback) : fallback;
 }
 
+// The timeline view preferences that move recorded geometry, so undo records them too (see applyToAllGanttTimelines).
+const GEOMETRY_PREFS = ['weekStartDay', 'showProjectSummary'];
+
 // Apply a timeline setting to EVERY GanttTimeline on the tab, as a single undo entry.
 export function applyToAllGanttTimelines(prop, value) {
   const graph = tctx.modules.graph;
   if (!graph) return;
   const timelines = graph.getElements().filter(el => el.get('type') === 'sf.GanttTimeline');
   if (!timelines.length) return;
-  tctx.modules.history.startBatch();
-  try { timelines.forEach(tl => tl.set(prop, value)); }
-  finally { tctx.modules.history.endBatch(); }
+  const history = tctx.modules.history;
+  history.startBatch();
+  try {
+    // Week Starts writes the End Date and can grow the axis, and Timeline Summary moves every bar a lane down, all
+    // recorded, but both props are view preferences history.js does not record. Without their own command, Cmd+Z
+    // reverted those writes and kept the new columns or lane: a stale End Date and a bar past the edge, or bars a row
+    // off their labels (review S6-6 follow-up). Pushed first, so its undo runs last, after sizes and positions are back.
+    const before = GEOMETRY_PREFS.includes(prop) ? timelines.filter(tl => tl.get(prop) !== value).map(tl => [tl.id, tl.get(prop)]) : [];
+    if (before.length) {
+      const setEach = (pick) => before.forEach(([id, old]) => graph.getCell(id)?.set(prop, pick(old)));
+      history.recordCommand(() => setEach(old => old), () => setEach(() => value));
+    }
+    timelines.forEach((tl) => {
+      tl.set(prop, value);
+      if (prop !== 'weekStartDay') return;
+      // The week start moves the snapped origin and so the right edge, and the End Date is the day before it: left
+      // alone, the field showed the old one (review S6-6). An earlier origin can leave a bar that ended on the old edge past the new
+      // one, so grow the axis to reach it. No spare column: the edge moved by days, the user pushed nothing past it.
+      const end = axisEndDate({ startDate: tl.get('startDate'), viewMode: tl.get('viewMode'), weekStartDay: value, numPeriods: tl.get('numPeriods') });
+      if (end) tl.set('endDate', end);
+      growTimelineToFitDates(tl, { spare: 0 });
+    });
+  } finally { history.endBatch(); }
 }
 
-export function updateGanttToggleLabels() {
+function setGanttChecks() {
   document.getElementById('btn-gantt-assignee')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showAssignee'));
   document.getElementById('btn-gantt-progress')
@@ -272,12 +305,33 @@ export function updateGanttToggleLabels() {
     const wesd = ((Number(getGanttTimelineSetting('weekendStartDay', 6)) % 7) + 7) % 7;
     weLabel.textContent = `Weekend Starts: ${WEEKDAY_NAMES[wesd]}`;
   }
+}
+
+export function updateGanttToggleLabels() {
+  setGanttChecks();
   refreshDisplayDotIndicator();
 }
 
-export function updateSequenceToggleLabels() {
+function setSequenceChecks() {
   document.getElementById('btn-sequence-bottom-labels')
     ?.classList.toggle('is-checked', isDisplayFlagOn('showBottomLabel'));
+}
+
+export function updateSequenceToggleLabels() {
+  setSequenceChecks();
+  refreshDisplayDotIndicator();
+}
+
+/** Re-read the View-menu checkmarks and the non-default dot from the live graph. Their state also changes outside
+ *  the menu (Undo/Redo, a per-object chevron, a per-cell flag in the panel), so the toolbar calls this on every
+ *  history change and whenever the menu opens, desktop or the phone sheet (M12). It runs on every edit, so it sets
+ *  only the active type's group (the others are hidden, and updateDisplayMenuVisibility sets them on a tab switch)
+ *  and refreshes the dot once. */
+export function refreshViewMenuState() {
+  const type = tctx.modules.tabs?.getActiveTabType?.();
+  if (type === 'datamodel' || type === 'datamapping') setDataObjectChecks();
+  else if (type === 'gantt') setGanttChecks();
+  else if (type === 'sequence') setSequenceChecks();
   refreshDisplayDotIndicator();
 }
 

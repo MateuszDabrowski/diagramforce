@@ -7,11 +7,11 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.25.9';
-import { prctx } from './context.js?v=1.25.9';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.25.9';
-import { ER_MARKER_D } from '../er-markers.js?v=1.25.9';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.25.9';
+import * as history from '../history.js?v=1.26.1';
+import { prctx } from './context.js?v=1.26.1';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.26.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.26.1';
+import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.26.1';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -50,6 +50,13 @@ export function setLinkAttrsAndRepaint(cell, mutate, afterSet) {
   mutate(allAttrs.line, allAttrs, cell);
   cell.set('attrs', allAttrs);
   afterSet?.(cell);
+  repaintLinkView(cell);
+}
+
+/** The re-insert half of setLinkAttrsAndRepaint: flush JointJS's view queue, then remove and re-insert the link's SVG
+ *  group so Safari repaints its markers. For every control that changes a marker through plain attr writes - Flow
+ *  connector Type, Connection type, Line width (review J2-11). Call it AFTER the history batch closes. */
+export function repaintLinkView(cell) {
   prctx.paper.updateViews();
   const view = prctx.paper.findViewByModel(cell);
   if (view?.el?.parentNode) {
@@ -138,9 +145,17 @@ export const FLOW_CONNECTOR_TYPES = [
 // Connection type for a field→field link: mapping ↔ relationship. Swaps `linkKind` and the
 // whole router/connector/marker style. No history batch and no panel re-render — the caller
 // owns both (it must re-render to disclose/hide the mapping fields).
+// The mapping F/ST/BT/CI badge is a label only the mapping style manages, so a switch to relationship drops it here
+// (it stayed on the grey line, and the panel then hid the Mapping type that could clear it - review J2-10).
+// `mappingType` and `expressionRule` stay on the link, so switching back re-derives the badge.
 export function applyLinkConnectionType(cell, v) {
   if (v === 'mapping') { cell.prop('linkKind', 'mapping'); applyMappingLinkStyle(cell); }
-  else { cell.prop('linkKind', null); applyRelationshipLinkStyle(cell); }
+  else {
+    cell.prop('linkKind', null);
+    applyRelationshipLinkStyle(cell);
+    const labels = cell.labels() || [];
+    if (labels.some(l => l?.attrs?.badgeBox)) cell.labels(labels.filter(l => !l?.attrs?.badgeBox));
+  }
 }
 // Mapping transform type (Standard / Formula / …) + its connector code badge (F / ST / BT / CI).
 export function applyLinkMappingType(cell, v) {
@@ -181,6 +196,7 @@ export function renderMappingControls(sec, links, { onStructureChange } = {}) {
   ], v => {
     history.startBatch();
     try { links.forEach(l => applyLinkConnectionType(l, v)); } finally { history.endBatch(); }
+    links.forEach(repaintLinkView);   // both styles swap the end markers (Safari marker cache)
     rerender();   // mapping fields appear (→ mapping) or vanish (→ relationship)
   });
 
@@ -268,22 +284,43 @@ export const LINK_MARKER_SVGS = {
   oneMany:   '<line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><line x1="18" y1="3" x2="18" y2="15" stroke="currentColor" stroke-width="2"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
   zeroMany:  '<line x1="2" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="9" r="4" fill="var(--bg-canvas, #1A1A1A)" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="1.5"/><path d="M 30 3 L 20 9 L 30 15" fill="none" stroke="currentColor" stroke-width="2"/>',
 };
+// The on-line USER label's index: not the mapping badge (`badgeBox`), not the frequency overlay (`freqText`). -1 = none.
+export function userLinkLabelIndex(cell) {
+  return (cell.labels() || []).findIndex(l => !(l?.attrs?.badgeBox) && !(l?.attrs?.freqText));
+}
+
 // Connector label font-size setter — shared by the single panel + the multi-connector bulk control (clamped 8-24).
+// It wrote labels[0], which is the badge or the frequency overlay when there is no user label (review J2-15); with
+// none it is now a no-op. The frequency overlay is re-derived (label size - 2) in the same call.
 export function applyLinkFontSize(cell, v) {
   const size = Math.max(8, Math.min(24, v));
-  if ((cell.labels() || []).length > 0) cell.label(0, { attrs: { text: { fontSize: size } } });
+  const idx = userLinkLabelIndex(cell);
+  if (idx < 0) return;
+  cell.label(idx, { attrs: { text: { fontSize: size } } });
+  syncFrequencyLabel(cell);
+}
+
+/** With no user label there is nothing for Font size to write, so the control is disabled and its tooltip says why. A
+ *  live-looking field that did nothing was the symptom review J2-15 reported. `fieldEl` is the addNumber field. */
+export function setLinkFontSizeEnabled(fieldEl, enabled) {
+  const input = fieldEl?.querySelector('input');
+  if (!input) return;
+  input.disabled = !enabled;
+  if (enabled) fieldEl.removeAttribute('title'); else fieldEl.title = 'Add a label first';
 }
 
 /** Set a connector's USER label text, the one way both the panel and the double-click editor do it. Keeps the
  *  non-user labels (the mapping F/ST/BT/CI badge, the frequency overlay), keeps a label the user dragged where they
  *  dragged it, and gives a Flow connector its bordered pill. The double-click editor used to replace the WHOLE labels
  *  array (the badge vanished until reload, a flow pill turned into a plain label) and both paths snapped a dragged
- *  label back to the midpoint on every edit (audit 2026-09-23). One `labels` write = one undo entry. */
-export function setUserLinkLabel(cell, text) {
+ *  label back to the midpoint on every edit (audit 2026-09-23). One `labels` write = one undo entry. `fallback` is the
+ *  label to take the size and position from when the connector has none right now (the panel field was just emptied
+ *  mid-typing, review S4-15). */
+export function setUserLinkLabel(cell, text, fallback = null) {
   const isBadge = l => !!(l?.attrs?.badgeBox);
   const isFreq = l => !!(l?.attrs?.freqText);
   const labels = cell.labels() || [];
-  const prev = labels.find(l => !isBadge(l) && !isFreq(l));
+  const prev = labels.find(l => !isBadge(l) && !isFreq(l)) || fallback || undefined;
   const others = labels.filter(l => isBadge(l) || isFreq(l));
   const fontSize = prev?.attrs?.text?.fontSize ?? 13;
   // Font colour (v1.16.1) overrides the line-stroke default for the label text.
@@ -292,7 +329,8 @@ export function setUserLinkLabel(cell, text) {
   const arr = [];
   if (text) {
     // Flow connectors use the bordered PILL label (Flow Builder look); every other diagram keeps the plain white-rect
-    // label. `flowLabelAttrs` forces fontSize 13, so a per-label font-size override is flow-exempt.
+    // label. `flowLabelAttrs` starts at 13; a size the user set on the existing label is carried over below, or the
+    // next text edit reset the panel's Font size (review J2-15).
     const label = isFlowDiagram ? flowLabelAttrs(text, fillColor) : {
       markup: [
         { tagName: 'rect', selector: 'body' },
@@ -305,6 +343,7 @@ export function setUserLinkLabel(cell, text) {
       position: { distance: 0.5, offset: 0 },
     };
     if (prev?.position) label.position = JSON.parse(JSON.stringify(prev.position));
+    if (isFlowDiagram && prev?.attrs?.text?.fontSize != null) label.attrs.text.fontSize = fontSize;
     arr.push(label);
   }
   arr.push(...others);
@@ -323,9 +362,16 @@ export function renderLinkProps(cell) {
   const userLabel = (cell.labels() || []).find(l => !isBadge(l) && !isFreq(l));
   const currentLabel = userLabel?.attrs?.text?.text ?? '';
   const currentLabelSize = userLabel?.attrs?.text?.fontSize ?? 13;
+  let fontSizeField = null;   // the Appearance Font size field, built below; enabled once a label exists
+  // Emptying the field drops the user label, and the next keystroke builds a new one: it takes the size and dragged
+  // position of the last label this field saw, not 13 px on the midpoint (review S4-15).
+  let lastUserLabel = userLabel ? JSON.parse(JSON.stringify(userLabel)) : null;
   addText(labelSec, 'Label', currentLabel, v => {
-    setUserLinkLabel(cell, v);
+    const cur = (cell.labels() || []).find(l => !isBadge(l) && !isFreq(l));
+    if (cur) lastUserLabel = JSON.parse(JSON.stringify(cur));
+    setUserLinkLabel(cell, v, lastUserLabel);
     prctx.titleEl.textContent = v || '';
+    setLinkFontSizeEnabled(fontSizeField, userLinkLabelIndex(cell) >= 0);
   });
 
   // Architecture only: integration-frequency overlay (clock icon + muted text below the
@@ -387,6 +433,7 @@ export function renderLinkProps(cell) {
         else if (v === 'goto') cell.labels([flowGoToLabelAttrs(flowGoToDestName(cell))]);   // blue italic "Name →" (no pill)
         else cell.labels([]);
       } finally { history.endBatch(); }
+      repaintLinkView(cell);   // the type swaps the target end (stub <-> arrow) and recolours both (Safari marker cache)
       prctx.refresh?.();
     });
   }
@@ -406,24 +453,31 @@ export function renderLinkProps(cell) {
     { defaultValue: cell.attr('line/stroke') || '#888888' });
   addSelect(appearance, 'Line style', cell.prop('lineStyle') || 'none', LINK_LINE_STYLE_OPTS,
     v => applyLinkLineStyle(cell, v));
-  addNumber(appearance, 'Line width', cell.attr('line/strokeWidth') ?? 2,
-    v => applyLinkStrokeWidth(cell, v));
+  addNumber(appearance, 'Line width', cell.attr('line/strokeWidth') ?? 2, v => {
+    history.startBatch();   // the line + any None stub ends = one undo step (it was up to three - review J2-7)
+    try { applyLinkStrokeWidth(cell, v); } finally { history.endBatch(); }
+    repaintLinkView(cell);   // a None stub end tracks the width (Safari marker cache)
+  });
   // Font size — connector label typography. Lives in Appearance for
   // consistency with the universal convention (text content in Content;
   // text styling in Appearance).
-  addNumber(appearance, 'Font size', currentLabelSize, v => applyLinkFontSize(cell, v), { min: 8, max: 24 });
-  const stroke = cell.attr('line/stroke') || '#333333';
-  const lineWidth = cell.attr('line/strokeWidth') ?? 2; // None stub follows the line weight
+  addNumber(appearance, 'Font size', currentLabelSize, v => {
+    history.startBatch();   // the label + the re-derived frequency overlay = one undo step
+    try { applyLinkFontSize(cell, v); } finally { history.endBatch(); }
+  }, { min: 8, max: 24 });
+  fontSizeField = appearance.lastElementChild;
+  setLinkFontSizeEnabled(fontSizeField, !!userLabel);
   // Endpoint markers — defs / opts / svgs / detect / apply are the SHARED module-level infra (top of file), so the
-  // single panel and the multi-connector bulk pickers stay in lockstep. `markerDefs` uses THIS cell's stroke/width
-  // (ER markers carry an explicit stroke that must track the line).
-  const markerDefs = buildLinkMarkerDefs(stroke, lineWidth);
+  // single panel and the multi-connector bulk pickers stay in lockstep. The def is built at PICK time from this cell's
+  // current stroke/width (ER markers carry an explicit stroke that must track the line; the None stub follows the
+  // line weight). Built once at render, a pick after a Color or Line width change used the old values (review J2-9).
+  const markerDefFor = (v) => buildLinkMarkerDefs(cell.attr('line/stroke') || '#333333', cell.attr('line/strokeWidth') ?? 2)[v];
   const lineStroke = cell.attr('line/stroke') || '#888888';
   addMarkerPicker(appearance, 'Source end', detectLinkMarker(cell.attr('line/sourceMarker')), LINK_MARKER_OPTS, LINK_MARKER_SVGS, v => {
-    applyLinkMarker(cell, 'sourceMarker', markerDefs[v]);
+    applyLinkMarker(cell, 'sourceMarker', markerDefFor(v));
   }, { strokeColor: lineStroke });
   addMarkerPicker(appearance, 'Target end', detectLinkMarker(cell.attr('line/targetMarker')), LINK_MARKER_OPTS, LINK_MARKER_SVGS, v => {
-    applyLinkMarker(cell, 'targetMarker', markerDefs[v]);
+    applyLinkMarker(cell, 'targetMarker', markerDefFor(v));
   }, { strokeColor: lineStroke });
 
   // Reverse direction + Simplify path — generic link actions available on EVERY
@@ -458,15 +512,10 @@ export function renderLinkProps(cell) {
     </svg>
     Simplify path`;
   simplifyBtn.addEventListener('click', () => {
-    // Two prop changes collapsed into one history command — Cmd+Z restores both
-    // the prior vertices AND the prior connector in a single undo step.
+    // Drop the manual waypoints, as the context menu's Simplify path does. It also forced the 'rounded' connector,
+    // which broke a mapping link's bezier and a Gantt dependency's elbow until the next load (review J2-12).
     history.startBatch();
-    try {
-      cell.vertices([]);
-      cell.connector('rounded', { radius: 8 });
-    } finally {
-      history.endBatch();
-    }
+    try { cell.vertices([]); } finally { history.endBatch(); }
   });
   appearance.appendChild(simplifyBtn);
 

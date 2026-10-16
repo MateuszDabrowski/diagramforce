@@ -4,7 +4,7 @@
 // Google Drive's "Open with Diagramforce" binds to. Plain `.json` is still read
 // everywhere — import detects format from the JSON structure, not the extension.
 //
-// Leaf module: ZERO imports, pure constants, so remote-store.js, json-pipeline.js
+// Leaf module: ZERO imports, pure constants, so remote-store.js, drive-sync-logic.js
 // and the Picker can all share it without a dependency cycle (like util.js).
 
 /** Canonical Diagramforce file extension. */
@@ -15,9 +15,6 @@ export const DGF_EXT = '.dgf';
  *  file content as `application/json` to keep the validated anonymous public-read
  *  path (fetchPublicGraph) byte-for-byte unchanged. */
 export const DGF_MIME = 'application/vnd.diagramforce+json';
-
-/** Diagram-file extensions stripped to derive a fallback diagram name on import. */
-export const KNOWN_EXT_RE = /\.(dgf|json)$/i;
 
 /** MIME list the Google Picker filters on: the custom `DGF_MIME` + `application/json` (so diagrams show
  *  whether or not Drive preserved the custom vendor MIME) + the FOLDER mime so folders appear and are

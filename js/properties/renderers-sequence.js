@@ -2,46 +2,14 @@
 // ActivationProps / FragmentProps. Each builds its panel via the widget builders + the shared render tail
 // (finishStandardProps from render-core), reading graph/paper/selection + the panel DOM refs + the showProperties
 // dispatch via prctx at CALL time; never imports the facade back. The facade's showProperties() dispatch imports
-// these four back.
-import * as history from '../history.js?v=1.25.9';
-import { prctx } from './context.js?v=1.25.9';
-
-// Port rebuilds and the Actor lifeline toggle rewrite `ports` (and attrs / size), which history does not record - so
-// an undo reverted the COUNT but left the ports, and undoing "Hide lifeline" showed a lifeline with no ports
-// (audit 2026-09-23). Run the op with recording suppressed and push ONE command that restores the whole snapshot.
-function snapLifeline(cell) {
-  const ratios = cell.get('lifelinePortRatios');
-  return {
-    ports: JSON.parse(JSON.stringify(cell.get('ports') || {})),
-    count: cell.get('lifelinePortCount'),
-    ratios: Array.isArray(ratios) ? ratios.slice() : null,
-    show: cell.get('showLifeline'),
-    attrs: JSON.parse(JSON.stringify(cell.get('attrs') || {})),
-    size: { ...cell.size() },
-  };
-}
-function applyLifeline(cell, st) {
-  history.setSuppressed(true);
-  try {
-    cell.prop('ports', JSON.parse(JSON.stringify(st.ports)), { rewrite: true });
-    cell.set({ lifelinePortCount: st.count, showLifeline: st.show });
-    if (st.ratios) cell.set('lifelinePortRatios', st.ratios.slice()); else cell.unset('lifelinePortRatios');
-    cell.set('attrs', JSON.parse(JSON.stringify(st.attrs)));
-    cell.resize(st.size.width, st.size.height);
-  } finally { history.setSuppressed(false); }
-}
-function undoableLifelineOp(cell, op) {
-  const before = snapLifeline(cell);
-  history.flushPendingDragCommit();
-  history.setSuppressed(true);
-  let after;
-  try { op(); history.flushPendingDragCommit(); after = snapLifeline(cell); } finally { history.setSuppressed(false); }
-  if (JSON.stringify(after) !== JSON.stringify(before)) {
-    history.recordCommand(() => applyLifeline(cell, before), () => applyLifeline(cell, after));
-  }
-}
-import { finishStandardProps } from './render-core.js?v=1.25.9';
-import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.25.9';
+// these four back, and its multi-select Lifeline section imports undoableLifelineOp (re-exported here).
+import { prctx } from './context.js?v=1.26.1';
+// Port rebuilds and the Actor lifeline toggle rewrite `ports`, which history does not record: undoableLifelineOp
+// (shared with Sequence Auto Layout) runs them as one snapshot command that also restores deleted messages.
+import { undoableLifelineOp } from '../canvas/lifeline-undo.js?v=1.26.1';
+export { undoableLifelineOp };
+import { finishStandardProps } from './render-core.js?v=1.26.1';
+import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.26.1';
 
 export function renderSequenceParticipantProps(cell) {
   // Content

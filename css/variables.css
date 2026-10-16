@@ -7,12 +7,20 @@
      amber-outline buttons, convert buttons, the format-glyph wire, Skip-tour) use this darker amber in LIGHT
      mode; theme.css swaps it back to --brand-amber in DARK. Single source for what were 7 private --_amber vars. */
   --brand-amber-strong: #D4911F;
+  /* Amber TEXT (review R7, 2026-10-15): even #D4911F is 2.67:1 on white, under WCAG's 4.5:1 for these 10-12px labels,
+     and a darker amber reads brown (the owner's 2026-10-08 call). So in LIGHT mode an amber control keeps its amber
+     border, tint or glyph, and its label is ink. theme.css swaps it to the brand amber in DARK (about 9:1 there). */
+  --brand-amber-text: var(--text-primary);
   /* Canvas LINE amber (1.25.2, owner call 2026-10-08): the brand hue at the brand saturation, darkened only until a
      thin line reaches 3:1 on the LIGHT canvas (#F6B355 is 1.75:1 there). Thin Gantt lines and small glyphs only - the
      dashed milestone lines, the dependency links, the summary-row diamonds; shapes keep --brand-amber. theme.css swaps
      it back to --brand-amber in DARK, where the base amber reads at 9.53:1. */
   --brand-amber-line: #D17E0B;
   --brand-green: #27AE60;   /* Success / confirmation accent (e.g. "Copied!" feedback) */
+  /* Green TEXT on a light surface (review R7): the brand green is 2.75:1 on #FAFAFA; this stop is 4.83:1 even on
+     the app grey (#F5F6F7) and still reads green. DARK keeps the brand green (theme.css). Success FILLS keep the brand
+     green with ink text (5.8:1). */
+  --brand-green-text: #1C7C44;
   --brand-primary: var(--brand-blue);   /* the primary brand hue, theme-stable (does NOT flip like --color-primary) — used for focus rings / brand hovers */
 
   /* Cloud-sync status — theme-stable semantic hues. Deliberately NOT --color-primary
@@ -114,7 +122,15 @@
 
   /* Transitions — matching Docusaurus/Infima timing */
   --transition-fast: 150ms ease;
-  --transition-normal: 400ms cubic-bezier(0.08, 0.52, 0.52, 1);
+  --transition-normal-duration: 400ms;   /* alone, for a transition-delay that waits out a slide */
+  --transition-normal: var(--transition-normal-duration) cubic-bezier(0.08, 0.52, 0.52, 1);
+
+  /* Motion system (2026-10-15) - enter animations on UI chrome only, never inside the JointJS paper. Keyframes
+     live in layout.css. FAST: menus, popovers, the context menu, tooltips, revealed sections, toast exit. BASE:
+     modals, the New Diagram dialog, toasts, the tour card, bottom bars. One ease-out curve for every enter. */
+  --df-motion-fast: 120ms;
+  --df-motion-base: 180ms;
+  --df-ease-out: cubic-bezier(0.2, 0, 0, 1);
 
   /* Node defaults (for diagram elements) */
   --node-bg: #FFFFFF;
@@ -127,4 +143,14 @@
   --selection-color: var(--brand-blue);
   --gantt-phase-fill: #2A2D32;
   --gantt-task-uncompleted: #C9CDD3;
+}
+
+/* Reduced motion turns the whole motion system off: every token-driven animation and transition gets a zero
+   duration. The global rule in layout.css stays as the backstop for older fixed-duration motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --df-motion-fast: 0ms;
+    --df-motion-base: 0ms;
+    --transition-normal-duration: 0ms;
+  }
 }

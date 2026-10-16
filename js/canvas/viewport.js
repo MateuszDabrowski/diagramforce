@@ -8,8 +8,9 @@
 // them onto cctx in init(), then calls registerViewportControls(cctx) to attach
 // the listeners and expose `getZoom` + `fitContent` back onto cctx for the
 // sub-modules that need them (e.g. auto-layout.js calls cctx.fitContent()).
-import { cctx } from './context.js?v=1.25.9';
-import { centerX, centerY, clamp } from '../util/geometry.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { centerX, centerY, clamp } from '../util/geometry.js?v=1.26.1';
+import { isTouchEvent } from '../util.js?v=1.26.1';
 
 // ── Zoom + grid state ───────────────────────────────────────────────
 let currentZoom = 1;
@@ -41,9 +42,32 @@ function setZoom(zoom) {
   updateZoomDisplay();
 }
 
-export function zoomIn() { setZoom(currentZoom + ZOOM_STEP); }
-export function zoomOut() { setZoom(currentZoom - ZOOM_STEP); }
-export function resetZoom() { setZoom(1); }   // clicking the zoom % snaps back to 100%
+// Anchor-zoom: set the zoom level while keeping the canvas point currently under (clientX, clientY) visually fixed.
+// paper.scale alone keeps the translate, so the fixed point is model (0,0), and content far from the origin slid
+// off-screen on every button or key zoom (review H1-4). Shared by the buttons, the keys, wheel-pinch and the Safari
+// trackpad gestures so every zoom input agrees.
+function zoomToClientPoint(newZoom, clientX, clientY) {
+  const { paper } = cctx;
+  const paperRect = paper.el.getBoundingClientRect();
+  const px = clientX - paperRect.left;
+  const py = clientY - paperRect.top;
+  const t = paper.translate();
+  const scale = newZoom / currentZoom;
+  paper.scale(newZoom, newZoom);
+  paper.translate(px - scale * (px - t.tx), py - scale * (py - t.ty));
+  currentZoom = newZoom;
+  updateZoomDisplay();
+}
+
+// The toolbar buttons, the +/- keys and the % reset zoom around the centre of the visible paper.
+function zoomAtCentre(zoom) {
+  const r = cctx.paper.el.getBoundingClientRect();
+  zoomToClientPoint(clamp(zoom, ZOOM_MIN, ZOOM_MAX), r.left + r.width / 2, r.top + r.height / 2);
+}
+
+export function zoomIn() { zoomAtCentre(currentZoom + ZOOM_STEP); }
+export function zoomOut() { zoomAtCentre(currentZoom - ZOOM_STEP); }
+export function resetZoom() { zoomAtCentre(1); }   // clicking the zoom % snaps back to 100%
 
 export function fitContent() {
   const { graph, paper } = cctx;
@@ -147,7 +171,10 @@ export function registerViewportControls(cctx) {
   // --- Pan (drag on blank canvas area) ---
   paper.on('blank:pointerdown', (evt) => {
     if (evt.shiftKey) return; // shift+drag is rubber-band in selection.js
-    if (evt.pointerType === 'touch') return; // touch pan handled separately
+    // Touch pan is handled separately. JointJS paper events carry no pointerType for a finger, so this check reads
+    // the native event type: a blank touch used to set isPanning, nothing cleared it (no compat mouseup), and the
+    // next mouse move anywhere panned the canvas (review H1-3).
+    if (isTouchEvent(evt)) return;
     isPanning = true;
     panStart = { x: evt.clientX, y: evt.clientY };
     document.body.style.cursor = 'grabbing';
@@ -162,12 +189,14 @@ export function registerViewportControls(cctx) {
     paper.translate(t.tx + dx, t.ty + dy);
   });
 
-  document.addEventListener('mouseup', () => {
+  const endPan = () => {
     if (isPanning) {
       isPanning = false;
       document.body.style.cursor = '';
     }
-  });
+  };
+  document.addEventListener('mouseup', endPan);
+  paper.on('blank:pointerup', endPan);
 
   // --- Touch: single-finger pan + pinch-to-zoom ---
   let touchPanStart = null;
@@ -254,21 +283,6 @@ export function registerViewportControls(cctx) {
   ['gesturestart', 'gesturechange'].forEach((type) => {
     document.addEventListener(type, (evt) => evt.preventDefault(), { passive: false });
   });
-
-  // Anchor-zoom: set the zoom level while keeping the canvas point currently
-  // under (clientX, clientY) visually fixed. Shared by the wheel-pinch handler
-  // and the Safari trackpad-gesture handlers so every pinch input agrees.
-  const zoomToClientPoint = (newZoom, clientX, clientY) => {
-    const paperRect = paper.el.getBoundingClientRect();
-    const px = clientX - paperRect.left;
-    const py = clientY - paperRect.top;
-    const t = paper.translate();
-    const scale = newZoom / currentZoom;
-    paper.scale(newZoom, newZoom);
-    paper.translate(px - scale * (px - t.tx), py - scale * (py - t.ty));
-    currentZoom = newZoom;
-    updateZoomDisplay();
-  };
 
   // Safari/WebKit emits proprietary gesture events for a desktop trackpad pinch
   // (Chrome instead synthesizes ctrl+wheel, handled below — and never fires

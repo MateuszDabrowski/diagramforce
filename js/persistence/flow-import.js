@@ -14,14 +14,16 @@
 // the service worker precaches the ?v= URL, so a bare specifier misses the cache and breaks offline boot;
 // and a bare './context.js' is a DIFFERENT module URL from './context.js?v=…', which instantiates a SECOND
 // pctx singleton whose appVersion is never set - stamping every imported flow appVersion "1".
-import { convertFlowMetadata } from './flow-convert.js?v=1.25.9';
-import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
-import { parseScalar, foldChild } from './flow-xml.js?v=1.25.9';
+import { convertFlowMetadata } from './flow-convert.js?v=1.26.1';
+import { computeFlowLayout } from '../canvas/flow-layout.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
+import { parseScalar, foldChild, parseFlowXmlText, stripHttpPreamble, isFlowMetadata } from './flow-xml.js?v=1.26.1';
 
 // The SCHEMA rules (which keys are lists, how a leaf scalar is typed, how a child folds into its parent) live
 // in flow-xml.js, shared byte-identically with the skill - so the browser's DOMParser path below and the
 // skill's standalone Node scanner can never disagree about the shape they produce. Only the TOKENISER differs.
+// The two input guards (stripHttpPreamble, isFlowMetadata) live there too, so the skill's CLI accepts and refuses
+// exactly what this Paste path does.
 
 /** One XML element -> a plain object shaped like the Tooling API's JSON for the same flow. */
 function xmlToObject(node) {
@@ -39,7 +41,13 @@ function xmlToObject(node) {
 export function parseFlowXml(text) {
   const doc = new DOMParser().parseFromString(text, 'text/xml');
   const err = doc.querySelector('parsererror');
-  if (err) throw new Error('That file is not valid XML.');
+  if (err) {
+    // DOMParser stays the parser of record; only the MESSAGE comes from the Node scanner, which refuses the same input
+    // with a reason (a truncated copy names the tag left open), in the CLI's words and the same in every engine.
+    let reason = 'That XML is not valid.';
+    try { parseFlowXmlText(text); } catch (e) { if (e?.message) reason = e.message; }
+    throw new Error(reason);
+  }
   const root = doc.documentElement;
   if (!root || root.localName !== 'Flow') {
     throw new Error(`That XML is a <${root?.localName || 'nothing'}>, not a <Flow>. Export the flow's .flow-meta.xml.`);
@@ -54,44 +62,11 @@ export function looksLikeFlowXml(text) {
   return /^\s*(<\?xml[^>]*\?>\s*)?<Flow[\s>]/.test(text);
 }
 
-// Workbench's REST Explorer shows the WHOLE HTTP exchange - "Raw Response", the status line, and a dozen
-// response headers - above the JSON body, and people copy the lot. Rather than making them hand-trim it,
-// drop a leading HTTP preamble: everything before the first `{` that actually parses as a Flow.
-//
-// Deliberately conservative. It only engages when the text does NOT already start with `{`, AND the preamble
-// looks like an HTTP exchange (a status line or header-ish `Name: value` lines) - so a stray brace inside
-// prose can't trick it, and a Diagramforce document (which starts with `{`) never reaches this path at all.
-const HTTP_PREAMBLE = /(^|\n)\s*(HTTP\/[\d.]+\s+\d{3}|Raw Response|[A-Za-z][A-Za-z0-9-]*:\s)/;
-export function stripHttpPreamble(text) {
-  const t = String(text);
-  if (/^\s*[{[]/.test(t)) return t;                 // already clean JSON
-  const brace = t.indexOf('{');
-  if (brace <= 0) return t;
-  if (!HTTP_PREAMBLE.test(t.slice(0, brace))) return t;
-  return t.slice(brace);
-}
-
 /** True when the text is a Tooling API Flow response (or a bare Flow `Metadata` object). */
 export function looksLikeFlowJson(text) {
   const body = stripHttpPreamble(text);
   if (!/^\s*\{/.test(body)) return false;
   try { return isFlowMetadata(JSON.parse(body)); } catch { return false; }
-}
-
-/** Shape test shared by both detectors — a Flow envelope, or the Metadata object itself. */
-export function isFlowMetadata(obj) {
-  if (!obj || typeof obj !== 'object') return false;
-  const md = obj.Metadata || obj;
-  if (!md || typeof md !== 'object') return false;
-  // A Diagramforce diagram must never match: it has `graph.cells` and a `diagramType`.
-  if (md.graph || md.diagramType) return false;
-  // A flow is identified by its `start` / `startElementReference` plus at least one element collection —
-  // `processType` alone is too weak (it appears in unrelated metadata too).
-  const hasEntry = md.start != null || md.startElementReference != null;
-  const hasElements = ['screens', 'decisions', 'actionCalls', 'assignments', 'recordLookups', 'recordCreates',
-    'recordUpdates', 'recordDeletes', 'loops', 'subflows', 'waits', 'orchestratedStages']
-    .some((k) => Array.isArray(md[k]) && md[k].length);
-  return Boolean(hasEntry && (hasElements || md.processType));
 }
 
 /**

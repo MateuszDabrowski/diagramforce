@@ -14,6 +14,7 @@ export const tbctx = {
   createDiagramOfType: null, getGroup: null,
   // close-manager slice reaches these facade mechanics + group renderers via forward-ref:
   deleteBrowserArchive: null, doCloseTab: null, forgetBrowserSaveName: null, getGroups: null, getTabGraphJSON: null, groupBadgeHtml: null,
+  guardActiveClose: null,
   // session-store slice reaches these facade lifecycle fns via forward-ref:
   generateId: null, markDirty: null, notifyChange: null, renameTab: null, render: null, reorderTabsByGroup: null,
 };

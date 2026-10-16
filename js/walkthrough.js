@@ -3,8 +3,8 @@
 // steps spliced in when relevant. Steps render as a spotlight-cutout popover locked with
 // trapFocus (from feedback.js). No external tour library, no graph mutations — purely an
 // overlay layer on top of the app. On a first visit the tour starts itself (no separate splash).
-import { trapFocus } from './feedback.js?v=1.25.9';
-import { escHtml } from './util.js?v=1.25.9';
+import { trapFocus } from './feedback.js?v=1.26.1';
+import { escHtml } from './util.js?v=1.26.1';
 
 let modules = null;
 let activeTour = null;   // { steps, index, els, release } while a tour runs
@@ -66,7 +66,7 @@ const BASE_TOUR = [
   {
     target: '#canvas-container', placement: 'center',
     title: 'Welcome to Diagramforce',
-    body: "A fast, browser-based canvas for architecture, data models, Data Cloud mappings, Salesforce Flows, process flows, org charts, Gantt charts, and UML sequence diagrams - no account, and nothing leaves your browser.\n\nLet's do a quick 60-second tour of the key tools.\n\nIn a rush? Hit skip. You can always jump right back into this walkthrough by clicking the {{help}} Help icon in the top toolbar.",
+    body: "A fast, browser-based canvas for architecture, data models, Data Cloud mappings, Salesforce Flows, process flows, org charts, Gantt charts, and UML sequence diagrams - no account, and nothing leaves your browser.\n\nLet's do a quick 60-second tour of the key tools.\n\nIn a rush? Hit Skip. You can replay this tour any time from Guided tour in the {{help}} Help menu, or in the main menu on a phone.",
   },
   {
     targets: ['#btn-save', '#btn-load', '#btn-share-url'], placement: 'below-start',
@@ -93,6 +93,8 @@ const BASE_TOUR = [
     target: '#properties-panel', placement: 'right',
     title: 'Manage Properties',
     body: 'Click any shape or connector to edit it here - labels, colors, data types and keys, connector ends, and type-specific settings. You can also convert between shape types or apply changes across a multi-selection.',
+    // On an empty canvas there is nothing to select, so the panel stays closed and the card is centred (Q14).
+    emptyBody: 'Once you add a shape, click it to open the properties panel. There you edit labels, colors, data types and keys, connector ends, and type-specific settings, convert between shape types, or change a whole multi-selection at once.',
     // Open an example shape's properties panel on enter so the step has something to point at;
     // clear it on leave so it closes again. Selection is UI state — no graph mutation / history.
     // Prefer a real content shape over a background grouper (Zone / Container / Pool / timeline).
@@ -264,7 +266,8 @@ function runTour(steps) {
       try { step.onEnter?.(modules); } catch { /* hooks are best-effort */ }
     }
     els.title.textContent = step.title;
-    els.body.innerHTML = renderBody(step.body);
+    const empty = !(modules?.graph?.getElements?.().length);
+    els.body.innerHTML = renderBody(empty && step.emptyBody ? step.emptyBody : step.body);
     els.count.textContent = `${i + 1} / ${steps.length}`;
     els.back.style.display = i === 0 ? 'none' : '';   // no Back on the first step
     els.skip.style.display = last ? 'none' : '';       // no Skip on the last step

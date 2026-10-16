@@ -100,7 +100,9 @@ function decodeEntities(s) {
  * @throws {Error} with a human-readable reason when the file is not a Flow.
  */
 export function parseFlowXmlText(text) {
-  const s = String(text ?? '');
+  // Line ends first, before any entity is decoded, as XML 1.0 section 2.11 requires and DOMParser does: a CRLF file
+  // (a Windows checkout) must read like its LF twin, while an ENCODED `&#13;` is content and survives.
+  const s = String(text ?? '').replace(/\r\n?/g, '\n');
   const root = { name: '#root', children: [], text: '' };
   const stack = [root];
   const top = () => stack[stack.length - 1];
@@ -138,7 +140,7 @@ export function parseFlowXmlText(text) {
       else if (c === '>') break;
       j++;
     }
-    if (j >= s.length) throw new Error('That file ends inside an XML tag - it looks truncated.');
+    if (j >= s.length) throw new Error('That XML ends inside a tag - it looks truncated.');
     const inner = s.slice(lt + 1, j);
     i = j + 1;
 
@@ -155,7 +157,7 @@ export function parseFlowXmlText(text) {
     }
     const selfClosing = inner.endsWith('/');
     const rawName = (selfClosing ? inner.slice(0, -1) : inner).match(/^[^\s/]+/)?.[0] || '';
-    if (!rawName) throw new Error('That file contains a malformed XML tag.');
+    if (!rawName) throw new Error('That XML contains a malformed tag.');
     // localName, matching DOMParser: `<xsi:nil>` and `<nil>` fold to the same key, and the root <Flow> keeps
     // its name whether or not the document declares a default namespace.
     const node = { name: rawName.split(':').pop(), children: [], text: '' };
@@ -166,10 +168,10 @@ export function parseFlowXmlText(text) {
   // Anything still open means the document was cut short. Without this a truncated retrieve parses into a
   // partial flow that looks fine, and the reader gets a diagram missing whatever came after the cut.
   if (stack.length > 1) {
-    throw new Error(`That file ends with <${top().name}> still open - it looks truncated.`);
+    throw new Error(`That XML ends with <${top().name}> still open - it looks truncated.`);
   }
   const doc = root.children[0];
-  if (!doc) throw new Error('That file has no XML content.');
+  if (!doc) throw new Error('That text has no XML content.');
   if (doc.name !== 'Flow') {
     throw new Error(`That XML is a <${doc.name}>, not a <Flow>. Export the flow's .flow-meta.xml.`);
   }
@@ -184,4 +186,48 @@ function toObject(node) {
   const out = {};
   for (const child of node.children) foldChild(out, child.name, toObject(child));
   return out;
+}
+
+// ── Input guards, shared with the skill's CLI ────────────────────────────────────────────────────────────────
+// Workbench's REST Explorer shows the WHOLE HTTP exchange - "Raw Response", the status line, and a dozen
+// response headers - above the JSON body, and people copy the lot. Rather than making them hand-trim it,
+// drop a leading HTTP preamble: everything before the first `{` that actually parses as a Flow.
+//
+// Deliberately conservative. It only engages when the text does NOT already start with `{`, AND the preamble
+// looks like an HTTP exchange (a status line or header-ish `Name: value` lines) - so a stray brace inside
+// prose can't trick it, and a Diagramforce document (which starts with `{`) never reaches this path at all.
+const HTTP_PREAMBLE = /(^|\n)\s*(HTTP\/[\d.]+\s+\d{3}|Raw Response|[A-Za-z][A-Za-z0-9-]*:\s)/;
+export function stripHttpPreamble(text) {
+  const t = String(text);
+  if (/^\s*[{[]/.test(t)) return t;                 // already clean JSON
+  const brace = t.indexOf('{');
+  if (brace <= 0) return t;
+  if (!HTTP_PREAMBLE.test(t.slice(0, brace))) return t;
+  return t.slice(brace);
+}
+
+/** Shape test shared by both detectors — a Flow envelope, or the Metadata object itself. */
+export function isFlowMetadata(obj) {
+  if (!obj || typeof obj !== 'object') return false;
+  // A Tooling SOQL result wraps the Flow record(s) in `records`. The converter unwraps one and refuses several with a
+  // message saying so, which is why several still count as a flow here.
+  const recs = obj.result?.records ?? obj.records;
+  if (Array.isArray(recs) && recs.some((r) => r && typeof r === 'object' && 'Metadata' in r)) return recs.some(isFlowMetadata);
+  // A MANAGED-PACKAGE flow: Salesforce returns the envelope with `Metadata: null`. It is still a flow, so it goes to
+  // the converter, whose error says why there is nothing to draw. Only with a Flow marker: an empty Metadata key
+  // alone must not take over the paste chain.
+  if ('Metadata' in obj && obj.Metadata == null) {
+    return obj.attributes?.type === 'Flow' || obj.FullName != null || 'ManageableState' in obj;
+  }
+  const md = obj.Metadata || obj;
+  if (!md || typeof md !== 'object') return false;
+  // A Diagramforce diagram must never match: it has `graph.cells` and a `diagramType`.
+  if (md.graph || md.diagramType) return false;
+  // A flow is identified by its `start` / `startElementReference` plus at least one element collection —
+  // `processType` alone is too weak (it appears in unrelated metadata too).
+  const hasEntry = md.start != null || md.startElementReference != null;
+  const hasElements = ['screens', 'decisions', 'actionCalls', 'assignments', 'recordLookups', 'recordCreates',
+    'recordUpdates', 'recordDeletes', 'loops', 'subflows', 'waits', 'orchestratedStages']
+    .some((k) => Array.isArray(md[k]) && md[k].length);
+  return Boolean(hasEntry && (hasElements || md.processType));
 }

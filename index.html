@@ -45,19 +45,22 @@
 
   <!-- Theme before first paint: classic + render-blocking on purpose, and before the stylesheets so it does not
        wait for them. Inline would be blocked by the CSP above. See js/theme-boot.js. -->
-  <script data-cfasync="false" src="js/theme-boot.js?v=1.25.9"></script>
+  <script data-cfasync="false" src="js/theme-boot.js?v=1.26.1"></script>
+  <!-- Boot watchdog: classic, so it still runs when a module fails to load or parse and app.js never starts. It says
+       so and offers Reload instead of leaving a dead toolbar. See js/boot-watchdog.js. -->
+  <script data-cfasync="false" src="js/boot-watchdog.js?v=1.26.1"></script>
 
   <!-- App CSS (order matters) -->
   <!-- Note: JointJS v4 ships no separate stylesheet; vendored JS is loaded below. -->
-  <link rel="stylesheet" href="css/variables.css?v=1.25.9">
-  <link rel="stylesheet" href="css/theme.css?v=1.25.9">
-  <link rel="stylesheet" href="css/layout.css?v=1.25.9">
-  <link rel="stylesheet" href="css/toolbar.css?v=1.25.9">
-  <link rel="stylesheet" href="css/stencil.css?v=1.25.9">
-  <link rel="stylesheet" href="css/properties.css?v=1.25.9">
-  <link rel="stylesheet" href="css/tabs.css?v=1.25.9">
-  <link rel="stylesheet" href="css/canvas.css?v=1.25.9">
-  <link rel="stylesheet" href="css/modals.css?v=1.25.9">
+  <link rel="stylesheet" href="css/variables.css?v=1.26.1">
+  <link rel="stylesheet" href="css/theme.css?v=1.26.1">
+  <link rel="stylesheet" href="css/layout.css?v=1.26.1">
+  <link rel="stylesheet" href="css/toolbar.css?v=1.26.1">
+  <link rel="stylesheet" href="css/stencil.css?v=1.26.1">
+  <link rel="stylesheet" href="css/properties.css?v=1.26.1">
+  <link rel="stylesheet" href="css/tabs.css?v=1.26.1">
+  <link rel="stylesheet" href="css/canvas.css?v=1.26.1">
+  <link rel="stylesheet" href="css/modals.css?v=1.26.1">
 </head>
 <body>
   <!-- A8 (v1.12.0) — top-level page heading. Visually hidden but announced by
@@ -476,7 +479,7 @@
           </button>
           <button class="df-toolbar__menu-item" data-action="display">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0-5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
-            Display
+            View
           </button>
           <button id="hmb-view-toggle" class="df-toolbar__menu-item" data-action="view-toggle" style="display:none">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 6h13M6 6v7.5" stroke-linecap="round"/></svg>
@@ -506,7 +509,7 @@
           </button>
           <button class="df-toolbar__menu-item" data-action="walkthrough">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/><text x="8" y="11.7" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui, -apple-system, sans-serif">?</text></svg>
-            Walkthrough
+            Guided tour
           </button>
           <button class="df-toolbar__menu-item" data-action="whatsnew">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6l8-3v10l-8-3V6z" stroke-linejoin="round"/><path d="M10 4.5l4-1.5v10l-4-1.5" stroke-linejoin="round"/></svg>
@@ -530,7 +533,7 @@
           </button>
           <button class="df-toolbar__menu-item" data-action="about">
             <svg class="df-toolbar__menu-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z"/></svg>
-            About
+            About Diagramforce
           </button>
         </div>
       </div>
@@ -702,7 +705,8 @@
             <rect x="130" y="92" width="60" height="30" rx="5"/>
             <rect x="220" y="92" width="60" height="30" rx="5"/>
           </svg>
-          <p class="df-canvas-empty__caption">Click or drag a shape from the sidebar to start →</p>
+          <!-- Two captions, one shown per layout by css/canvas.css: the phone stencil is a bottom sheet, not a sidebar. -->
+          <p class="df-canvas-empty__caption"><span class="df-canvas-empty__caption--wide">Click or drag a shape from the sidebar to start →</span><span class="df-canvas-empty__caption--narrow">Tap a shape below to start ↓</span></p>
           <!-- Visible homepage legal links (Google OAuth homepage requirement). Shown on the empty canvas - what a
                first-time visitor / crawler sees. The accessible copies live in the About modal (this splash is
                aria-hidden); pointer-events:auto re-enables clicks since the ghost itself is pointer-events:none. -->
@@ -785,9 +789,6 @@
     </div>
   </div>
 
-  <!-- Hidden file input for JSON import -->
-  <input type="file" id="file-input" accept=".json,.dgf" multiple style="display:none" aria-label="Import Diagramforce file">
-
   <!-- Scripts: JointJS as global, then app as ES module.
        Libraries are vendored in assets/vendor/ and served same-origin so the
        app works fully offline once the service worker has cached them.
@@ -799,8 +800,8 @@
        that mangled HTML. The attribute MUST precede `src` (Cloudflare requirement). Keeping it in
        the markup makes the app RL-proof regardless of edge config (this is the belt; an optional
        host-scoped "Rocket Loader: Off" Configuration Rule at Cloudflare is the braces). -->
-  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.25.9"></script>
-  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.25.9"></script>
-  <script data-cfasync="false" type="module" src="js/app.js?v=1.25.9"></script>
+  <script data-cfasync="false" defer src="assets/vendor/joint.min.js?v=1.26.1"></script>
+  <script data-cfasync="false" defer src="assets/vendor/pako.min.js?v=1.26.1"></script>
+  <script data-cfasync="false" type="module" src="js/app.js?v=1.26.1"></script>
 </body>
 </html>

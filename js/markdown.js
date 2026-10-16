@@ -24,7 +24,7 @@
 // escHtml is the shared security primitive (js/util.js — itself dependency-free,
 // so this module gains no transitive deps). It runs FIRST in parseMarkdown so
 // user text can never inject markup.
-import { escHtml } from './util.js?v=1.25.9';
+import { escHtml } from './util.js?v=1.26.1';
 
 /**
  * Convert plain text with inline markdown markers to HTML. Safe for innerHTML.
@@ -54,10 +54,13 @@ export function parseMarkdown(text) {
 }
 
 /**
- * Wrap the user's text selection inside a textarea/input with the given pair
- * of marker tokens. Used by the properties-panel keyboard shortcuts (Cmd+B,
- * Cmd+I, etc.). When the selection is empty, inserts the pair at the cursor
- * and re-positions the caret between them so the user can type immediately.
+ * Toggle the given pair of marker tokens around the user's text selection
+ * inside a textarea/input. Used by the properties-panel keyboard shortcuts
+ * (Cmd+B, Cmd+I, etc.). When the markers already sit just outside the
+ * selection (where a wrap leaves it), they are removed; otherwise the
+ * selection is wrapped. When the selection is empty, inserts the pair at the
+ * cursor and re-positions the caret between them so the user can type
+ * immediately (a second press removes the empty pair).
  *
  * Returns true if the input was modified (caller fires an 'input' event so
  * the standard property-update + history pipeline captures the change).
@@ -70,11 +73,26 @@ export function wrapSelectionWithMarker(inputEl, marker) {
   const before = value.slice(0, start);
   const selected = value.slice(start, end);
   const after = value.slice(end);
-  inputEl.value = `${before}${marker}${selected}${marker}${after}`;
-  // Re-select the previously-selected text (now offset by marker length) so
-  // the user can immediately re-trigger to un-wrap or chain another marker.
-  const newStart = start + marker.length;
-  const newEnd = end + marker.length;
-  inputEl.setSelectionRange(newStart, newEnd);
+  // A second press un-wraps. It used to wrap again: Cmd+B twice gave
+  // '****bold****', rendered with stray asterisks (review I13).
+  const n = isWrappedBy(before, after, marker) ? -marker.length : marker.length;
+  inputEl.value = n < 0
+    ? `${before.slice(0, n)}${selected}${after.slice(-n)}`
+    : `${before}${marker}${selected}${marker}${after}`;
+  // Re-select the previously-selected text (shifted by the marker length) so
+  // the user can immediately re-trigger to toggle back or chain another marker.
+  inputEl.setSelectionRange(start + n, end + n);
   return true;
+}
+
+/**
+ * True when `marker` already wraps the selection from just outside it.
+ * Asterisks are read as runs (1 italic, 2 bold, 3 both), so '*' toggles an odd
+ * run and never takes one half of a bold pair, and '**' needs a run of 2+.
+ */
+function isWrappedBy(before, after, marker) {
+  if (marker[0] !== '*') return before.endsWith(marker) && after.startsWith(marker);
+  const k = before.length - before.replace(/\*+$/, '').length;
+  const m = after.length - after.replace(/^\*+/, '').length;
+  return marker === '*' ? (k % 2 === 1 && m % 2 === 1) : (k >= 2 && m >= 2);
 }

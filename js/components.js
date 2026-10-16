@@ -1,16 +1,16 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.25.9';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.25.9';
-import { GANTT_HEADER_H, GANTT_BAR_DY, orderToY } from './gantt-layout.js?v=1.25.9';
-import { localISODate } from './gantt-scale.js?v=1.25.9';
-import { sanitizeCssColor } from './util.js?v=1.25.9';
-import { SEQ_ROLE_ACCENT, BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from './persistence/diagram-schema.js?v=1.25.9';
+import { getIconDataUri } from './icons.js?v=1.26.1';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.26.1';
+import { orderToY } from './gantt-layout.js?v=1.26.1';
+import { axisEndDate, periodDate, addDaysISO, localISODate } from './gantt-scale.js?v=1.26.1';
+import { sanitizeCssColor } from './util.js?v=1.26.1';
+import { SEQ_ROLE_ACCENT, BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from './persistence/diagram-schema.js?v=1.26.1';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.25.9';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.25.9';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.26.1';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.26.1';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -22,18 +22,6 @@ export function getStencilSvgDataUri(svgContent, color = '#FFFFFF', size = 32) {
   const svg = svgContent.replace(/currentColor/g, safeColor);
   const full = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="${size}" height="${size}">${svg}</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(full);
-}
-
-/** Extract a display hostname from a URL string for the sf.Link subtitle.
- *  Strips a leading "www.". Empty string if the URL is missing or invalid. */
-export function extractLinkDomain(url) {
-  if (!url || typeof url !== 'string') return '';
-  try {
-    const normalized = /^[a-z]+:\/\//i.test(url) ? url : `https://${url}`;
-    return new URL(normalized).hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
 }
 
 // WCAG luminance-based contrast — returns dark or white text for a given bg
@@ -655,13 +643,10 @@ function hexToRgba(hex, a) {
 // draggable `sf.GanttTask` bars (the schedule), so creating a Gantt shows an editable plan immediately instead of
 // a blank canvas. Returns { timeline, bars }; the CALLER adds them, embeds each bar in the timeline, and positions
 // each via applyGanttGeometry (x/width from the dates). Phase 4.6: the timeline carries NO `tasks[]` — the bars own
-// the record and the left panel derives from them (slice 4.2). Each bar's Y aligns to its row: HEADER_H (88 =
-// dateH 48 + phaseRow 40) + i*rowHeight, +BAR_DY (8) to centre the 32-tall bar in the 48-tall row — kept in sync
-// with GanttTimelineView._renderColumns (shapes.js).
+// the record and the left panel derives from them (slice 4.2). Each bar's seed Y is its row's orderToY, the same
+// header height (ganttHeaderH) GanttTimelineView._renderColumns draws; the caller's layoutTimelineTasks re-places it.
 export function createGanttTimelineSeed({ x = 40, y = 40 } = {}) {
   const today = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const plus = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
   const numPeriods = 12, taskListWidth = 200, rowHeight = 48;
   // The default plan is the FULL unified GANTT_PROJECT_LIBRARY: ALL phases, each with its single must-have task
@@ -671,35 +656,41 @@ export function createGanttTimelineSeed({ x = 40, y = 40 } = {}) {
   // The axis starts a week BEFORE today (TL_START) so the today marker sits a column in, not clipped at the edge.
   const slug = (name) => 'g-' + name.toLowerCase().replace(/\s+/g, '-');
   const TL_START = -7;   // days before today the axis begins
-  const PLAN = [{ from: 0, to: 14 }, { from: 14, to: 28 }, { from: 28, to: 56 }, { from: 56, to: 70 }, { from: 70, to: 84 }];   // phase windows (days from axis start)
+  const PLAN = [{ from: 0, to: 14 }, { from: 14, to: 28 }, { from: 28, to: 56 }, { from: 56, to: 70 }, { from: 70, to: 84 }];   // phase windows (days from the snapped origin)
   const groups = GANTT_PROJECT_LIBRARY.map((p, i) => ({ id: slug(p.name), label: p.name, color: p.color, order: i }));
+  const axis = { startDate: localISODate(plus(TL_START)), viewMode: 'week', weekStartDay: 1, numPeriods };
+  // The plan counts from the axis's SNAPPED origin (the Monday on or before the start), so the last phase ends on the
+  // right edge. Counted from the start itself it ran up to six days past it on any day but Monday (review S6-1).
+  const day0 = periodDate(axis, 0);
+  const at = (days) => addDaysISO(day0, days);
   const timeline = new joint.shapes.sf.GanttTimeline({
     position: { x, y },
-    startDate: iso(plus(TL_START)),
-    endDate: iso(plus(TL_START + numPeriods * 7)),
+    startDate: axis.startDate,
+    // The last day the axis draws (the start snaps back to Monday), so the End Date is a date the axis shows (review L2).
+    endDate: axisEndDate(axis),
     viewMode: 'week',
     numPeriods, taskListWidth, rowHeight, groups,
     showProjectSummary: true,   // Timeline Summary lane ON by default for a fresh Gantt diagram
   });
   const bars = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttTask({
-    position: { x: x + taskListWidth, y: y + GANTT_HEADER_H + i * rowHeight + GANTT_BAR_DY },
+    position: { x: x + taskListWidth, y: orderToY(timeline, i) },   // a seed Y; layoutTimelineTasks re-places every bar
     order: i,                              // Phase 4.3: the row slot — applyGanttGeometry derives the Y from it
     groupId: slug(p.name),
     taskLabel: p.keyTask,
     attrs: { label: { text: p.keyTask }, progressBar: { fill: p.color } },   // task bar follows its group colour; no progress = 0%
-    startDate: iso(plus(TL_START + PLAN[i].from)),
-    endDate: iso(plus(TL_START + PLAN[i].to)),
+    startDate: at(PLAN[i].from),
+    endDate: at(PLAN[i].to),
   }));
   // Gate milestone per phase, on its task's row (task i sits at unified rowIndex 2i+1 - a group header before each
   // task); orderToY gives the bar-top Y so we centre the diamond on it. layoutTimelineTasks sets the X from the date.
   const milestones = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttMilestone({
     position: { x: x + taskListWidth, y: Math.round(orderToY(timeline, 2 * i + 1) + 4) },
-    milestoneDate: iso(plus(TL_START + PLAN[i].to)),
+    milestoneDate: at(PLAN[i].to),
     attrs: { label: { text: p.milestones[0] } },
   }));
   const marker = new joint.shapes.sf.GanttMarker({
     position: { x: x + taskListWidth, y: Math.round(orderToY(timeline, 1) + 8) },
-    markerDate: iso(today),
+    markerDate: localISODate(today),
     attrs: { label: { text: 'Today' } },
   });
   return { timeline, bars, milestones, marker };
@@ -709,32 +700,30 @@ export function createGanttTimelineSeed({ x = 40, y = 40 } = {}) {
 // axis so the spans stay proportional whatever the view mode. The caller adds + embeds + positions each via
 // applyGanttGeometry. Keeps the stencil drop on the unified bar model — no `tasks[]`-only timelines are created.
 export function createGanttBarsFor(timeline) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const vm = timeline.get('viewMode') || 'week';
-  const todayIso = iso(new Date());
+  const todayIso = localISODate(new Date());
   // Shift the axis start back ONE view-period so a "Today" Day Marker at today sits a column in, not clipped at the
   // panel edge (mirrors the fresh-diagram seed's week-earlier start).
   const origStart = new Date((timeline.get('startDate') || todayIso) + 'T00:00:00');
   const shifted = new Date(origStart);
   if (vm === 'day') shifted.setDate(origStart.getDate() - 1);
-  else if (vm === 'month') shifted.setMonth(origStart.getMonth() - 1);
+  // Month: from the 1st, or the 29th-31st overflowed back into the same month (30 Mar - 1 month = 2 Mar) and Today
+  // fell before the plan.
+  else if (vm === 'month') { shifted.setDate(1); shifted.setMonth(origStart.getMonth() - 1); }
   else shifted.setDate(origStart.getDate() - 7);
-  timeline.set('startDate', iso(shifted));
-  const at = (units) => {                  // units are periods of the current view, from the (shifted) axis start
-    const d = new Date(shifted);
-    if (vm === 'day') d.setDate(shifted.getDate() + units);
-    else if (vm === 'month') d.setMonth(shifted.getMonth() + units);
-    else d.setDate(shifted.getDate() + units * 7);
-    return iso(d);
-  };
+  timeline.set('startDate', localISODate(shifted));
+  const axis = { startDate: localISODate(shifted), viewMode: vm, weekStartDay: timeline.get('weekStartDay'), numPeriods: timeline.get('numPeriods') };
+  timeline.set('endDate', axisEndDate(axis) || '');
+  // Units are periods of the current view, from the axis's SNAPPED origin (the week's first day, the 1st of the month),
+  // so the last phase ends on the right edge. Counted from the shifted start it ran past it (review S6-1).
+  const at = (units) => periodDate(axis, units);
   // Same FULL unified library as the fresh-diagram seed: ALL phases, each with its single must-have task (`keyTask`),
   // sequenced across the axis - so a dropped timeline shows the SAME phases + tasks + colours the stencil offers. NO
   // seeded progress (clean slate). Plus each phase's gate milestone (on its task row) and a "Today" Day Marker.
   const slug = (name) => 'g-' + name.toLowerCase().replace(/\s+/g, '-');
   const groups = GANTT_PROJECT_LIBRARY.map((p, i) => ({ id: slug(p.name), label: p.name, color: p.color, order: i }));
   timeline.set('groups', groups);
-  const PLAN = [{ from: 1, to: 3 }, { from: 3, to: 5 }, { from: 5, to: 8 }, { from: 8, to: 10 }, { from: 10, to: 12 }];   // periods from the shifted start (today = period 1)
+  const PLAN = [{ from: 1, to: 3 }, { from: 3, to: 5 }, { from: 5, to: 8 }, { from: 8, to: 10 }, { from: 10, to: 12 }];   // periods from the snapped origin (today is in period 1)
   const px = timeline.position().x + (timeline.get('taskListWidth') || 200);
   const bars = GANTT_PROJECT_LIBRARY.map((p, i) => new joint.shapes.sf.GanttTask({
     order: i,
@@ -1119,17 +1108,10 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
     case 'sf.GanttTimeline': {
       // Default to today's date; auto-calculate end date
       const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const startDate = `${yyyy}-${mm}-${dd}`;
+      const startDate = localISODate(today);
       const mode = component.viewMode || 'week';
       const periods = component.numPeriods || 12;
-      const endD = new Date(today);
-      if (mode === 'day') endD.setDate(endD.getDate() + periods);
-      else if (mode === 'week') endD.setDate(endD.getDate() + periods * 7);
-      else endD.setMonth(endD.getMonth() + periods);
-      const endDate = localISODate(endD);   // LOCAL day - toISOString() is the UTC day, one early in UTC+ zones
+      const endDate = axisEndDate({ startDate, viewMode: mode, numPeriods: periods });   // the last day the axis draws
       // Phase 4.6: NO tasks[] — the stencil drop handler seeds real dated bars (createGanttBarsFor) so a
       // dropped timeline lands on the unified bar model, exactly like creating a fresh Gantt diagram.
       return new joint.shapes.sf.GanttTimeline({

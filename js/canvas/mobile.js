@@ -106,6 +106,8 @@ export function initMobileDragHandles() {
           target.style.height = '';
           if (target.id === 'properties-panel') {
             target.classList.add('df-properties--hidden');
+            // properties.js runs the X button's path on this (restore the stencil, clear the selection).
+            target.dispatchEvent(new CustomEvent('df-dismiss'));
           } else if (target.id === 'stencil-panel') {
             target.classList.add('df-stencil--hidden');
             const btn = document.getElementById('btn-toggle-stencil');

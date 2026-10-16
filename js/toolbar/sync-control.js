@@ -1,8 +1,8 @@
 // Cloud-sync control (CLEANUP S4) — the Drive sync icon + state-aware dropdown (sign-in status row / sync-now / history / auto-sync toggle / disconnect / about). Connecting is the status-row "Sign in" button (signIn), NOT a menu item. Reads tctx.modules; imports btn+setupDropdown (context) + showDriveHistoryModal (drive-history) - one-way slice edges. init calls setupSyncControl.
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.25.9';
-import { formatRelativeTime } from '../util.js?v=1.25.9';
-import { btn, setupDropdown, tctx } from './context.js?v=1.25.9';
-import { showDriveHistoryModal } from './drive-history.js?v=1.25.9';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.1';
+import { formatRelativeTime } from '../util.js?v=1.26.1';
+import { btn, setupDropdown, tctx } from './context.js?v=1.26.1';
+import { showDriveHistoryModal } from './drive-history.js?v=1.26.1';
 
 // One icon (left of Share Link) + a state-aware dropdown menu. The Drive icon is
 // colour + glyph coded by sync state via the SLDS sync family; the time text shows
@@ -16,8 +16,9 @@ function syncStatusText(st, connected = false) {
     case 'saving':   return 'Saving to Google Drive…';
     case 'error':    return 'Signed out of Google Drive - sign in to reconnect.';
     case 'conflict': return 'This diagram changed on Google Drive.';
-    case 'refresh':  return 'The original shared file has new changes.';
+    case 'refresh':  return st.refreshOwn ? 'A newer version of this diagram is on Google Drive.' : 'The original shared file has new changes.';
     case 'pending':  return 'Unsaved changes - they will sync to Google Drive.';
+    case 'failed':   return st.failText || 'Google Drive did not take the last save - it will try again.';
     case 'synced':   return rel ? `Synced to Google Drive · last saved ${rel}.` : 'Auto-sync is on - this diagram syncs to Google Drive once it has content.';
     // state 'off' splits on account-level connection: when connected it's just THIS diagram that isn't synced
     // yet (don't claim "not connected" while the menu offers Disconnect); otherwise the account truly isn't connected.
@@ -55,7 +56,7 @@ export function setupSyncControl() {
     const isError = st.state === 'error';
     const isConflict = st.state === 'conflict';
     const isRefresh = st.state === 'refresh';   // the original shared file changed — pull available (item 6)
-    const isAction = isError || isConflict || isRefresh;   // all put an actionable label + status-row affordance up
+    const isFailed = st.state === 'failed';     // Drive did not take a save (offline, full, no answer) - auto-sync retries it
     // ONE icon, ONE href for every state — no swapping. CSS recolours the SAME detailed Drive logo per
     // [data-state]: greyed (off) / full colour (synced) / spinning (saving) / red-tinted (error) /
     // amber-tinted (conflict). Text appears for an action (red "Sign in" / amber "Review") and as a neutral
@@ -64,13 +65,15 @@ export function setupSyncControl() {
       if (isError) { textEl.textContent = 'Sign in'; textEl.style.display = ''; }
       else if (isConflict) { textEl.textContent = 'Review'; textEl.style.display = ''; }
       else if (isRefresh) { textEl.textContent = 'Refresh'; textEl.style.display = ''; }
+      else if (isFailed) { textEl.textContent = 'Not synced'; textEl.style.display = ''; }
       else if (st.state === 'saving') { textEl.textContent = 'Saving'; textEl.style.display = ''; }
       else textEl.style.display = 'none';
     }
     // Title hints the left-click (menu) + right-click (primary action) split.
     btnEl.title = isError ? 'Google Drive sign-in needed - left-click for menu, right-click to reconnect'
       : isConflict ? 'This diagram changed on Google Drive - left-click for menu, right-click to review'
-      : isRefresh ? 'The original shared file has new changes - left-click for menu, right-click to refresh'
+      : isRefresh ? `${st.refreshOwn ? 'A newer version is on Google Drive' : 'The original shared file has new changes'} - left-click for menu, right-click to refresh`
+      : isFailed ? 'Google Drive did not take the last save - left-click for why, right-click to try again'
       : st.state === 'saving' ? 'Saving to Google Drive…'
       : 'Google Drive sync - left-click for menu, right-click to sync all diagrams now';
 
@@ -92,6 +95,7 @@ export function setupSyncControl() {
       else if (isError || !connected) { label = 'Sign in'; tone = 'error'; }
       else if (isConflict) { label = 'Review'; tone = 'conflict'; }
       else if (isRefresh) { label = 'Refresh'; tone = 'refresh'; }
+      else if (isFailed) { label = 'Try again'; tone = 'error'; }   // Sync now, which the click below runs
       else if (st.state !== 'saving') { label = 'Sync now'; tone = 'sync'; }
       statusBtn.textContent = label;
       statusBtn.dataset.tone = tone;
@@ -101,16 +105,17 @@ export function setupSyncControl() {
     // Menu shape: not-connected shows only "Connect"; connected shows the Drive-unique set. Save & Export /
     // Load & Import are NOT here — they live on the always-present navbar, so the menu never duplicates them.
     const set = (sel, hide) => { const el = menu.querySelector(sel); if (el) el.hidden = hide; };
-    // "Version history" — shown only when connected AND the active tab is linked to a Drive file (its revisions).
-    const showHistory = connected && !!p.activeHasDriveFile?.();
+    // "Version history" — shown only when connected AND the active tab has a Drive file of its own (its revisions). A
+    // view of someone's file has none: the panel opened empty and said "save this diagram" (review 2026-10-15, A9).
+    const showHistory = connected && !!p.activeHasOwnFile?.();
     // "Refresh imported diagram" — shown ONLY when the active diagram was opened from a Drive link
     // (re-fetches the sender's latest). Independent of connected: a public link refreshes anonymously.
     const showReload = !!p.activeIsImported?.();
-    // A FORK (own master + a refresh-only sharedSource) opens the original in a NEW tab, leaving your copy intact →
-    // "Open the original shared diagram". An UN-forked view (sharedSource, no own master) re-pulls the original INTO
-    // the current tab → "Refresh from the original". (reopenLatestFromDrive picks the same branch via hasOwnFork.)
+    // A clean, un-forked view re-pulls the original INTO the current tab → "Refresh from the original". A fork, or a tab
+    // with edits Drive lacks, gets the original in a NEW tab → "Open the original shared diagram". The same test
+    // reopenLatestFromDrive uses (activeRefreshesInPlace), so the label says what the click does (A9).
     const reloadLabel = menu.querySelector('[data-sync-reload-label]');
-    if (reloadLabel && showReload) reloadLabel.textContent = p.activeHasDriveFile?.() ? 'Open the original shared diagram' : 'Refresh from the original';
+    if (reloadLabel && showReload) reloadLabel.textContent = p.activeRefreshesInPlace?.() ? 'Refresh from the original' : 'Open the original shared diagram';
     set('[data-sync="history"]', !showHistory);
     set('[data-sync="reload"]', !showReload);
     set('[data-sync="autosync"]', !connected);

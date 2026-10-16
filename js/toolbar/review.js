@@ -1,8 +1,8 @@
 // Change Review (CLEANUP S4) — the picker + banner + Apply-as-Highlights orchestration over util.diffGraphs and the canvas review-overlay. Reads tctx.modules inside function bodies; drive-history calls reviewAgainstRevision (slice->slice).
-import { buildModal, showError, showToast } from '../feedback.js?v=1.25.9';
-import { storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.25.9';
-import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.25.9';
-import { tctx } from './context.js?v=1.25.9';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.1';
+import { storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
+import { countDiagramShapes, diffGraphs, escHtml, formatRelativeTime } from '../util.js?v=1.26.1';
+import { tctx } from './context.js?v=1.26.1';
 
 function currentGraphJSON() {
   return tctx.modules.graph ? tctx.modules.graph.toJSON() : { cells: [] };
@@ -72,7 +72,18 @@ function startReview(baselineGraph, label) {
 
 /** Jump straight to reviewing the current diagram against a specific Drive revision id. */
 export async function reviewAgainstRevision(revId, label) {
-  const rev = await tctx.modules.persistence?.readRevision?.(revId);
+  // The picker has closed and the fetch is a Drive round trip (a sign-in prompt can sit in it). startReview diffs
+  // against whatever tab is active when it lands, so a tab switch meanwhile compared this revision with ANOTHER
+  // diagram. Remember the tab, show that something is loading, and bail if the tab or its Drive file changed.
+  const tabId = tctx.modules.tabs?.getActiveTabId?.();
+  const loading = showToast('Loading that version…', 'info', { sticky: true });
+  let rev;
+  try { rev = await tctx.modules.persistence?.readRevision?.(revId); }
+  finally { loading?.(); }
+  if (tctx.modules.tabs?.getActiveTabId?.() !== tabId || rev?.isActiveFile === false) {
+    showToast('Comparison cancelled - you switched diagrams while that version was loading.', 'info');
+    return;
+  }
   if (!rev?.graph) { showError('Could not load that version.'); return; }
   startReview(rev.graph, label);
 }
@@ -84,7 +95,7 @@ export async function openReviewPicker() {
   const t = tctx.modules.tabs;
   const activeId = t?.getActiveTabId?.();
   const otherTabs = (t?.getAllTabs?.() || []).filter((x) => x.id !== activeId);
-  const hasDriveFile = !!p?.activeHasDriveFile?.();
+  const hasDriveFile = !!p?.activeHasOwnFile?.();   // its own file: a view has no revisions to compare (A9)
   // Only AUTO-list Drive revisions when a valid token already exists (silent, no overlay). Listing them
   // when signed-out would force getToken() -> an unsolicited Google sign-in overlay just from opening this
   // picker, and closing that overlay was crashing the app. When signed-out we offer an EXPLICIT sign-in

@@ -2,8 +2,8 @@
 // toolbar.init(); the manager-modal slices read tctx.modules.X INSIDE function bodies (never at module top, which
 // runs before init). btn/setupDropdown/renderDriveSignIn moved here FIRST because init + several slices share them
 // — keeping them on the facade would force a slice→facade import cycle.
-import { escHtml } from '../util.js?v=1.25.9';
-import { showError } from '../feedback.js?v=1.25.9';
+import { escHtml } from '../util.js?v=1.26.1';
+import { showError } from '../feedback.js?v=1.26.1';
 
 export const tctx = { modules: null };
 
@@ -53,6 +53,7 @@ export function setupDropdown(triggerId) {
   // and focuses the last (the "Reverse-tab into menu" convention used
   // by macOS menu bars and the ARIA Authoring Practices menu pattern).
   trigger.addEventListener('keydown', (evt) => {
+    if (evt.ctrlKey || evt.metaKey || evt.altKey) return;   // Ctrl/Cmd+Enter is Present (keyboard.js), not "open"
     if (evt.key === 'ArrowDown' || evt.key === 'Enter' || evt.key === ' ') {
       evt.preventDefault();
       openMenu();
@@ -68,7 +69,9 @@ export function setupDropdown(triggerId) {
   // Gap 24 (v1.12.0) — keyboard nav inside the open menu. Arrow keys
   // cycle; Home/End jump; Escape closes and returns focus to the
   // trigger; Tab closes without restoring focus (so Tab continues into
-  // the next toolbar item naturally).
+  // the next toolbar item naturally). Left / Right do nothing: the
+  // dropdowns are not side by side, and unhandled they nudged the
+  // selected shape behind the menu (review I2).
   menu.addEventListener('keydown', (evt) => {
     const items = focusables();
     if (!items.length) return;
@@ -85,6 +88,8 @@ export function setupDropdown(triggerId) {
     } else if (evt.key === 'End') {
       evt.preventDefault();
       items[items.length - 1].focus();
+    } else if (evt.key === 'ArrowLeft' || evt.key === 'ArrowRight') {
+      evt.preventDefault();
     } else if (evt.key === 'Escape') {
       evt.preventDefault();
       closeMenu(true);

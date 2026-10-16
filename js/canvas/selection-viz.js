@@ -12,8 +12,8 @@
 // js/selection.js — this module only READS `.selected`. No public exports
 // besides the registration hook; `registerSelectionViz(cctx)` is called once in
 // canvas.init() after cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.25.9';
-import { getBumpLayer } from './crossing-bumps.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { getBumpLayer } from './crossing-bumps.js?v=1.26.1';
 
 // ── Private state ───────────────────────────────────────────────────
 const linkOriginalNext = new WeakMap();   // linkView → original nextSibling (z-order restore)
@@ -151,16 +151,20 @@ const restoreLinkMarkers = (linkView) => {
 // Mirrors the marker-tinting pattern: a per-link-id Set tracks which links are
 // currently tinted; the sweep restores stale entries. Reads the bump layer
 // directly from crossing-bumps.js (the focus-tinting bridge).
+// Idempotent: it tints only arcs not yet tinted. The bump layer is rebuilt from scratch whenever a line moves, so
+// recomputeCrossingBumps re-applies every tint still owed (cctx.retintCrossingBumps, below); with a one-shot tint the
+// arcs of a selected link went back to its own stroke about 400 ms after the click.
 const tintLinkBumps = (linkView) => {
-  if (!getBumpLayer()) return;
   const linkId = linkView?.model?.id;
-  if (!linkId || _bumpsTinted.has(linkId)) return;
+  if (!getBumpLayer() || !linkId) return;
   _bumpsTinted.add(linkId);
+  paintBumps(linkId);
+};
+const paintBumps = (linkId) => {
   const color = getSelectionColor();
   getBumpLayer().querySelectorAll(`[data-link-id="${CSS.escape(String(linkId))}"]`).forEach(el => {
-    if (!el.hasAttribute('data-orig-stroke')) {
-      el.setAttribute('data-orig-stroke', el.getAttribute('stroke') ?? '');
-    }
+    if (el.hasAttribute('data-orig-stroke')) return;
+    el.setAttribute('data-orig-stroke', el.getAttribute('stroke') ?? '');
     el.setAttribute('stroke', color);
   });
 };
@@ -257,6 +261,7 @@ const sweepStaleMarkerTints = (keep) => queueMicrotask(() => {
 // ── Registration: bind the hover/focus listeners to the live paper/graph ─
 export function registerSelectionViz(cctx) {
   const { paper, graph } = cctx;
+  cctx.retintCrossingBumps = () => { if (getBumpLayer()) for (const id of _bumpsTinted) paintBumps(id); };
 
   paper.on('link:mouseenter', (linkView) => {
     bringLinkToFront(linkView);

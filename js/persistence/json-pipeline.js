@@ -1,23 +1,23 @@
 // JSON pipeline — untrusted-graph sanitisation + the load/import path for every
 // Diagramforce file format (single diagram, export bundle, templates), driven by
-// the file picker (importJSON) and the unified Load-from-Paste modal (loadJSONText
+// the Load manager's File and Paste panes and a window drop (loadJSONText
 // + describePastedJSON). Extracted
 // from persistence.js (Phase 3, Slice 2). sanitizeGraphJSON is PURE (consts only)
 // so unit tests reach it through the facade with no init(). Everything else is
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.25.9';
-import { KNOWN_EXT_RE } from './df-format.js?v=1.25.9';
-import { normalizeDateSuffix } from '../util.js?v=1.25.9';
-import { escHtml } from '../util.js?v=1.25.9';
-import { showToast, showError, buildModal } from '../feedback.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
-import { slimForShare } from '../share-codec.js?v=1.25.9';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.26.1';
+import { normalizeDateSuffix } from '../util.js?v=1.26.1';
+import { escHtml } from '../util.js?v=1.26.1';
+import { showToast, showError } from '../feedback.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
+import { slimForShare } from '../share-codec.js?v=1.26.1';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.25.9';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.26.1';
+import { widenZonesForJoinLanes } from '../canvas/join-lanes.js?v=1.26.1';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
@@ -117,7 +117,7 @@ function breakParentCycles(cells) {
  *  Drops unsafe markup, event handlers and script URIs, dangling references and parent loops. `keepUnknownTypes`
  *  (session restore only) leaves cells of an unregistered type in place, so a diagram written by a NEWER release is
  *  kept for the load guard to protect instead of being silently thinned on the next save. */
-export function sanitizeGraphJSON(graphData, { keepUnknownTypes = false } = {}) {
+export function sanitizeGraphJSON(graphData, { keepUnknownTypes = false, stats = null } = {}) {
   if (!graphData || !Array.isArray(graphData.cells)) return graphData;
   if (graphData.cells.length > MAX_CELL_COUNT) {
     throw new Error(`Diagram exceeds maximum element count (${MAX_CELL_COUNT}).`);
@@ -165,11 +165,15 @@ export function sanitizeGraphJSON(graphData, { keepUnknownTypes = false } = {}) 
   // allowlist. Closes the fuzzing surface where a crafted share URL could
   // ship a cell with an unknown `type` that JointJS would silently render
   // with default attrs (or worse, with attrs the app's renderer never
-  // expected to handle). Drop silently — a noisy error would help an
-  // attacker probe the allowlist boundaries.
-  graphData.cells = graphData.cells.filter(c =>
-    c && typeof c === 'object' && typeof c.type === 'string' && (keepUnknownTypes || ALLOWED_CELL_TYPES.has(c.type))
-  );
+  // expected to handle). Name no type — a noisy error would help an
+  // attacker probe the allowlist boundaries. `stats` (an object the caller
+  // passes) gets counts only, so a load can say what it skipped (review D9).
+  if (stats) Object.assign(stats, { unknownShapes: 0, unknownLinks: 0, danglingLinks: 0 });
+  graphData.cells = graphData.cells.filter((c) => {
+    if (c && typeof c === 'object' && typeof c.type === 'string' && (keepUnknownTypes || ALLOWED_CELL_TYPES.has(c.type))) return true;
+    if (stats) { if (c?.source || c?.target) stats.unknownLinks++; else stats.unknownShapes++; }
+    return false;
+  });
   // S5 (v1.15.5) — drop links whose source/target references a cell that isn't
   // present. An LLM-authored diagram frequently names an object in a link that
   // it never actually defines (or mistypes the id) — exactly the Gemini failure
@@ -188,6 +192,7 @@ export function sanitizeGraphJSON(graphData, { keepUnknownTypes = false } = {}) 
     }
     return true;
   });
+  if (stats) stats.danglingLinks = droppedLinkIds.length;
   if (droppedLinkIds.length) {
     console.warn(
       `Diagramforce: skipped ${droppedLinkIds.length} link(s) referencing a missing cell:`,
@@ -256,38 +261,24 @@ export function compactGraphForSave(graphJSON) {
   return out;
 }
 
-export function importJSON() {
-  const input = document.getElementById('file-input');
-  input.onchange = (evt) => {
-    const files = Array.from(evt.target.files);
-    if (!files.length) return;
-    for (const file of files) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const fallbackName = file.name.replace(KNOWN_EXT_RE, '') || 'Imported';
-        await loadJSONText(e.target.result, fallbackName);
-      };
-      reader.readAsText(file);
-    }
-    input.value = '';
-  };
-  input.click();
-}
-
 /** Restore a bundled diagram as a named browser save (collision-safe name).
  *  Non-destructive: doesn't touch open tabs — the diagram lands in
- *  Load → Load from Browser. Sanitises the (untrusted) graph first. */
-function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion, mappingMode) {
+ *  Load → Load from Browser. Sanitises the (untrusted) graph first. The session archive on "Don't load"
+ *  (session-store archiveSessionOnReset) passes the rest: `keepUnknownTypes` keeps cells of a type this build does not
+ *  know (the session may come from a newer release), `overwrite` writes to exactly `name` (the tab's own archive,
+ *  updated in place as a close does), and `extra` adds fields such as the Drive link (the fields below win). */
+export function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion, mappingMode, group = null, { keepUnknownTypes = false, overwrite = false, extra = null } = {}) {
   const { normalizeDiagramType, namedSavePrefix: NAMED_SAVE_PREFIX, appVersion: APP_VERSION } = pctx;
   if (!graphJSON) return false;
-  try { sanitizeGraphJSON(graphJSON); } catch { return false; }
+  try { sanitizeGraphJSON(graphJSON, { keepUnknownTypes }); } catch { return false; }
   const base = normalizeDateSuffix(String(name || 'Imported')).slice(0, 80) || 'Imported';
-  let finalName = base;
-  for (let n = 2; localStorage.getItem(NAMED_SAVE_PREFIX + finalName) !== null; n++) {
+  let finalName = overwrite ? String(name) : base;
+  for (let n = 2; !overwrite && localStorage.getItem(NAMED_SAVE_PREFIX + finalName) !== null; n++) {
     finalName = `${base} (${n})`;
   }
   try {
     localStorage.setItem(NAMED_SAVE_PREFIX + finalName, JSON.stringify({
+      ...(extra || {}),
       name: finalName,
       timestamp: Date.now(),
       diagramType: normalizeDiagramType(diagramType),
@@ -297,6 +288,8 @@ function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion
       // Preserve the diagram's original version so re-imports stay honest;
       // fall back to the current app version when the source carried none.
       appVersion: appVersion || APP_VERSION,
+      // An archive's tab-group meta (#7), so loading it later rejoins the group it was closed from.
+      ...(group ? { group } : {}),
     }));
     return true;
   } catch (err) {
@@ -305,23 +298,59 @@ function restoreDiagramAsSave(name, diagramType, graphJSON, viewport, appVersion
   }
 }
 
+/** The import dedup key: the content signature of the COMPACTED cells. Exports and named saves are compacted, an open
+ *  tab's graph is live (`angle: 0`, default sizes, ports, icon art), so signing raw cells never matched an open tab.
+ *  compactGraphForSave deep-clones: the graph passed in is never touched. A null or non-object cell is dropped first,
+ *  as sanitizeGraphJSON drops it: slimForShare reads `cell.attrs` and threw on one, before the per-diagram try, so one
+ *  null cell lost a whole bundle import with no message (review R1). */
+export function importSignature(cells) {
+  const objects = Array.isArray(cells) ? cells.filter((c) => c && typeof c === 'object') : [];
+  return contentSignature(compactGraphForSave({ cells: objects }).cells);
+}
+
+/** An archive's `group` meta ({name, icon, color}) from an untrusted file, or null. A bare string is a group-bundle
+ *  TAG, not meta (splitGroupBundle). */
+function groupMetaOf(g) {
+  if (!g || typeof g !== 'object' || typeof g.name !== 'string' || !g.name) return null;
+  return { name: g.name.slice(0, 60), icon: typeof g.icon === 'string' ? g.icon : null, color: typeof g.color === 'string' ? g.color : null };
+}
+
+/**
+ * Split a `kind:'group'` bundle's diagrams. A diagram TAGGED with a group name reopens as a tab in that group; an
+ * untagged one follows the plain bundle rule (dedup, then browser saves). A file that tags no diagram is a legacy group
+ * export, so all of them go to its group. `backup` = tagged and untagged together: only a full backup writes that
+ * ("Export group" tags every diagram), and a backup restored into the browser that made it must not duplicate the
+ * grouped tabs still open there. A backup since 2026-10-15 also says so (`backup: true`, read by loadJSONText): one
+ * whose every tab is grouped, with no archive, has no untagged entry to tell it apart. Before this split, every untagged entry of a backup (ungrouped tabs, every closed
+ * archive) opened as a tab and, with one group in the file, joined it (review D1, 2026-10-15).
+ */
+export function splitGroupBundle(diagrams) {
+  const all = Array.isArray(diagrams) ? diagrams : [];
+  const isTagged = (d) => typeof d?.group === 'string' && d.group !== '';
+  const grouped = all.filter(isTagged);
+  if (!grouped.length) return { grouped: all, loose: [], backup: false, tagged: false };
+  const loose = all.filter((d) => !isTagged(d));
+  return { grouped, loose, backup: loose.length > 0, tagged: true };
+}
+
 /** Content-signature + name sets of every existing diagram (open tabs + named
  *  saves) — the dedup reference for an import. */
 function collectExistingDiagrams() {
   const { getAllTabs: getAllTabsCallback, getTabGraph: getTabGraphCallback, getNamedSaves, readNamedSave } = pctx;
   const sigs = new Set();
   const names = new Set();
+  const tabSigs = new Set();   // open tabs only: what a backup's grouped diagrams are checked against
   for (const t of (getAllTabsCallback ? getAllTabsCallback() : [])) {
     if (t.name) names.add(t.name);
     const g = getTabGraphCallback ? getTabGraphCallback(t.id) : null;
-    if (g?.cells) sigs.add(contentSignature(g.cells));
+    if (g?.cells) { const sig = importSignature(g.cells); sigs.add(sig); tabSigs.add(sig); }
   }
   for (const s of getNamedSaves()) {
     names.add(s.name);
     const d = readNamedSave(s.key);
-    if (d?.graph?.cells) sigs.add(contentSignature(d.graph.cells));
+    if (d?.graph?.cells) sigs.add(importSignature(d.graph.cells));
   }
-  return { sigs, names };
+  return { sigs, names, tabSigs };
 }
 
 /** Tell the user which diagrams of a multi-diagram file were skipped, and why. */
@@ -344,7 +373,7 @@ function prepareImportedDiagrams(rawDiagrams) {
   for (const d of rawDiagrams) {
     const cells = d?.graph?.cells;
     if (!Array.isArray(cells)) continue;
-    const sig = contentSignature(cells);
+    const sig = importSignature(cells);
     if (sigs.has(sig) || seen.has(sig)) continue;   // exact duplicate → skip
     seen.add(sig);
     // A throw here (over MAX_CELL_COUNT, nested too deeply) used to escape loadJSONText and abort EVERY diagram and
@@ -354,9 +383,61 @@ function prepareImportedDiagrams(rawDiagrams) {
     let name = String(d.name || 'Imported').slice(0, 80) || 'Imported';
     if (names.has(name)) name = `${name} (Restored)`;
     names.add(name);
-    out.push({ name, diagramType: normalizeDiagramType(d.diagramType), mappingMode: d.mappingMode || false, graph: d.graph, viewport: d.viewport || null, appVersion: d.appVersion || null });
+    out.push({ name, diagramType: normalizeDiagramType(d.diagramType), mappingMode: d.mappingMode || false, graph: d.graph, viewport: d.viewport || null, appVersion: d.appVersion || null, group: groupMetaOf(d.group) });
   }
   return out;
+}
+
+/** Dedup a bundle's diagrams, then land the new ones as browser saves. Reports skipped-as-unloadable diagrams and
+ *  full storage itself. Returns `{ saved, storageFull, rejected }` (counts). */
+function saveBundleDiagrams(rawDiagrams, bundleAppVersion) {
+  const diagrams = prepareImportedDiagrams(rawDiagrams);   // dedup + rename + sanitise
+  if (diagrams.rejected.length) reportRejected(diagrams.rejected);
+  let saved = 0;
+  let storageFull = 0;
+  for (const d of diagrams) {
+    // Preserve each diagram's own version, else the bundle's, else current.
+    const r = restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || bundleAppVersion, d.mappingMode, d.group);
+    if (r === true) saved++;
+    else if (r === 'quota') storageFull++;
+  }
+  // A save that failed on FULL STORAGE is not an "already saved" skip - the summary would say it was.
+  if (storageFull) showError(`Browser storage is full: ${storageFull} diagram${storageFull === 1 ? '' : 's'} from this file could not be saved. Free some space (Close & Delete) and import it again.`);
+  return { saved, storageFull, rejected: diagrams.rejected.length };
+}
+
+/** Merge a file's templates into My Templates. Returns importTemplatesArray's tally `{ added, duplicates, full,
+ *  invalid }`, so the summary and toasts can say why a template did not land (review D10). */
+function mergeTemplates(rawTemplates) {
+  const { templatesBackupApi } = pctx;
+  const ts = { added: 0, duplicates: 0, full: 0, invalid: 0 };
+  if (rawTemplates.length && templatesBackupApi?.importMerge) ts.added = templatesBackupApi.importMerge(rawTemplates, ts) || 0;
+  return ts;
+}
+
+/** The import summary's template lines, from mergeTemplates' tally. */
+const templateStats = (ts) => ({ templates: ts.added, templatesSkipped: ts.duplicates, templatesFull: ts.full, templatesInvalid: ts.invalid });
+
+/**
+ * The warning a single-diagram load or replace shows, or null when it has nothing to warn about (review D9).
+ * `stats` is sanitizeGraphJSON's; `rawType` is the diagramType the file named. A named type normalizeDiagramType does
+ * not know falls back to Architecture, so the warning says so. Counts only, never cell type names: the allowlist
+ * stays unprobed, and `npm run validate` names them.
+ */
+export function loadWarning(verb, name, stats, rawType) {
+  const n = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
+  const items = [];
+  if (stats.unknownShapes) items.push(`${n(stats.unknownShapes, 'shape')} of an unknown type`);
+  if (stats.unknownLinks) items.push(`${n(stats.unknownLinks, 'connector')} of an unknown type`);
+  if (stats.danglingLinks) items.push(`${n(stats.danglingLinks, 'connector')} ${stats.unknownShapes ? 'to a missing shape' : "pointing to a shape that isn't in the file"}`);
+  const list = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0];
+  const raw = rawType == null ? '' : String(rawType);
+  const unknownType = raw !== '' && raw.toLowerCase() !== 'architecture' && pctx.normalizeDiagramType(raw) === 'architecture';
+  if (unknownType) {
+    return `${verb} "${name}" as Architecture: the file's diagramType "${raw.slice(0, 40)}" is not one Diagramforce knows.`
+      + (list ? ` Skipped ${list}.` : '');
+  }
+  return list ? `${verb} "${name}" - skipped ${list}.` : null;
 }
 
 /**
@@ -366,20 +447,37 @@ function prepareImportedDiagrams(rawDiagrams) {
  *     opens so the user sees them); templates merged into the library.
  *   - `diagramforce-templates`: merged into the template library.
  *   - single diagram (`{graph,…}`): opened as a new tab (the original behaviour).
- * Used by `importJSON` (file picker) and the unified Load-from-Paste modal. Returns
+ * Used by the Load manager's File and Paste panes, a window drop and the postMessage import. Returns
  * true on success.
  */
+/** An imported Data Mapping's zones grow by the room its join lanes need (join-lanes.js): SQL Studio 1.4.0 sends 48 px
+ *  of padding, so the outer lanes drew on or past the dashed border. Imports only; a session restore keeps its zones. */
+function fitJoinLanes(graph, diagramType) {
+  if (diagramType === 'datamapping' && Array.isArray(graph?.cells)) widenZonesForJoinLanes(graph.cells);
+}
+
 export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly = false } = {}) {
   const { templatesBackupApi, showLoadModal: showLoadModalCallback, onImport: onImportCallback, normalizeDiagramType, graph, canvas: canvasModule } = pctx;
   let data;
   try { data = JSON.parse(jsonText); }
   catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
 
-  const okVer = await checkVersionWarning(data.appVersion || null, String(data.title || fallbackName || 'Imported'), data);
+  const isBundle = data?.schema === 'diagramforce-export' || data?.schema === 'diagramforce-diagrams'
+    || (Array.isArray(data?.diagrams) && !data.graph);
+  // Classify BEFORE the version check (review D8): a JSON that is no Diagramforce document has no appVersion, so it
+  // raised the major "Compatibility Warning" first and only then "No graph data found".
+  if (!isBundle && !data?.graph && !Array.isArray(data?.cells) && !Array.isArray(data?.templates)
+      && data?.schema !== 'diagramforce-templates') {
+    showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: No graph data found in JSON.`);
+    return false;
+  }
+
+  // Inside a try: a throw here rejected loadJSONText, and Paste > Load's click handler does not catch it.
+  let okVer;
+  try { okVer = await checkVersionWarning(data.appVersion || null, String(data.title || fallbackName || 'Imported'), data); }
+  catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
   if (!okVer) return false;
 
-  const isBundle = data.schema === 'diagramforce-export' || data.schema === 'diagramforce-diagrams'
-    || (Array.isArray(data.diagrams) && !data.graph);
   // A `kind:'group'` bundle (from "Export group") round-trips a whole working set:
   // recreate the group(s) and open each diagram as a grouped tab, rather than the
   // default bundle behaviour (land diagrams in browser saves).
@@ -393,13 +491,20 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     return false;
   }
 
-  // ── Group bundle: recreate the group + open its diagrams as grouped tabs ──
+  // ── Group bundle: recreate the group(s) + open the TAGGED diagrams as grouped tabs ──
+  // Untagged diagrams (a full backup's ungrouped tabs and closed archives) follow the plain bundle rule instead.
   if (isGroupBundle) {
     const { normalizeDiagramType, onImportGroup } = pctx;
+    const { grouped, loose, backup: mixed, tagged } = splitGroupBundle(data.diagrams);
+    // Back up now writes `backup: true`. The tag mix alone misses a backup whose every entry is a grouped tab (R2).
+    const backup = data.backup === true || mixed;
+    const openSigs = backup ? collectExistingDiagrams().tabSigs : null;
     const diagrams = [];
     const rejected = [];
-    for (const d of (Array.isArray(data.diagrams) ? data.diagrams : [])) {
+    let alreadyOpen = 0;
+    for (const d of grouped) {
       if (!Array.isArray(d?.graph?.cells)) continue;
+      if (openSigs && openSigs.has(importSignature(d.graph.cells))) { alreadyOpen++; continue; }
       // drop endpoint-less links etc. (same as every import path); one unloadable diagram is skipped, not fatal
       try { sanitizeGraphJSON(d.graph); }
       catch (err) { rejected.push({ name: String(d.name || 'Imported'), reason: err.message }); continue; }
@@ -409,19 +514,36 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
         mappingMode: d.mappingMode || false,
         graph: d.graph,
         viewport: d.viewport || null,
-        group: d.group || null,
+        group: typeof d.group === 'string' ? d.group.slice(0, 60) : null,   // cut like the group names below, so they match
         appVersion: d.appVersion || data.appVersion || null,
       });
     }
     if (rejected.length) reportRejected(rejected);
-    if (diagrams.length === 0) { if (!rejected.length) showToast('No diagrams found in that group file.', 'warning'); return true; }
     const groupMetas = data.groups.map(g => ({ name: String(g.name || 'Group').slice(0, 60), icon: g.icon || null, color: g.color || null }));
-    onImportGroup(groupMetas, diagrams);
+    // Recreate only the groups something opens into, or a backup restored where its grouped tabs are still open
+    // leaves an empty "Project X 2". An untagged (legacy) file keeps its groups: its sole group takes every diagram.
+    const usedMetas = tagged ? groupMetas.filter((gm) => diagrams.some((d) => d.group === gm.name)) : groupMetas;
+    if (diagrams.length) onImportGroup(usedMetas, diagrams);
+    const looseResult = loose.length ? saveBundleDiagrams(loose, data.appVersion) : { saved: 0, storageFull: 0, rejected: 0 };
     // A full backup can be a kind:'group' bundle that ALSO carries templates - import them too so a restore
     // doesn't silently drop the user's template library (item 4).
-    const tc = (Array.isArray(data.templates) && data.templates.length && templatesBackupApi?.importMerge)
-      ? (templatesBackupApi.importMerge(data.templates) || 0) : 0;
-    const gLabel = groupMetas.length === 1 ? `group "${groupMetas[0].name}"` : `${groupMetas.length} groups`;
+    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : []);
+    const tc = ts.added;
+    // A backup: the Load > Browser summary says what opened, what was saved and what was already here.
+    if (backup && showLoadModalCallback) {
+      showLoadModalCallback({
+        opened: diagrams.length,
+        imported: looseResult.saved,
+        skipped: alreadyOpen + Math.max(0, loose.length - looseResult.saved - looseResult.storageFull - looseResult.rejected),
+        ...templateStats(ts),
+      });
+      return true;
+    }
+    if (diagrams.length === 0) {
+      if (!rejected.length) showToast('No diagrams found in that group file.', 'warning');
+      return true;
+    }
+    const gLabel = usedMetas.length === 1 ? `group "${usedMetas[0].name}"` : `${usedMetas.length} groups`;
     const tLabel = tc ? ` + ${tc} template${tc === 1 ? '' : 's'}` : '';
     showToast(`Imported ${gLabel} - ${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'}${tLabel} ✓`, 'success');
     return true;
@@ -440,40 +562,31 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     if (rawDiagrams.length === 1 && rawTemplates.length === 0 && onImportCallback) {
       const d = rawDiagrams[0];
       if (Array.isArray(d?.graph?.cells)) {
-        try { sanitizeGraphJSON(d.graph); }
+        const stats = {};
+        try { sanitizeGraphJSON(d.graph, { stats }); }
         catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
+        fitJoinLanes(d.graph, normalizeDiagramType(d.diagramType));
         const nm = String(d.name || d.title || fallbackName || 'Imported').slice(0, 80) || 'Imported';
         // #7: a 1-diagram bundle's per-diagram `group` is a bare NAME tag (bundle meta lives in data.groups, handled
         // by the onImportGroup path above) - wrap it so recreate-or-rejoin works by name.
         const grp = typeof d.group === 'string' ? { name: d.group } : (d.group || null);
         onImportCallback(nm, normalizeDiagramType(d.diagramType), d.graph, d.viewport || null, d.mappingMode || false, null, grp);
-        showToast(`Loaded "${nm}" ✓`, 'success');
+        const warning = loadWarning('Loaded', nm, stats, d.diagramType);
+        if (warning) showToast(warning, 'warning', { duration: 8000 });
+        else showToast(`Loaded "${nm}" ✓`, 'success');
         return true;
       }
     }
-    const diagrams = prepareImportedDiagrams(rawDiagrams);   // dedup + rename + sanitise
-    if (diagrams.rejected.length) reportRejected(diagrams.rejected);
-
-    let saved = 0;
-    let storageFull = 0;
-    for (const d of diagrams) {
-      // Preserve each diagram's own version, else the bundle's, else current.
-      const r = restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || data.appVersion, d.mappingMode);
-      if (r === true) saved++;
-      else if (r === 'quota') storageFull++;
-    }
-    // A save that failed on FULL STORAGE is not an "already saved" skip - the summary below would say it was.
-    if (storageFull) showError(`Browser storage is full: ${storageFull} diagram${storageFull === 1 ? '' : 's'} from this file could not be saved. Free some space (Close & Delete) and import it again.`);
-    const tc = (rawTemplates.length && templatesBackupApi?.importMerge)
-      ? (templatesBackupApi.importMerge(rawTemplates) || 0) : 0;
+    const { saved, storageFull, rejected } = saveBundleDiagrams(rawDiagrams, data.appVersion);
+    const ts = mergeTemplates(rawTemplates);
+    const tc = ts.added;
 
     // Import tally. "skipped" = file entries that did NOT become new saves
     // because an exact content-copy is already open (as a tab) or saved here.
     const stats = {
       imported: saved,
-      skipped: Math.max(0, rawDiagrams.length - saved - storageFull - diagrams.rejected.length),
-      templates: tc,
-      templatesSkipped: Math.max(0, rawTemplates.length - tc),
+      skipped: Math.max(0, rawDiagrams.length - saved - storageFull - rejected),
+      ...templateStats(ts),
     };
 
     // If the file carried diagrams, reveal the Load-from-Browser modal and let
@@ -504,9 +617,18 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
   // ── Templates-only file ──
   if (isTemplatesOnly) {
     if (!templatesBackupApi?.importMerge) { showError('Templates import is unavailable.'); return false; }
-    const n = templatesBackupApi.importMerge(data.templates || []) || 0;
+    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : []);
+    const n = ts.added;
+    const tpl = (k) => `${k} template${k === 1 ? '' : 's'}`;
+    // A re-imported export is not "no valid templates" (review D10): say it is already here, or that the library is full.
+    if (n === 0 && ts.full) return false;   // importTemplatesArray has already said the library is full
+    if (n === 0 && ts.duplicates) {
+      showToast(`Nothing new to import: ${tpl(ts.duplicates)} already in your library${ts.invalid ? `, ${ts.invalid} could not be read` : ''}.`, 'info');
+      return true;
+    }
     if (n === 0) { showError('No valid templates found in that file.'); return false; }
-    showToast(`Imported ${n} template${n === 1 ? '' : 's'} ✓`, 'success');
+    if (ts.full) showToast(`Imported ${tpl(n)} - your template library is full, ${ts.full} more not imported.`, 'warning');
+    else showToast(`Imported ${tpl(n)} ✓`, 'success');
     return true;
   }
 
@@ -519,23 +641,18 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     data = { ...rest, graph: { cells } };
   }
   try {
-    // `name` is the envelope a NAMED BROWSER SAVE uses (saveSingleTab writes {name, …}); `title` is
+    // `name` is the envelope a NAMED BROWSER SAVE uses (restoreDiagramAsSave writes {name, …}); `title` is
     // what an authored/exported file carries. Preferring both over the filename matters for the
     // domain-move rescue path, where the old host hands over raw named saves as .dgf files - without
     // this the tab was labelled "Marketing Journey.dgf", extension and all, instead of its real name.
     // String(): a numeric <label> in a Flow XML, or a numeric title in any JSON, became a numeric tab name, and the
     // tab bar's `.trim()` threw on it (audit 2026-09-23).
     const name = String(data.title || data.name || fallbackName || 'Imported');
-    // Count endpoint-links before/after sanitise so we can tell the user how many
-    // pointed at a missing shape and were skipped (the common LLM-output error) —
-    // the diagram still loads instead of failing wholesale.
-    const countLinks = (g) => (g?.cells || []).filter((c) => c && (c.source || c.target)).length;
-    let droppedLinks = 0;
-    if (data?.graph) {
-      const before = countLinks(data.graph);
-      sanitizeGraphJSON(data.graph);   // a throw lands in the catch below, which reports it
-      droppedLinks = Math.max(0, before - countLinks(data.graph));
-    }
+    // What sanitise skipped (unknown-type cells, links to a missing shape - the common LLM-output errors), so the
+    // user is told while the diagram still loads instead of failing wholesale.
+    const stats = { unknownShapes: 0, unknownLinks: 0, danglingLinks: 0 };
+    if (data?.graph) sanitizeGraphJSON(data.graph, { stats });   // a throw lands in the catch below, which reports it
+    if (data?.graph) fitJoinLanes(data.graph, normalizeDiagramType(data.diagramType));
     if (onImportCallback && data?.graph) {
       // #7: a single-diagram file can carry its tab-group meta ({name,icon,color}) so import recreate-or-rejoins it.
       onImportCallback(name, normalizeDiagramType(data.diagramType), data.graph, data.viewport, data.mappingMode, null, data.group || null);
@@ -546,15 +663,9 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     } else {
       throw new Error('No graph data found in JSON.');
     }
-    if (droppedLinks > 0) {
-      showToast(
-        `Loaded "${name}" - skipped ${droppedLinks} connector${droppedLinks === 1 ? '' : 's'} `
-        + `pointing to a shape that isn't in the file.`,
-        'warning',
-      );
-    } else {
-      showToast(`Loaded "${name}" ✓`, 'success');
-    }
+    const warning = loadWarning('Loaded', name, stats, data.diagramType);
+    if (warning) showToast(warning, 'warning', { duration: 8000 });
+    else showToast(`Loaded "${name}" ✓`, 'success');
     return true;
   } catch (err) {
     showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`);
@@ -608,16 +719,16 @@ export async function replaceActiveWithJSONText(jsonText) {
   }
   const okVer = await checkVersionWarning(d.appVersion || null, String(d.name || 'Pasted'), data);
   if (!okVer) return false;
-  const countLinks = (g) => (g?.cells || []).filter((c) => c && (c.source || c.target)).length;
-  const linksBefore = countLinks(d.graph);
-  try { sanitizeGraphJSON(d.graph); }
+  const stats = {};
+  try { sanitizeGraphJSON(d.graph, { stats }); }
   catch (err) { showError(`Failed to load the pasted diagram: ${err.message}`); return false; }
-  const droppedLinks = Math.max(0, linksBefore - countLinks(d.graph));
+  fitJoinLanes(d.graph, normalizeDiagramType(d.diagramType));
   if (!onReplaceContent) { showError('Replace is unavailable.'); return false; }
   const name = tabNameCb ? tabNameCb() : 'Diagram';
   return onReplaceContent(d.graph, () => {
-    if (droppedLinks > 0) {
-      showToast(`Replaced "${name}" - skipped ${droppedLinks} connector${droppedLinks === 1 ? '' : 's'} pointing to a shape that isn't in the file.`, 'warning');
+    const warning = loadWarning('Replaced', name, stats, d.diagramType);
+    if (warning) {
+      showToast(warning, 'warning', { duration: 8000 });
     } else {
       showToast(`Replaced "${name}" ✓ - Undo brings the old version back.`, 'success');
     }
@@ -625,11 +736,7 @@ export async function replaceActiveWithJSONText(jsonText) {
 }
 
 /**
- * Paste-from-JSON modal: shows a textarea, validates the input is parseable
- * JSON with a `graph` field, and loads it via the same pipeline as `importJSON`.
- */
-/**
- * Classify pasted text as Diagramforce JSON (single diagram / export bundle / templates file) for the unified
+ * Classify pasted text as Diagramforce JSON (single diagram, bare `{cells}` graph, export bundle, templates file) for the unified
  * Load-from-Paste modal's live feedback. Returns { ok: true, label } (HTML, safe to inject) or { ok: false,
  * error } (plain text). The same shapes `loadJSONText` accepts. Mermaid is detected separately (mermaid-import).
  */
@@ -651,6 +758,12 @@ export function describePastedJSON(text) {
     // `rawType` = the diagramType string as it appears in the pasted JSON (may be an alias, e.g. "organization");
     // `diagramType` = the normalised internal type. The Paste pane shows "rawType → friendly label".
     return { ok: true, diagramType: norm, rawType: String(data.diagramType || norm), ...single, label: `<strong>${escHtml(data.title || 'Untitled')}</strong> (${escHtml(norm)}, ${data.graph.cells.length} cells)` };
+  }
+  // A bare graph ({cells}, no envelope) is one diagram, as loadJSONText and singleDiagramOf take it (1.25.0). This
+  // gate called it "Unrecognised format", so it opened by file and not from the paste box (review D6).
+  if (!data?.graph && Array.isArray(data?.cells) && one) {
+    const norm = normalizeDiagramType(data.diagramType);
+    return { ok: true, diagramType: norm, rawType: String(data.diagramType || norm), ...single, label: `<strong>${escHtml(data.title || data.name || 'Untitled')}</strong> (${escHtml(norm)}, ${data.cells.length} cells)` };
   }
   if (isBundle) {
     const dN = Array.isArray(data.diagrams) ? data.diagrams.length : 0;

@@ -95,10 +95,3 @@ export function registerCellTooltip(cctx) {
   // A deleted card must not leave its tip behind.
   graph?.on('remove', hideTip);
 }
-
-/** Test seam: tear the tip down. */
-export function _resetCellTooltip() {
-  hideTip();
-  tipEl?.remove();
-  tipEl = null;
-}

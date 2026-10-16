@@ -4,14 +4,15 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.25.9';
-import { showNewDiagramModal } from './new-diagram-modal.js?v=1.25.9';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getStorageFootprint, isQuotaError, normalizeDiagramType, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.25.9';
-import { forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.25.9';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.25.9';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.25.9';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { tbctx } from './context.js?v=1.26.1';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './new-diagram-modal.js?v=1.26.1';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getNamedSaves, getStorageFootprint, importSignature, isQuotaError, normalizeDiagramType, restoreDiagramAsSave, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.26.1';
+import { ARCHIVE_DRIVE_FIELDS, archiveDedupName, driveIdentityOf, forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.26.1';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.1';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.26.1';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
+import { noteDeviceOnlyEdit } from './device-only.js?v=1.26.1';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -135,6 +136,9 @@ export function saveTabs({ force = false } = {}) {
   // loading in parallel (loadFromURL runs regardless) used to save straight over it - and the prompt's own "Export JSON"
   // backup then exported the share tab instead (audit 2026-09-23). Writes resume once the user decides.
   if (_holdForVersionPrompt) return;
+  // Declared out here so the quota retry below can reach it: a `const` inside the try did not exist in the catch, so
+  // the retry always threw a ReferenceError and every recovery ended in "backup paused" (review S2-1).
+  let payload;
   try {
     // Save lightweight tab metadata (not graph data — that's per-tab autosave)
     const data = tabs.map(t => ({ id: t.id, name: t.name, dirty: t.dirty }));
@@ -153,6 +157,8 @@ export function saveTabs({ force = false } = {}) {
       lastSaveType: t.lastSaveType || null,
       lastModifiedAt: t.lastModifiedAt || null,
       browserSaveName: t.browserSaveName || null,   // Save Manager "In Browser" chip survives a reload
+      deviceOnlySince: t.deviceOnlySince || null,   // the device-only prompt's clock (device-only.js)
+      deviceOnlyPrompted: !!t.deviceOnlyPrompted,
       // Google Drive sync state (Phase 2) — ONE canonical field list (serializeDriveFields) shared with the restore
       // path below, so a synced tab keeps syncing after a reload and no drive field can silently drift out of sync.
       ...serializeDriveFields(t),
@@ -163,7 +169,7 @@ export function saveTabs({ force = false } = {}) {
       graphJSON: (t.id === tbctx.activeTabId && !t.loadFailed) ? compactGraphForSave(graph.toJSON()) : compactTabGraph(t.graphJSON),
       viewport: t.id === tbctx.activeTabId ? canvasModule.getViewport() : t.viewport,
     }));
-    const payload = JSON.stringify({ ...meta, tabs: full });
+    payload = JSON.stringify({ ...meta, tabs: full });
     localStorage.setItem(STORAGE_KEY, payload);
     _backupHealthy = true;
     // CR-7.1 / Gap 32 (v1.12.0) — proactive pressure check, sampled every
@@ -178,10 +184,10 @@ export function saveTabs({ force = false } = {}) {
     // it's the first to hit the wall. Before pausing (which silently drops recent edits until reload), do what
     // the NAMED-SAVE path does: shed redundant Drive-backed archives (recoverable from Drive) and retry the
     // write ONCE. Only if the retry still fails do we warn + pause (throttled to once per session).
-    if (isQuotaError(err)) {
+    if (isQuotaError(err) && payload !== undefined) {   // only setItem raises a quota error, so payload is built
       try {
         evictRedundantArchives(0);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...meta, tabs: full }));
+        localStorage.setItem(STORAGE_KEY, payload);
         _backupHealthy = true;
         return;   // recovered - the backup is current again
       } catch (e2) {
@@ -310,6 +316,8 @@ function doRestoreTabData(sessionData) {
         lastModifiedAt: t.lastModifiedAt || t.lastSavedAt
           || (t.graphJSON?.cells?.length > 0 ? Date.now() : null),
         browserSaveName: t.browserSaveName || null,
+        deviceOnlySince: Number.isFinite(t.deviceOnlySince) ? t.deviceOnlySince : null,
+        deviceOnlyPrompted: !!t.deviceOnlyPrompted,
         // Same canonical Drive-field list as saveTabs (serializeDriveFields) — the two can't drift.
         ...serializeDriveFields(t),
       });
@@ -369,21 +377,37 @@ export function restoreTabs() {
       // Major version mismatch — ask user whether to reset or try loading. Session writes are HELD until the answer
       // (see saveTabs), so a share link opening meanwhile cannot overwrite the old session first.
       _holdForVersionPrompt = true;
-      showSessionVersionWarning(savedVersion, 'major').then(tryLoad => {
-        _holdForVersionPrompt = false;
+      const ask = (note) => showSessionVersionWarning(savedVersion, 'major', note).then(({ tryLoad, exported }) => {
         if (tryLoad) {
+          // The restore below always leaves a tab, so no New Diagram modal may stay over it (review S2-2).
+          dismissNewDiagramModal();
+          _holdForVersionPrompt = false;
           const opened = tbctx.activeTabId;   // a tab loadFromURL opened while the prompt was up, if any
           if (opened) saveCurrentTabState();
           doRestoreTabData(data);
           if (opened && tbctx.activeTabId !== opened) activateTab(opened, false);   // keep the shared diagram on screen
           saveTabs(); // stamp current version so warning doesn't repeat
+          tbctx.notifyChange();   // the View menu and stencil follow the restored active tab, not the empty session
         } else {
+          // "Don't load" keeps each diagram as a browser save stamped with its OLD version, so Load still warns before
+          // opening one (rule 4.11). Removing the key used to be the end of every diagram never archived (review C6).
+          const { kept, failed } = archiveSessionOnReset(data, savedVersion);
+          // A diagram that did not fit (a near-full store: each archive is written while the session is still stored)
+          // must not be lost in silence (review R7). Keep the session, writes still held, and ask again: Export JSON
+          // downloads it, Try Anyway loads it. After an export, Don't load goes ahead.
+          if (failed && !exported) {
+            ask(`Browser storage is full: ${failed} diagram${failed === 1 ? '' : 's'} from your last session could not be kept. Choose Export JSON to download ${failed === 1 ? 'it' : 'them'}, then Don't load, or choose Try Anyway.`);
+            return;
+          }
+          _holdForVersionPrompt = false;
           localStorage.removeItem(STORAGE_KEY);
+          if (kept) showToast(`${kept} diagram${kept === 1 ? '' : 's'} from your last session ${kept === 1 ? 'is' : 'are'} in Load > Browser.`, 'info');
           if (tabs.length) saveTabs();   // the share-link tab (if any) was held back until now
           else if (!persistenceModule.hasPendingUrlLoad?.()) showNewDiagramModal();   // don't stack over an Open-with / share load (A2)
         }
         render();
       });
+      ask('');
       return;
     }
 
@@ -403,6 +427,43 @@ export function restoreTabs() {
   }
 }
 
+/** "Don't load" on the MAJOR-version prompt: keep every content-bearing tab of the old session as a browser save,
+ *  stamped with the OLD version so Load still warns (rule 4.11). Written like a close archive (archiveTabToBrowser):
+ *  the tab's own archive, or the one mirroring its Drive file, is updated in place (archiveDedupName), and the tab's
+ *  group and Drive link ride along, so opening it later re-links instead of minting a second Drive master. Any other
+ *  tab whose content is already a browser save is not written again, which also makes a retry write only what failed.
+ *  Each tab used to land as a new "Name (2)" copy with no group and no Drive link (review R8). Returns
+ *  { kept, failed }. */
+function archiveSessionOnReset(data, savedVersion) {
+  const all = (Array.isArray(data.tabs) ? data.tabs : []).filter(Boolean);
+  const saves = getNamedSaves();
+  const stored = new Set();
+  for (const s of saves) {
+    try { const cells = JSON.parse(localStorage.getItem(s.key))?.graph?.cells; if (Array.isArray(cells)) stored.add(importSignature(cells)); }
+    catch { /* an unreadable save matches nothing */ }
+  }
+  const groups = new Map((Array.isArray(data.groups) ? data.groups : []).filter(Boolean).map((g) => [g.id, g]));
+  const reused = [];   // archives this pass updated in place: never a second tab's too
+  let kept = 0, failed = 0;
+  for (const t of all) {
+    if (!t.graphJSON?.cells?.length) continue;
+    const sig = importSignature(t.graphJSON.cells);
+    const otherOpenSaveNames = [...all.filter((o) => o !== t).map((o) => o.browserSaveName), ...reused];
+    const dd = archiveDedupName({ browserSaveName: t.browserSaveName, driveKey: driveIdentityOf(t), saves, otherOpenSaveNames });
+    if (!dd.reuse && stored.has(sig)) { kept++; continue; }
+    const g = t.groupId != null ? groups.get(t.groupId) : null;
+    const drive = { tabName: t.name };   // reopened under this when Drive-linked, not a reused dated name (S1-3)
+    for (const f of ARCHIVE_DRIVE_FIELDS) if (t[f]) drive[f] = t[f];
+    // A copy to sanitise: "Try Anyway" on a repeated prompt restores `data` as stored.
+    const r = restoreDiagramAsSave(dd.reuse || t.name, t.diagramType, JSON.parse(JSON.stringify(t.graphJSON)), t.viewport, savedVersion,
+      t.mappingMode, g ? { name: g.name, icon: g.icon || null, color: g.color || null } : null,
+      { keepUnknownTypes: true, overwrite: !!dd.reuse, extra: drive });
+    if (r === true) { kept++; stored.add(sig); if (dd.reuse) reused.push(dd.reuse); }
+    else { failed++; noteError('session:archive-on-reset', new Error(String(r))); }
+  }
+  return { kept, failed };
+}
+
 // Set during session restore when the saved session was from an OLDER release: { fromVersion, diff }, else null.
 // app.js reads it to drive the What's-New overlay (a returning user updating in from a pre-What's-New release has no
 // seen-key, so the session version is the only reliable "last release I ran" signal). Captured BEFORE saveTabs()
@@ -410,15 +471,18 @@ export function restoreTabs() {
 let _sessionUpdate = null;
 // True while the major-version prompt waits for an answer - session writes are held (see saveTabs).
 let _holdForVersionPrompt = false;
+/** The major-version prompt holds the session: render()'s zero-tab safety net must not open New Diagram under it. */
+export function isHoldingForVersionPrompt() { return _holdForVersionPrompt; }
 /** The version update detected on this session restore ({ fromVersion, diff:'minor'|'major' }) or null. */
 export function getSessionUpdate() { return _sessionUpdate; }
 
 /**
  * Show a warning when the auto-saved session version differs. Now used for MAJOR only (a reset decision) — a MINOR
  * update no longer shows this inline notice; the richer What's-New overlay (app.js) supersedes it.
- * For major: returns Promise<boolean> — true = try loading, false = reset.
+ * For major: returns Promise<{ tryLoad, exported }> - tryLoad true = try loading, false = reset; exported = Export JSON
+ * ran. `note` (plain text) leads the body: why the prompt is back (a "Don't load" that could not keep everything).
  */
-function showSessionVersionWarning(savedVersion, diff) {
+function showSessionVersionWarning(savedVersion, diff, note = '') {
   const { tabs } = tbctx;
   const { persistence: persistenceModule, graph } = tbctx.modules;
   return new Promise(resolve => {
@@ -445,15 +509,18 @@ function showSessionVersionWarning(savedVersion, diff) {
          <button class="df-modal__btn df-modal__btn--primary" data-action="try">Try Anyway</button>`
       : `<button class="df-modal__btn df-modal__btn--primary" data-action="ok">OK</button>`;
 
-    // Major resolves false unless "try" sets true; minor resolves undefined.
+    // Major resolves tryLoad false unless "try" sets true; minor resolves undefined.
     let result = isMajor ? false : undefined;
+    let exported = false;
     const { footer, close } = buildModal({
       title,
       zIndex: 10001,
       width: '440px',
       showClose: false,
+      // Major: only the buttons answer. Escape and a backdrop click resolved "Don't load" (review C6).
+      ...(isMajor ? { backdropClose: false, onEscape: () => {} } : {}),
       bodyStyle: 'padding:16px 20px',
-      bodyHtml: `
+      bodyHtml: `${note ? `<p class="df-session-warning__note" role="alert" style="margin:0 0 12px"><strong>${escHtml(note)}</strong></p>` : ''}
         <p style="margin:0 0 12px">
           ${isMajor
             ? `Diagramforce has been updated from <strong>v${escHtml(savedVersion)}</strong> to <strong>v${escHtml(APP_VERSION)}</strong> (${githubLink}).`
@@ -464,7 +531,7 @@ function showSessionVersionWarning(savedVersion, diff) {
         </p>
         ${footerNote}`,
       footerHtml: buttons,
-      onClose: () => resolve(result), // backdrop / Escape resolve the variant default
+      onClose: () => resolve(isMajor ? { tryLoad: result, exported } : result), // minor: backdrop / Escape resolve its default (major has no such exit)
     });
     footer.style.justifyContent = 'flex-end';
 
@@ -503,6 +570,7 @@ function showSessionVersionWarning(savedVersion, diff) {
             // without this the user saw "No full backup yet" right after pulling this
             // session backup. See storage.markFullBackup().
             if (backedUp > 0) persistenceModule.markFullBackup?.();
+            exported = backedUp > 0;
           }
         } catch (err) {
           console.warn('SF Diagrams: Session backup export failed:', err);
@@ -517,7 +585,7 @@ function showSessionVersionWarning(savedVersion, diff) {
     } else {
       footer.querySelector('[data-action="ok"]').addEventListener('click', () => close());
     }
-    // backdrop / Escape close → onClose resolves `result` (false major / undefined minor)
+    // minor: backdrop / Escape close → onClose resolves `result` (undefined). Major answers only by its buttons.
   });
 }
 
@@ -566,13 +634,18 @@ export function setupAutoSave() {
 /** What a content edit on the active tab sets off: dirty, the view-share fork, Drive autosave, the session save.
  *  The graph listener above runs it per edit; replaceActiveContent runs it once after a swap, whose fromJSON fires
  *  a 'reset' this listener never hears. */
-function noteContentEdit() {
+function noteContentEdit(_cell, opt) {
+  // A cosmetic repaint (the theme switch's icon recolour) is not an edit: no dirty, no view-share fork, no Drive.
+  if (opt?.dfCosmetic) return;
   const { tabs } = tbctx;
   const { persistence: persistenceModule, canvas: canvasModule } = tbctx.modules;
   const { markDirty } = tbctx;
   // Capture "this is the FIRST real content edit on the active tab" BEFORE markDirty flips the flag. markDirty's
   // own isLoadingJSON guard means a load/restore/migration never counts; viewport + selection never reach here.
   const tab = tabs.find(t => t.id === tbctx.activeTabId);
+  // No tab at all: an opener of the unclosable New Diagram modal ended without one (a cancelled Google Picker, say).
+  // Nothing drawn here can be saved, so offer New Diagram again on the first edit (review C5).
+  if (!tabs.length && !canvasModule.isLoadingJSON?.()) setTimeout(reofferIfStranded, 0);
   // A tab whose diagram failed to load: edits on its empty canvas are not the diagram, and must never reach Drive,
   // where they would overwrite the real file with them (see loadTabGraph).
   if (tab && tab.loadFailed) return;
@@ -589,6 +662,8 @@ function noteContentEdit() {
   // Drive autosave — only on REAL edits (markDirty's same isLoadingJSON gate), so a
   // tab switch / open / restore doesn't trigger a Drive write.
   if (!canvasModule.isLoadingJSON?.()) persistenceModule.notifyDriveChange?.();
+  // A diagram only on this device: the one prompt's clock, and the tab marker when the state flips (device-only.js).
+  if (tab && !canvasModule.isLoadingJSON?.() && noteDeviceOnlyEdit(tab) !== !!tab._deviceMarked) tbctx.render?.();
   clearTimeout(tabSaveTimer);
   tabSaveTimer = setTimeout(() => saveTabs(), 1000);
 }

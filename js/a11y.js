@@ -18,8 +18,8 @@
 // Pure overlay — reads graph/selection, drives selection + offscreen nodes. Never mutates the
 // diagram or history. The "describe a shape" knowledge lives in properties.js (the inspector
 // already owns the type→label map + name accessors); we just narrate + navigate + outline.
-import { describeCell, cellName } from './properties.js?v=1.25.9';
-import { escHtml } from './util.js?v=1.25.9';
+import { describeCell, cellName } from './properties.js?v=1.26.1';
+import { escHtml } from './util.js?v=1.26.1';
 
 let graph = null;
 let selection = null;
@@ -80,10 +80,30 @@ function setupKeyboardNav() {
   canvasEl.setAttribute(
     'aria-label',
     'Diagram canvas. Press Tab and Shift Tab to move between shapes; arrow keys nudge the '
-    + 'selected shape; Enter opens its properties; Delete removes it. A text outline of the whole '
-    + 'diagram is available in the Diagram outline region.',
+    + 'selected shape; Enter opens its properties; Shift F10 opens its menu; Delete removes it. A text '
+    + 'outline of the whole diagram is available in the Diagram outline region.',
   );
   canvasEl.addEventListener('keydown', onCanvasKeydown);
+  // The ContextMenu key also fires a native contextmenu on the focused canvas; the app's own menu replaces it.
+  canvasEl.addEventListener('contextmenu', (e) => { if (e.target === canvasEl) e.preventDefault(); });
+
+  // A hidden properties panel or stencil slides out by transform or width and keeps its controls, so `inert` takes
+  // them out of the Tab order and the a11y tree, and blurs a field left focused there (review R1). Synced from the
+  // hidden class, so every path that hides or shows a panel is covered. Not CSS `visibility`: WebKit kept sections
+  // re-rendered during its delayed transition hidden after the panel came back (multi-mapping.spec.js).
+  for (const [sel, hiddenCls] of [['.df-properties', 'df-properties--hidden'], ['.df-stencil', 'df-stencil--hidden']]) {
+    const panel = document.querySelector(sel);
+    if (!panel) continue;
+    const sync = () => { panel.inert = panel.classList.contains(hiddenCls); };
+    sync();
+    new MutationObserver(sync).observe(panel, { attributes: true, attributeFilter: ['class'] });
+  }
+  // The skip link (index.html) is a fragment link, and the hash router treats every hash change as an incoming
+  // diagram: it left Present and kept #canvas-container in the URL (review R11). Focus the canvas here instead.
+  document.querySelector('.df-skip-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    canvasEl.focus();
+  });
 }
 
 /**
@@ -107,14 +127,20 @@ function onCanvasKeydown(e) {
   if (e.key === 'Tab') {
     if (navBy(e.shiftKey ? -1 : 1)) e.preventDefault();   // moved → stay; edge → let focus leave
   } else if (e.key === 'Enter') {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;   // Ctrl/Cmd+Enter is Present (keyboard.js)
     if ((selection?.getSelectedIds?.() || []).length) {
       e.preventDefault();
-      document.querySelector(
-        '#properties-panel input, #properties-panel textarea, #properties-panel select, #properties-panel button',
-      )?.focus();
+      // The fields first: the panel header's Close button comes earlier in the document, and focusing it made the
+      // next Enter close the panel and drop the selection (review I4).
+      [...document.querySelectorAll('#properties-body :is(input, textarea, select, button), #properties-footer button')]
+        .find((el) => !el.disabled && el.offsetParent !== null)?.focus();
     }
-  } else if (e.key === 'Escape') {
+  } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+    // The context menu by keyboard: Group / Ungroup live only there (review I12).
     e.preventDefault();
+    selection?.openContextMenuFromKeyboard?.();
+  } else if (e.key === 'Escape') {
+    // No preventDefault: keyboard.js skips a handled key, and it is keyboard.js that leaves Present on Escape.
     selection?.clearSelection?.();
     canvasEl.blur();
   }

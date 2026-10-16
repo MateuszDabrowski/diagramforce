@@ -2,24 +2,29 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.25.9';
-import * as history from '../history.js?v=1.25.9';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.25.9';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.25.9';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.25.9';
-import { confirmModal, showToast } from '../feedback.js?v=1.25.9';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.25.9';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout } from '../canvas.js?v=1.25.9';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.25.9';
-import { escHtml } from '../util.js?v=1.25.9';
-import { saveCellAsShape } from '../templates.js?v=1.25.9';
+import { prctx, asUndoBatch } from './context.js?v=1.26.1';
+import * as history from '../history.js?v=1.26.1';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.26.1';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.26.1';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.26.1';
+import { confirmModal, showToast } from '../feedback.js?v=1.26.1';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.26.1';
+import { Z_TIER_SPAN, tierNameForType, zTierBase } from '../canvas.js?v=1.26.1';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.26.1';
+import { escHtml } from '../util.js?v=1.26.1';
+import { saveCellAsShape } from '../templates.js?v=1.26.1';
+import { TYPE_LABELS } from './type-meta.js?v=1.26.1';
+import { RACI_ROLES } from '../shapes/raci.js?v=1.26.1';
 
 /** One undo batch per TYPING RUN: opened by the first keystroke, closed on blur or after a pause. It used to open on
  *  FOCUS and close only on blur - but clicking a shape does not blur the panel input (JointJS prevents the default on
  *  mousedown) and the panel is then rebuilt with the input still focused. Where no blur follows, the batch never
  *  closed and undo stayed dead for the session; where it did, the text edit and the next drag merged into one entry
- *  (audit 2026-09-23). The idle close bounds the batch whatever happens to the element. */
-function typingBatch(idleMs = 1500) {
+ *  (audit 2026-09-23). The idle close bounds the batch whatever happens to the element. A canvas press now blurs
+ *  the panel field first (selection.js onPaperPointerDown), so the merge with a drag is closed at its source too.
+ *  Exported for the bespoke text rows (field list, org Details, Gantt task editor) that do not go through addText
+ *  (review J2-7). */
+export function typingBatch(idleMs = 1500) {
   let open = false, timer = 0;
   const close = () => {
     if (timer) { clearTimeout(timer); timer = 0; }
@@ -44,7 +49,18 @@ export function section(parent, title, open = true) {
     <svg class="df-section__chevron" viewBox="0 0 10 6" xmlns="http://www.w3.org/2000/svg">
       <path d="M0 0 L5 6 L10 0 Z"/>
     </svg>`;
-  hdr.addEventListener('click', () => wrap.classList.toggle('df-section--collapsed'));
+  // A keyboard control too: a div with only a click listener left a collapsed section (Highlight State starts
+  // collapsed) out of reach (review J1-12). Enter / Space go through click() so extra click listeners still run.
+  hdr.setAttribute('role', 'button');
+  hdr.tabIndex = 0;
+  hdr.setAttribute('aria-expanded', String(open));
+  hdr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hdr.click(); } });
+  // `--animate` lets CSS reveal a body the user opened, and only that one (css/properties.css, motion).
+  hdr.addEventListener('click', () => {
+    wrap.classList.add('df-section--animate');
+    const collapsed = wrap.classList.toggle('df-section--collapsed');
+    hdr.setAttribute('aria-expanded', String(!collapsed));
+  });
 
   const body = document.createElement('div');
   body.className = 'df-section__body';
@@ -89,6 +105,8 @@ export function orderPeerLabel(cell) {
     'sf.GanttTask':           'tasks and milestones',
     'sf.GanttMilestone':      'tasks and milestones',
     'sf.GanttMarker':         'tasks and milestones',
+    // An Image sits in its own 1500 band, under the shapes (zTierBase)
+    'sf.Image':               'images',
   });
   return SPECIFIC[type] || tierNameForType(type);
 }
@@ -96,7 +114,7 @@ export function orderPeerLabel(cell) {
 /** Raise a cell above its same-tier peers (undoable). Shared by the properties Order button + the context menu. */
 export function bringToFront(cell) {
   const type = cell.get('type');
-  const tierBase = Z_BASE[type] ?? 20000;
+  const tierBase = zTierBase(type);
   const tierMax = tierBase + Z_TIER_SPAN;
   const peers = prctx.graph.getElements().filter(el => el !== cell && el.get('z') >= tierBase && el.get('z') < tierMax);
   const maxZ = peers.length ? Math.max(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
@@ -113,7 +131,7 @@ export function bringToFront(cell) {
 /** Drop a cell below its same-tier peers (undoable). Shared by the properties Order button + the context menu. */
 export function sendToBack(cell) {
   const type = cell.get('type');
-  const tierBase = Z_BASE[type] ?? 20000;
+  const tierBase = zTierBase(type);
   const tierMax = tierBase + Z_TIER_SPAN;
   const peers = prctx.graph.getElements().filter(el => el !== cell && el.get('z') >= tierBase && el.get('z') < tierMax);
   const minZ = peers.length ? Math.min(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
@@ -144,7 +162,9 @@ export function primaryFontSelector(cell) {
 export function addFontSizeControl(sec, cell) {
   const sel = primaryFontSelector(cell);
   if (!sel) return;
-  addNumber(sec, 'Font size', cell.attr(`${sel}/fontSize`) ?? 13, (v) => cell.attr(`${sel}/fontSize`, v), { min: 6, max: 96 });
+  // Batched: a Pill and a Legend re-fit their width on a font change, and the resize must join the font's undo step
+  // (review S4-4).
+  addNumber(sec, 'Font size', cell.attr(`${sel}/fontSize`) ?? 13, asUndoBatch((v) => cell.attr(`${sel}/fontSize`, v)), { min: 6, max: 96 });
 }
 
 export function addOrderButtons(sec, cell) {
@@ -257,20 +277,15 @@ export const CONVERT_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 16 16"
     <path d="M1 4h11l-3-3M15 12H4l3 3"/>
   </svg>`;
 
-/** Default clone behavior for a single cell: place a copy beside the original. */
+/** Default clone behavior for a single cell: place a copy beside the original. An element goes through the shared
+ *  clipboard clone (one undo step), so a Zone or Container brings its embedded shapes and the links between them, and
+ *  a Gantt bar stays on its timeline in a row of its own. It used to copy a bare frame (owner call 2026-10-15). */
 export function cloneCellPlain(cell) {
+  if (cell.isElement()) { cloneElementWithConnectors(cell, 'none'); return; }
   const clone = cell.clone();
-  if (cell.isElement()) {
-    const pos = cell.position();
-    const size = cell.size();
-    clone.position(pos.x + size.width + 16, pos.y);
-    clone.unset('parent');
-    clone.unset('embeds');
-  } else if (cell.isLink()) {
-    // Offset vertices so the cloned link traces a parallel path
-    const verts = clone.get('vertices');
-    if (verts) clone.set('vertices', verts.map(v => ({ x: v.x + 24, y: v.y + 24 })));
-  }
+  // Offset vertices so the cloned link traces a parallel path
+  const verts = clone.get('vertices');
+  if (verts) clone.set('vertices', verts.map(v => ({ x: v.x + 24, y: v.y + 24 })));
   prctx.graph.addCell(clone);
   prctx.selection.selectOnly(clone.id);
 }
@@ -279,8 +294,8 @@ export function addCloneBtn(parent, cell) {
   const wrap = document.createElement('div');
   wrap.className = 'df-clone-strip';
 
-  // Always show a primary "Clone" button (plain duplicate — element only,
-  // or parallel connector for links).
+  // Always show a primary "Clone" button (plain duplicate — the element with
+  // its embedded shapes, or a parallel connector for links).
   const primary = document.createElement('button');
   primary.className = 'df-properties__btn df-properties__btn--clone';
   primary.innerHTML = `${CLONE_ICON_SVG} Clone`;
@@ -398,6 +413,20 @@ export function addDeleteBtn(parent, onClick) {
 
 // ── Field builders ──────────────────────────────────────────────────
 
+// Name a field's controls by its visible label: the label is a div, so a screen reader announced "edit text" with no
+// name (review J1-12). Builders append the control AFTER field() returns, so link once the synchronous render ends.
+// Only this field's own controls, and only ones nothing else names.
+let _labelSeq = 0;
+function nameFieldControls(f, l) {
+  l.id = `df-prop-label-${++_labelSeq}`;
+  queueMicrotask(() => {
+    f.querySelectorAll('input, select, textarea, [contenteditable="true"]').forEach((ctl) => {
+      if (ctl.closest('.df-prop-field') !== f || ctl.hasAttribute('aria-label') || ctl.hasAttribute('aria-labelledby')) return;
+      ctl.setAttribute('aria-labelledby', l.id);
+    });
+  });
+}
+
 export function field(parent, label) {
   const f = document.createElement('div');
   f.className = 'df-prop-field';
@@ -406,6 +435,7 @@ export function field(parent, label) {
     l.className = 'df-properties__label';
     l.textContent = label;
     f.appendChild(l);
+    nameFieldControls(f, l);
   }
   parent.appendChild(f);
   return f;
@@ -534,7 +564,7 @@ export function wireCanvasLabelHighlight(input, cell) {
     if (!view) return;
 
     caretEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    caretEl.setAttribute('class', 'df-canvas-caret');
+    caretEl.setAttribute('class', 'df-canvas-caret df-transient');   // df-transient: exports strip it
     caretEl.setAttribute('stroke', 'var(--selection-color)');
     caretEl.setAttribute('stroke-width', '1.5');
     view.el.appendChild(caretEl);
@@ -556,15 +586,18 @@ export function wireCanvasLabelHighlight(input, cell) {
   input.addEventListener('input', () => requestAnimationFrame(updateCaret));
 }
 
-export function addDate(parent, label, value, onChange) {
+export function addDate(parent, label, value, onChange, opts = {}) {
   const f = field(parent, label);
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:relative;display:flex;gap:4px;align-items:center;';
 
-  // Hidden native date picker — used only for its calendar popup
+  // Hidden native date picker — used only for its calendar popup. Out of the tab order and the accessibility tree: it
+  // was an invisible Tab stop announced as the field's label (review S4-6).
   const picker = document.createElement('input');
   picker.type = 'date';
   picker.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;opacity:0;pointer-events:none;';
+  picker.tabIndex = -1;
+  picker.setAttribute('aria-hidden', 'true');
 
   // Visible text input showing DD/MM/YYYY (manual entry)
   const display = document.createElement('input');
@@ -589,26 +622,42 @@ export function addDate(parent, label, value, onChange) {
     return isoVal || '';
   }
 
-  // Parse DD/MM/YYYY to YYYY-MM-DD
+  // Parse DD/MM/YYYY (or YYYY-MM-DD) to YYYY-MM-DD; null unless it is a real calendar day. The shape check alone
+  // stored 31/02/2026 as '2026-02-31', which V8 reads as 3 March and JavaScriptCore rejects (review J1-8).
   function toISO(displayVal) {
-    const match = displayVal.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (match) {
-      return `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(displayVal.trim())) return displayVal.trim();
-    return null;
+    const s = displayVal.trim();
+    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/), y, mo, d;
+    if (m) [d, mo, y] = [+m[1], +m[2], +m[3]];
+    else if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) [y, mo, d] = [+m[1], +m[2], +m[3]];
+    else return null;
+    const dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
 
   display.value = toDisplay(value);
   picker.value = value || '';
+  let lastShown = display.value;   // what an invalid entry reverts to
+  let lastISO = value || '';       // the same, for the picker
 
-  // Manual text entry — commit on change/enter
+  // Manual text entry — commit on change/enter. A bad date reverts with the red flash a bad hex gets; a blank clears
+  // the value only where the caller allows it (the Gantt Today line: blank = no line). An onChange that returns
+  // `false` refuses a real date the same way (a timeline End before its Start, review S4-11).
+  const reject = () => {
+    display.value = lastShown;
+    picker.value = lastISO;
+    display.classList.add('df-properties__input--invalid');
+    setTimeout(() => display.classList.remove('df-properties__input--invalid'), 400);
+  };
   display.addEventListener('change', () => {
-    const iso = toISO(display.value);
-    if (iso) {
-      picker.value = iso;
-      onChange(iso);
-    }
+    const blank = !display.value.trim();
+    const iso = blank ? (opts.allowEmpty ? '' : null) : toISO(display.value);
+    if (iso == null) { reject(); return; }
+    if (blank) display.value = '';
+    if (onChange(iso) === false) { reject(); return; }
+    lastShown = display.value;
+    lastISO = iso;
+    picker.value = iso;
   });
 
   // Calendar button opens the native date picker
@@ -616,10 +665,14 @@ export function addDate(parent, label, value, onChange) {
     try { picker.showPicker(); } catch { picker.focus(); picker.click(); }
   });
 
-  // Calendar selection updates text display
+  // Calendar selection updates text display. The calendar's Clear empties it; a blank goes through the same gate as
+  // the text field, so it reaches the model only where the caller allows it (review S4-6).
   picker.addEventListener('change', () => {
+    if (!picker.value && !opts.allowEmpty) { picker.value = lastISO; return; }
+    if (onChange(picker.value) === false) { reject(); return; }
     display.value = toDisplay(picker.value);
-    onChange(picker.value);
+    lastShown = display.value;
+    lastISO = picker.value;
   });
 
   wrap.appendChild(picker);
@@ -628,11 +681,15 @@ export function addDate(parent, label, value, onChange) {
   f.appendChild(wrap);
 
   // Live setter — push a new ISO value into the field WITHOUT firing onChange (used to reflect a model change made
-  // elsewhere, e.g. a drag/resize updating the dates). Never clobbers a value the user is actively typing.
+  // elsewhere, e.g. a drag/resize updating the dates). Never clobbers a value the user is actively typing. `input`
+  // is the visible field, for a caller that flags it (the Gantt task's End before Start).
   return {
+    input: display,
     set(isoVal) {
       if (document.activeElement === display) return;
       display.value = toDisplay(isoVal || '');
+      lastShown = display.value;
+      lastISO = isoVal || '';
       picker.value = isoVal || '';
     },
   };
@@ -748,14 +805,13 @@ export function addRaciPicker(parent, label, value, onChange) {
   const f = field(parent, label);
   const grid = document.createElement('div');
   grid.className = 'df-raci-picker';
-  const state = { R: !!value?.R, A: !!value?.A, C: !!value?.C, I: !!value?.I };
-  const NAMES = Object.assign(Object.create(null), { R: 'Responsible', A: 'Accountable', C: 'Consulted', I: 'Informed' });
-  for (const key of ['R', 'A', 'C', 'I']) {
+  const state = Object.fromEntries(RACI_ROLES.map((r) => [r.key, !!value?.[r.key]]));
+  for (const { key, name } of RACI_ROLES) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'df-raci-picker__btn' + (state[key] ? ' df-raci-picker__btn--active' : '');
     btn.dataset.raci = key;
-    btn.title = NAMES[key];
+    btn.title = name;
     btn.textContent = key;
     btn.addEventListener('click', () => {
       state[key] = !state[key];
@@ -781,8 +837,9 @@ export function addRaciPicker(parent, label, value, onChange) {
  *  which picker fired it (a deliberate >IDLE_MS pause mid-drag simply starts a fresh entry — acceptable). The
  *  open batch also coalesces every intra-drag change:attrs into ONE composite command with the correct
  *  pre-drag→final diff (a plain setSuppressed can't: cell.previous only remembers one step). `apply` is the
- *  RAW setter (this batch owns history); `onInput` runs synchronously every event for cheap UI mirroring. */
-function wireColorSwatchDrag(swatch, apply, onInput) {
+ *  RAW setter (this batch owns history); `onInput` runs synchronously every event for cheap UI mirroring. Exported
+ *  for the Gantt task editor's bare colour inputs (review J2-7). */
+export function wireColorSwatchDrag(swatch, apply, onInput) {
   let open = false, frameGuard = false, latest = null, idleTimer = 0;
   const IDLE_MS = 250;
   const close = () => {
@@ -875,7 +932,8 @@ export function addColor(parent, label, value, onChange, opts = {}) {
     const stripped = raw.replace(/^#/, '');
     const isValidHex = /^[0-9a-fA-F]{3,8}$/.test(stripped) &&
       [3, 4, 6, 8].includes(stripped.length);
-    if (!isValidHex && raw !== '') {
+    // A blank reverts too: it fell through to toHex(''), which is #000000, and painted the shape black (review J1-5).
+    if (!isValidHex) {
       textInput.value = lastValid;
       textInput.classList.add('df-properties__input--invalid');
       setTimeout(() => textInput.classList.remove('df-properties__input--invalid'), 400);
@@ -1057,9 +1115,11 @@ export function addColorMulti(parent, label, value, onChange) {
   textInput.addEventListener('focus', () => { textInput.dataset.prev = textInput.value; });
   textInput.addEventListener('change', () => {
     // A blank field or a typo ("reed") is not a colour: toHex answers #000000 for it, and this painted EVERY
-    // selected shape black (audit 2026-09-23). Refuse it and put the last good value back.
+    // selected shape black (audit 2026-09-23). Refuse it and put the last good value back. CSS.supports also passes
+    // 'transparent', 'currentcolor' and the CSS-wide keywords, which toHex turns into #000000 too (review S4-9).
     const raw = textInput.value.trim();
-    const ok = raw && (typeof CSS === 'undefined' || !CSS.supports || CSS.supports('color', raw) || /^#?[0-9a-f]{3,8}$/i.test(raw));
+    const ok = raw && !/^(transparent|currentcolor|inherit|initial|unset|revert|revert-layer)$/i.test(raw)
+      && (typeof CSS === 'undefined' || !CSS.supports || CSS.supports('color', raw) || /^#?[0-9a-f]{3,8}$/i.test(raw));
     if (!ok) {
       textInput.value = textInput.dataset.prev ?? '';   // what it showed before this edit (blank for a Mixed field)
       textInput.classList.add('df-properties__input--invalid');
@@ -1138,6 +1198,7 @@ export function addNumberPair(parent, labelA, valueA, onChangeA, labelB, valueB,
     const l = document.createElement('div');
     l.className = 'df-properties__label';
     l.textContent = lbl;
+    nameFieldControls(f, l);
     const inp = document.createElement('input');
     inp.type = 'number';
     inp.className = 'df-properties__input';
@@ -1221,6 +1282,7 @@ export function addAutoSizeBtn(parent, onClick) {
 
 export const TYPE_PLURALS = Object.assign(Object.create(null), {
   'sf.SimpleNode':     'Nodes',
+  'sf.TextLabel':      'Text Labels',   // the label is "Text"; "Select all Texts" read badly (review Q13)
   'sf.Container':      'Containers',
   'sf.Zone':           'Zones',
   'sf.TaskGroup':      'Task Groups',
@@ -1245,10 +1307,21 @@ export const TYPE_PLURALS = Object.assign(Object.create(null), {
   'sf.OrgPerson':      'Persons',
   'sf.GanttTask':      'Tasks',
   'sf.GanttMilestone': 'Milestones',
-  'sf.GanttMarker':    'Markers',
+  'sf.GanttMarker':    'Day Markers',   // renamed from Today Marker; matches TYPE_LABELS
   'sf.GanttTimeline':  'Timelines',
   'sf.GanttGroup':     'Groups',
 });
+
+/** The plural a button names a type by ("Select all ...", "Apply this size to all ..."). The curated plural first.
+ *  Flow labels are often plural already ("Get Records", "Wait for Conditions") or a phrase, and suffixing read "Get
+ *  Recordses", so they say "elements" (review J1-15). Shared so the Apply-size button stops saying "Shapes" for a type
+ *  it does not curate (review S4-14). */
+export function typePlural(type) {
+  if (TYPE_PLURALS[type]) return TYPE_PLURALS[type];
+  const label = TYPE_LABELS[type] || String(type).replace(/^(sf|df)\./, '');
+  if (String(type).startsWith('df.Flow') || label.endsWith('s')) return `${label} elements`;
+  return label.endsWith('x') ? label + 'es' : label + 's';
+}
 
 // The shared "standard tail" every element renderer ends with (CLEANUP V8): a Size & Order section (Width/Height
 // pair, a square Diameter/Size, or width-only; + optional Auto Size / Apply-to-all / rotation) followed by the
@@ -1262,7 +1335,7 @@ export const TYPE_PLURALS = Object.assign(Object.create(null), {
 
 export function addApplySizeBtn(parent, cell) {
   const type = cell.get('type');
-  const typePlural = TYPE_PLURALS[type] || 'Shapes';
+  const plural = typePlural(type);
   const btn = document.createElement('button');
   btn.className = 'df-properties__btn df-properties__btn--apply-size';
   btn.innerHTML = `
@@ -1270,8 +1343,8 @@ export function addApplySizeBtn(parent, cell) {
       <path d="M1 1h5v2H3v3H1V1zm9 0h5v5h-2V3h-3V1zM1 10h2v3h3v2H1v-5zm12 3h-3v2h5v-5h-2v3z"/>
       <circle cx="8" cy="8" r="2"/>
     </svg>
-    Apply this size to all ${typePlural}`;
-  btn.title = `Resize every ${typePlural.toLowerCase()} to match this element's width and height`;
+    Apply this size to all ${plural}`;
+  btn.title = `Resize every ${plural.toLowerCase()} to match this element's width and height`;
   btn.addEventListener('click', async () => {
     const { width, height } = cell.size();
     // Count peers BEFORE confirming so the dialog can quote the exact number
@@ -1282,13 +1355,13 @@ export function addApplySizeBtn(parent, cell) {
     );
     if (peers.length === 0) return; // nothing to do
     const ok = await confirmModal({
-      title: `Apply size to all ${typePlural.toLowerCase()}?`,
+      title: `Apply size to all ${plural.toLowerCase()}?`,
       // Wording note (v1.12.1): the old "This is undoable" was ambiguous —
       // English natively reads "undoable" as "cannot be undone" even though
       // the technical meaning is "can be undone". The new phrasing names
       // the keyboard shortcut so the user knows the safety net is one
       // keystroke away.
-      message: `${peers.length} other ${peers.length === 1 ? typePlural.toLowerCase().replace(/s$/, '') : typePlural.toLowerCase()} on this diagram will be resized to ${Math.round(width)} × ${Math.round(height)} px. You can undo with ⌘Z (Ctrl+Z).`,
+      message: `${peers.length} other ${peers.length === 1 ? plural.toLowerCase().replace(/s$/, '') : plural.toLowerCase()} on this diagram will be resized to ${Math.round(width)} × ${Math.round(height)} px. You can undo with ⌘Z (Ctrl+Z).`,
       okLabel: 'Apply',
       cancelLabel: 'Cancel',
       tone: 'primary',
@@ -1311,7 +1384,7 @@ export function addApplySizeBtn(parent, cell) {
       history.endBatch();
     }
     prctx.paper.updateViews();
-    showToast(`Resized ${peers.length} ${peers.length === 1 ? typePlural.toLowerCase().replace(/s$/, '') : typePlural.toLowerCase()} ✓`, 'success');
+    showToast(`Resized ${peers.length} ${peers.length === 1 ? plural.toLowerCase().replace(/s$/, '') : plural.toLowerCase()} ✓`, 'success');
   });
   parent.appendChild(btn);
 }
@@ -1325,9 +1398,18 @@ export function addNumberWithSuffix(parent, label, value, suffix, onChange) {
   input.className = 'df-properties__input';
   input.value = value ?? 0;
   input.min = 1;
+  let last = input.value;
+  // A blank, zero or negative entry did nothing and kept showing; it reverts with the invalid flash (review S4-11).
   input.addEventListener('change', () => {
     const v = parseFloat(input.value);
-    if (!isNaN(v) && v > 0) onChange(v);
+    if (isNaN(v) || v <= 0) {
+      input.value = last;
+      input.classList.add('df-properties__input--invalid');
+      setTimeout(() => input.classList.remove('df-properties__input--invalid'), 400);
+      return;
+    }
+    last = input.value;
+    onChange(v);
   });
   const span = document.createElement('span');
   span.className = 'df-properties__input-suffix';
@@ -1462,6 +1544,9 @@ export function addTextWithSuggestions(parent, label, value, suggestions, onChan
   const readVal = () => box.textContent.replace(/[\r\n]+/g, '').trim();
   let cur = value ?? '';
   const commit = () => { const v = readVal(); if (v !== cur) { cur = v; onChange(v); } };
+  // One undo step per typing run (and a pick that ends it), like addText: it committed every keystroke on its own,
+  // so undo walked back one letter at a time (review J1-7).
+  const typing = typingBatch();
 
   let itemEls = [];        // the current option divs (rebuilt on every renderMenu)
   let activeIndex = -1;    // keyboard/hover highlight; -1 = none
@@ -1479,7 +1564,7 @@ export function addTextWithSuggestions(parent, label, value, suggestions, onChan
     else box.removeAttribute('aria-activedescendant');
   };
 
-  const pick = (s) => { box.textContent = s; cur = s; onChange(s); menu.hidden = true; setOpen(false); activeIndex = -1; };
+  const pick = (s) => { typing.touch(); box.textContent = s; cur = s; onChange(s); typing.close(); menu.hidden = true; setOpen(false); activeIndex = -1; };
 
   // Flip the menu ABOVE the box when there isn't room below inside the scrollable panel body (whose overflow
   // would otherwise clip the lower options behind the sticky footer). Cap the height to the space it lands in.
@@ -1523,9 +1608,9 @@ export function addTextWithSuggestions(parent, label, value, suggestions, onChan
     placeMenu();          // choose up/down + cap height now that the options are laid out
   };
 
-  box.addEventListener('input', () => { commit(); renderMenu(); });
+  box.addEventListener('input', () => { typing.touch(); commit(); renderMenu(); });
   box.addEventListener('focus', renderMenu);
-  box.addEventListener('blur', () => { commit(); setTimeout(() => { menu.hidden = true; setOpen(false); }, 120); });
+  box.addEventListener('blur', () => { commit(); typing.close(); setTimeout(() => { menu.hidden = true; setOpen(false); }, 120); });
   box.addEventListener('keydown', (e) => {
     if (e.isComposing) return;   // Enter / Escape / arrows belong to the IME while it composes (audit 2026-09-23)
     if (e.key === 'ArrowDown') {
@@ -1599,19 +1684,33 @@ export function addMarkerPicker(parent, label, current, options, svgs, onChange,
       list.querySelectorAll('.df-marker-picker__item--active').forEach(el => el.classList.remove('df-marker-picker__item--active'));
       item.classList.add('df-marker-picker__item--active');
       updateBtn(opt.value);
-      list.style.display = 'none';
+      closeList();
       onChange(opt.value);
     });
     list.appendChild(item);
   });
 
+  // Close on outside click. The document listener lives only while the list is OPEN: added on every render and never
+  // removed, it piled up two per connector selection, each holding its detached panel (review J2-13).
+  const onOutsideClick = (e) => { if (!wrap.contains(e.target)) closeList(); };
+  // Escape closes the list and stops there, like the canvas and tab menus (menu.js), so the selection stays. A panel
+  // re-render under the open list (an undo, a delete) detaches it with this listener still wired: Escape then still
+  // closes it, which removes the listener, but reaches the app, or it would swallow the key meant for the selection.
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    if (wrap.isConnected) e.stopPropagation();
+    closeList();
+  };
+  function closeList() {
+    list.style.display = 'none';
+    document.removeEventListener('click', onOutsideClick);
+    document.removeEventListener('keydown', onKey, true);
+  }
   btn.addEventListener('click', () => {
-    list.style.display = list.style.display === 'none' ? 'flex' : 'none';
-  });
-
-  // Close on outside click
-  document.addEventListener('click', (e) => {
-    if (!wrap.contains(e.target)) list.style.display = 'none';
+    if (list.style.display !== 'none') { closeList(); return; }
+    list.style.display = 'flex';
+    document.addEventListener('click', onOutsideClick);
+    document.addEventListener('keydown', onKey, true);
   });
 
   wrap.appendChild(btn);
@@ -1654,6 +1753,13 @@ export function addIconPicker(parent, label, currentHref, onChange, iconColorGet
   search.type = 'text';
   search.className = 'df-prop-icon-search-input';
   search.placeholder = 'Search icons\u2026';
+  // A combobox over the icon grid, as addTextWithSuggestions: focus stays in the input, arrows move the highlight,
+  // Enter picks. The grid was mouse-only (review J1-12).
+  const uid = `df-icon-pick-${++_datalistSeq}`;
+  search.setAttribute('role', 'combobox');
+  search.setAttribute('aria-autocomplete', 'list');
+  search.setAttribute('aria-expanded', 'false');
+  search.setAttribute('aria-controls', `${uid}-menu`);
 
   const clearBtn = document.createElement('button');
   clearBtn.className = 'df-prop-icon-clear';
@@ -1717,16 +1823,16 @@ export function addIconPicker(parent, label, currentHref, onChange, iconColorGet
     search.focus();
   });
 
+  // #6: Click (or Enter) on the current icon to switch to search mode (keeping the icon until a new one is picked)
+  const searchAgain = () => {
+    search.readOnly = false;
+    search.style.cursor = '';
+    search.value = '';
+    search.focus();
+    showDropdown('');
+  };
   inputRow.addEventListener('click', () => {
-    if (hasIcon) {
-      // #6: Click on current icon to switch to search mode (keeping the icon until a new one is picked)
-      search.readOnly = false;
-      search.style.cursor = '';
-      search.value = '';
-      search.focus();
-      showDropdown('');
-      return;
-    }
+    if (hasIcon) { searchAgain(); return; }
     search.focus();
   });
 
@@ -1742,6 +1848,27 @@ export function addIconPicker(parent, label, currentHref, onChange, iconColorGet
     padding:6px; gap:4px;
     box-shadow:var(--shadow-md);
   `;
+  dropdown.id = `${uid}-menu`;
+  dropdown.setAttribute('role', 'listbox');
+  dropdown.setAttribute('aria-label', 'Icons');
+
+  let shown = [];        // [{ el, icon }] for the open grid
+  let activeIdx = -1;    // keyboard highlight; -1 = none
+  const paint = (el, on) => { el.style.background = on ? 'var(--toolbar-button-hover)' : ''; el.style.borderColor = on ? 'var(--border-color)' : 'transparent'; };
+  const setActive = (i) => {
+    activeIdx = i;
+    shown.forEach(({ el }, idx) => { paint(el, idx === i); el.setAttribute('aria-selected', String(idx === i)); });
+    if (shown[i]) { search.setAttribute('aria-activedescendant', shown[i].el.id); shown[i].el.scrollIntoView({ block: 'nearest' }); }
+    else search.removeAttribute('aria-activedescendant');
+  };
+  const hideDropdown = () => { dropdown.style.display = 'none'; search.setAttribute('aria-expanded', 'false'); setActive(-1); };
+  const pickIcon = (icon) => {
+    const iconColor = iconColorGetter ? iconColorGetter() : (getComputedStyle(document.documentElement).getPropertyValue('--node-text').trim() || '#1C1E21');
+    const href = getIconDataUri(icon.id, iconColor);
+    onChange(href);
+    setIconMode(icon.id, icon.name, href);
+    hideDropdown();
+  };
 
   function showDropdown(query) {
     const q = (query || '').toLowerCase();
@@ -1749,25 +1876,28 @@ export function addIconPicker(parent, label, currentHref, onChange, iconColorGet
       ? getAllIcons().filter(i => i.name.toLowerCase().includes(q)).slice(0, 48)
       : getAllIcons().slice(0, 48);
     dropdown.innerHTML = '';
-    if (!icons.length) { dropdown.style.display = 'none'; return; }
+    shown = [];
+    setActive(-1);
+    if (!icons.length) { hideDropdown(); return; }
 
     dropdown.style.display = 'flex';
-    icons.forEach(icon => {
+    search.setAttribute('aria-expanded', 'true');
+    icons.forEach((icon, idx) => {
       const item = document.createElement('div');
       item.title = icon.name;
+      item.id = `${uid}-opt-${idx}`;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-label', icon.name);
       item.style.cssText = 'width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;flex-shrink:0;border:1px solid transparent;';
       const safeIconId = icon.id.replace(/[^a-zA-Z0-9_-]/g, '');
       item.innerHTML = `<svg width="28" height="28" fill="var(--text-primary)"><use href="#${safeIconId}"></use></svg>`;
-      item.addEventListener('mouseenter', () => { item.style.background = 'var(--toolbar-button-hover)'; item.style.borderColor = 'var(--border-color)'; });
-      item.addEventListener('mouseleave', () => { item.style.background = ''; item.style.borderColor = 'transparent'; });
+      item.addEventListener('mouseenter', () => paint(item, true));
+      item.addEventListener('mouseleave', () => paint(item, idx === activeIdx));
       item.addEventListener('mousedown', e => {
         e.preventDefault();
-        const iconColor = iconColorGetter ? iconColorGetter() : (getComputedStyle(document.documentElement).getPropertyValue('--node-text').trim() || '#1C1E21');
-        const href = getIconDataUri(icon.id, iconColor);
-        onChange(href);
-        setIconMode(icon.id, icon.name, href);
-        dropdown.style.display = 'none';
+        pickIcon(icon);
       });
+      shown.push({ el: item, icon });
       dropdown.appendChild(item);
     });
   }
@@ -1782,7 +1912,30 @@ export function addIconPicker(parent, label, currentHref, onChange, iconColorGet
     }
   });
 
-  search.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 150));
+  // Enter on a set icon starts a new search; while searching, Down / Up step through the grid in reading order
+  // (Left / Right stay with the caret), Enter picks the highlighted icon or the first match, Escape closes the grid.
+  search.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+    if (hasIcon && search.readOnly) {
+      if (e.key === 'Enter') { e.preventDefault(); searchAgain(); }
+      return;
+    }
+    const open = dropdown.style.display !== 'none' && shown.length > 0;
+    const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+    if (step) {
+      e.preventDefault();
+      if (!open) { showDropdown(search.value); if (shown.length) setActive(0); return; }
+      setActive(activeIdx < 0 ? 0 : Math.max(0, Math.min(shown.length - 1, activeIdx + step)));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open) pickIcon((shown[activeIdx] || shown[0]).icon);
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      hideDropdown();
+    }
+  });
+
+  search.addEventListener('blur', () => setTimeout(hideDropdown, 150));
 
   inputRow.appendChild(swatch);
   inputRow.appendChild(search);

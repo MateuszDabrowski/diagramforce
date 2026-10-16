@@ -69,6 +69,7 @@ export const SHORTCUT_GROUPS = [
     ['Arrows', 'Nudge selection (4 px)'],
     ['Shift+Arrows', 'Nudge selection (16 px)'],
     ['Escape', 'Clear selection'],
+    ['Shift+F10', 'Open the right-click menu (canvas focused)'],
   ] },
   { title: 'View', items: [
     ['Ctrl+Enter', 'Present - this diagram alone, full screen, still editable (Esc leaves)'],
@@ -76,6 +77,14 @@ export const SHORTCUT_GROUPS = [
     ['Ctrl+0', 'Fit to content'],
     ['+', 'Zoom in'],
     ['-', 'Zoom out'],
+  ] },
+  // The tab bar's own keys (wireTabListKeys in tabs.js, review R3). " / " separates alternative keys.
+  { title: 'Tabs', items: [
+    ['Left / Right', 'Previous or next tab or group (a tab focused)'],
+    ['Home / End', 'First or last tab or group'],
+    ['Enter / Space', 'Switch to the tab, or collapse or expand the group'],
+    ['Delete / Backspace', 'Close the tab'],
+    ['Shift+F10', 'Open the tab or group menu'],
   ] },
 ];
 
@@ -129,13 +138,21 @@ function handleKeydown(evt) {
   // Skip when typing in a form field
   const tag = evt.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || evt.target.isContentEditable) return;
+  // A key the focused control already handled is not a canvas shortcut too: a menu's arrows and Escape, a stencil
+  // tile's Enter / Space, a panel drag handle's arrows. The arrows used to nudge the selected shape behind the menu,
+  // and Escape cleared it (review I2).
+  if (evt.defaultPrevented) return;
+  // A focused tab or group chip (#tab-list, review R3): its own handler took the keys it uses, and the rest must not
+  // edit the canvas selection. Chords and Escape still act globally.
+  const inTabBar = !!evt.target.closest?.('#tab-list');
 
   // While the guided walkthrough is open it owns the keyboard (Tab/Escape via trapFocus,
   // arrows via its own handler) — don't fire canvas shortcuts behind the overlay.
   if (modules.walkthrough?.isActive?.()) return;
   // Same for any open modal: Delete with a shape still selected deleted it BEHIND the dialog (audit 2026-09-23). The
-  // modal's own trapFocus handles Tab and Escape.
-  if (document.querySelector('.df-modal:not(.df-modal--hidden)')) return;   // (the About dialog is static, hidden markup)
+  // modal's own trapFocus handles Tab and Escape. The New Diagram overlay is its own markup, not a `.df-modal`, and was
+  // missed: arrows, Delete and typing edited the tab behind it (review C8).
+  if (document.querySelector('.df-modal:not(.df-modal--hidden), .df-new-modal')) return;   // (the About dialog is static, hidden markup)
   // In the Table view the canvas is hidden and its selection cleared, but these keys still acted on it: Cmd+A then
   // Delete emptied the diagram, Cmd+C copied a PNG of the hidden canvas instead of the table text, Cmd+V pasted cells
   // nobody could see, and the arrows nudged hidden shapes instead of scrolling. Leave them to the browser there;
@@ -238,10 +255,11 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Delete / Backspace — Delete selected
+  // Delete / Backspace — Delete selected. Not from a focused tab or group chip: the user is in the tab bar and cannot see
+  // the canvas selection being targeted (review S2-3). The tab bar closes a tab on its own Delete.
   if (key === 'Delete' || key === 'Backspace') {
     evt.preventDefault();
-    modules.selection.deleteSelected();
+    if (!inTabBar) modules.selection.deleteSelected();
     return;
   }
 
@@ -285,8 +303,9 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Arrow keys — nudge selected elements
+  // Arrow keys — nudge selected elements (not from the tab bar, whose Left / Right move between tabs)
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+    if (inTabBar) return;
     const elements = modules.selection.getSelectedElements().filter(e => e.isElement());
     if (elements.length === 0) return;
     evt.preventDefault();
@@ -319,8 +338,11 @@ function handleKeydown(evt) {
     return;
   }
 
-  // Printable character with element selected → auto-focus label input
-  if (!mod && key.length === 1 && modules.selection.getCount() === 1) {
+  // Printable character with element selected → auto-focus label input. Not Space: it is the key that presses a
+  // focused button, and a label never usefully starts with one (it wrote a stray space into the label, review I2). Not
+  // from a control already IN the panel: a section header or a Highlight State row owns its keys (review J1-12). Nor from
+  // a focused tab or chip (review S2-3).
+  if (!mod && key.length === 1 && key !== ' ' && modules.selection.getCount() === 1 && !inTabBar && !evt.target.closest?.('#properties-panel')) {
     const panel = document.querySelector('.df-properties__body');
     const labelInput = panel?.querySelector('.df-properties__input');
     if (labelInput) {

@@ -2,13 +2,14 @@
 //
 // It carries COUNTS and states, never content: no diagram names, file ids, account emails or cell data. The user
 // sees the whole text before copying, and nothing is sent anywhere by the app (limits/security.md, "Data
-// privacy"). Recorded failures come from js/diagnostics.js; their messages can name a diagram, which the dialog says.
-import { buildModal, showToast } from '../feedback.js?v=1.25.9';
-import { formatBytes } from '../util.js?v=1.25.9';
-import { recentErrors } from '../diagnostics.js?v=1.25.9';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.25.9';
-import { getStorageBreakdown, NAMED_SAVE_PREFIX } from '../persistence/storage.js?v=1.25.9';
-import { tctx } from './context.js?v=1.25.9';
+// privacy"). Recorded failures come from js/diagnostics.js, which replaces Drive file ids and emails in them and
+// drops name-like values from logged objects. A free-text message can still name a diagram, which the dialog says.
+import { buildModal, showToast } from '../feedback.js?v=1.26.1';
+import { formatBytes } from '../util.js?v=1.26.1';
+import { recentErrors } from '../diagnostics.js?v=1.26.1';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.26.1';
+import { getStorageBreakdown, NAMED_SAVE_PREFIX } from '../persistence/storage.js?v=1.26.1';
+import { tctx } from './context.js?v=1.26.1';
 
 const safe = (fn, fallback = 'unavailable') => { try { const v = fn(); return v ?? fallback; } catch { return fallback; } };
 const time = (ms) => new Date(ms).toISOString().slice(11, 19);
@@ -68,8 +69,9 @@ export async function openDiagnosticsModal(modules = tctx.modules || {}) {
     className: 'df-diagnostics-modal',
     width: '640px',
     bodyHtml: `<p class="df-diagnostics__lead">A plain-text summary for a bug report: the version, your browser, storage use, tab and Drive counts,
-      and any errors this tab recorded, including before a reload. It holds no diagram content, but an error message can mention a diagram's
-      name, so read it before you send it. Nothing is sent anywhere unless you paste it.</p>
+      and any errors this tab recorded, including before a reload. It holds no diagram content, and Google Drive file ids and email
+      addresses are replaced with &lt;id&gt; and &lt;email&gt;. An error message can still mention a diagram's name, so read it before
+      you send it. Nothing is sent anywhere unless you paste it.</p>
       <textarea class="df-diagnostics__text" readonly spellcheck="false" aria-label="Diagnostics report"></textarea>`,
     footerHtml: '<button class="df-modal__btn df-diagnostics__close">Close</button><button class="df-modal__btn df-modal__btn--primary df-diagnostics__copy">Copy</button>',
   });

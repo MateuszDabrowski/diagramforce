@@ -1,74 +1,55 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { wrapSelectionWithMarker } from './markdown.js?v=1.25.9';
-import { ER_MARKER_D } from './er-markers.js?v=1.25.9';
-import { cycleKeyType, keyImpliesRequired, keyTypeLabel, applyKeyType, newField } from './field-model.js?v=1.25.9';
-import { COLOR_SCHEMA, recolorCellIcon } from './properties/color-schema.js?v=1.25.9';
-import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.25.9';
+import { COLOR_SCHEMA } from './properties/color-schema.js?v=1.26.1';
+import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.26.1';
 // Property-panel widget builders (CLEANUP S2 slice 3) — form fields, action buttons, pickers.
 import {
-  CLONE_ICON_SVG, addActionBtn, addApplySizeBtn, addAutoSizeBtn, addChipInput, addCloneBtn,
-  addColor, addColorMulti, addConvertBtn, addDate, addDeleteBtn, addIconPicker,
-  addMarkerPicker, addNumber, addNumberPair, addNumberWithSuffix, addOrderButtons, addRaciPicker,
-  addRotationField, addSegmented, addSelect, addText, addTextarea, addToggle,
-  bringToFront, cloneCellPlain, copyCellStyle, field, getActiveCell, hasStyleClip,
-  pasteCellStyle, rotationField, section, sendToBack, toHex, wireMarkdownShortcuts,
-} from './properties/widgets.js?v=1.25.9';
+  CLONE_ICON_SVG, addActionBtn, addAutoSizeBtn, addColorMulti, addDeleteBtn, addMarkerPicker, addNumber,
+  addNumberPair, addSelect, copyCellStyle, field, getActiveCell, hasStyleClip, pasteCellStyle, rotationField,
+  section, typePlural, wireMarkdownShortcuts,
+} from './properties/widgets.js?v=1.26.1';
 // Re-export the style-clipboard trio for app.js (selection.setStyleApi) — they live in widgets.js now.
-export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.25.9';
+export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.26.1';
 // DataObject field editor (CLEANUP S2 slice 4) — renderDataObjectProps + the dblclick handler call these back.
-import { renderFieldEditor, openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.25.9';
+import { openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.26.1';
 // SF_FIELD_TYPES lives in field-editor.js now; table-view.js still imports it from properties.js (this re-export).
-export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.25.9';
+export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.26.1';
 // Link / connector panel (CLEANUP S2 slice 5) — the facade dispatch (showProperties) + the multi-select
 // Connectors section use these; setLinkEndpoints is reached via properties.setLinkEndpoints (app.js), so re-export.
 import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle,
-  applyLinkFontColor, applyLinkFontSize, setUserLinkLabel, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.25.9';
-export { setLinkEndpoints } from './properties/link-props.js?v=1.25.9';
+  applyLinkFontColor, applyLinkFontSize, setLinkFontSizeEnabled, userLinkLabelIndex, setUserLinkLabel, repaintLinkView, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.26.1';
+export { setLinkEndpoints } from './properties/link-props.js?v=1.26.1';
 // Shape type metadata (CLEANUP S2 slice 6) — pure data maps shared by the facade + renderers + convert + autoSizeCell.
-import { TYPE_LABELS, DEFAULT_SIZES } from './properties/type-meta.js?v=1.25.9';
+import { TYPE_LABELS } from './properties/type-meta.js?v=1.26.1';
 // Shape-type conversion (CLEANUP S2 slice 6) — the renderers' Convert buttons + the right-click convert menu (via
 // buildCellActions) call these; each rewires a cell in place preserving links + embedding.
-import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.25.9';
+import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.26.1';
 // Shared render tail (CLEANUP S2 slice 7) — every render*Props ends with finishStandardProps; autoSizeCell +
 // buildCellActions are wired into selection via app.js (properties.autoSizeCell / .buildCellActions), so re-export.
-import { finishStandardProps, autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.25.9';
-export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.25.9';
+import { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.1';
+export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.1';
 // Match Container Height (1.23.0) — the canvas menus reach it through the facade, same as autoSizeCell:
 // selection.setLaneMatcher(...) in app.js injects these so js/selection/ never imports js/properties/.
-export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.25.9';
+export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.26.1';
 // Per-family property renderers (CLEANUP S2 slice 8+) — the showProperties() dispatch calls these back.
-import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps } from './properties/renderers-sequence.js?v=1.25.9';
-import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.25.9';
-import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.25.9';
-import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.25.9';
-import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.25.9';
-import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.25.9';
-import { triggerDownload } from './persistence.js?v=1.25.9';
-import { confirmModal, showToast, buildModal } from './feedback.js?v=1.25.9';
-import { getAllIcons, getIconDataUri } from './icons.js?v=1.25.9';
-import { Z_BASE, Z_TIER_SPAN, tierNameForType, updateSimpleNodeLayout, updateDataObjectHeaderLayout, updateContainerHeaderLayout, updateNoteIconLayout, syncMobilePanelHeight, canEmbed, applyMappingLinkStyle, applyRelationshipLinkStyle, syncMappingTypeBadge, syncFrequencyLabel } from './canvas.js?v=1.25.9';
-import * as stencilModule from './stencil.js?v=1.25.9';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from './brand-palette.js?v=1.25.9';
-import { resizeDataObjectToFit, contrastTextColor, getStencilSvgDataUri, SVG as COMPONENT_SVG, extractLinkDomain } from './components.js?v=1.25.9';
+import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps, undoableLifelineOp } from './properties/renderers-sequence.js?v=1.26.1';
+import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.26.1';
+import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.26.1';
+import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.26.1';
+import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.26.1';
+import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.26.1';
+import { confirmModal, buildModal } from './feedback.js?v=1.26.1';
+import { Z_TIER_SPAN, zTierBase, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.26.1';
+import * as stencilModule from './stencil.js?v=1.26.1';
 import {
   duplicate as clipboardDuplicate,
-  copy as clipboardCopy,
-  cloneElementWithConnectors,
-  countConnectors,
-  countConnectedConnectors,
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.25.9';
-import * as history from './history.js?v=1.25.9';
-import { startImageAddFlow } from './image-component.js?v=1.25.9';
-import { escHtml, sanitizeFilenamePart, sanitizeCssColor } from './util.js?v=1.25.9';
-import { getActiveTabName } from './tabs.js?v=1.25.9';
-import { saveSelectionAsTemplate, saveCellAsShape } from './templates.js?v=1.25.9';
-import { newFid } from './shapes.js?v=1.25.9';
-import { timelineBars, applyGanttGeometry, resequenceGanttOrders, orderToY, ganttRowLayout, ganttTimelineFor, applyGanttGroupGeometry } from './gantt-layout.js?v=1.25.9';
+} from './clipboard.js?v=1.26.1';
+import * as history from './history.js?v=1.26.1';
+import { saveSelectionAsTemplate } from './templates.js?v=1.26.1';
 
 
 
@@ -108,9 +89,17 @@ let mappingModeGetter = null;
 export function setMappingModeGetter(fn) { mappingModeGetter = fn; }
 function isMappingMode() { return !!(mappingModeGetter && mappingModeGetter()); }
 
-// Re-render the property panel for the current single selection (used when
-// mapping mode toggles so the Data Cloud section appears/disappears live).
+// Re-render the property panel for the current selection (used when mapping mode toggles so the Data Cloud
+// section appears/disappears live, and after every undo / redo). A multi panel re-renders too: after an undo its
+// fields kept the values from before the replay (review J1-2).
 export function refresh() {
+  const ids = selection.getSelectedIds();
+  if (ids.length > 1) {
+    clearActiveSizeListener();
+    clearActiveGanttDateListener();
+    showMultiProperties(ids.length);
+    return;
+  }
   const c = getActiveCell();
   if (c) showProperties(c);
 }
@@ -130,13 +119,24 @@ export function init(_graph, _paper, _selection) {
   // own code; the leaves read prctx.* at call time.
   wirePrctx({ graph, paper, selection, panelEl, typeBadgeEl, titleEl, bodyEl, footerEl, refresh, showProperties, bindLiveGanttDates, openTableEditorModal, isMappingMode });
 
-  document.getElementById('btn-close-properties').addEventListener('click', () => {
+  // The X button and the mobile swipe-down (canvas/mobile.js dispatches `df-dismiss` on the panel) take one path:
+  // hide, restore the stencil, clear the selection. A swipe that only hid the sheet kept the selection, so a re-tap
+  // on the same shape could not reopen it (review H1-7).
+  const dismissPanel = () => {
     panelEl.classList.add('df-properties--hidden');
     restoreStencilAfterProperties();
     selection.clearSelection();
-  });
+  };
+  document.getElementById('btn-close-properties').addEventListener('click', dismissPanel);
+  panelEl.addEventListener('df-dismiss', dismissPanel);
 
   selection.onChange((ids) => {
+    // Commit a panel field the user is still typing in, while its own cell is current. Clicking a shape never blurs it
+    // (JointJS prevents the default on mousedown), the rebuild below removes it, and WebKit fires no change for a
+    // removed input, so the value was lost; a blank click cleared the selection first, so a Gantt timeline field
+    // re-opened the panel for nothing (review J1-6).
+    const focused = document.activeElement;
+    if (focused && focused !== document.body && panelEl.contains(focused)) focused.blur();
     cleanupCanvasHighlights();
     // Dismiss any inline text editor (trigger blur to save and clean up)
     const activeEditor = document.querySelector('.df-inline-edit__input');
@@ -249,6 +249,12 @@ function getInlineEditTarget(cell) {
 }
 
 /** Start inline text editing on the canvas overlay */
+/** The canvas label editor is open with text not committed yet: it commits only when it closes. */
+export function isLabelEditChanged() {
+  const el = document.querySelector('.df-inline-edit__input');
+  return !!el && el.value !== el.defaultValue;
+}
+
 function startInlineEdit(cellView, evt) {
   document.querySelector('.df-inline-edit')?.remove();
 
@@ -375,6 +381,7 @@ function startInlineEdit(cellView, evt) {
 
   const textarea = document.createElement('textarea');
   textarea.className = 'df-inline-edit__input';
+  textarea.defaultValue = String(currentText ?? '');   // isLabelEditChanged compares against it
   textarea.value = currentText;
 
   textarea.style.cssText = `
@@ -426,14 +433,25 @@ function startInlineEdit(cellView, evt) {
   textarea.select();
   autosize();
 
+  let cancelled = false;   // Escape: commit nothing, not even the trailing-break cleanup below
   const finish = () => {
     if (overlay._finished) return;
     overlay._finished = true;
 
-    const newText = textarea.value;
-    if (newText !== currentText) {
-      commit(newText);
-      if (type === 'sf.SimpleNode') updateSimpleNodeLayout(cell);
+    // Enter inserts a line break (multi-line labels are a feature), but a TRAILING one is never meant: it drew the
+    // label above centre and leaked into exports, the Table view and search (Q4). Compare against the UNTRIMMED old
+    // text, so deleting an old label's trailing break counts as a change. The cost: opening and closing the editor
+    // on such a label commits the cleaned label as one undo step.
+    const dropTrailingBreaks = (s) => String(s ?? '').replace(/(?:[ \t]*\r?\n)+[ \t]*$/, '');
+    const newText = dropTrailingBreaks(textarea.value);
+    if (!cancelled && newText !== String(currentText ?? '')) {
+      // One undo step: a Pill or Legend re-fits its width on the new text, and endBatch lands that pending resize in
+      // the same entry (review S4-4).
+      history.startBatch();
+      try {
+        commit(newText);
+        if (type === 'sf.SimpleNode' || type === 'df.Placeholder') updateSimpleNodeLayout(cell);
+      } finally { history.endBatch(); }
       const ids = selection.getSelectedIds();
       if (ids.length === 1 && ids[0] === cell.id) showProperties(cell);
     }
@@ -447,6 +465,7 @@ function startInlineEdit(cellView, evt) {
   textarea.addEventListener('keydown', (e) => {
     // While an IME composes, Escape cancels the COMPOSITION, not the edit (audit 2026-09-23).
     if (e.key === 'Escape' && !e.isComposing) {
+      cancelled = true;
       textarea.value = currentText;
       textarea.blur();
     }
@@ -523,6 +542,9 @@ export function applyShapeState(cell, style) {
   // One undo step for the state, its stash and the stroke it paints.
   history.startBatch();
   try { applyShapeStateInner(cell, style); } finally { history.endBatch(); }
+  // A connector's colour write re-inserts its group, but the width write after it thickens the None stub ends, and
+  // Safari keeps the old marker paint until the next re-insert (review S4-12).
+  if (cell.isLink?.()) repaintLinkView(cell);
 }
 function applyShapeStateInner(cell, style) {
   if (cell.isLink?.()) { applyLinkState(cell, style); return; }
@@ -668,11 +690,40 @@ function maybeAddShapeStateControl(cell) {
   placeShapeStateSection(body.parentElement);   // move between Content and Appearance
 }
 
+// Keyboard focus across a re-render of the SAME cell (review S4-13). A Highlight State row, the Actor lifeline
+// Visibility, the Flow connector Type and the Connection type re-render the panel from their own click, which removed
+// the focused control and dropped a keyboard user to the top of the page. Only buttons and their ARIA kin are
+// restored: putting focus back in a text field would reopen a phone's keyboard after every commit.
+const FOCUS_RESTORE_SEL = 'button, [role="button"], [role="radio"], [role="checkbox"]';
+let panelCellId = null;   // the cell the single panel last rendered (null after a multi-select render)
+const sectionTitle = (sec) => sec.querySelector('.df-section__header span')?.textContent ?? '';
+const fieldLabel = (f) => f.querySelector('.df-properties__label')?.textContent ?? '';
+function panelFocusKey() {
+  const el = document.activeElement;
+  if (!el || !bodyEl.contains(el) || !el.matches(FOCUS_RESTORE_SEL)) return null;
+  const sec = el.closest('.df-section');
+  if (!sec) return null;
+  const field = el.closest('.df-prop-field');
+  const scope = field || sec;
+  return { title: sectionTitle(sec), field: field ? fieldLabel(field) : null, value: el.dataset.value ?? null,
+    index: [...scope.querySelectorAll(FOCUS_RESTORE_SEL)].indexOf(el) };
+}
+function restorePanelFocus(key) {
+  if (!key) return;
+  const sec = [...bodyEl.querySelectorAll('.df-section')].find((s) => sectionTitle(s) === key.title);
+  const scope = sec && (key.field == null ? sec : [...sec.querySelectorAll('.df-prop-field')].find((f) => fieldLabel(f) === key.field));
+  if (!scope) return;
+  const byValue = key.value != null && [...scope.querySelectorAll('[data-value]')].find((b) => b.dataset.value === key.value);
+  const target = byValue || [...scope.querySelectorAll(FOCUS_RESTORE_SEL)][key.index];
+  target?.focus({ preventScroll: true });
+}
+
 function showProperties(cell) {
   const wasHidden = panelEl.classList.contains('df-properties--hidden');
   panelEl.classList.remove('df-properties--hidden');
   if (wasHidden) hideStencilForProperties();
   syncMobilePanelHeight(panelEl);
+  const focusKey = panelCellId === cell.id ? panelFocusKey() : null;
   bodyEl.innerHTML = '';
   footerEl.innerHTML = '';
   clearActiveGanttDateListener();   // a prior gantt task's date binding (re-set below if this is a gantt task)
@@ -741,7 +792,10 @@ function showProperties(cell) {
   // real time instead of waiting for the next selection cycle.
   bindLiveSizeInputs(cell);
 
-  // Don't auto-focus inputs on single click — single click selects, double click edits.
+  // Don't auto-focus inputs on single click — single click selects, double click edits. A control that re-rendered
+  // its own panel gets its focus back (S4-13).
+  panelCellId = cell.id;
+  restorePanelFocus(focusKey);
 }
 
 // ── Live size sync ──────────────────────────────────────────────────
@@ -807,6 +861,7 @@ function showMultiProperties(count) {
   // identical to a single shape with no label.
   typeBadgeEl.textContent = `${count} Selected`;
   titleEl.textContent = '';
+  panelCellId = null;
   bodyEl.innerHTML = '';
   footerEl.innerHTML = '';
 
@@ -819,8 +874,7 @@ function showMultiProperties(count) {
   // width). Shown for ANY selection that includes links (pure-link or mixed) so many
   // connectors can be recoloured at once; each control applies to every selected link in ONE
   // undo step. (Previously a pure-link multi-select read "No elements selected" — no edits.)
-  // refresh() only re-renders a SINGLE-cell panel, so the multi panel re-renders itself by
-  // re-running showMultiProperties — needed when a control changes which fields apply
+  // The multi panel re-renders itself by re-running showMultiProperties — needed when a control changes which fields apply
   // (Connection type → mapping fields appear/vanish; Mapping type → Expression discloses).
   const rerenderMulti = () => showMultiProperties(count);
 
@@ -859,6 +913,7 @@ function showMultiProperties(count) {
     addNumber(sec, 'Line width', sameWidth ? widths[0] : '', v => {
       history.startBatch();
       try { links.forEach(l => applyLinkStrokeWidth(l, v)); } finally { history.endBatch(); }
+      links.forEach(repaintLinkView);   // None stub ends track the width (Safari marker cache)
     }, { placeholder: sameWidth ? undefined : 'Mixed' });
 
     // ── Bulk parity with the single-connector Appearance panel (v1.19.4.1): the fields that make sense to
@@ -870,12 +925,13 @@ function showMultiProperties(count) {
       history.startBatch();
       try { links.forEach(l => applyLinkFontColor(l, v)); } finally { history.endBatch(); }
     });
-    const sizes = links.map(l => l.labels()?.[0]?.attrs?.text?.fontSize ?? 13);
+    const sizes = links.map(l => l.labels()?.[userLinkLabelIndex(l)]?.attrs?.text?.fontSize ?? 13);   // the user label, not a badge
     const sameSize = sizes.every(s => s === sizes[0]);
     addNumber(sec, 'Font size', sameSize ? sizes[0] : '', v => {
       history.startBatch();
       try { links.forEach(l => applyLinkFontSize(l, v)); } finally { history.endBatch(); }
     }, { min: 8, max: 24, placeholder: sameSize ? undefined : 'Mixed' });
+    setLinkFontSizeEnabled(sec.lastElementChild, links.some(l => userLinkLabelIndex(l) >= 0));
     const repStroke = links[0].attr('line/stroke') || '#888888';
     const bulkMarker = (side, key) => {
       const marks = links.map(l => detectLinkMarker(l.attr(`line/${key}`)));
@@ -890,8 +946,8 @@ function showMultiProperties(count) {
     bulkMarker('Source end', 'sourceMarker');
     bulkMarker('Target end', 'targetMarker');
 
-    // Reverse direction (swap endpoints) + Simplify path (clear vertices + round) — batch versions of the single
-    // panel's foot buttons; each is one undo step across the whole selection.
+    // Reverse direction (swap endpoints) + Simplify path (clear vertices; each link keeps its own connector) — batch
+    // versions of the single panel's foot buttons; each is one undo step across the whole selection.
     const bulkBtn = (label, svg, onClick) => {
       const b = document.createElement('button');
       b.className = 'df-properties__btn df-properties__btn--auto-size';
@@ -905,7 +961,7 @@ function showMultiProperties(count) {
       () => links.forEach(l => { const s = l.get('source'), t = l.get('target'); l.set({ source: t, target: s }); }));
     bulkBtn('Simplify path',
       '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13 L14 3" stroke-linecap="round"/><circle cx="2" cy="13" r="1.5" fill="currentColor" stroke="none"/><circle cx="14" cy="3" r="1.5" fill="currentColor" stroke="none"/></svg>',
-      () => links.forEach(l => { l.vertices([]); l.connector('rounded', { radius: 8 }); }));
+      () => links.forEach(l => l.vertices([])));
   };
 
   // Highlight State — the shared 5-state list applied to every selected shape (body) AND connector (line) in one
@@ -970,7 +1026,6 @@ function showMultiProperties(count) {
   }
 
   // ── Size section ──
-  const types = new Set(elements.map(c => c.get('type')));
   const sizeSec = section(bodyEl, 'Size');
   const widths = elements.map(c => c.size().width);
   const heights = elements.map(c => c.size().height);
@@ -983,9 +1038,13 @@ function showMultiProperties(count) {
 
   // ── Rotation — every element supports an angle, so offer a shared rotation. Shows the shared
   // angle (or 0 when mixed); setting applies to all selected elements in one undo step.
-  const angles = elements.map(c => c.angle());
-  const sameAngle = angles.every(a => a === angles[0]);
-  rotationField(sizeSec, 'Rotation', () => sameAngle ? angles[0] : 0, v => {
+  // Read the angles LIVE: rotate() is absolute and nothing re-renders this panel after its own edits, so a
+  // render-time snapshot made the second +90° set 90° again (review J1-10).
+  const sharedAngle = () => {
+    const angles = elements.map(c => c.angle());
+    return angles.every(a => a === angles[0]) ? angles[0] : 0;
+  };
+  rotationField(sizeSec, 'Rotation', sharedAngle, v => {
     history.startBatch();
     try { elements.forEach(c => c.rotate(v, true)); } finally { history.endBatch(); }
   });
@@ -1030,18 +1089,24 @@ function showMultiProperties(count) {
     const allSameCount = counts.every(n => n === counts[0]);
     addNumber(seqSec, 'Ports', allSameCount ? counts[0] : '', v => {
       const n = Math.max(1, v | 0);
-      elements.forEach(c => {
-        const t = c.get('type');
-        if (t === 'sf.SequenceParticipant') joint.shapes.sf.rebuildSeqParticipantPorts(c, n);
-        else if (t === 'sf.SequenceActor') {
-          // Only rebuild ports when the actor's lifeline is actually visible;
-          // otherwise just store the count so re-showing the lifeline picks
-          // it up (rebuildSeqActorPorts sets lifelinePortCount either way).
-          if (c.get('showLifeline')) joint.shapes.sf.rebuildSeqActorPorts(c, n);
-          else c.set('lifelinePortCount', n);
-        }
-        else if (t === 'sf.SequenceActivation') joint.shapes.sf.rebuildSeqActivationPorts(c, n);
-      });
+      // Same snapshot helper as the single panel, one batch for the selection: ONE undo step that restores the
+      // ports, the count AND the messages a lower count deleted (it was two steps that restored only the count,
+      // leaving the re-added message on a port that no longer existed - review XJ2-1).
+      history.startBatch();
+      try {
+        elements.forEach(c => {
+          const t = c.get('type');
+          if (t === 'sf.SequenceParticipant') undoableLifelineOp(c, () => joint.shapes.sf.rebuildSeqParticipantPorts(c, n));
+          else if (t === 'sf.SequenceActor') {
+            // Only rebuild ports when the actor's lifeline is actually visible;
+            // otherwise just store the count so re-showing the lifeline picks
+            // it up (rebuildSeqActorPorts sets lifelinePortCount either way).
+            if (c.get('showLifeline')) undoableLifelineOp(c, () => joint.shapes.sf.rebuildSeqActorPorts(c, n));
+            else undoableLifelineOp(c, () => c.set('lifelinePortCount', n));
+          }
+          else if (t === 'sf.SequenceActivation') undoableLifelineOp(c, () => joint.shapes.sf.rebuildSeqActivationPorts(c, n));
+        });
+      } finally { history.endBatch(); }
     });
   }
 
@@ -1068,7 +1133,7 @@ function showMultiProperties(count) {
     try {
       elements.forEach(c => {
         const type = c.get('type');
-        const tierBase = Z_BASE[type] ?? 2000;
+        const tierBase = zTierBase(type);
         const peers = graph.getElements().filter(el => !ids.includes(el.id) && el.get('z') >= tierBase && el.get('z') < tierBase + Z_TIER_SPAN);
         const maxZ = peers.length ? Math.max(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
         const oldZ = c.get('z'); const newZ = maxZ + 1;
@@ -1094,7 +1159,7 @@ function showMultiProperties(count) {
     try {
       elements.forEach(c => {
         const type = c.get('type');
-        const tierBase = Z_BASE[type] ?? 2000;
+        const tierBase = zTierBase(type);
         const peers = graph.getElements().filter(el => !ids.includes(el.id) && el.get('z') >= tierBase && el.get('z') < tierBase + Z_TIER_SPAN);
         const minZ = peers.length ? Math.min(...peers.map(el => el.get('z') ?? tierBase)) : tierBase;
         const oldZ = c.get('z'); const newZ = Math.max(tierBase, minZ - 1);
@@ -1113,7 +1178,7 @@ function showMultiProperties(count) {
 
   // Auto-size button — route through the SHARED sizer so it stays in sync with the single-select path
   // (which content-fits DataObject / Note / df.Table / df.Legend instead of forcing DEFAULT_SIZES).
-  addAutoSizeBtn(actionSec, () => { elements.forEach(c => autoSizeCell(c)); });
+  addAutoSizeBtn(actionSec, asUndoBatch(() => { elements.forEach(c => autoSizeCell(c)); }));   // one undo step (J1-13)
 
   // ── Selection, Convert & Delete (footer) ──
   const allNodes = elements.every(c => c.get('type') === 'sf.SimpleNode');
@@ -1163,11 +1228,9 @@ function showMultiProperties(count) {
     const [typeName, count] = typeEntries[0];
     const totalOfType = graph.getElements().filter(c => c.get('type') === typeName).length;
     if (count < totalOfType) {
-      const typeLabel = TYPE_LABELS[typeName] || typeName.replace('sf.', '');
-      const plural = typeLabel.endsWith('s') || typeLabel.endsWith('x') ? typeLabel + 'es' : typeLabel + 's';
+      const plural = typePlural(typeName);   // the curated plural, else "<label> elements" / "<label>s" (J1-15)
       addActionBtn(footerEl, `Select all ${plural}`, () => {
-        selection.clearSelection();
-        graph.getElements().filter(c => c.get('type') === typeName).forEach(c => selection.addToSelection(c.id));
+        selection.selectMany(graph.getElements().filter(c => c.get('type') === typeName).map(c => c.id), { replace: true });
       });
     }
   }
@@ -1185,66 +1248,37 @@ function showMultiProperties(count) {
   // of icon nodes mirrors the single-element panel's "Convert to Node".
   const allIconNodes = allNodes && elements.every(c => c.get('iconMode'));
   const noIconNodes = allNodes && elements.every(c => !c.get('iconMode'));
+  // ONE undo step for the whole set (each convert's own batch nests inside this one), and the converted shapes stay
+  // selected (review J1-4). Each convert skips its own selectOnly and the results are selected in ONE change: a
+  // per-id re-select rebuilt the panel and re-ran the link dimming twice per shape (review S4-10).
+  const convertAll = (accepts, convert) => {
+    const newIds = [];
+    history.startBatch();
+    try {
+      [...ids].forEach(id => {
+        const c = graph.getCell(id);
+        if (!c || !accepts(c)) return;
+        newIds.push(convert(c, { select: false }));
+      });
+    } finally { history.endBatch(); }
+    selection.selectMany(newIds.filter(id => graph.getCell(id)), { replace: true });
+  };
+  const isNode = c => c.get('type') === 'sf.SimpleNode';
+  const isContainer = c => c.get('type') === 'sf.Container';
   if (allIconNodes) {
-    addActionBtn(footerEl, 'Convert all to Node', () => {
-      const selectedBefore = [...ids];
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.SimpleNode' && c.get('iconMode')) convertFromIcon(c);
-      });
-    });
-    addActionBtn(footerEl, 'Convert all to Container', () => {
-      const selectedBefore = [...ids];
-      selection.clearSelection();
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.SimpleNode') convertToContainer(c);
-      });
-    });
+    addActionBtn(footerEl, 'Convert all to Node', () => convertAll(c => isNode(c) && c.get('iconMode'), convertFromIcon));
+    addActionBtn(footerEl, 'Convert all to Container', () => convertAll(isNode, convertToContainer));
   } else if (noIconNodes) {
-    addActionBtn(footerEl, 'Convert all to Container', () => {
-      const selectedBefore = [...ids];
-      selection.clearSelection();
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.SimpleNode') convertToContainer(c);
-      });
-    });
-    addActionBtn(footerEl, 'Convert all to Icon', () => {
-      const selectedBefore = [...ids];
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.SimpleNode') convertToIcon(c);
-      });
-    });
+    addActionBtn(footerEl, 'Convert all to Container', () => convertAll(isNode, convertToContainer));
+    addActionBtn(footerEl, 'Convert all to Icon', () => convertAll(isNode, convertToIcon));
   } else if (allNodes) {
     // Mixed (some icon, some regular SimpleNodes) — only the cross-type
     // conversion makes sense; "to Icon" would no-op on already-icons.
-    addActionBtn(footerEl, 'Convert all to Container', () => {
-      const selectedBefore = [...ids];
-      selection.clearSelection();
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.SimpleNode') convertToContainer(c);
-      });
-    });
+    addActionBtn(footerEl, 'Convert all to Container', () => convertAll(isNode, convertToContainer));
   }
   if (allContainers) {
-    addActionBtn(footerEl, 'Convert all to Node', () => {
-      const selectedBefore = [...ids];
-      selection.clearSelection();
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.Container') convertToNode(c);
-      });
-    });
-    addActionBtn(footerEl, 'Convert all to Icon', () => {
-      const selectedBefore = [...ids];
-      selectedBefore.forEach(id => {
-        const c = graph.getCell(id);
-        if (c && c.get('type') === 'sf.Container') convertContainerToIcon(c);
-      });
-    });
+    addActionBtn(footerEl, 'Convert all to Node', () => convertAll(isContainer, convertToNode));
+    addActionBtn(footerEl, 'Convert all to Icon', () => convertAll(isContainer, convertContainerToIcon));
   }
 
   // Delete All
@@ -1275,11 +1309,19 @@ function openTableEditorModal(cell) {
     plainCells: !!cell.get('plainCells'),
     size: { ...cell.size() },
   });
+  // By id, not the captured `cell`: the undo entry outlives this instance (a tab switch reloads the graph, an undone
+  // delete re-adds the table from JSON), and replaying onto a detached model changed nothing (review J1-3).
+  const id = cell.id;
   const applyState = (s) => {
-    cell.set({ rows: s.rows.map(r => [...r]), highlightFirstRow: s.highlightFirstRow, highlightFirstCol: s.highlightFirstCol, plainCells: s.plainCells });
-    cell.resize(s.size.width, s.size.height);
+    const c = graph.getCell(id);
+    if (!c) return;
+    c.set({ rows: s.rows.map(r => [...r]), highlightFirstRow: s.highlightFirstRow, highlightFirstCol: s.highlightFirstCol, plainCells: s.plainCells });
+    c.resize(s.size.width, s.size.height);
   };
   const before = snap();
+  // Land a change still in history's 80 ms merge window (e.g. a Font size committed by the blur of this click) BEFORE
+  // muting: flushed while suppressed, it would be dropped.
+  history.flushPendingDragCommit();
   // SUPPRESS recording so the live preview edits never hit the undo stack (setLocked only blocks playback, NOT
   // recording — relying on it alone double-records). Also lock so a stray Cmd+Z mid-edit can't pop a prior entry.
   history.setSuppressed(true);

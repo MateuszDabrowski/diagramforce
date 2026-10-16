@@ -1,7 +1,7 @@
 // Gantt-chart shapes (GanttTask/Milestone/Marker/Timeline/Group) (CLEANUP S3). registerGantt() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttRowLayout, ganttSummaryLaneH, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.25.9';
+import { GANTT_SUMMARY_GROUP_H, GANTT_SUMMARY_MARKER_H, applyGanttGeometry, applyGanttGroupGeometry, applyGanttMarkerGeometry, applyGanttMilestoneGeometry, dateToLocalX, ganttGroupSummary, ganttHeaderH, ganttRowLayout, ganttSummaryLaneH, ganttTaskListWidth, ganttTimelineFor, layoutTimelineTasks, recolorGroupTasks } from '../gantt-layout.js?v=1.26.1';
 
 export function registerGantt() {
   // --- GanttTask ---
@@ -421,14 +421,19 @@ export function registerGantt() {
   joint.shapes.sf.GanttTimelineView = joint.dia.ElementView.extend({
     initialize() {
       joint.dia.ElementView.prototype.initialize.apply(this, arguments);
-      // Re-draw the ruler AND re-position dated task bars whenever the axis changes (the bars track the timeline).
-      this.listenTo(this.model, 'change:startDate change:endDate change:todayDate change:viewMode change:numPeriods change:size change:tasks change:groups change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay change:showProjectSummary', () => { this._renderColumns(); layoutTimelineTasks(this.model); });
       // Issue 7: a group's colour change must reach its bars — the per-task `change:groupId` listener can't see a
       // `change:groups` edit (recolour in the group editor / properties), so recolour all non-manual bars here.
+      // Registered BEFORE the axis listener below, so the panel it redraws reads the new bar colours: in the other
+      // order the task-row dots kept the old colour (review S6-5).
       this.listenTo(this.model, 'change:groups', () => recolorGroupTasks(this.model));
+      // Re-draw the ruler AND re-position dated task bars whenever the axis changes (the bars track the timeline).
+      this.listenTo(this.model, 'change:startDate change:endDate change:todayDate change:viewMode change:numPeriods change:size change:tasks change:groups change:taskListWidth change:rowHeight change:timelineTitle change:timelineDescription change:weekStartDay change:showWeekNumber change:weekendStartDay change:showProjectSummary', () => { this._renderColumns(); layoutTimelineTasks(this.model); });
       // Phase 4.2: the left panel is DERIVED from the bars, so re-render it when a GanttTask bar is added /
-      // removed / moved / resized / relabelled. rAF-debounced; _renderColumns only touches this view's columns
-      // group + silent attrs (no graph mutation), so there is no redraw loop.
+      // removed / re-parented / re-ordered / relabelled / re-dated. rAF-debounced; _renderColumns only touches this
+      // view's columns group + silent attrs (no graph mutation), so there is no redraw loop. NOT on position / size:
+      // the panel reads order, groups and dates, never a bar's pixels, and a drag fired a full rebuild per frame
+      // (review L10). `change:parent` covers a bar re-embedded into another timeline, which used to arrive only
+      // through the follow-up position change.
       this._panelRaf = false;
       const reRenderPanel = () => {
         if (this._panelRaf) return;
@@ -436,11 +441,20 @@ export function registerGantt() {
         requestAnimationFrame(() => { this._panelRaf = false; this._renderColumns(); });
       };
       if (this.model.graph) {
-        this.listenTo(this.model.graph, 'add remove change:position change:size change:taskLabel change:groupId change:markerDate change:milestoneDate change:progress change:startDate change:endDate', (cell) => {
+        this.listenTo(this.model.graph, 'add remove change:parent change:order change:taskLabel change:groupId change:markerDate change:milestoneDate change:progress change:startDate change:endDate', (cell) => {
           const ct = cell?.get?.('type');
           // Re-draw on a task change (panel rows + group summary bars react to dates/progress) OR a marker/
           // milestone change (the event lines + glyph columns + the Timeline Summary lane).
           if (ct === 'sf.GanttTask' || ct === 'sf.GanttMarker' || ct === 'sf.GanttMilestone') reRenderPanel();
+        });
+        // A milestone or marker name and a bar colour are attrs only (`label/text`, `progressBar/fill`), and the
+        // Timeline Summary labels and the task-row dots draw them, so a rename or recolour left them stale (review
+        // S6-5). Only those two paths re-render: a hover or theme attr write must not rebuild the panel (review L10).
+        this.listenTo(this.model.graph, 'change:attrs', (cell) => {
+          const ct = cell?.get?.('type');
+          if (ct !== 'sf.GanttTask' && ct !== 'sf.GanttMarker' && ct !== 'sf.GanttMilestone') return;
+          const a = cell.get('attrs') || {}, p = cell.previous('attrs') || {};
+          if (a.label?.text !== p.label?.text || a.progressBar?.fill !== p.progressBar?.fill) reRenderPanel();
         });
       }
     },
@@ -465,21 +479,21 @@ export function registerGantt() {
       // their bars) — the bars own the record. A legacy tasks[]-only timeline can't reach here: migrateGanttTimeline
       // converts it to bars on load, the stencil drop seeds bars, and a fresh Gantt seeds bars.
       const layout = ganttRowLayout(model);
-      const rowCount = layout.length;
-      const taskListWidth = rowCount ? (model.get('taskListWidth') || 200) : 0;
+      const taskListWidth = ganttTaskListWidth(model, layout);   // the same rule the axis (dateToX) uses
       const rowHeight = Math.max(model.get('rowHeight') || 48, 48);
       const dateH = 48;            // total height for the two date rows
       const topH = dateH / 2;      // top date row height
       const botH = dateH / 2;      // bottom date row height
       // Timeline Summary overview lane (Display toggle). When ON it REPLACES the band below the dates with a lane
       // that has one SUBROW per group + a marker subrow (grows with the group count). When OFF the band is the 40px
-      // phase row ONLY if there's a description; otherwise it collapses to 0 (no empty gap). headerH matches
-      // ganttHeaderH so bars + panel stay aligned.
+      // phase row ONLY if there's a description; otherwise it collapses to 0 (no empty gap). headerH IS
+      // ganttHeaderH, the value the bar geometry reads, so bars + panel stay aligned; the two band heights below
+      // only draw the bands.
       const summaryOn = model.get('showProjectSummary');
       const summaryH = summaryOn ? ganttSummaryLaneH(model) : 0;
       const hasDesc = !!(model.get('timelineDescription') || '').trim();
       const phaseRowH = summaryOn ? 0 : (hasDesc ? 40 : 0);
-      const headerH = dateH + phaseRowH + summaryH;
+      const headerH = ganttHeaderH(model);
 
       // Unified row list. Each layout row (group header OR bar) sits at the DETERMINISTIC slot
       // `headerH + rowIndex*rowHeight` — the SAME index the geometry uses for the bar's Y — so the panel and the

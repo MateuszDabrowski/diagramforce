@@ -1,4 +1,4 @@
-import { showError } from './feedback.js?v=1.25.9';
+import { showError, trapFocus } from './feedback.js?v=1.26.1';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //
@@ -166,21 +166,30 @@ function loadImage(url) {
   });
 }
 
+// The open dialog's finish(), so a second open closes it through finish (callback + focus-trap release), not a bare
+// remove() that left its document keydown listener behind (K11).
+let _closeConsent = null;
+
 /**
  * Modal: explains the URL-share trade-off and lists supported formats.
  * Resolves via callback so the "Add image" click handler can synchronously
  * open the file picker (preserving Safari's user-gesture chain).
  */
 function showImageConsentModal(callback) {
-  document.querySelector('.df-image-consent-modal')?.remove();
+  _closeConsent?.(false);
+  const opener = document.activeElement;
   const overlay = document.createElement('div');
   overlay.className = 'df-modal df-image-consent-modal';
   overlay.style.zIndex = '10001';
+  // A real modal dialog to assistive tech, named by its title (review S6-8: a screen reader heard only the button).
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'df-image-consent-title');
   overlay.innerHTML = `
     <div class="df-modal__overlay"></div>
     <div class="df-modal__dialog" style="width:480px">
       <div class="df-modal__header">
-        <h2 class="df-modal__title">Add image to this diagram?</h2>
+        <h2 id="df-image-consent-title" class="df-modal__title">Add image to this diagram?</h2>
       </div>
       <div class="df-modal__body" style="padding:16px 20px">
         <p style="margin:0 0 12px;line-height:1.5">
@@ -199,15 +208,17 @@ function showImageConsentModal(callback) {
       </div>
     </div>`;
   let finished = false;
+  let release = null;
   const finish = (val) => {
     if (finished) return;
     finished = true;
-    document.removeEventListener('keydown', onKey);
+    if (_closeConsent === finish) _closeConsent = null;
+    release?.();
     overlay.remove();
     callback(val);
+    if (opener?.isConnected && document.activeElement === document.body) opener.focus?.();   // back to the tile
   };
-  const onKey = (e) => { if (e.key === 'Escape') finish(false); };
-  document.addEventListener('keydown', onKey);
+  _closeConsent = finish;
   overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => finish(false));
   // CRITICAL: this click handler runs as a user gesture. The callback fires
   // synchronously, which calls openImagePicker → input.click() — the file
@@ -215,4 +226,11 @@ function showImageConsentModal(callback) {
   overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => finish(true));
   overlay.querySelector('.df-modal__overlay').addEventListener('click', () => finish(false));
   document.body.appendChild(overlay);
+  // Tab stays inside the dialog and Escape cancels (review S6-8). Tab used to leave it for a stencil tile, whose own
+  // Enter handler added a shape behind the modal. The confirm click stays a plain synchronous handler (Safari).
+  release = trapFocus(overlay, { onEscape: () => finish(false) });
+  // Focus the main action (K11): a keyboard user's next Enter lands on the button, whose native click IS the user
+  // gesture the picker needs. Focus used to stay on the stencil tile, so that Enter re-ran quick add and rebuilt this
+  // dialog. Enter is not mapped by the trap: with focus on Cancel it must cancel.
+  overlay.querySelector('[data-action="confirm"]').focus();
 }

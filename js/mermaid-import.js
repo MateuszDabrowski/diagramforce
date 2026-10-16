@@ -11,16 +11,17 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.25.9';
-import { ER_MARKER_D } from './er-markers.js?v=1.25.9';
-import { showError, showToast } from './feedback.js?v=1.25.9';
-import { MAX_CELL_COUNT } from './persistence/diagram-schema.js?v=1.25.9';
+import { createElementFromComponent } from './components.js?v=1.26.1';
+import { ER_MARKER_D } from './er-markers.js?v=1.26.1';
+import { showError, showImportNotes, showToast } from './feedback.js?v=1.26.1';
+import { MAX_CELL_COUNT, SEQ_ROLE_ACCENT } from './persistence/diagram-schema.js?v=1.26.1';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.25.9';
-import { noteError } from './diagnostics.js?v=1.25.9';
-import { portExitBlocked } from './canvas/router.js?v=1.25.9';
+  from './gantt-layout.js?v=1.26.1';
+import { axisEndDate, localISODate } from './gantt-scale.js?v=1.26.1';
+import { noteError } from './diagnostics.js?v=1.26.1';
+import { portExitBlocked, obstacleBoxes } from './canvas/router.js?v=1.26.1';
 
 let modules = {};
 
@@ -36,12 +37,28 @@ export function init(_modules) {
  */
 export function validateMermaid(text) {
   if (!text || !text.trim()) return { ok: false, error: 'Empty input.' };
-  const { body } = parseFrontmatter(text);
+  const { body } = parseFrontmatter(stripMermaidWrapper(text));
   const type = detectDiagramType(body);
-  if (!type) {
-    return { ok: false, error: 'Could not detect a supported diagram type. Expected one of: graph, flowchart, stateDiagram, erDiagram, sequenceDiagram.' };
-  }
+  if (!type) return { ok: false, error: 'Could not detect a supported Mermaid diagram type.' };
   return { ok: true, type };
+}
+
+/** The diagram inside what people paste. A README, a wiki or an LLM answer wraps Mermaid in a ```mermaid fence, and
+ *  a `%%{ init }%%` directive may span lines before the type keyword; detection gave up at the first line that was
+ *  neither, so Load stayed disabled (review 2026-10-15, E8). Takes the first ```mermaid block anywhere (prose
+ *  around it is dropped), else a bare fence that opens the text, then strips directives and whole-line `%%` comments
+ *  (a comment after a statement goes in parseMermaid, which knows the type). Runs
+ *  before parseFrontmatter, so a fence around `---` frontmatter works too. */
+function stripMermaidWrapper(text) {
+  const t = String(text);
+  const open = /^[ \t]*(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n/im.exec(t) || /^\s*(`{3,}|~{3,})[ \t]*\r?\n/.exec(t);
+  let body = t;
+  if (open) {
+    const rest = t.slice(open.index + open[0].length);
+    const close = new RegExp(`^[ \\t]*\\${open[1][0]}{${open[1].length},}[ \\t]*\\r?$`, 'm').exec(rest);
+    body = close ? rest.slice(0, close.index) : rest;
+  }
+  return stripComments(body);
 }
 
 /**
@@ -62,10 +79,12 @@ function parseFrontmatter(text) {
 /**
  * Parse + import mermaid text into a new tab.
  * Returns true on success, false on failure (with error toast shown).
+ * `opts.target`: the flowchart's Import as type. `opts.name`: a dropped or picked file's name, the tab name when the
+ * source sets no title.
  */
 export function importMermaidText(text, opts = {}) {
   if (!text || !text.trim()) { showError('Mermaid import failed: empty input.'); return false; }
-  const { title: fmTitle, body } = parseFrontmatter(text);
+  const { title: fmTitle, body } = parseFrontmatter(stripMermaidWrapper(text));
   const type = detectDiagramType(body);
   if (!type) { showError('Mermaid import failed: unsupported diagram type.'); return false; }
 
@@ -78,24 +97,25 @@ export function importMermaidText(text, opts = {}) {
     return false;
   }
   // A Gantt is a SCHEDULE, not a node-and-edge graph: it carries `tasks`, never `elements`, and its geometry
-  // comes from dates rather than from a layout. Branch before the node guard below, which would otherwise
-  // reject every gantt as empty.
-  if (parsed?.diagramType === 'gantt') return buildGantt(parsed, modules);
-
-  if (!parsed || !parsed.elements || parsed.elements.length === 0) {
+  // comes from dates rather than from a layout. It skips the node guard below, which would otherwise reject every
+  // gantt as empty, but NOT the cell cap or the frontmatter title: it used to return before both (E13).
+  const isGantt = parsed?.diagramType === 'gantt';
+  if (!isGantt && (!parsed || !parsed.elements || parsed.elements.length === 0)) {
     showError('Mermaid import failed: no nodes found.');
     return false;
   }
   // The same ceiling every other import enforces. Mermaid had none, so it could build a diagram that the share link,
-  // the Drive reopen and a bundle restore then all refused to load (audit 2026-09-23).
-  const cellEstimate = parsed.elements.length + (parsed.links || []).length + (parsed.groups || []).length;
+  // the Drive reopen and a bundle restore then all refused to load (audit 2026-09-23). A gantt adds its timeline.
+  const cellEstimate = isGantt ? parsed.tasks.length + parsed.links.length + 1
+    : parsed.elements.length + (parsed.links || []).length + (parsed.groups || []).length;
   if (cellEstimate > MAX_CELL_COUNT) {
     showError(`Mermaid import failed: ${cellEstimate} shapes and connectors is more than a diagram can hold (${MAX_CELL_COUNT}). Split the source into smaller diagrams.`);
     return false;
   }
+  if (isGantt) return buildGantt(parsed, modules, fmTitle, opts.name);
 
-  // Frontmatter title takes precedence; fall back to inline title, then default.
-  const baseName = fmTitle || parsed.title || defaultTabName(parsed.diagramType);
+  // Frontmatter title takes precedence; fall back to inline title, then the file's name (`opts.name`), then default.
+  const baseName = fmTitle || parsed.title || opts.name || defaultTabName(parsed.diagramType);
   const tabName = dedupeTabName(baseName);
   modules.tabs.newTab(tabName, parsed.diagramType);
 
@@ -144,8 +164,12 @@ export function importMermaidText(text, opts = {}) {
       if (!src || !tgt) continue;
       const link = isSequence
         ? buildSequenceLink(lk, src, tgt)
-        : buildLink(lk, src, tgt);
+        : buildLink(lk, src, tgt, parsed.direction);
       if (link) graph.addCell(link);
+      // A self-message's loop corners are absolute vertices. Embedded in its participant, a drag or nudge (both
+      // translate()) carries them with the lifeline. Left out, the first drag left them behind as two diagonals
+      // (S7-2 review); the app only embeds a link like this at the END of a drag (JointJS reparent).
+      if (link && isSequence && src === tgt) src.embed(link);
     }
 
     // Migration hooks — keeps marker attrs consistent
@@ -159,10 +183,11 @@ export function importMermaidText(text, opts = {}) {
   // hierarchical layout + port-snapping that would otherwise disturb the
   // carefully-aligned lifelines / messages.
   if (isSequence) {
+    modules.history.clear();
     requestAnimationFrame(() => {
       try { modules.canvas.fitContent(); } catch {}
     });
-    showToast(`Imported ${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'} from Mermaid`, 'success');
+    importToast(`${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'}`, parsed.warnings);
     return true;
   }
 
@@ -204,11 +229,26 @@ export function importMermaidText(text, opts = {}) {
     try { modules.canvas.rerouteAllLinks?.(); } catch (e) { noteError('import:reroute', e); }
     try { modules.canvas.resolveConnectorLabels?.(); } catch (e) { noteError('import:labels', e); }
   }
+  // The layout, Zones, port snap and label pass above run after the load guard, so history recorded them on a tab
+  // that is brand new: the first Undo moved every node back to the 220 px stagger grid and out of its Zone (review
+  // 2026-10-15, E7). The import is one load, so it leaves nothing to undo. clear() also drops the 80 ms position
+  // merge still pending; setSuppressed alone would let that commit after the flag came back.
+  modules.history.clear();
   requestAnimationFrame(() => {
     try { modules.canvas.fitContent(); } catch {}
   });
-  showToast(`Imported ${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'} from Mermaid`, 'success');
+  importToast(`${parsed.elements.length} ${parsed.elements.length === 1 ? 'shape' : 'shapes'}`, parsed.warnings);
   return true;
+}
+
+/** The import's closing toast. A parser's warnings are what it could not draw faithfully, so they turn it into a
+ *  warning through `showImportNotes`, the helper the Flow import (`loadFlowSource`) uses too: up to five notes, one
+ *  per line, and the full list in the console. Every Mermaid type reports through here. It showed the first note and "(+N more)" until review S7-4
+ *  (2026-10-15), and the rest were shown and logged nowhere. */
+function importToast(what, warnings) {
+  const n = warnings?.length || 0;
+  if (!n) { showToast(`Imported ${what} from Mermaid`, 'success'); return; }
+  showImportNotes(`Imported ${what} from Mermaid`, warnings, 'Mermaid');
 }
 
 /**
@@ -219,6 +259,7 @@ export function importMermaidText(text, opts = {}) {
  */
 export function snapLinksToPorts(graph, direction) {
   const links = graph.getLinks();
+  const boxes = obstacleBoxes(graph);   // nothing moves in this loop, so one bbox read serves every link (E14)
   for (const link of links) {
     const src = link.getSourceElement?.();
     const tgt = link.getTargetElement?.();
@@ -235,7 +276,7 @@ export function snapLinksToPorts(graph, direction) {
     if (labels.length) {
       link.labels(labels.map((l) => ({ ...l, position: { distance: 0.5, offset: 0 } })));
     }
-    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, direction);
+    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, direction, boxes);
     if (!srcIsFieldPort && src.getPort?.(srcPort)) link.source({ id: src.id, port: srcPort });
     if (!tgtIsFieldPort && tgt.getPort?.(tgtPort)) link.target({ id: tgt.id, port: tgtPort });
   }
@@ -252,7 +293,7 @@ export function snapLinksToPorts(graph, direction) {
  * Also reports whether either end sits on a DataObject field port, which the
  * caller must leave alone (ER cardinality lives on those).
  */
-export function pickFacingPorts(link, src, tgt, direction) {
+export function pickFacingPorts(link, src, tgt, direction, boxes = null) {
   const sb = src.getBBox();
   const tb = tgt.getBBox();
   const dx = (tb.x + tb.width / 2) - (sb.x + sb.width / 2);
@@ -303,8 +344,8 @@ export function pickFacingPorts(link, src, tgt, direction) {
     // with no open side keeps the facing port.
     const graph = src.graph;
     if (graph) {
-      srcPort = openSide(graph, src, srcPort, tgt, dx, dy);
-      tgtPort = openSide(graph, tgt, tgtPort, src, -dx, -dy);
+      srcPort = openSide(graph, src, srcPort, tgt, dx, dy, boxes);
+      tgtPort = openSide(graph, tgt, tgtPort, src, -dx, -dy, boxes);
     }
   }
   return { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort };
@@ -312,13 +353,13 @@ export function pickFacingPorts(link, src, tgt, direction) {
 
 /** `port` when its exit is open, else this cell's open perpendicular side nearer the other end (dx, dy point from
  *  this cell to it), else `port` unchanged. */
-function openSide(graph, cell, port, other, dx, dy) {
+function openSide(graph, cell, port, other, dx, dy, boxes = null) {
   const side = port.replace('port-', '');
-  if (!portExitBlocked(graph, cell, side, [other])) return port;
+  if (!portExitBlocked(graph, cell, side, [other], boxes)) return port;
   const order = (side === 'top' || side === 'bottom')
     ? (dx >= 0 ? ['right', 'left'] : ['left', 'right'])
     : (dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']);
-  const open = order.find((s) => cell.getPort?.(`port-${s}`) && !portExitBlocked(graph, cell, s, [other]));
+  const open = order.find((s) => cell.getPort?.(`port-${s}`) && !portExitBlocked(graph, cell, s, [other], boxes));
   return open ? `port-${open}` : port;
 }
 
@@ -336,12 +377,13 @@ function openSide(graph, cell, port, other, dx, dy) {
  */
 export function refaceConnectors(graph) {
   let changed = 0;
+  const boxes = obstacleBoxes(graph);
   for (const link of graph.getLinks()) {
     const src = link.getSourceElement?.();
     const tgt = link.getTargetElement?.();
     if (!src || !tgt || src === tgt) continue;          // danglers + self-loops
     if ((link.get('vertices') || []).length) continue;  // user route is sacred
-    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, null);
+    const { srcPort, tgtPort, srcIsFieldPort, tgtIsFieldPort } = pickFacingPorts(link, src, tgt, null, boxes);
     const curS = link.get('source')?.port;
     const curT = link.get('target')?.port;
     let touched = false;
@@ -581,9 +623,11 @@ function createSubgraphZones(graph, groups, byId, createElementFromComponent) {
  *  `applyGanttGeometry` compute every pixel, exactly as an LLM-authored Gantt JSON is handled on load. That is
  *  what makes this tractable: when gantt support was dropped in beta a bar carried a manual x/width, so an
  *  importer had to do axis maths it had no business doing. */
-function buildGantt(parsed, modules) {
+function buildGantt(parsed, modules, fmTitle = null, fileName = null) {
   const graph = modules.graph;
-  const name = dedupeTabName(parsed.title || 'Imported Plan');
+  // Frontmatter first, then the inline `title`, then the file's name (D8), as for every other type.
+  const title = fmTitle || parsed.title || fileName;
+  const name = dedupeTabName(title || 'Imported Plan');
   modules.tabs.newTab(name, 'gantt');
   // Row index for a MILESTONE. Milestones are NOT part of ganttRowLayout, so their row is the caller's job, and
   // a source index is the wrong number to use: ganttRowLayout interleaves a header row per group, so a bar's
@@ -598,11 +642,14 @@ function buildGantt(parsed, modules) {
   try {
     graph.clear();
     tl = createElementFromComponent({
-      type: 'sf.GanttTimeline', label: parsed.title || 'Timeline',
+      type: 'sf.GanttTimeline', label: title || 'Timeline',
       viewMode: parsed.timeline.viewMode, numPeriods: parsed.timeline.numPeriods,
     }, { x: 0, y: 0 });
     if (!tl) throw new Error('could not create the timeline');
-    tl.set('startDate', parsed.timeline.startDate);
+    // The End Date is the last day the axis draws, so it moves with the Start: the factory dated it from today, and
+    // the inspector showed that date for a plan in another year (review S6-6).
+    const startDate = parsed.timeline.startDate;
+    tl.set({ startDate, endDate: axisEndDate({ startDate, viewMode: tl.get('viewMode'), weekStartDay: tl.get('weekStartDay'), numPeriods: tl.get('numPeriods') }) || '' });
     tl.set('groups', parsed.timeline.groups);
     graph.addCell(tl);
 
@@ -663,12 +710,11 @@ function buildGantt(parsed, modules) {
     }
     layoutTimelineTasks(tl);
   } catch (err) { console.warn('gantt geometry failed:', err); }
+  modules.history.clear();   // the milestone rows above are part of the load, not an edit to undo (E7)
 
   requestAnimationFrame(() => { try { modules.canvas.fitContent(); } catch {} });
   const n = parsed.tasks.length;
-  const w = parsed.warnings || [];
-  if (w.length) showToast(`Imported ${n} task${n === 1 ? '' : 's'} - ${w[0]}`, 'warning', { duration: 9000 });
-  else showToast(`Imported ${n} task${n === 1 ? '' : 's'} from Mermaid`, 'success');
+  importToast(`${n} task${n === 1 ? '' : 's'}`, parsed.warnings);
   return true;
 }
 
@@ -735,8 +781,7 @@ function isCalendarDate(iso) {
 const DURATION = /^(\d+(?:\.\d+)?)\s*(ms|[dwhms])$/i;
 
 const gDate = (iso) => new Date(`${iso}T00:00:00`);
-const gIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const gAdd = (iso, days) => { const d = gDate(iso); d.setDate(d.getDate() + days); return gIso(d); };
+const gAdd = (iso, days) => { const d = gDate(iso); d.setDate(d.getDate() + days); return localISODate(d); };
 const gDiff = (a, b) => Math.round((gDate(b) - gDate(a)) / 86400000);
 
 /** A duration token in DAYS. Diagramforce's axis is day-granular, so sub-day units collapse to one day. */
@@ -761,9 +806,12 @@ export function parseGantt(text) {
   const badDates = [];          // "Task (2026-13-45)" - date-shaped tokens that are not calendar days
   let openGroup = null;
   const unsupported = new Set();
+  const inAccDescr = accDescrBlock();
 
   for (const line of lines) {
     if (/^gantt\b/i.test(line)) continue;
+    // Accessibility text holds a colon, so it read as a task named accTitle with no start.
+    if (inAccDescr(line) || /^(accTitle|accDescr)\s*:/i.test(line)) continue;
     let m;
     if ((m = line.match(/^title\s+(.+)$/i))) { title = m[1].trim(); continue; }
     if ((m = line.match(/^section\s+(.+)$/i))) {
@@ -848,7 +896,7 @@ export function parseGantt(text) {
   }
 
   const dated = tasks.filter((t) => t.startDate);
-  const anchor = dated.length ? dated.map((t) => t.startDate).sort()[0] : gIso(new Date());
+  const anchor = dated.length ? dated.map((t) => t.startDate).sort()[0] : localISODate(new Date());
   const stranded = tasks.filter((t) => !t.startDate);
   if (stranded.length) {
     warnings.push(`${stranded.length} task(s) had no resolvable start (an unknown or circular \`after\`): `
@@ -902,7 +950,7 @@ export function parseGantt(text) {
 
 export function parseMermaid(text, kind, target) {
   // Strip %% comments and directive blocks
-  const cleaned = stripComments(text);
+  const cleaned = stripComments(text, kind);
   switch (kind) {
     // A flowchart legitimately maps to THREE app types - the shapes differ, the graph does not - so the caller
     // picks. Defaulting to 'process' keeps every existing paste byte-identical.
@@ -916,10 +964,52 @@ export function parseMermaid(text, kind, target) {
   return null;
 }
 
-function stripComments(text) {
-  return text
+/** Directive blocks and whole-line comments go for every caller. A comment after a statement needs the diagram type
+ *  (`kind`), because each type has its own text spans, so stripMermaidWrapper (no type yet) leaves it to parseMermaid. */
+function stripComments(text, kind = null) {
+  const out = text
     .replace(/%%\{[\s\S]*?\}%%/g, '')   // directive blocks
     .replace(/^\s*%%.*$/gm, '');         // single-line comments
+  return kind ? out.split('\n').map((l) => stripTrailingComment(l, kind)).join('\n') : out;
+}
+
+/** Cut a `%%` comment that follows a statement, as Mermaid's lexers do. Left in, `end %% backend` was no longer the
+ *  whole-line `end` (E2), so the subgraph or loop stayed open, and a gantt read `10d %% two weeks` as no duration
+ *  (review 2026-10-15, S7-1). Only a `%%` after whitespace, outside double quotes and not opening a `%%{` directive
+ *  counts, so `B[50%%]` keeps its text. A first version cut inside every other text span too, and lost text Mermaid
+ *  keeps (S7-1 review). So `%%` is text in a flowchart's brackets, `|label|` and `-- label -->`; after the first `:`
+ *  of a sequence or state statement (Mermaid's TXT token runs to the end of the line); and in a gantt task's name,
+ *  where only the task data after its `:` can end in a comment. */
+function stripTrailingComment(line, kind) {
+  if (!line.includes('%%')) return line;
+  const flow = kind === 'flowchart' || kind === 'graph';
+  const textAfterColon = kind === 'sequence' || kind === 'state';
+  const ci = kind === 'gantt' ? line.indexOf(':') : -1;
+  let quoted = false, depth = 0, piped = false, edge = -1, scanned = -1, edgeEnd = 0;
+  for (let i = 0; i < line.length - 1; i++) {
+    const ch = line[i];
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (quoted) continue;
+    if (textAfterColon && ch === ':') {
+      if (!line.startsWith(':::', i)) return line;
+      i += 2; continue;                              // a `:::class` suffix, not the text's colon
+    }
+    if (flow) {
+      if (piped) { if (ch === '|') piped = false; continue; }
+      if ('[({'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+      else if (depth) continue;
+      else if (ch === '|') { piped = true; continue; }
+      // Where the last link operator starts: scanEdge then says whether a `-- label -->` runs past a `%%`.
+      else if (/^(--|==|-\.)/.test(line.slice(i, i + 2)) && !'-=.'.includes(line[i - 1] || ' ')) edge = i;
+    }
+    if (ch !== '%' || line[i + 1] !== '%' || !/\s/.test(line[i - 1] || '') || line[i + 2] === '{' || i < ci) continue;
+    // One scan per operator, not per `%%`: a long label full of them stays linear.
+    if (edge !== scanned) { scanned = edge; edgeEnd = edge >= 0 ? (scanEdge(line, edge)?.next ?? 0) : 0; }
+    if (edgeEnd > i) continue;
+    return line.slice(0, i).trimEnd();
+  }
+  return line;
 }
 
 // ─── Flowchart / graph parser ──────────────────────────────────────────────
@@ -939,6 +1029,15 @@ const FLOW_SHAPES = [
   { open: '(',   close: ')',   shape: 'round' },
   { open: '{',   close: '}',   shape: 'rhombus' },
 ];
+/** Mermaid 11 `@{ shape: ... }` names -> the bracket shape keys above. An unknown name reads as a rectangle. */
+const AT_SHAPES = Object.assign(Object.create(null), {
+  rect: 'rect', rectangle: 'rect', proc: 'rect', process: 'rect', rounded: 'round', event: 'round',
+  stadium: 'stadium', pill: 'stadium', terminal: 'stadium', 'fr-rect': 'subroutine', subprocess: 'subroutine',
+  subroutine: 'subroutine', cyl: 'cylinder', cylinder: 'cylinder', database: 'cylinder', db: 'cylinder',
+  circle: 'circle', circ: 'circle', diam: 'rhombus', diamond: 'rhombus', decision: 'rhombus', question: 'rhombus',
+  hex: 'hexagon', hexagon: 'hexagon', prepare: 'hexagon', 'lean-r': 'parallelogram', 'lean-l': 'parallelogram',
+  'in-out': 'parallelogram', 'out-in': 'parallelogram', odd: 'asymmetric',
+});
 
 /** Split flowchart source into statements: one per line AND one per `;` outside quotes and shape brackets - Mermaid
  *  allows `graph TD; A-->B; B-->C` on one line, which imported as nothing (audit 2026-09-23). */
@@ -977,6 +1076,7 @@ export function parseFlowchart(text, targetType) {
   }
 
   const ensureNode = (id, label, shape) => {
+    mentioned.push(id);
     if (elementsById.has(id)) {
       // Upgrade label/shape if previously unlabeled
       const existing = elementsById.get(id);
@@ -998,6 +1098,7 @@ export function parseFlowchart(text, targetType) {
     elementsById.set(id, node);
     return node;
   };
+  const mentioned = [];              // ids ensureNode saw on the current line, new or not
 
   // `subgraph <Name>` / `subgraph id[Title]` ... `end` groups its members. Previously both keywords were simply
   // skipped, so the member nodes still parsed (they sit on their own lines) and the GROUPING was silently lost -
@@ -1011,11 +1112,14 @@ export function parseFlowchart(text, targetType) {
   const groupOfNode = new Map();     // nodeId -> group key (innermost)
   const openStack = [];
   const droppedOuter = new Set();
+  const unread = [];                 // statements the scanner stopped inside - reported, never dropped silently
+  const inAccDescr = accDescrBlock();
 
   // First line is the header (flowchart TD / graph LR) — skip
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (i === 0 && /^(flowchart|graph)/i.test(line)) continue;
+    if (inAccDescr(line)) continue;
     if (/^title\s+/i.test(line)) { title = line.replace(/^title\s+/i, '').trim(); continue; }
 
     const sg = line.match(/^subgraph\s+(.+)$/i);
@@ -1034,18 +1138,24 @@ export function parseFlowchart(text, targetType) {
       openStack.push(key);
       continue;
     }
-    if (/^end\b/i.test(line)) { openStack.pop(); continue; }
-    if (/^(direction|classDef|class|click|style|linkStyle)\b/i.test(line)) continue;
+    // Lowercase and alone, as Mermaid reads it: its docs tell users to write `End` or `END` for a NODE, and the
+    // case-insensitive `^end\b` closed a subgraph on `End --> Notify` and dropped the line (review 2026-10-15, E2).
+    if (/^end\s*$/.test(line)) { openStack.pop(); continue; }
+    // The other keywords are lowercase too: matched case-insensitively, `Style --> Class` was skipped as a `style`
+    // statement and both nodes vanished without a warning.
+    if (/^(direction|classDef|class|click|style|linkStyle|accTitle|accDescr)\b/.test(line)) continue;
 
     // Parse links on this line (may contain multiple sequential: A --> B --> C)
-    const before = new Set(elementsById.keys());
-    parseFlowLineEdges(line, ensureNode, links);
-    // Claim every node this line INTRODUCED for the innermost open subgraph. Claiming only new ids is what makes
-    // `A --> B` outside a subgraph leave an already-grouped A where it was.
+    mentioned.length = 0;
+    if (!parseFlowLineEdges(line, ensureNode, links)) unread.push(line);
+    // Claim every ungrouped node this line MENTIONS for the innermost open subgraph, as Mermaid does: a node first
+    // written outside every subgraph joins the first one that lists it (its docs' own example put a2 and c1 outside
+    // their Zones when only new ids were claimed; review 2026-10-15, S7-3). A node already in a group stays there.
+    // `mentioned` holds this line's ids only; copying every id per line made the parse O(lines x nodes) (E14).
     if (openStack.length) {
       const key = openStack[openStack.length - 1];
-      for (const id of elementsById.keys()) {
-        if (before.has(id) || groupOfNode.has(id)) continue;
+      for (const id of mentioned) {
+        if (groupOfNode.has(id)) continue;
         groupOfNode.set(id, key);
         groupByKey.get(key).memberIds.push(id);
       }
@@ -1054,8 +1164,21 @@ export function parseFlowchart(text, targetType) {
 
   const warnings = [];
   if (droppedOuter.size) {
-    warnings.push(`Nested subgraphs flattened to the innermost group: ${[...droppedOuter].join(', ')} `
-      + 'kept its label but not its members (a Zone cannot contain another Zone).');
+    // Say what is DRAWN: an outer group keeps only the nodes declared directly in it, and with none it has no Zone.
+    const outer = [...droppedOuter].map((k) => groupByKey.get(k));
+    const gone = outer.filter((g) => !g.memberIds.length).map((g) => g.title);
+    const kept = outer.filter((g) => g.memberIds.length).map((g) => g.title);
+    warnings.push('Nested subgraphs flattened to the innermost group (a Zone cannot contain another Zone): '
+      + [gone.length ? `${gone.join(', ')} not drawn` : '',
+        kept.length ? `${kept.join(', ')} drawn around ${kept.length === 1 ? 'its' : 'their'} own nodes only` : '']
+        .filter(Boolean).join('; ') + '.');
+  }
+  if (unread.length) warnings.push(unreadWarning(unread));
+  // `Client --> Backend`, where Backend is a subgraph: Mermaid ends the edge on the group's border. An sf.Zone has no
+  // ports, so the edge ends on a card named after the subgraph, and the user is told why it is there (E10).
+  const linkedGroups = groups.filter((g) => elementsById.has(g.key) && !elementsById.get(g.key)._labeled).map((g) => g.key);
+  if (linkedGroups.length) {
+    warnings.push(`A link to a subgraph cannot end on its Zone, so it ends on a separate card: ${linkedGroups.join(', ')}.`);
   }
 
   return {
@@ -1077,13 +1200,14 @@ function parseFlowLineEdges(line, ensureNode, links) {
   // Find all edges on this line. Grammar:
   //   <nodeRef> <edge> <nodeRef> [<edge> <nodeRef>]...
   // where nodeRef is `ID[label]` or `ID` etc., and edge is `-->`, `---`, `-.->`, `==>`, etc.
-  // We tokenize by scanning left-to-right.
+  // We tokenize by scanning left-to-right. Returns false when part of the line could not be read, so the caller
+  // can say so: a scan that stops early drops the rest of the line, and it used to do that silently.
   let pos = 0;
   const len = line.length;
 
   // Parse the first node group (`A` or `A & B`)
   const first = scanNodeGroup(line, pos);
-  if (!first) return; // not a node line
+  if (!first) return false; // not a node line
   pos = first.next;
   let prevNodes = first.refs.map((r) => ensureNode(r.id, r.label, r.shape));
 
@@ -1094,29 +1218,34 @@ function parseFlowLineEdges(line, ensureNode, links) {
 
     // Try to parse an edge
     const edge = scanEdge(line, pos);
-    if (!edge) break;
+    if (!edge) return false;
     pos = edge.next;
 
     // Skip whitespace, then parse the next node group. `A --> B & C` links A to BOTH (C used to be dropped).
     while (pos < len && /\s/.test(line[pos])) pos++;
     const nxt = scanNodeGroup(line, pos);
-    if (!nxt) break;
+    if (!nxt) return false;
     pos = nxt.next;
 
     const nxtNodes = nxt.refs.map((r) => ensureNode(r.id, r.label, r.shape));
-    for (const from of prevNodes) {
-      for (const to of nxtNodes) {
-        links.push({
-          source: from.id,
-          target: to.id,
-          label: edge.label || '',
-          style: edge.style, // 'solid' | 'dotted' | 'thick'
-          arrow: edge.arrow, // true/false
-        });
+    // `~~~` only spaces nodes in Mermaid's own layout and draws nothing, so its nodes import and no connector does.
+    if (edge.style !== 'invisible') {
+      for (const from of prevNodes) {
+        for (const to of nxtNodes) {
+          links.push({
+            source: from.id,
+            target: to.id,
+            label: edge.label || '',
+            style: edge.style, // 'solid' | 'dotted' | 'thick'
+            arrow: edge.arrow, // true/false
+            srcArrow: edge.srcArrow,   // `<-->`, `o--o`: the source end points too
+          });
+        }
       }
     }
     prevNodes = nxtNodes;
   }
+  return true;
 }
 
 /** Scan a node reference starting at pos. Returns { id, label, shape, next } or null.
@@ -1134,6 +1263,21 @@ function scanNodeRef(line, pos) {
   if (i === pos) return null;
   const id = line.slice(pos, i);
   let next = skipClassSuffix(line, i);
+  // Mermaid 11's `A@{ shape: diamond, label: "Check" }`. It used to stop the scan, dropping the rest of the line.
+  if (line.startsWith('@{', next)) {
+    let j = next + 2, quote = null;
+    for (; j < line.length; j++) {
+      const ch = line[j];
+      if (quote) { if (ch === quote) quote = null; } else if (ch === '"' || ch === "'") quote = ch; else if (ch === '}') break;
+    }
+    if (j < line.length) {
+      const body = line.slice(next + 2, j);
+      const lm = /\blabel\s*:\s*(?:"([^"]*)"|'([^']*)'|([^,]+))/.exec(body);
+      const sm = /\bshape\s*:\s*([\w-]+)/.exec(body);
+      const label = lm ? unquoteLabel((lm[1] ?? lm[2] ?? lm[3]).trim()) : null;
+      return { id, label, shape: AT_SHAPES[sm?.[1]?.toLowerCase()] || 'rect', next: skipClassSuffix(line, j + 1) };
+    }
+  }
 
   // Check for a shape block immediately after the id
   for (const sh of FLOW_SHAPES) {
@@ -1190,68 +1334,86 @@ function unquoteLabel(s) {
   return s.replace(/<br\s*\/?>/gi, '\n').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 }
 
-/** Scan an edge starting at pos. Returns { style, arrow, label, next } or null. */
+/** One warning for the statements a parser could not read, naming the first three so the user can find them. */
+function unreadWarning(lines) {
+  const n = lines.length;
+  const shown = lines.slice(0, 3).map((l) => `"${l.length > 60 ? `${l.slice(0, 57)}...` : l}"`).join(', ');
+  return `Skipped ${n} line${n === 1 ? '' : 's'} that could not be read: ${shown}${n > 3 ? ` and ${n - 3} more` : ''}.`;
+}
+
+/** Mermaid's multi-line `accDescr { ... }` is free text up to the first `}`, in every diagram type. Returns a per-parse
+ *  test that is true for the opener and each line of the block, so the caller skips them. Skipping the opener alone
+ *  made the text a node and the `}` an unread line. */
+function accDescrBlock() {
+  let open = false;
+  return (line) => {
+    if (!open && !/^accDescr\s*\{/i.test(line)) return false;
+    open = !line.slice(open ? 0 : line.indexOf('{')).includes('}');
+    return true;
+  };
+}
+
+/** Scan an edge starting at pos. Returns { style, arrow, srcArrow, label, next } or null. */
 function scanEdge(line, pos) {
-  // Patterns we support (ordered so longer matches first):
-  //   -- text -->     (labelled solid with arrow)
-  //   -- text ---     (labelled solid no arrow)
-  //   -.text.->       (labelled dotted)
-  //   == text ==>     (labelled thick)
-  //   -->|text|       (handled after the arrow itself)
-  //   -->   ---   -.->   ==>   ----
+  // Patterns we support:
+  //   -->   ---   ---->   -.->   -.-   -..->   ==>   ===       (plain)
+  //   <-->  o--o  x--x  --o  --x  <-.->  <==>                   (end markers, Mermaid's flowchart docs)
+  //   ~~~                                                       (invisible: a layout hint, not a connector)
+  //   -->|text|                                                 (label after the arrow)
+  //   -- text -->   -- text ---   -. text .->   == text ==>     (labelled, optionally opened by `<`)
   const remaining = line.slice(pos);
+
+  // Plain operators FIRST. An `o`/`x` end marker counts only before whitespace or the end of the line, so
+  // `--off-->` stays the labelled edge "off" while `A --o B --> C` is two edges. Checked the other way round, the
+  // labelled search ran past `--o` and made ONE edge A->C labelled "o B" (review 2026-10-15, E1).
+  const m = /^([<ox])?(?:(--+)(?:([->])|([ox])(?=\s|$))|(==+)(?:([=>])|([ox])(?=\s|$))|(-\.+-)(?:(>)|([ox])(?=\s|$))?|(~~~+))/.exec(remaining);
+  if (m) {
+    const [tok, start, , solidEnd, solidMark, , thickEnd, thickMark, , dotArrow, dotMark, invisible] = m;
+    const style = invisible ? 'invisible' : m[5] ? 'thick' : m[8] ? 'dotted' : 'solid';
+    // A circle or cross end has no Diagramforce marker of its own; an arrow keeps the direction it gives.
+    const arrow = !!(solidMark || thickMark || dotMark || dotArrow || solidEnd === '>' || thickEnd === '>');
+    let next = pos + tok.length;
+    let label = '';
+    const lm = /^\s*\|([^|]*)\|/.exec(line.slice(next));
+    if (lm) { label = unquoteLabel(lm[1].trim()); next += lm[0].length; }   // |"yes"| -> yes
+    return { style, arrow, srcArrow: !!start, label, next };
+  }
 
   // Labelled edges, found with indexOf instead of lazy regexes: `^--\s*([^-][^|]*?)\s*-->` backtracked
   // quadratically on a long line that did not match (a 20K-character line took 375 ms+; audit 2026-09-23). Same
   // rules: the label starts with neither the opener's character nor whitespace-only, holds no `|`, and ends at the
-  // FIRST closer.
+  // FIRST closer. A leading `<` (`A <-- text --> B`) points the source end too.
+  const lt = remaining[0] === '<' ? 1 : 0;
+  const body = remaining.slice(lt);
   const labelled = (open, close, badFirst, badChars) => {
-    if (!remaining.startsWith(open)) return null;
+    if (!body.startsWith(open)) return null;
     // `-->`, `---`, `==>`, `-.->` are PLAIN arrows, not the opener of a labelled one. The old regexes accepted
     // `--> B -->` as the labelled edge "> B", so the most basic chain, `A --> B --> C`, imported as ONE edge A->C
     // labelled "> B" (found while fixing the audit's Mermaid items, 2026-09-23).
-    const after = remaining[open.length];
+    const after = body[open.length];
     if (after === '>' || after === open[open.length - 1] || (open === '-.' && after === '-')) return null;
-    const end = remaining.indexOf(close, open.length);
+    const end = body.indexOf(close, open.length);
     if (end < 0) return null;
-    const label = remaining.slice(open.length, end).trim();
-    if (!label || label[0] === badFirst || badChars.test(label)) return null;
-    return { label, next: pos + end + close.length };
+    const label = body.slice(open.length, end).trim();
+    // One quoted span cannot be two edges, so `-- "2--3 days" -->` keeps its label.
+    if (!label || label[0] === badFirst || (!/^"[^"]*"$/.test(label) && badChars.test(label))) return null;
+    return { label: unquoteLabel(label), next: pos + lt + end + close.length };
   };
-  // Pattern: `-- label -->` or `-- label ---`
-  let hit = labelled('--', '-->', '-', /\|/);
-  if (hit) return { style: 'solid', arrow: true, label: hit.label, next: hit.next };
-  hit = labelled('--', '---', '-', /\|/);
-  if (hit) return { style: 'solid', arrow: false, label: hit.label, next: hit.next };
+  const srcArrow = !!lt;
+  // Pattern: `-- label -->` or `-- label ---`. Mermaid's edge text cannot hold the operator itself, so a label
+  // containing `--` is two edges read as one.
+  let hit = labelled('--', '-->', '-', /\||--/);
+  if (hit) return { style: 'solid', arrow: true, srcArrow, label: hit.label, next: hit.next };
+  hit = labelled('--', '---', '-', /\||--/);
+  if (hit) return { style: 'solid', arrow: false, srcArrow, label: hit.label, next: hit.next };
 
   // Pattern: `== label ==>`
-  hit = labelled('==', '==>', '=', /\|/);
-  if (hit) return { style: 'thick', arrow: true, label: hit.label, next: hit.next };
+  hit = labelled('==', '==>', '=', /\||==/);
+  if (hit) return { style: 'thick', arrow: true, srcArrow, label: hit.label, next: hit.next };
 
   // Pattern: `-. label .->`
   hit = labelled('-.', '.->', '.', /\./);
-  if (hit) return { style: 'dotted', arrow: true, label: hit.label, next: hit.next };
-
-  let m;
-
-  // Plain arrows
-  m = /^(-\.->|--+>|==+>|--+-|==+=|-\.\.->)/.exec(remaining);
-  if (m) {
-    const tok = m[0];
-    let style = 'solid', arrow = true;
-    if (tok.startsWith('-.'))       style = 'dotted';
-    else if (tok.startsWith('=='))  style = 'thick';
-    if (!tok.includes('>')) arrow = false;
-    let next = pos + tok.length;
-
-    // Check for trailing `|label|`
-    let label = '';
-    const rest = line.slice(next);
-    const lm = /^\s*\|([^|]*)\|/.exec(rest);
-    if (lm) { label = unquoteLabel(lm[1].trim()); next += lm[0].length; }   // |"yes"| -> yes
-
-    return { style, arrow, label, next };
-  }
+  if (hit) return { style: 'dotted', arrow: true, srcArrow, label: hit.label, next: hit.next };
   return null;
 }
 
@@ -1304,20 +1466,19 @@ export function parseStateDiagram(text) {
   const links = [];
   let title = null;
 
-  let startId = null, endId = null;
-  const getStart = () => {
-    if (!startId) {
-      startId = '__start__';
-      elementsById.set(startId, { id: startId, label: '', component: { type: 'sf.BpmnEvent', label: '', eventType: 'start' } });
+  // `[*]` is the start or end of the scope it is written in. Inside a composite `state Paid { ... }` that scope is
+  // Paid, so it gets its own start and end events, labelled with the composite's name. Mapping every `[*]` to the
+  // diagram's single Start gave that Start a second outgoing edge into the composite (review 2026-10-15, E12).
+  const composites = [];   // open composite state ids, innermost last
+  let inNote = false;
+  const pseudo = (eventType) => {
+    const scope = composites.at(-1);
+    const id = scope ? `__${eventType}__${scope}` : `__${eventType}__`;
+    if (!elementsById.has(id)) {
+      const label = scope ? (elementsById.get(scope)?.label || scope) : '';
+      elementsById.set(id, { id, label, component: { type: 'sf.BpmnEvent', label, eventType } });
     }
-    return startId;
-  };
-  const getEnd = () => {
-    if (!endId) {
-      endId = '__end__';
-      elementsById.set(endId, { id: endId, label: '', component: { type: 'sf.BpmnEvent', label: '', eventType: 'end' } });
-    }
-    return endId;
+    return id;
   };
   const ensureState = (id) => {
     if (id === '[*]') return null;
@@ -1326,12 +1487,36 @@ export function parseStateDiagram(text) {
     elementsById.set(id, node);
     return node;
   };
+  // `state "Waiting for payment" as Waiting` and `Waiting : The order waits` are what Mermaid draws in the box.
+  // A second description line goes under the first.
+  const describe = (id, text) => {
+    const node = ensureState(id);
+    const label = node.described ? `${node.label}\n${text}` : text;
+    Object.assign(node, { label, described: true, component: { ...node.component, label } });
+  };
 
+  const inAccDescr = accDescrBlock();
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    // `Moving:::movement` (alone or at either end of a transition) applies a style class the importer does not carry.
+    // Left in, the colon read as a description, so the state was renamed "::movement".
+    const line = lines[i].replace(/([^\s:]):::[\w-]+/g, '$1');
     if (i === 0 && /^stateDiagram/i.test(line)) continue;
     if (/^title\s+/i.test(line)) { title = line.replace(/^title\s+/i, '').trim(); continue; }
-    if (/^(state|note|direction|\[\*\]\s*:)/i.test(line) && !/-->/.test(line)) continue;
+    // A multi-line note's text is not a state description, even when it holds a colon.
+    if (inNote) { if (/^end\s+note$/i.test(line)) inNote = false; continue; }
+    if (/^note\b/i.test(line) && !line.includes(':')) { inNote = true; continue; }
+    // `accTitle: Order lifecycle` is accessibility text, not a description of a state called accTitle.
+    if (inAccDescr(line) || /^(accTitle|accDescr)\s*:/i.test(line)) continue;
+    let d = /^state\s+"([^"]*)"\s+as\s+([^\s{]+)\s*(\{)?$/.exec(line);
+    if (d) { describe(d[2], d[1]); if (d[3]) composites.push(d[2]); continue; }
+    d = /^state\s+([^\s{"]+)\s*\{$/.exec(line);
+    if (d) { composites.push(d[1]); continue; }
+    if (line === '}') { composites.pop(); continue; }
+    // Whole words: without the boundary `Statement : Printed monthly` or `Notes : x` was skipped as a keyword (S7-5).
+    if (/^(?:(?:state|note|direction|classDef|class|style|click|scale|hide)\b|\[\*\]\s*:)/i.test(line)
+      && !/-->/.test(line)) continue;
+    d = /^([^\s:>[\]-]+(?:-[^\s:>-]+)*)\s*:\s*(.+)$/.exec(line);
+    if (d && !/-->/.test(line)) { describe(d[1], unquoteLabel(d[2].trim())); continue; }
 
     // Transition: A --> B : label
     // State ids stop at `:` (and `-->`): `Idle-->Running:start` is Idle -> Running labelled "start" - `\S+` made the
@@ -1339,8 +1524,8 @@ export function parseStateDiagram(text) {
     const m = /^(\[\*\]|[^\s:>-]+(?:-[^\s:>-]+)*)\s*-->\s*(\[\*\]|[^\s:>-]+(?:-[^\s:>-]+)*)\s*(?::\s*(.*))?$/u.exec(line);
     if (!m) continue;
     const [, lhs, rhs, label] = m;
-    const srcId = lhs === '[*]' ? getStart() : ensureState(lhs)?.id;
-    const tgtId = rhs === '[*]' ? getEnd()   : ensureState(rhs)?.id;
+    const srcId = lhs === '[*]' ? pseudo('start') : ensureState(lhs)?.id;
+    const tgtId = rhs === '[*]' ? pseudo('end')   : ensureState(rhs)?.id;
     if (!srcId || !tgtId) continue;
     links.push({ source: srcId, target: tgtId, label: (label || '').trim(), style: 'solid', arrow: true });
   }
@@ -1350,24 +1535,37 @@ export function parseStateDiagram(text) {
 
 // ─── ER diagram parser ─────────────────────────────────────────────────────
 
+// One entity-name pattern for the block opener and both relationship ends: a bare name in any script, or a quoted one
+// (Mermaid's way to write spaces), either optionally aliased `p[Person]` / `p["Person name"]`. The ASCII-only names
+// dropped `"Customer Account"`, `Zamówienie` and `p[Person] {` with their fields and links (review 2026-10-15, E4).
+const ER_NAME = String.raw`("[^"]+"|[\p{L}_][\p{L}\p{N}_-]*)(?:\[\s*(?:"([^"]*)"|([^\]"]*?))\s*\])?`;
+const ER_BLOCK = new RegExp(`^${ER_NAME}\\s*\\{$`, 'u');
+const ER_REL = new RegExp(`^${ER_NAME}\\s+([|}o][|o}]?)(--|\\.\\.)([|{o][|o{]?)\\s+${ER_NAME}(?:\\s*:\\s*(.*))?$`, 'u');
+
 export function parseErDiagram(text) {
   const lines = text.split('\n');
-  const entities = new Map(); // name → { fields: [] }
+  const entities = new Map(); // id → { name, label, fields: [] }
   const rels = [];
+  const unread = [];
   let title = null;
 
-  // Ensure helper
-  const ensureEntity = (name) => {
-    if (!entities.has(name)) entities.set(name, { name, fields: [] });
-    return entities.get(name);
+  // Keyed by the unquoted id, so a relationship written with the id finds the entity its block aliased.
+  const ensureEntity = (rawName, alias) => {
+    const name = rawName.startsWith('"') ? rawName.slice(1, -1) : rawName;
+    if (!entities.has(name)) entities.set(name, { name, label: null, fields: [] });
+    const ent = entities.get(name);
+    if (alias && alias.trim() && !ent.label) ent.label = alias.trim();
+    return ent;
   };
 
   // Block-state: when we see `ENTITY {`, subsequent lines are fields until `}`
   let currentBlock = null;
+  const inAccDescr = accDescrBlock();
   for (let raw of lines) {
     const line = raw.trim();
     if (!line || line.startsWith('%%')) continue;
     if (/^erDiagram\b/i.test(line)) continue;
+    if (inAccDescr(line)) continue;
     if (/^title\s+/i.test(line)) { title = line.replace(/^title\s+/i, '').trim(); continue; }
 
     if (currentBlock) {
@@ -1384,31 +1582,32 @@ export function parseErDiagram(text) {
           type: fType,
           keyType: keys.includes('PK') ? 'pk' : keys.includes('FK') ? 'fk' : null,
         });
-      }
+      } else unread.push(line);
       continue;
     }
+    if (/^(direction|classDef|class|style|accTitle|accDescr)\b/i.test(line)) continue;
 
-    // Block opener: `CUSTOMER {`
-    const bm = /^([A-Za-z_][\w-]*)\s*\{$/.exec(line);
+    // Block opener: `CUSTOMER {`, `"Customer Account" {`, `p[Person] {`
+    const bm = ER_BLOCK.exec(line);
     if (bm) {
-      currentBlock = ensureEntity(bm[1]);
+      currentBlock = ensureEntity(bm[1], bm[2] ?? bm[3]);
       continue;
     }
 
     // Relationship: `CUSTOMER ||--o{ ORDER : places`
-    const rm = /^([A-Za-z_][\w-]*)\s+([|}o][|o}]?)(--|\.\.)([|{o][|o{]?)\s+([A-Za-z_][\w-]*)(?:\s*:\s*(.*))?$/.exec(line);
+    const rm = ER_REL.exec(line);
     if (rm) {
-      const [, leftName, leftCard, , rightCard, rightName, label] = rm;
-      ensureEntity(leftName);
-      ensureEntity(rightName);
+      const [, leftName, lq, la, leftCard, , rightCard, rightName, rq, ra, label] = rm;
+      const left = ensureEntity(leftName, lq ?? la);
+      const right = ensureEntity(rightName, rq ?? ra);
       rels.push({
-        source: leftName,
-        target: rightName,
+        source: left.name,
+        target: right.name,
         label: unquoteLabel((label || '').trim()),   // `: "places order"` -> places order
         sourceMarker: erMarkerFromLeft(leftCard),
         targetMarker: erMarkerFromRight(rightCard),
       });
-    }
+    } else unread.push(line);
   }
 
   // Build elements
@@ -1416,11 +1615,11 @@ export function parseErDiagram(text) {
   for (const [name, ent] of entities) {
     elements.push({
       id: name,
-      label: name,
+      label: ent.label || name,
       component: {
         type: 'sf.DataObject',
-        label: name,
-        objectName: name,
+        label: ent.label || name,
+        objectName: ent.label || name,   // the header; Mermaid draws an aliased entity under its alias
         fields: ent.fields.length > 0 ? ent.fields : [
           { label: 'Id', apiName: 'Id', type: 'ID', keyType: 'pk' },
         ],
@@ -1437,7 +1636,8 @@ export function parseErDiagram(text) {
     erTarget: r.targetMarker,
   }));
 
-  return { diagramType: 'datamodel', title, direction: 'horizontal', elements, links };
+  return { diagramType: 'datamodel', title, direction: 'horizontal', elements, links,
+    warnings: unread.length ? [unreadWarning(unread)] : [] };
 }
 
 /** Left side card (before the dashes) → marker name for the SOURCE end of the link. */
@@ -1466,9 +1666,10 @@ function erMarkerFromRight(card) {
 
 /**
  * Build a JointJS link from a parsed link spec.
- * Handles flowchart edges (arrow/dotted/thick/labelled) and ER markers.
+ * Handles flowchart edges (arrow/dotted/thick/labelled) and ER markers. `direction` ('vertical' or 'horizontal') picks
+ * the two sides a self-loop uses.
  */
-function buildLink(lk, src, tgt) {
+function buildLink(lk, src, tgt, direction) {
   const strokeColor = '#888888';
   const strokeWidth = lk.style === 'thick' ? 3 : 2;
   const dashArray = lk.style === 'dotted' ? '4 4' : null;
@@ -1487,6 +1688,8 @@ function buildLink(lk, src, tgt) {
   let sourceMarker;
   if (lk.erSource) {
     sourceMarker = erMarkerPath(lk.erSource, strokeColor);
+  } else if (lk.srcArrow) {
+    sourceMarker = { type: 'path', d: ER_MARKER_D.arrow };   // `<-->`: the same marker the panel sets on a source end
   } else {
     sourceMarker = { type: 'path', d: ER_MARKER_D.none, fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
   }
@@ -1498,9 +1701,21 @@ function buildLink(lk, src, tgt) {
     targetMarker,
   };
 
+  // A self-relationship (`EMPLOYEE ||--o{ EMPLOYEE`) leaves and returns through port-top, the bracket the ERD and
+  // data-graph converters draw. With no port the router fell back to a straight line from the card's centre to
+  // itself: zero length, nothing visible (review 2026-10-15, E5). snapLinksToPorts skips self-loops, so it stays.
+  // DataObject only, the one shape validateConnection lets loop on a single port. Every other self-link (a flowchart
+  // retry, a state's self-transition) leaves one side and returns through the next, a corner loop the router draws
+  // around the card: right to bottom in a left-to-right flow, bottom to right in a top-down one (S7-2).
+  let selfPorts = null;
+  if (src === tgt) {
+    const pair = src.get('type') === 'sf.DataObject' ? ['port-top', 'port-top']
+      : direction === 'vertical' ? ['port-bottom', 'port-right'] : ['port-right', 'port-bottom'];
+    if (pair.every((p) => src.getPort?.(p))) selfPorts = pair;
+  }
   const link = new joint.shapes.standard.Link({
-    source: { id: src.id },
-    target: { id: tgt.id },
+    source: selfPorts ? { id: src.id, port: selfPorts[0] } : { id: src.id },
+    target: selfPorts ? { id: tgt.id, port: selfPorts[1] } : { id: tgt.id },
     attrs: { line: lineAttrs },
     router: { name: 'sfManhattan' },
     connector: { name: 'rounded', args: { radius: 8 } },
@@ -1583,17 +1798,9 @@ const SEQ_CONST = {
   NOTE_GAP: 12,
 };
 
-// Role-colour map mirrors SEQ_ACCENT in components.js. Actor is kept neutral
-// grey to match the generic participant default — sequence diagrams read
-// cleaner when only roles with a semantic colour (Salesforce green, API blue,
-// External amber) stand out visually.
-const SEQ_ROLE_COLORS = Object.assign(Object.create(null), {
-  generic:    '#8A9099',
-  salesforce: '#2E844A',
-  api:        '#1D73C9',
-  external:   '#F6B355',
-  actor:      '#8A9099',
-});
+// Role colours come from SEQ_ROLE_ACCENT (diagram-schema.js), the one table the stencil, loader and validator read
+// too. Actor stays neutral grey like the generic participant: only roles with a semantic colour (Salesforce green,
+// API blue, External amber) stand out.
 
 /** Guess a participant role from its id / displayed label. */
 function inferSequenceRole(id, label) {
@@ -1617,6 +1824,7 @@ export function parseSequenceDiagram(text) {
   // ── Pass 1: tokenise into a flat event stream ───────────────────────────
   const participants = new Map(); // id → { id, label, role, isActor, order }
   const events = []; // { kind: 'msg'|'note'|'activate'|'deactivate'|'fragStart'|'fragElse'|'fragEnd', ... }
+  const blocks = []; // open `end`-closed blocks, innermost last: 'fragment' (drawn) or 'block' (rect / box, not drawn)
   let title = null;
   let autonumber = false;
   let autoNum = 0;
@@ -1638,10 +1846,13 @@ export function parseSequenceDiagram(text) {
     return p;
   };
 
+  const inAccDescr = accDescrBlock();
   for (let raw of lines) {
     const line = raw.trim();
     if (!line || line.startsWith('%%')) continue;
     if (/^sequenceDiagram\b/i.test(line)) continue;
+    // Its text could start with a keyword: "Alt text..." would open a fragment.
+    if (inAccDescr(line)) continue;
 
     // title MyTitle
     let m = /^title\s+(.*)$/i.exec(line);
@@ -1674,24 +1885,36 @@ export function parseSequenceDiagram(text) {
       continue;
     }
 
-    // Fragment openers: loop / alt / opt / par / critical / break  <condition>
-    m = /^(loop|alt|opt|par|critical|break)\b\s*(.*)$/i.exec(line);
+    // Fragment openers: loop / alt / opt / par / critical / break  <condition>. Any case, as Mermaid's sequence lexer
+    // is case-insensitive (`Loop every minute` ... `end` is a loop), but a whole word: `\b` let a participant id like
+    // `Par-Service` open a par fragment.
+    m = /^(loop|alt|opt|par|critical|break)(?:\s+(.*))?$/i.exec(line);
     if (m) {
+      blocks.push('fragment');
       events.push({ kind: 'fragStart', type: m[1].toLowerCase(), condition: (m[2] || '').trim() });
       continue;
     }
+    // `rect rgb(...)` highlights and `box` participant groups have no Diagramforce shape, but each closes with its
+    // own `end`. Skipped without a marker, that `end` closed the enclosing loop early, so its later messages fell
+    // outside the box drawn for it (review 2026-10-15, E9). Only a fragment's own `end` emits fragEnd.
+    if (/^(rect|box)(?:\s+.*)?$/i.test(line)) { blocks.push('block'); continue; }
     // else / and / option  <condition>  — alternative branch inside a fragment
-    m = /^(else|and|option)\b\s*(.*)$/i.exec(line);
+    m = /^(else|and|option)(?:\s+(.*))?$/i.exec(line);
     if (m) {
       events.push({ kind: 'fragElse', branch: m[1].toLowerCase(), condition: (m[2] || '').trim() });
       continue;
     }
-    // end — closes the most recent fragment
-    if (/^end\b/i.test(line)) { events.push({ kind: 'fragEnd' }); continue; }
+    // end — closes the most recent block. Alone on its line, so a participant called End still sends messages; any
+    // case, like the openers, or a capitalised `Loop` ... `End` would leave the loop open.
+    if (/^end\s*$/i.test(line)) {
+      if (blocks.pop() !== 'block') events.push({ kind: 'fragEnd' });
+      continue;
+    }
 
     // Message: `Src OP [+|-]Tgt : label`
-    // OP ∈ {->>, -->>, ->, -->, -), --), -x, --x}
-    const msgRe = /^(\S+?)\s*(->>|-->>|->|-->|-\)|--\)|-x|--x)\s*([+-]?)(\S+?)\s*:\s*(.*)$/;
+    // OP ∈ {->>, -->>, ->, -->, -), --), -x, --x, <<->>, <<-->>}. The two-headed pair is listed so `A<<->>B` is not
+    // read as a participant called "A<<".
+    const msgRe = /^(\S+?)\s*(<<->>|<<-->>|->>|-->>|->|-->|-\)|--\)|-x|--x)\s*([+-]?)(\S+?)\s*:\s*(.*)$/;
     m = msgRe.exec(line);
     if (m) {
       const [, srcId, op, actFlag, tgtId, label] = m;
@@ -1700,12 +1923,12 @@ export function parseSequenceDiagram(text) {
       if (actFlag === '+') events.push({ kind: 'activate', id: tgtId });
       let text = unquoteLabel(label.trim());
       if (autonumber) { autoNum += 1; text = `${autoNum}. ${text}`; }
-      const style = (op === '-->>' || op === '-->' || op === '--)' || op === '--x') ? 'dashed' : 'solid';
-      const arrow = (op === '->>' || op === '-->>') ? 'solid'
+      const style = (op === '-->>' || op === '-->' || op === '--)' || op === '--x' || op === '<<-->>') ? 'dashed' : 'solid';
+      const arrow = (op === '->>' || op === '-->>' || op.startsWith('<<')) ? 'solid'
                    : (op === '-)' || op === '--)') ? 'openAsync'
                    : (op === '-x' || op === '--x') ? 'lost'
                    : 'open';
-      events.push({ kind: 'msg', src: srcId, tgt: tgtId, style, arrow, label: text });
+      events.push({ kind: 'msg', src: srcId, tgt: tgtId, style, arrow, twoWay: op.startsWith('<<'), label: text });
       if (actFlag === '-') events.push({ kind: 'deactivate', id: tgtId });
       continue;
     }
@@ -1826,7 +2049,7 @@ export function parseSequenceDiagram(text) {
   // Participants / actors
   for (const p of partList) {
     const centerX = partX.get(p.id);
-    const accent = SEQ_ROLE_COLORS[p.role] || SEQ_ROLE_COLORS.generic;
+    const accent = SEQ_ROLE_ACCENT[p.role] || SEQ_ROLE_ACCENT.generic;
     if (p.isActor) {
       const w = SEQ_CONST.ACTOR_W;
       const x = centerX - w / 2;
@@ -1913,6 +2136,7 @@ export function parseSequenceDiagram(text) {
       y: m.y,
       style: m.style,    // 'solid' | 'dashed'
       arrow: m.arrow,    // 'solid' | 'open' | 'openAsync' | 'lost'
+      twoWay: !!m.twoWay,   // `<<->>`: an arrowhead at the source end too
     });
   }
 
@@ -1935,8 +2159,9 @@ function buildSequenceLink(lk, src, tgt) {
   const strokeWidth = 2;
   const dashed = lk.style === 'dashed';
 
-  // Source marker: never a marker tail — just trim the line.
-  const sourceMarker = { type: 'path', d: 'M 0 0 L -6 0', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
+  // Source marker: just trim the line, except on a two-headed `<<->>` message.
+  const sourceMarker = lk.twoWay ? { type: 'path', d: ER_MARKER_D.arrow }
+    : { type: 'path', d: 'M 0 0 L -6 0', fill: 'none', stroke: strokeColor, 'stroke-width': 2 };
 
   // Target marker — open V-head for async / open, filled triangle for sync.
   let targetMarker;
@@ -1959,6 +2184,13 @@ function buildSequenceLink(lk, src, tgt) {
     targetMarker,
   };
 
+  // A self-message (`Alice->>Alice: Think`) had both anchors on one point: a zero-length line with its label on the
+  // lifeline (review 2026-10-15, S7-2). It now leaves the lifeline, runs down SELF_LOOP_H and comes back, 40 px right
+  // of the axis like a hand-drawn self-message (gotchas-routing.md). Vertices are absolute, so they are placed from
+  // the participant's imported position; the next message is MESSAGE_Y_GAP below, which leaves room.
+  const self = src === tgt;
+  const SELF_LOOP_W = 40, SELF_LOOP_H = 20;
+  const axisX = src.position().x + srcW / 2, absY = src.position().y + lk.y;
   const link = new joint.shapes.standard.Link({
     source: {
       id: src.id,
@@ -1966,8 +2198,9 @@ function buildSequenceLink(lk, src, tgt) {
     },
     target: {
       id: tgt.id,
-      anchor: { name: 'topLeft', args: { dx: tgtW / 2, dy: lk.y } },
+      anchor: { name: 'topLeft', args: { dx: tgtW / 2, dy: self ? lk.y + SELF_LOOP_H : lk.y } },
     },
+    ...(self ? { vertices: [{ x: axisX + SELF_LOOP_W, y: absY }, { x: axisX + SELF_LOOP_W, y: absY + SELF_LOOP_H }] } : {}),
     connectionPoint: { name: 'anchor' },
     router: { name: 'normal' },
     connector: { name: 'normal' },
@@ -1980,8 +2213,11 @@ function buildSequenceLink(lk, src, tgt) {
   if (dashed) link.prop('lineStyle', '8 4');
 
   if (lk.label) {
+    // A self-message's label sits right of its loop, as UML draws it; centred on the loop it covered the line. Labels
+    // are centred (migrateLinks), so the shift is half an estimated width of its longest line at 11 px bold.
+    const longest = self ? Math.max(...lk.label.split('\n').map((s) => s.length)) : 0;
     link.labels([{
-      position: { distance: 0.5, offset: -10 },
+      position: self ? { distance: 0.5, offset: { x: Math.round(longest * 3.3) + 10, y: 0 } } : { distance: 0.5, offset: -10 },
       attrs: {
         text: { text: lk.label, fontSize: 11, fill: 'var(--text-primary)' },
       },

@@ -15,10 +15,10 @@
 //
 // Always run the output through validate-diagram.mjs before handing it to the user.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { computeFlowLayout } from './flow-layout.js';
-import { convertFlowMetadata } from './flow-convert.js';
-import { parseFlowXmlText } from './flow-xml.js';
+import { convertFlowMetadata, unwrapFlowQuery } from './flow-convert.js';
+import { parseFlowXmlText, stripHttpPreamble, isFlowMetadata } from './flow-xml.js';
+import { runSf, readText } from './sf-cli.js';
 
 // Read the version from the bundled spec's "Spec snapshot: vX" marker rather than hardcoding it, so
 // re-syncing the spec automatically stamps the right appVersion and the two can never drift apart.
@@ -46,28 +46,46 @@ const orgUrlFlag = (() => { const i = argv.indexOf('--org-url'); return i > -1 ?
 const expandStages = argv.includes('--expand-stages');
 const [inPath, outPath] = argv.filter((a) => !a.startsWith('--') && a !== orgUrlFlag && a !== orgAlias);
 if (!inPath) { console.error('usage: node flow-to-diagramforce.mjs <flow.flow-meta.xml|flow.json> [out.json] [--org <alias>] [--org-url https://…my.salesforce.com] [--expand-stages]'); process.exit(1); }
+const fail = (m) => { console.error(m); process.exit(1); };
+
+// READ AND CHECK THE INPUT FIRST, before any `sf` call: a mistyped path should fail in one line, not after a
+// subprocess round trip, and never as a Node stack (the reader is an agent relaying it).
+let text;
+try { text = readText(inPath); } catch (e) { fail(`Could not read ${inPath}: ${e.message}`); }
+// BOTH source formats, detected from the CONTENT rather than the extension. The XML path is what
+// `sf project retrieve start -m "Flow:*"` produces - the same command the object and mapping importers use.
+// The JSON path takes what the app's Paste takes (flow-xml.js holds both guards): a Workbench copy with its HTTP
+// preamble, and nothing that is not a flow - without that check ANY JSON converted to a "successful" Start -> End.
+let raw;
+if (/^\s*(<\?xml|<Flow[\s>])/.test(text)) {
+  try { raw = parseFlowXmlText(text); } catch (e) { fail(e.message); }
+} else {
+  try { raw = JSON.parse(stripHttpPreamble(text)); } catch { fail('That is neither Flow metadata JSON nor a .flow-meta.xml file.'); }
+  // A Tooling SOQL result (`sf data query -t --json`, or a bare query page) is unwrapped HERE as well as in the
+  // converter, so the id and name read below are the record's, not the wrapper's. Several records are refused with
+  // the converter's message, as the app's Paste refuses them.
+  try { raw = unwrapFlowQuery(raw); } catch (e) { fail(e?.message || String(e)); }
+  // `Metadata: null` is a managed-package flow; the converter names that case itself, so let it through.
+  const withheld = raw && typeof raw === 'object' && 'Metadata' in raw && raw.Metadata == null;
+  if (!withheld && !isFlowMetadata(raw)) fail('No Flow found in that input: that JSON is not a Salesforce Flow (no start element and no element collections).');
+}
+
 // Resolve the instance url from the alias when it was not given. Read-only (`sf org display`), best-effort: a
 // failure just means no card, which is the same as passing neither flag.
 let orgUrl = orgUrlFlag;
 if (!orgUrl && orgAlias) {
   try {
-    const out = execFileSync('sf', ['org', 'display', '-o', orgAlias, '--json'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const out = runSf(['org', 'display', '-o', orgAlias, '--json']);
     // `sf org display --json` also returns an accessToken. Take the one field and let the rest go out of scope -
     // never log the payload, and never write it into a diagram that is about to be shared.
     orgUrl = JSON.parse(out)?.result?.instanceUrl || null;
     if (!orgUrl) console.error(`  note: ${orgAlias} reported no instanceUrl - no link card`);
-  } catch { console.error(`  note: could not read ${orgAlias} (not authenticated?) - no link card`); }
+  } catch (e) { console.error(`  note: could not read ${orgAlias} (${e.message}) - no link card`); }
 }
-const text = readFileSync(inPath, 'utf8');
-// BOTH source formats, detected from the CONTENT rather than the extension. The XML path is what
-// `sf project retrieve start -m "Flow:*"` produces - the same command the object and mapping importers use -
-// and until now this script JSON.parse'd unconditionally and died on it with a raw SyntaxError stack, while
-// stripping `.flow-meta.xml` off the filename two lines below to derive the API name.
-const raw = /^\s*(<\?xml|<Flow[\s>])/.test(text) ? parseFlowXmlText(text) : JSON.parse(text);
 // SFDX source format keeps a flow's API name ONLY in the FILE NAME - never inside the document - so derive it
 // here for the .flow-meta.xml path. A Tooling response carries FullName and wins over this.
-const fullName = inPath.split('/').pop().replace(/\.(flow-meta\.xml|json|xml)$/i, '') || null;
+// Split on BOTH separators: a Windows path keeps its backslashes, and on POSIX `path.basename` would not split them.
+const fullName = inPath.split(/[\\/]/).pop().replace(/\.(flow-meta\.xml|json|xml)$/i, '') || null;
 // Resolve the id BEFORE converting, so the card can deep-link. Best-effort: a failed lookup degrades to the
 // Setup link rather than aborting a conversion that is otherwise fine.
 let flowId = raw?.Id || raw?.id || null;
@@ -92,8 +110,7 @@ if (!flowId && orgAlias && orgUrl && queryable) {
     // org holds 51 installed FlowDefinitions across 8 of them.
     const q = 'SELECT DeveloperName, ActiveVersionId, LatestVersionId FROM FlowDefinition '
       + `WHERE DeveloperName = '${String(apiName).replace(/'/g, "\\'")}' AND NamespacePrefix = NULL`;
-    const out = execFileSync('sf', ['data', 'query', '-o', orgAlias, '-t', '-q', q, '--json'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const out = runSf(['data', 'query', '-o', orgAlias, '-t', '-q', q, '--json']);
     const rec = JSON.parse(out)?.result?.records?.[0];
     flowId = rec?.LatestVersionId || rec?.ActiveVersionId || null;
     // A live difference between the two is a fact about the FLOW, not a converter apology: the file you are
@@ -103,7 +120,7 @@ if (!flowId && orgAlias && orgUrl && queryable) {
         + 'running a DIFFERENT version as Active');
     }
     if (!flowId) console.error(`  note: no unmanaged flow named ${apiName} in ${orgAlias} - the link will point at Setup`);
-  } catch { console.error(`  note: could not look up ${apiName} in ${orgAlias} - the link will point at Setup`); }
+  } catch (e) { console.error(`  note: could not look up ${apiName} in ${orgAlias} (${e.message}) - the link will point at Setup`); }
 }
 
 // ── Resolving the references a marketing flow leaves opaque ───────────────────────────────────────────────────
@@ -140,8 +157,7 @@ function orgQuery(alias, soql, tooling) {
   try {
     const args = ['data', 'query', '-o', alias, '-q', soql, '--json'];
     if (tooling) args.splice(4, 0, '-t');
-    const out = execFileSync('sf', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return JSON.parse(out)?.result?.records || [];
+    return JSON.parse(runSf(args))?.result?.records || [];
   } catch { return []; }
 }
 

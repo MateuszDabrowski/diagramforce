@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.25.9';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.1';
 
 /** `cell` sits somewhere inside `ancestor`. Replaces JointJS's isEmbeddedIn here, which walks ancestors with no
  *  visited set (a parent loop hangs the tab) and dereferences a missing parent (a dangling `parent` throws) - and this
@@ -46,6 +46,27 @@ const SPACING_SNAP_TOL = 4;
 // element's container context, skipping background shapes that carry no rhythm.
 let _spacingDragContext = null;
 let guideLayer = null;       // the <g class="df-alignment-guides"> overlay
+// The other members of a multi-select drag. selection.js moves them one frame AFTER this module runs, so as peers or
+// alignment targets they measured the selection against itself: the rhythm snap pulled the group back and the labels
+// showed stale gaps (review H2-6). They, and their descendants, are excluded for the drag. The selection is read when
+// the drag context is built on the first move, after every pointerdown listener has run, so the order the paper
+// listeners were registered in does not matter. selection.js injects the getter at init.
+let _getSelectedIds = () => null;
+export function setSpacingSelectionSource(getter) { _getSelectedIds = getter; }
+function coDraggedExclusions(moved) {
+  const { graph } = cctx;
+  const out = new Set();
+  const ids = _getSelectedIds();
+  // selection.js drags the whole selection along when the grabbed shape is one of several selected.
+  if (!ids || ids.size < 2 || !ids.has(moved.id)) return out;
+  for (const id of ids) {
+    const c = id !== moved.id && graph.getCell(id);
+    if (!c?.isElement?.()) continue;
+    out.add(id);
+    for (const d of c.getEmbeddedCells({ deep: true })) out.add(d.id);
+  }
+  return out;
+}
 
 // Background / group shapes that don't share rhythm with ordinary nodes. When an
 // ORDINARY element is dragged these are skipped as peers (an object shouldn't space
@@ -68,9 +89,10 @@ function buildSpacingDragContext(moved, originParent) {
   const homeParent = originParent !== undefined ? originParent : (moved.get('parent') || null);
   const movedType = moved.get('type');
   const movedIsGroup = NON_RHYTHM_TYPES.has(movedType);
+  const excluded = coDraggedExclusions(moved);
   const peers = graph.getElements()
     .filter(el => {
-      if (el.id === moved.id) return false;
+      if (el.id === moved.id || excluded.has(el.id)) return false;
       if (el.id === homeParent) return false;          // never the container itself
       if (isDescendantOf(el, moved)) return false;
       if (isDescendantOf(moved, el)) return false;
@@ -86,7 +108,7 @@ function buildSpacingDragContext(moved, originParent) {
     .map(el => ({ id: el.id, bb: el.getBBox() }));
   // Always return the context (peers may be empty) so the home parent stays
   // available to the edge-alignment pass; the spacing pass gates on peers.length.
-  return { peers, originParent: homeParent };
+  return { peers, originParent: homeParent, excluded };
 }
 
 // Look for a sequential rhythm where the dragged element extends or sits inside
@@ -266,7 +288,7 @@ function getGuideLayer() {
   const { paper } = cctx;
   if (!guideLayer || !guideLayer.parentNode) {
     guideLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    guideLayer.setAttribute('class', 'df-alignment-guides');
+    guideLayer.setAttribute('class', 'df-alignment-guides df-transient');   // df-transient: exports strip it
     // Append inside joint-layers so guides inherit the paper translate/scale transform
     const layers = paper.svg.querySelector('.joint-layers');
     if (layers) {
@@ -337,10 +359,11 @@ export function registerSpacingGuides(cctx) {
     // isEmbeddedIn() no longer excludes it — drop it explicitly so the child never
     // edge-aligns to the very Zone/Container it sits inside.
     const homeParent = _spacingDragContext?.originParent || null;
+    const excluded = _spacingDragContext?.excluded || new Set();   // co-selected shapes moving with this one
     const movedBBox = movedEl.getBBox();
     const movedType = movedEl.get('type');
     const allElements = graph.getElements().filter(el => {
-      if (el.id === movedEl.id || el.id === homeParent) return false;
+      if (el.id === movedEl.id || el.id === homeParent || excluded.has(el.id)) return false;
       if (isDescendantOf(el, movedEl) || isDescendantOf(movedEl, el)) return false;
       // When dragging a Zone/Pool/group, align only against the SAME type — otherwise the
       // children sitting inside OTHER zones pollute edge-alignment, and a stray child-edge
@@ -387,7 +410,7 @@ export function registerSpacingGuides(cctx) {
     // in X), a vertical link pins centre-X — so it never tugs the off-axis.
     let connBestX = null, connBestY = null;
     for (const ce of graph.getNeighbors(movedEl)) {
-      if (ce.id === movedEl.id || isDescendantOf(ce, movedEl) || isDescendantOf(movedEl, ce)) continue;
+      if (ce.id === movedEl.id || excluded.has(ce.id) || isDescendantOf(ce, movedEl) || isDescendantOf(movedEl, ce)) continue;
       const cb = ce.getBBox();
       const ceCx = centerX(cb), ceCy = centerY(cb);
       const ddx = ceCx - movedCx;

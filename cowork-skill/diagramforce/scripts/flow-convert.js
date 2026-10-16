@@ -166,8 +166,17 @@ const plainText = (t) => {
  *  a fallback (the field name) so refusing a formatted one is safe, but a choice's text has none - dropping it
  *  loses the only description of that option. Rich text is authored in the Flow Builder editor, so it arrives
  *  as `<p>`-wrapped runs with inline styles; without this the reader gets the style attributes and the
- *  character cap spends itself on markup instead of the sentence. */
-const strippedText = (t) => String(t || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+ *  character cap spends itself on markup instead of the sentence.
+ *  Only TAG-shaped runs go (`<p>`, `</i>`), so a typed "score < 5 or > 30" survives. The XML layer has already
+ *  decoded its own entities (both tokenisers and JSON.parse do), so the entities left are the editor's: `&lt;` is a
+ *  `<` the author typed, `&nbsp;` a space. They are decoded AFTER the strip, so a typed `<` never opens a tag. */
+const HTML_ENTITY = Object.assign(Object.create(null), { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" });
+const decodeHtml = (s) => s.replace(/&(#[xX][0-9a-fA-F]+|#\d+|[A-Za-z]+);/g, (whole, b) => {
+  if (b[0] !== '#') return HTML_ENTITY[b] ?? whole;
+  const code = b[1] === 'x' || b[1] === 'X' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10);
+  return code > 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : whole;
+});
+const strippedText = (t) => decodeHtml(String(t || '').replace(/<\/?[A-Za-z][^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 const LABEL_MAX = 60;
 const screenFieldLabel = (f) => {
   const labelParam = (f.inputParameters || []).find((p) => p.name === 'label');
@@ -477,7 +486,7 @@ const getOutputRows = (el) => {
 /** A subflow's parameter list is the only thing that makes it comprehensible - by definition its internals are
  *  not on this canvas. */
 const subflowRows = (el) => {
-  const rows = rows2(el.inputAssignments, (a) => ({ label: a.name, value: `= ${pickValue(a.value)}` }));
+  const rows = rows2(el.inputAssignments, (a) => ({ label: a.name, value: `= ${assignedValue(a)}` }));
   for (const o of asList(el.outputAssignments)) {
     if (o.name) rows.push({ label: o.name, value: `-> {!${o.assignToReference}}` });
   }
@@ -822,11 +831,6 @@ const capQuoted = (s, n) => {
   const v = String(s ?? '').replace(/\s+/g, ' ').trim();
   return v.length <= n ? `"${v}"` : `"${v.slice(0, n)}..." (+${v.length - n} chars)`;
 };
-// XML arrives escaped, and an expression full of &apos;/&quot; is unreadable as documentation. The DOM path
-// unescapes for us; the raw-string path (and any &amp;-double-escape) does not.
-const unescapeXml = (s) => String(s ?? '')
-  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-  .replace(/&apos;/g, "'").replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
 /** `{!Account.Name}` references inside a template or formula - what it actually PULLS. Harvested from the
  *  RAW text, deliberately BEFORE any tag-stripping: a template whose whole content is
  *  `<img src="{!Get_Account_Owner.FullPhotoUrl}">` keeps its meaning only in that attribute, so stripping
@@ -857,12 +861,17 @@ function resourceRows(md, choiceIdx) {
   };
   for (const f of asList(md.formulas)) {
     push(f.name, [`Formula${f.dataType ? ` (${f.dataType})` : ''}`,
-      f.expression ? `= ${capText(unescapeXml(f.expression))}` : null]);
+      // As written: every input route has already decoded the XML, and a second decode turned a formula that
+      // builds "&lt;b&gt;" into one that appears to build "<b>".
+      f.expression ? `= ${capText(f.expression)}` : null]);
   }
   for (const t of asList(md.textTemplates)) {
-    const raw = unescapeXml(t.text || '');
+    const raw = String(t.text || '');
     const isHtml = t.isViewedAsPlainText === false || t.isViewedAsPlainText === 'false';
-    const stripped = strippedText(raw);
+    // An explicitly PLAIN template is literal text: "score<5 or wait>30" has no tags, however tag-like. Anything
+    // else may hold the rich-text editor's HTML (older templates omit the flag), so it is stripped.
+    const isPlain = t.isViewedAsPlainText === true || t.isViewedAsPlainText === 'true';
+    const stripped = isPlain ? raw.replace(/\s+/g, ' ').trim() : strippedText(raw);
     // The size is only worth printing when the reader cannot see the thing itself. A short template shows in
     // full inside the quotes, and "73 chars" next to "Select the products with cancel fee." is a fact about a
     // string the reader is already looking at. Reported: "resources again show more than I think it should,
@@ -997,7 +1006,7 @@ const COLLECTIONS = [
       : stageStepRows(e),
   })],
   ['subflows', bySubtype(SUBFLOW_SUBTYPE, 'df.FlowSubflow', 'subflows'), (e) => ({ flowName: e.flowName, details: subflowRows(e) })],
-  ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${pickValue(a.value)}`).join('; ') || null })],
+  ['assignments', () => 'df.FlowAssignment', (e) => ({ assignmentItems: (e.assignmentItems || []).map((a) => `${a.assignToReference} ${a.operator || '='} ${assignedValue(a)}`).join('; ') || null })],
   ['decisions', bySubtype(DECISION_SUBTYPE, 'df.FlowDecision', 'decisions'), (e) => ({ outcomes: (e.rules || []).map((r) => r.label || r.name).concat(e.defaultConnectorLabel ? [e.defaultConnectorLabel] : []).join(', ') || null, details: outcomeRows(e) })],
   ['loops', () => 'df.FlowLoop', (e) => ({
     collectionReference: e.collectionReference,
@@ -1051,7 +1060,21 @@ HANDLED_KEYS.add('groups');
 // as a set of flow ELEMENTS (rather than resources like `variables` / `choices`, which carry none).
 const CONNECTOR_KEYS = ['connector', 'connectors', 'faultConnector', 'defaultConnector', 'nextValueConnector', 'noMoreValuesConnector'];
 
+/** A Tooling SOQL result - `sf data query -t --json "SELECT Id, FullName, Metadata FROM Flow WHERE Id = '301...'"`, or
+ *  the REST /tooling/query response - wraps the Flow record in `records`. Unwrap ONE; refuse several rather than
+ *  silently draw whichever came first. Anything else is returned unchanged. */
+export function unwrapFlowQuery(input) {
+  const recs = input?.result?.records ?? input?.records;
+  if (!Array.isArray(recs) || !recs.some((r) => r && typeof r === 'object' && 'Metadata' in r)) return input;
+  if (recs.length > 1) {
+    throw new Error(`That query result holds ${recs.length} flow records, and a diagram draws one. `
+      + "Query one flow version (WHERE Id = '301...') and convert that.");
+  }
+  return recs[0];
+}
+
 function convert(input, opts = {}) {
+  input = unwrapFlowQuery(input);
   // A managed-package flow returns the envelope with `Metadata: null` - Salesforce withholds a packaged
   // flow's definition from subscribers. Falling through to `|| input` then treats the ENVELOPE as the
   // metadata: no element collections, so an empty Start -> End diagram, carrying a confident "Package:
@@ -1064,6 +1087,13 @@ function convert(input, opts = {}) {
   }
   const md = input?.Metadata || input;
   if (!md || typeof md !== 'object') throw new Error('No Flow Metadata found in input');
+  // The CLI has no detector in front of it, so any object reaches here, and `{}` used to convert to a confident
+  // Start -> End. A flow has an entry point or at least one element.
+  if (md.start == null && md.startElementReference == null && !COLLECTIONS.some(([k]) => asList(md[k]).length)) {
+    throw new Error('No Flow found in that input: it has no start element and no element collections. Pass the '
+      + 'Tooling API response for one flow version (GET /services/data/vXX.0/tooling/sobjects/Flow/301...), its '
+      + 'Metadata object, or a .flow-meta.xml file.');
+  }
   const title = input?.MasterLabel || md.label || 'Imported Flow';
   const cells = [];
   const edges = [];          // { source, target, kind, label }
@@ -1253,6 +1283,9 @@ function convert(input, opts = {}) {
       } else if (key === 'loops') {
         addEdge(el.name, null, el.nextValueConnector, 'For Each', el.nextValueConnector?.isGoTo ? 'goto' : 'loopNext');
         addEdge(el.name, null, el.noMoreValuesConnector, 'After Last', el.noMoreValuesConnector?.isGoTo ? 'goto' : 'loopExit');
+        // A null After Last ends the flow: v67 leaves it null where v68 points it at an End, which addEdge reads
+        // as this same labelled branch to a synthesised End.
+        if (!el.noMoreValuesConnector?.targetReference) addDeadBranch(el.name, 'After Last');
       } else if (key === 'experiments') {
         // A Path Experiment (and Personalize Paths) branches exactly like a decision, through `paths`. The label is
         // what Flow Builder prints on the branch; the API name is the fallback.
@@ -1290,13 +1323,17 @@ function convert(input, opts = {}) {
   // array of named objects that carries a connector or a canvas coordinate as elements, draw them as
   // generic Action cards, and SAY SO. Resources (variables, choices, formulas, textTemplates) have
   // neither marker and are skipped.
+  // XML cannot say "list of one", so a LONE element of a collection XML_ARRAY_KEYS does not know arrives as a plain
+  // object. Wrap it, or the one new element in a .flow-meta.xml is dropped while its JSON twin is drawn.
   for (const [key, val] of Object.entries(md)) {
-    if (HANDLED_KEYS.has(key) || !Array.isArray(val) || !val.length) continue;
-    const looksLikeElements = val.every((e) => e && typeof e === 'object' && e.name)
-      && val.some((e) => e.locationX != null || CONNECTOR_KEYS.some((k) => e[k] != null));
+    if (HANDLED_KEYS.has(key)) continue;
+    const list = Array.isArray(val) ? val : (val && typeof val === 'object' && val.name ? [val] : null);
+    if (!list?.length) continue;
+    const looksLikeElements = list.every((e) => e && typeof e === 'object' && e.name)
+      && list.some((e) => e.locationX != null || CONNECTOR_KEYS.some((k) => e[k] != null));
     if (!looksLikeElements) continue;
-    warnings.push(`${val.length} "${key}" element(s) have no dedicated shape - drawn as generic Action cards`);
-    for (const el of val) {
+    warnings.push(`${list.length} "${key}" element(s) have no dedicated shape - drawn as generic Action cards`);
+    for (const el of list) {
       if (!addNode(el.name, 'df.FlowAction', el.label || el.name, { actionType: key }, el)) continue;
       addEdge(el.name, null, el.connector);
       for (const c of el.connectors || []) addEdge(el.name, null, c, c.label || null);
@@ -1346,7 +1383,9 @@ function convert(input, opts = {}) {
     }
   }
 
-  const hasOut = new Set(kept.filter((e) => e.target).map((e) => e.source));
+  // A Fault is not a way to finish: an element whose only exit is its Fault path still ends the flow on success
+  // (v67 leaves that connector null, v68 points it at an End).
+  const hasOut = new Set(kept.filter((e) => e.target && e.kind !== 'fault').map((e) => e.source));
   for (const c of [...cells]) {
     if (c.type === 'df.FlowEnd' || hasOut.has(c.id)) continue;
     // An UNREACHABLE element gets no End. Flow Builder draws none either - free-form never draws End at all,
@@ -1365,14 +1404,16 @@ function convert(input, opts = {}) {
   // reader would otherwise have no way to tell a Custom Error from an Apex action. (The catch-all above
   // warns for collections this converter does not know at all; this warns for the ones it knows but
   // cannot draw faithfully.)
+  // Plain words: the note reaches the user in the import toast, where a class name like df.FlowCustomError means
+  // nothing.
   const NO_SHAPE_YET = [
-    ['customErrors', 'Custom Error element', 'df.FlowCustomError'],
-    ['apexPluginCalls', 'Apex Plugin call', 'df.FlowApexPlugin'],
-    ['steps', 'legacy Step element', 'df.FlowStep'],
+    ['customErrors', 'Custom Error element'],
+    ['apexPluginCalls', 'Apex Plugin call'],
+    ['steps', 'legacy Step element'],
   ];
-  for (const [key, label, shape] of NO_SHAPE_YET) {
+  for (const [key, label] of NO_SHAPE_YET) {
     const n = md[key]?.length;
-    if (n) warnings.push(`${n} ${label}(s) drawn as generic Action cards - Diagramforce has no ${shape} shape`);
+    if (n) warnings.push(`${n} ${label}(s) drawn as generic Action cards - there is no dedicated card for them yet`);
   }
 
   // ── Layout: real coordinates when the builder persisted them, else the app's tidy tree ──
@@ -1602,6 +1643,14 @@ function convert(input, opts = {}) {
     for (const name of groupDefs.keys()) {
       const parent = groupDefs.get(name).group;
       if (!parent || !groupDefs.has(String(parent))) drawGroup(name, 0, seen);
+    }
+    // A group in a parent CYCLE (two naming each other, or one naming itself) is never a root above, so it would
+    // vanish without a word. Draw each cycle from its first group at the top level; `seen` stops the recursion.
+    for (const name of groupDefs.keys()) {
+      if (seen.has(name)) continue;
+      if (drawGroup(name, 0, seen).box) {
+        warnings.push(`Group "${groupDefs.get(name).label || name}" is in a parent cycle - drawn at the top level`);
+      }
     }
     // Members that name a group the flow does not define.
     const orphans = [...groupOf].filter(([, name]) => !groupDefs.has(name));

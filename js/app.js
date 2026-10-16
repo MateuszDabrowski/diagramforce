@@ -3,34 +3,37 @@
 // notice stays. Licensed under the EUPL 1.2.
 // Initializes all modules in order. JointJS is a global (vendored script tag, assets/vendor/joint.min.js).
 
-import * as theme       from './theme.js?v=1.25.9';
-import * as icons       from './icons.js?v=1.25.9';
-import { getAllStencilSvgs } from './components.js?v=1.25.9';
-import * as shapes      from './shapes.js?v=1.25.9';
-import * as canvas      from './canvas.js?v=1.25.9';
-import * as stencil     from './stencil.js?v=1.25.9';
-import * as selection   from './selection.js?v=1.25.9';
-import * as history     from './history.js?v=1.25.9';
-import * as clipboard   from './clipboard.js?v=1.25.9';
-import * as templates    from './templates.js?v=1.25.9';
-import * as keyboard    from './keyboard.js?v=1.25.9';
-import * as toolbar     from './toolbar.js?v=1.25.9';
-import * as properties  from './properties.js?v=1.25.9';
-import * as persistence from './persistence.js?v=1.25.9';
-import * as tabs        from './tabs.js?v=1.25.9';
-import * as mermaidImport from './mermaid-import.js?v=1.25.9';
-import * as tableView    from './table-view.js?v=1.25.9';
-import * as walkthrough  from './walkthrough.js?v=1.25.9';
-import * as present      from './present.js?v=1.25.9';
-import * as whatsNew     from './whats-new.js?v=1.25.9';
-import * as migrationBridge from './persistence/migration-bridge.js?v=1.25.9';
-import * as singleWindow from './tabs/single-window.js?v=1.25.9';
-import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.25.9';
-import * as externalImport from './persistence/external-import.js?v=1.25.9';   // 3rd-party postMessage import (open a diagram from another site)
-import * as a11y         from './a11y.js?v=1.25.9';
-import { seedDefaultPalette } from './brand-palette.js?v=1.25.9';
-import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.25.9';   // external-import timeout fallback
-import { installErrorCapture } from './diagnostics.js?v=1.25.9';
+import * as theme       from './theme.js?v=1.26.1';
+import * as icons       from './icons.js?v=1.26.1';
+import { getAllStencilSvgs } from './components.js?v=1.26.1';
+import * as shapes      from './shapes.js?v=1.26.1';
+import * as canvas      from './canvas.js?v=1.26.1';
+import * as stencil     from './stencil.js?v=1.26.1';
+import * as selection   from './selection.js?v=1.26.1';
+import * as history     from './history.js?v=1.26.1';
+import * as clipboard   from './clipboard.js?v=1.26.1';
+import * as templates    from './templates.js?v=1.26.1';
+import * as keyboard    from './keyboard.js?v=1.26.1';
+import * as toolbar     from './toolbar.js?v=1.26.1';
+import * as properties  from './properties.js?v=1.26.1';
+import * as persistence from './persistence.js?v=1.26.1';
+import * as tabs        from './tabs.js?v=1.26.1';
+import * as mermaidImport from './mermaid-import.js?v=1.26.1';
+import * as tableView    from './table-view.js?v=1.26.1';
+import * as walkthrough  from './walkthrough.js?v=1.26.1';
+import * as present      from './present.js?v=1.26.1';
+import * as whatsNew     from './whats-new.js?v=1.26.1';
+import * as migrationBridge from './persistence/migration-bridge.js?v=1.26.1';
+import * as singleWindow from './tabs/single-window.js?v=1.26.1';
+import { setBrowserBackupHealthGetter } from './storage-ui.js?v=1.26.1';
+import * as externalImport from './persistence/external-import.js?v=1.26.1';   // 3rd-party postMessage import (open a diagram from another site)
+import * as a11y         from './a11y.js?v=1.26.1';
+import { seedDefaultPalette } from './brand-palette.js?v=1.26.1';
+import { showNewDiagramModal } from './tabs/new-diagram-modal.js?v=1.26.1';   // external-import timeout fallback
+import { installErrorCapture } from './diagnostics.js?v=1.26.1';
+import { holdUpdateReload, isUpdateReloadHeld, releaseLoss, reloadWhenIdle, setUpdateReadyHandler, updateReady } from './update-reload.js?v=1.26.1';
+import { isInSlot } from './persistence/host-env.js?v=1.26.1';
+import { showToast } from './feedback.js?v=1.26.1';
 
 // Record uncaught errors, unhandled rejections and console errors in memory for Help > Copy diagnostics. First
 // statement after the imports, so every later failure is caught. Nothing is sent anywhere (js/diagnostics.js).
@@ -204,6 +207,8 @@ async function main() {
   // An open Data Mapping table edit session vetoes a tab switch until the user
   // resolves it (Save / Discard the unapplied field edits) — see table-view.guardLeave.
   tabs.setSwitchGuard((proceed) => tableView.guardLeave(proceed));
+  // The same guard before a pasted share link reloads the page (review R6).
+  persistence.setLeaveGuard((proceed) => tableView.guardLeave(proceed));
   // The diagram-edit guard's "Keep editing" returns to the Table view (clicking the toolbar toggle keeps
   // the session intact) after undoing the stray diagram change — see table-view.revertDiagramEdit (#5).
   tableView.setRequestTableView(() => document.getElementById('btn-view-table')?.click());
@@ -215,6 +220,9 @@ async function main() {
   // row keeps an index or a state copy from before the replay (audit 2026-09-23).
   tabs.onChange(() => properties.refresh());
   history.onReplay(() => properties.refresh());
+  // A replayed icon edit restores the href as recorded, baked in the theme ink of that moment: repaint it in the
+  // current theme (review S2-4). refreshIcons writes as a cosmetic change, so this records nothing and dirties nothing.
+  history.onReplay(() => canvas.refreshIcons());
 
   // Tag captured templates with the active diagram type (metadata only — the
   // library is global, shown across every diagram type).
@@ -248,14 +256,16 @@ async function main() {
   canvas.initMobileDragHandles();
 
   // --- Phase 9: Check for shared diagram in URL hash ---
-  persistence.loadFromURL();
+  // Held: loadFromURL strips the address before it awaits, so an update reload mid-open would lose the link.
+  holdUpdateReload(persistence.loadFromURL());
 
   // --- Phase 9a: External-site live import (postMessage). A 3rd-party web app can open us with
   // `#import=postmessage` (new tab) and hand over a Diagramforce JSON with no backend and no URL
   // size limit; it routes through loadJSONText — the same sanitize + open-as-tab path as file/paste
   // import. See js/persistence/external-import.js + DIAGRAM_JSON_SPEC.md. ---
   if (externalImport.isExternalImportBoot()) {
-    externalImport.startExternalImport({
+    // Held like loadFromURL: the trigger is stripped before the payload arrives (review R4).
+    holdUpdateReload(externalImport.startExternalImport({
       // ONE diagram per push: a bundle or a templates file would write browser saves and templates (and push them to
       // Drive) behind the user's back - more than "the site showed you a diagram" (audit 2026-09-23).
       onImportJSON: (json) => {
@@ -287,7 +297,7 @@ async function main() {
         // normal flow, but don't stack over a modal or a tab the user opened meanwhile.
         if (tabs.getAllTabs().length === 0 && !document.querySelector('.df-new-modal')) showNewDiagramModal();
       },
-    });
+    }));
   }
 
   // --- Phase 9b: One-time "What's new" overlay on a new RELEASE (R23) ---
@@ -352,10 +362,14 @@ async function main() {
     evt.returnValue = '';
     return '';
   });
+
+  // Booted: tell the watchdog (js/boot-watchdog.js), which otherwise shows its banner after a grace period.
+  window.__dfBootDone?.();
 }
 
 main().catch(err => {
   console.error('SF Diagrams: Initialization failed', err);
+  window.__dfBootFailed?.(err);   // a banner: the diagrams are still saved, Reload (review I10)
 });
 
 // --- Service worker (offline support) ---
@@ -374,6 +388,48 @@ main().catch(err => {
 const isDevHost = ['localhost', '127.0.0.1', '0.0.0.0', ''].includes(location.hostname)
   || location.protocol === 'file:';
 
+// What a new version does once it has taken over (production's controllerchange below; e2e calls updateReady). Not
+// mid-flow: a link being opened, an open dialog or an unapplied Table-view edit holds it until done. The about box is
+// a static .df-modal, hidden by a class, so it never counts. Then it reloads by itself only when that loses nothing:
+// no undo or redo step, no edit the browser session could not save, no text field in use. Otherwise a toast offers
+// the reload and the user chooses (owner decision 2026-10-15, B2).
+setUpdateReadyHandler(() => reloadWhenIdle({
+  getState: () => ({
+    urlOpen: isUpdateReloadHeld(),
+    tableEditing: tableView.isEditing(),
+    modalOpen: !!document.querySelector('.df-modal:not(.df-modal--hidden)'),
+  }),
+  getLoss: () => {
+    const el = document.activeElement;
+    return {
+      history: tabs.hasAnyHistory(),
+      unsavedEdits: tabs.hasAnyDirty() && !tabs.isSessionBackupHealthy(),
+      typing: !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable),
+    };
+  },
+  reload: () => window.location.reload(),
+  offer: () => showToast('Diagramforce has been updated.', 'info', { sticky: true, action: { label: 'Reload', onClick: () => window.location.reload() } }),
+}));
+
+// Slot asks this before it releases the tab by its own rules, through the same read-only script call it uses for other
+// pages, and keeps a tab that answers yes for up to an hour more (Slot's side). Only in Slot, and read-only. The
+// answer is { unsaved, reasons }; undo history never counts (releaseLoss). Contract: drive/sync-model.md#slot.
+if (isInSlot()) {
+  Object.defineProperty(window, 'diagramforceUnsavedWork', {
+    value: () => {
+      try {
+        return releaseLoss({
+          tableEdits: tableView.hasUnappliedEdits(),
+          labelTyping: properties.isLabelEditChanged(),
+          drivePush: persistence.drivePushPending(),
+          unsavedEdits: tabs.hasAnyDirty() && !tabs.isSessionBackupHealthy(),
+        });
+      } catch (e) { return { unsaved: false, reasons: ['error'], error: String(e && e.message || e) }; }   // as an older build
+    },
+    writable: false, configurable: false, enumerable: false,
+  });
+}
+
 if ('serviceWorker' in navigator) {
   if (isDevHost) {
     // Tear down any SW left behind by an earlier visit so dev edits land
@@ -387,12 +443,13 @@ if ('serviceWorker' in navigator) {
     // a manual reload — the recurring "I bumped the version but see no change" trap, since the SW is
     // cache-first and the already-loaded page stays on the old assets. Skip the first-ever claim (no
     // prior controller → the page already loaded from the network, nothing stale to replace).
+    // When and whether it reloads by itself: the update-ready handler above (js/update-reload.js).
     const hadController = !!navigator.serviceWorker.controller;
     let swReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (swReloading || !hadController) return;
       swReloading = true;
-      window.location.reload();
+      updateReady();
     });
     // Defer registration until after the load event so it doesn't compete with the initial paint or
     // app bootstrap. `updateViaCache: 'none'` forces the browser to re-fetch sw.js fresh (not serve a

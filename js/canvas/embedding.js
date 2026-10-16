@@ -12,9 +12,12 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.25.9';
-import { isUndoRedoActive, startBatch, endBatch, amendLast } from '../history.js?v=1.25.9';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.1';
+import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.1';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.1';
+import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.1';
+import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.1';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -118,10 +121,36 @@ export const HALO_PARENT_TYPES = new Set([
   'sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop', 'sf.Task',
 ]);
 
+// `el` sits somewhere inside the cell `ancestorId` (walks `parent` with a visited set, so a parent loop cannot hang).
+// JointJS processEmbedding never offers the dragged element's own descendants as its parent; the drop ghost and the
+// pointerup re-check must not either, or cross-type nesting (Zone > Pool > Zone) ejected the Pool from its real
+// parent in favour of the inner Zone (review H1-10).
+function isInsideCell(el, ancestorId) {
+  const { graph } = cctx;
+  if (!ancestorId || !graph) return false;
+  const seen = new Set([el.id]);
+  let pid = el.get('parent');
+  while (pid != null && !seen.has(pid)) {
+    if (pid === ancestorId) return true;
+    seen.add(pid);
+    pid = graph.getCell(pid)?.get('parent');
+  }
+  return false;
+}
+
 // A BpmnPool carries its label band down the LEFT edge (see shapes.js — header
 // rect width 30). Children must clear it both when tucked on drop AND when the
 // parent re-hugs its content, or the first step overlaps the rotated pool title.
 const POOL_HEADER_W = 30;
+// The left header band a frame reserves: a pool's 30 px title band when it is drawn on the left, else 0. The stencil's
+// VERTICAL pool draws its header across the TOP (components.js), inside the 48 px top padding every frame keeps, so it
+// reserves no left band; it used to get one, and its children sat 30 px right of centre. The side comes from the header
+// attrs, not poolDirection: a pool with only poolDirection set still draws the left band, and its cards sat 18 px from
+// it with a link down the gap through the title (POOL-HDR). The tuck, the fit and the drop ghost all read the band from
+// here, so the ghost cannot drift from the fit again (review H1-11).
+function poolLeftHeader(parent) {
+  return parent.get('type') === 'sf.BpmnPool' && poolHeaderSide(parent.attr('header')) === 'left' ? POOL_HEADER_W : 0;
+}
 
 // Find a container-like parent whose capture region (visible bbox inflated by the
 // halo) the child's BBOX reaches, honouring canEmbed. Topmost (highest z) wins.
@@ -147,7 +176,7 @@ export function findHaloParent(childBBox, childType, excludeId, originParentId) 
   let bestZ = -Infinity;
   let sticky = null;   // the origin parent, if the child is still within its EXIT halo
   for (const el of graph.getElements()) {
-    if (el.id === excludeId) continue;
+    if (el.id === excludeId || isInsideCell(el, excludeId)) continue;   // never the dragged frame's own content
     const type = el.get('type');
     if (!HALO_PARENT_TYPES.has(type)) continue;
     if (!canEmbed(type, childType)) continue;
@@ -185,6 +214,7 @@ export function enclosedCapturableShapes(captor) {
     && el.isElement?.()
     && !el.get('parent')
     && canEmbed(captorType, el.get('type'))
+    && !isInsideCell(captor, el.id)   // never the captor's own ancestor (JointJS throws on a recursive embed)
     && !el.getBBox().containsRect(bb));
 }
 
@@ -204,6 +234,102 @@ export function groupChildrenInto(captor, children) {
       captor.embed(c);
     }
   } finally { endBatch(); }
+}
+
+// ── Auto Layout capture (owner decision, 2026-10-15) ────────────────
+// A shape lying on a frame without being embedded in it was laid out as a unit of its own, so Auto Layout carried it
+// away from the frame it was drawn on. Auto Layout now embeds such shapes first, so they move with their frame. The
+// rule is stricter than a drop: the shape is embedded nowhere and its WHOLE box lies inside the frame's body, below the
+// frame's header; a shape that only overlaps a frame edge stays free. Then a drop's rules: canEmbed, the shape drawn
+// above the frame (z), the topmost frame winning, never into the shape's own content.
+// The header each frame keeps clear: a Container's 41 px title bar, a Task Group's section label, the label line a
+// Zone, Subprocess or Loop draws at y 16, a Pool's 30 px band on the side its header attrs draw it, a RACI Task's left
+// label column.
+const FRAME_LABEL_BAND = 24;
+function frameBody(frame) {
+  const b = frame.getBBox(), type = frame.get('type');
+  let top = 0, left = 0;
+  if (type === 'sf.Container') top = 41;
+  else if (type === 'sf.TaskGroup') top = 28;
+  else if (type === 'sf.Zone' || type === 'sf.BpmnSubprocess' || type === 'sf.BpmnLoop') top = FRAME_LABEL_BAND;
+  else if (type === 'sf.BpmnPool') { if (poolHeaderSide(frame.attr('header')) === 'left') left = 30; else top = 30; }
+  else if (type === 'sf.Task') left = taskRightColumnLeft(frame);
+  return { x: b.x + left, y: b.y + top, right: b.x + b.width, bottom: b.y + b.height };
+}
+
+// Set while setCaptured embeds or releases: the change:parent trigger below then skips its tuck and fit.
+let _quietEmbed = false;
+
+/** Embed every free shape that lies wholly inside a frame's body (rules above), decided on the geometry before any
+ *  embed. The embeds are SILENT: the layout that follows reads `parent` / `embeds`, but no listener hears them yet (no
+ *  fit, no undo entry, no unsaved-change mark), so a run that then finds nothing to arrange puts them back unseen
+ *  (releaseCaptured). A layout that ran announces them with commitCaptured. Returns null when nothing is captured. */
+export function captureEnclosedShapes() {
+  const { graph } = cctx;
+  if (!graph) return null;
+  const frames = graph.getElements().filter((el) => HALO_PARENT_TYPES.has(el.get('type')));
+  if (!frames.length) return null;
+  const pairs = [];
+  for (const el of graph.getElements()) {
+    if (el.get('parent')) continue;
+    const b = el.getBBox(), z = el.get('z') ?? 0;
+    let captor = null;
+    for (const f of frames) {
+      if (f === el || isInsideCell(f, el.id) || !canEmbed(f.get('type'), el.get('type'))) continue;
+      const fz = f.get('z') ?? 0;
+      if (fz >= z || (captor && (captor.get('z') ?? 0) >= fz)) continue;
+      const r = frameBody(f);
+      if (b.x >= r.x && b.y >= r.y && b.x + b.width <= r.right && b.y + b.height <= r.bottom) captor = f;
+    }
+    if (captor) pairs.push({ childId: el.id, parentId: captor.id });
+  }
+  if (!pairs.length) return null;
+  const prior = new Map();   // frame id -> its own embeds before the capture, restored exactly by releaseCaptured
+  for (const { childId, parentId } of pairs) {
+    const parent = graph.getCell(parentId);
+    if (!prior.has(parentId)) prior.set(parentId, parent.get('embeds'));
+    parent.embed(graph.getCell(childId), { silent: true });
+  }
+  return { pairs, prior };
+}
+
+/** Put a capture no listener has heard of back, silently and exactly (each frame's own `embeds`, not an empty list). */
+export function releaseCaptured(capture) {
+  const { graph } = cctx;
+  if (!graph || !capture) return;
+  for (const { childId } of capture.pairs) graph.getCell(childId)?.unset('parent', { silent: true });
+  for (const [parentId, embeds] of capture.prior) {
+    const parent = graph.getCell(parentId);
+    if (!parent) continue;
+    if (embeds === undefined) parent.unset('embeds', { silent: true });
+    else parent.set('embeds', embeds, { silent: true });
+  }
+}
+
+/** Announce a capture the layout kept: embed it again where every listener hears it (unsaved changes, the Table view,
+ *  the capture overlay), with no fit (the layout placed the frame) and no undo entry (the caller records setCaptured). */
+export function commitCaptured(capture) {
+  if (!capture) return;
+  releaseCaptured(capture);
+  setCaptured(capture.pairs, true);
+}
+
+/** Embed (`on`) or release captured pairs quietly: no tuck, no fit, no undo entry. commitCaptured, and the undo and
+ *  redo of a capture. */
+export function setCaptured(pairs, on) {
+  const { graph } = cctx;
+  if (!graph || !pairs?.length) return;
+  _quietEmbed = true;
+  try {
+    suppressEmbedTracking(() => {
+      for (const { childId, parentId } of (on ? pairs : [...pairs].reverse())) {
+        const child = graph.getCell(childId), parent = graph.getCell(parentId);
+        if (!child || !parent) continue;
+        if (on && !child.get('parent')) parent.embed(child);
+        else if (!on && child.get('parent') === parentId) parent.unembed(child);
+      }
+    });
+  } finally { _quietEmbed = false; }
 }
 
 // ── RACI Task geometry (v1.15.0) ────────────────────────────────────
@@ -283,10 +409,11 @@ export function tuckChildInside(child, parent) {
   // it. Zone / BPMN groupers have no top header.
   const headerPad = ptype === 'sf.Container' ? 32 : (ptype === 'sf.TaskGroup' ? 28 : 0);
   const ny = Math.max(cp.y, pp.y + headerPad + pad);
-  // A BpmnPool's header runs down the LEFT — tuck the child right past it so the
+  // A BpmnPool whose header band runs down the LEFT: tuck the child right past it so the
   // first step never lands on the rotated pool title. Other parents keep their
   // left overflow (a left drop wraps the parent leftward — see fitParentToChildren).
-  const nx = ptype === 'sf.BpmnPool' ? Math.max(cp.x, pp.x + POOL_HEADER_W + pad) : cp.x;
+  const leftHeader = poolLeftHeader(parent);
+  const nx = leftHeader ? Math.max(cp.x, pp.x + leftHeader + pad) : cp.x;
   if (ny !== cp.y || nx !== cp.x) child.position(nx, ny);
 }
 
@@ -306,8 +433,10 @@ export function findEmbeddingParent(elementView) {
     if (Math.hypot(p.x - _dragStartPos.x, p.y - _dragStartPos.y) < CAPTURE_MIN_DRAG) return [];
   }
   const bbox = elementView.model.getBBox();
+  // Never the dragged frame's own content (JointJS drops it anyway). A lane holding a Subprocess found its own child
+  // as a container hit below, so the halos were skipped and the drop missed the capture the ghost showed (review S3-3).
   const candidates = graph.findModelsInArea(bbox).filter(
-    (el) => el.id !== elementView.model.id
+    (el) => el.id !== elementView.model.id && !isInsideCell(el, elementView.model.id)
   );
   // For milestones/markers: if a GanttTask is found, replace it with its GanttTimeline ancestor
   if (childType === 'sf.GanttMilestone' || childType === 'sf.GanttMarker') {
@@ -486,12 +615,21 @@ function fitParentToChildren(parent) {
   //              accent bar from being clipped.
   // Children keep their absolute positions: a programmatic position()/resize()
   // does NOT cascade to embeds (only an interactive paper drag translates them).
-  // A BpmnPool reserves its left header band; everything else hugs flush. Using a
+  // A BpmnPool with a left header band reserves it; everything else hugs flush. Using a
   // wider left inset for pools means re-hugging never slides the title back over
   // the leftmost child — it grows the pool left until the header clears it.
-  const leftInset = parent.get('type') === 'sf.BpmnPool' ? POOL_HEADER_W + PARENT_FIT_PADDING : PARENT_FIT_PADDING;
+  // A Data Mapping zone keeps room for its join lanes (join-lanes.js; SQL Studio's lineage, 2026-10-16): the 48 px fits
+  // one lane, and each further lane on a side needs JOIN_LANE_GAP more. Hugging at 48 drew the outer lanes on or past
+  // the border, and undid the room Auto Layout and the import had made.
+  let laneL = 0, laneR = 0;
+  if (parent.get('type') === 'sf.Zone' && cctx.getDiagramType?.() === 'datamapping') {
+    const n = liveJoinLaneCounts(graph, children.map((c) => c.id));
+    laneL = JOIN_LANE_GAP * Math.max(0, n.left - 1);
+    laneR = JOIN_LANE_GAP * Math.max(0, n.right - 1);
+  }
+  const leftInset = poolLeftHeader(parent) + PARENT_FIT_PADDING + laneL;
   const newLeft = minLeft - leftInset;                 // hug left (grow AND shrink)
-  const rightEdge = maxRight + PARENT_FIT_PADDING;      // hug right (grow AND shrink)
+  const rightEdge = maxRight + PARENT_FIT_PADDING + laneR;      // hug right (grow AND shrink)
   // Floor the width to the header title's rendered right edge so auto-fit keeps a long, non-wrapping title (the
   // Container's `headerLabel`) fully visible instead of clipping it — the reported "Financial Services Cloud" bug.
   const targetWidth = Math.max(PARENT_FIT_MIN_WIDTH, headerLabelMinWidth(parent, paper, PARENT_FIT_PADDING), rightEdge - newLeft);
@@ -535,7 +673,7 @@ function ensureGhostLayer() {
   const layersGroup = cellsLayer?.parentNode;
   if (!layersGroup) return null;
   _ghostLayer = document.createElementNS(GHOST_SVG_NS, 'g');
-  _ghostLayer.setAttribute('class', 'df-drop-ghost');
+  _ghostLayer.setAttribute('class', 'df-drop-ghost df-transient');   // df-transient: exports strip it
   _ghostLayer.setAttribute('pointer-events', 'none');
   layersGroup.insertBefore(_ghostLayer, cellsLayer.nextSibling);
   return _ghostLayer;
@@ -548,7 +686,7 @@ function findCaptureParent(childBBox, childType, excludeId) {
   const { graph } = cctx;
   if (!graph) return null;
   const overlap = graph.findModelsInArea(childBBox)
-    .filter(el => el.id !== excludeId
+    .filter(el => el.id !== excludeId && !isInsideCell(el, excludeId)
       && HALO_PARENT_TYPES.has(el.get('type'))
       && canEmbed(el.get('type'), childType))
     .sort((a, b) => (b.get('z') || 0) - (a.get('z') || 0));
@@ -574,10 +712,13 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
   const ptype = parent.get('type');
   const headerPad = ptype === 'sf.Container' ? 32 : (ptype === 'sf.TaskGroup' ? 28 : 0);
   // Mirror fitParentToChildren: TOP clamps the child below the header (can't grow
-  // up); LEFT/RIGHT/BOTTOM take the child where it lands and the frame wraps it.
+  // up); LEFT/RIGHT/BOTTOM take the child where it lands and the frame wraps it. A pool with a left band also tucks the
+  // child right of that band, and the fit keeps it clear (tuckChildInside / leftInset).
   const tuckedTop = Math.max(childBBox.y, pp.y + headerPad + pad);
-  let minLeft = childBBox.x;
-  let maxRight = childBBox.x + childBBox.width;
+  const leftHeader = poolLeftHeader(parent);
+  const tuckedLeft = leftHeader ? Math.max(childBBox.x, pp.x + leftHeader + pad) : childBBox.x;
+  let minLeft = tuckedLeft;
+  let maxRight = tuckedLeft + childBBox.width;
   let maxBottom = tuckedTop + childBBox.height;
   for (const c of graph.getElements()) {
     if (c.get('parent') !== parent.id) continue;
@@ -588,7 +729,7 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
     if (cp.x + cs.width > maxRight) maxRight = cp.x + cs.width;
     if (cp.y + cs.height > maxBottom) maxBottom = cp.y + cs.height;
   }
-  const newLeft = minLeft - pad;      // hug left (mirror the fit)
+  const newLeft = minLeft - leftHeader - pad;      // hug left (mirror the fit)
   const rightEdge = maxRight + pad;   // hug right
   return {
     x: newLeft,
@@ -667,6 +808,25 @@ export function hideDropGhost() {
 // crossing-bumps / spacing-guides "recompute on drop" pattern. Stencil drops and
 // programmatic embeds aren't pointer-drags (no element:pointerdown), so they
 // still fit immediately through the same handlers.
+// A child that shares its new parent's z tier (a BPMN Loop nested into a Subprocess, both 500) must paint above it.
+// The paper sets frontParentOnEmbed:false and the z-tier listener snaps JointJS's drag toFront() back to the old z,
+// so a Loop created before the Subprocess kept the lower z and drew under the Subprocess body (review H1-5). Lift the
+// child and its same-tier descendants, in their own order, to the top of the tier.
+function raiseAboveSameTierParent(child, parent) {
+  const { graph } = cctx;
+  const base = Z_BASE[child.get('type')];
+  if (!parent || base === undefined || base !== Z_BASE[parent.get('type')]) return;
+  if ((child.get('z') ?? base) > (parent.get('z') ?? base)) return;
+  const chain = [child, ...child.getEmbeddedCells({ deep: true })
+    .filter((c) => c.isElement?.() && Z_BASE[c.get('type')] === base)]
+    .sort((a, b) => (a.get('z') ?? base) - (b.get('z') ?? base));
+  const inChain = new Set(chain.map((c) => c.id));
+  const top = graph.getElements()
+    .filter((el) => !inChain.has(el.id) && el.get('z') >= base && el.get('z') < base + Z_TIER_SPAN)
+    .reduce((m, el) => Math.max(m, el.get('z')), base - 1);
+  chain.forEach((c, i) => c.set('z', Math.min(top + 1 + i, base + Z_TIER_SPAN - 1)));
+}
+
 export function registerEmbedding(cctx) {
   const { graph, paper } = cctx;
   cctx.fitParentToChildren = fitParentToChildren;
@@ -756,8 +916,10 @@ export function registerEmbedding(cctx) {
   // new one (may grow) and the previous one (may shrink). Deferred during drag.
   graph.on('change:parent', (cell, newParentId) => {
     if (cctx.isLoadingJSON || isUndoRedoActive()) return;   // undo/redo restores size+position exactly; don't re-fit over it
+    if (_quietEmbed) return;   // Auto Layout's capture: the layout that follows places and fits the frame
     if (!cell.isElement || !cell.isElement()) return;
     const prevParentId = cell.previous('parent');
+    if (newParentId) raiseAboveSameTierParent(cell, graph.getCell(newParentId));   // a drag embed too, so before the deferral
     if (_dragActive) {
       if (newParentId) _pendingParents.add(newParentId);
       if (prevParentId && prevParentId !== newParentId) _pendingParents.add(prevParentId);

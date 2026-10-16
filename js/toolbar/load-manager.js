@@ -1,23 +1,27 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.25.9';
-import { dedupeSharedInWorkingCopies, listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.25.9';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.25.9';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.25.9';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.25.9';
-import { showSaveManagerModal } from './save-manager.js?v=1.25.9';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.26.1';
+import { dedupeSharedInWorkingCopies, isDeviceOnly, listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.1';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, deviceOnlyChipHtml, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.1';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.26.1';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.26.1';
+import { showSaveManagerModal } from './save-manager.js?v=1.26.1';
+import { isInSlot, SLOT_PICKER_NOTE } from '../persistence/host-env.js?v=1.26.1';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
 
-function formatImportSummary({ imported = 0, skipped = 0, templates = 0, templatesSkipped = 0 } = {}) {
+function formatImportSummary({ opened = 0, imported = 0, skipped = 0, templates = 0, templatesSkipped = 0, templatesFull = 0, templatesInvalid = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   // "Import complete" whenever ANYTHING new landed — including templates-only
   // (a template added IS something new, so "Nothing new" would be wrong).
-  const head = (imported || templates) ? 'Import complete:' : 'Nothing new to import:';
+  const head = (opened || imported || templates) ? 'Import complete:' : 'Nothing new to import:';
   const items = [];
+  if (opened)           items.push(`${noun(opened, 'diagram')} opened in ${opened === 1 ? 'its tab group' : 'their tab groups'}`);   // a backup's grouped tabs
   if (imported)         items.push(`${noun(imported, 'diagram')} saved`);
   if (skipped)          items.push(`${noun(skipped, 'diagram')} skipped - already opened or saved in this browser`);
   if (templates)        items.push(`${noun(templates, 'template')} saved`);
   if (templatesSkipped) items.push(`${noun(templatesSkipped, 'template')} skipped - already in your stencil`);
+  if (templatesFull)    items.push(`${noun(templatesFull, 'template')} not imported - your template library is full`);
+  if (templatesInvalid) items.push(`${noun(templatesInvalid, 'template')} skipped - could not be read`);
   const lis = items.map(i => `<li>${i}</li>`).join('');
   return `<strong class="df-import-summary__head">${head}</strong><ul class="df-import-summary__list">${lis}</ul>`;
 }
@@ -27,6 +31,7 @@ let _loadMgrClose = null;
 /** `opts.replace` (the tab menu's "Replace with JSON"): the Replace current tab box starts ticked. */
 export function showLoadManagerModal(initialTab = null, importStats = null, opts = {}) {
   const p = tctx.modules.persistence;
+  const focusWasInLoad = !!document.activeElement?.closest?.('.df-load-manager-modal');   // read before the old panel's close moves it
   _loadMgrClose?.(); _loadMgrClose = null;                 // release any prior instance's focus trap
   document.querySelector('.df-load-manager-modal')?.remove();
   const driveOn = !!p.isDriveConfigured?.();
@@ -55,6 +60,7 @@ export function showLoadManagerModal(initialTab = null, importStats = null, opts
   });
   _loadMgrClose = () => { _loadMgrClose = null; close(); };
   const pane = body.querySelector('.df-load-mgr__pane');
+  const keptStats = importStats;   // for the modal's life: a reconcile re-render of Browser shows the summary again
   // The Replace current tab box, shared by Paste and File: the same decision in both, so switching between them keeps it.
   const replaceState = { on: !!opts.replace };
 
@@ -74,13 +80,37 @@ export function showLoadManagerModal(initialTab = null, importStats = null, opts
   };
   body.querySelectorAll('.df-load-mgr__tab').forEach(b => b.addEventListener('click', () => select(b.dataset.tab)));
   select(active);
+  // A bundle import started in the Load panel (Paste's Load, a File pick) reopened it here with its summary. The old
+  // panel's close sent focus to the Load button, outside this panel, where the next Enter toggled the panel shut and
+  // lost the summary (review D11). The File route closes the old panel before it reads, so focus is on that button
+  // already. Focus the summary instead: a screen reader reads it, and Enter there does nothing.
+  // Safari does not focus a clicked button, so there focus rests on <body> instead (no focus anywhere useful).
+  const ae = document.activeElement;
+  if (keptStats && (focusWasInLoad || !ae || ae === document.body || ae === document.getElementById('btn-load'))) {
+    const summary = pane.querySelector('.df-import-summary');
+    if (summary) summary.tabIndex = -1;
+    (summary || body.querySelector('.df-load-mgr__tab.is-active'))?.focus({ preventScroll: true });
+  }
 
   // Heal stale/missing per-tab Drive links against the user's real owned files BEFORE the chips can mislead, so
   // the Browser tab's "My Drive"/"Shared Drive" and the Drive tab's "This browser" both agree with reality (the
   // chip-honesty fix). One network round-trip; re-render the active pane ONLY when the reconcile actually changed
   // a tab - re-rendering unconditionally re-fetched + flashed the Drive pane every open (the "loads twice" flicker).
+  // Only the panes that SHOW chips re-render: re-rendering Paste or File wiped what the user had pasted while the
+  // listing ran, and the Browser pane lost its import summary (review D12).
   if (driveOn && p.isDriveConnected?.() && p.reconcileTabDriveLinks) {
-    p.reconcileTabDriveLinks().then((changed) => { if (changed && document.body.contains(pane)) select(active); }).catch(() => { /* offline → keep optimistic chips */ });
+    p.reconcileTabDriveLinks().then((changed) => {
+      if (!changed || !document.body.contains(pane) || (active !== 'browser' && active !== 'drive')) return;
+      if (active === 'browser' && pane.querySelector('.df-import-summary')) importStats = keptStats;
+      // The re-render removes whatever had focus in the pane (the summary, a row), and focus fell to <body> (S8-11).
+      const hadFocus = pane.contains(document.activeElement);
+      select(active);
+      if (hadFocus) {
+        const summary = pane.querySelector('.df-import-summary');
+        if (summary) summary.tabIndex = -1;
+        (summary || body.querySelector('.df-load-mgr__tab.is-active'))?.focus({ preventScroll: true });
+      }
+    }).catch(() => { /* offline → keep optimistic chips */ });
   }
 }
 
@@ -113,7 +143,7 @@ function storagePressureHtml() {
     if (bd) breakdown = `<div class="df-load-gauge__caption" style="font-size:var(--font-size-xs);color:var(--text-muted)"><span>Diagrams ${escHtml(formatBytes(bd.diagrams))} · My Templates ${escHtml(formatBytes(bd.templates))} · App data ${escHtml(formatBytes(bd.app))}</span></div>`;
   } catch { /* gauge stays total-only */ }
   return `<div class="df-load-gauge df-load-gauge--${level}">
-      <div class="df-load-gauge__caption"><span>Browser storage</span><span>${escHtml((used / 1e6).toFixed(1))} MB used</span></div>
+      <div class="df-load-gauge__caption"><span>Browser storage</span><span>${escHtml(formatBytes(used))} used</span></div>
       <div class="df-load-gauge__track"><div class="df-load-gauge__fill" style="width:${pct}%"></div></div>
       ${breakdown}
       ${hint}
@@ -138,8 +168,11 @@ function renderBrowserLoadPane({ pane, footer }, importStats) {
   const hasArchives = !!(saves && saves.length);
   const hasContent = hasArchives || openTabs.length > 0;
 
-  // Transient import summary (green) — only right after a bundle import reopened us on this tab.
-  if (importStats && (importStats.imported || importStats.skipped || importStats.templates || importStats.templatesSkipped)) {
+  // Transient import summary (green) — only right after a bundle import reopened us on this tab. Any count that
+  // formatImportSummary has a line for shows it: a backup whose every diagram reopened in its group has only `opened`
+  // (review S8-4). Listed, not Object.values, so a non-count field on the stats can never trigger it.
+  const IMPORT_COUNTS = ['opened', 'imported', 'skipped', 'templates', 'templatesSkipped', 'templatesFull', 'templatesInvalid'];
+  if (importStats && IMPORT_COUNTS.some((k) => importStats[k] > 0)) {
     const summary = document.createElement('div');
     summary.className = 'df-modal__advisory df-modal__advisory--success df-import-summary';
     summary.innerHTML = formatImportSummary(importStats);
@@ -153,10 +186,17 @@ function renderBrowserLoadPane({ pane, footer }, importStats) {
   // "...free up space, or back up to JSON.").
   const advisory = document.createElement('p');
   advisory.className = 'df-drive-save-modal__hint';
-  const delLink = '<button type="button" class="df-modal__advisory-link df-load__manage-link">delete</button>';
+  // Says what the code does (Q10, Q11, XQ1): closing keeps a diagram unless the close dialog's Discard is chosen, and
+  // the only automatic clearing is evictRedundantArchives, which sheds copies already synced to Drive and never a
+  // browser-only save ("Browser saves never expire", backlog/decisions.md).
+  const delLink = '<button type="button" class="df-modal__advisory-link df-load__manage-link">Delete</button>';
   const driveLink = '<button type="button" class="df-modal__advisory-link df-load__drive-link">Google Drive</button>';
   const backupLink = '<button type="button" class="df-modal__advisory-link df-load__export-link">back up</button>';
-  advisory.innerHTML = `Your diagrams are auto-saved in this browser, so they reopen after you close a tab. The browser can clear old ones if space runs low. ${delLink} ones you don't need to free up space, ${driveOn ? `sync all to ${driveLink} to keep them for good, or ` : 'or '}${backupLink} to JSON.`;
+  advisory.innerHTML = 'Your diagrams are auto-saved in this browser, and closing a tab keeps its diagram here unless you choose Discard. '
+    + (driveOn ? 'When space runs low, the app clears only copies already synced to Google Drive. ' : 'The app never clears them for you. ')
+    // The browser, not the app, can still erase site data (limits/gotchas-storage-tabs.md 8.2): this is why to back up.
+    + 'Your browser can still clear them after a few weeks without a visit, or when you clear browsing data. '
+    + `${delLink} the ones you don't need to free up space, ${driveOn ? `sync all to ${driveLink} to keep them for good, or ` : 'or '}${backupLink} to JSON.`;
   advisory.querySelector('.df-load__manage-link')?.addEventListener('click', () => { hideLoadModal(); tctx.modules.tabs.showCloseTabsModal?.(); });
   advisory.querySelector('.df-load__export-link')?.addEventListener('click', () => { hideLoadModal(); showSaveManagerModal(); });
   advisory.querySelector('.df-load__drive-link')?.addEventListener('click', () => { hideLoadModal(); showSaveManagerModal(); });
@@ -205,7 +245,8 @@ function renderBrowserLoadPane({ pane, footer }, importStats) {
       // Coalesce the version notice: loading several old-version saves at once prompts ONCE per version (item 3).
       tctx.modules.persistence.beginVersionWarningBatch?.();
       try {
-        for (const chk of sel) { if (await tctx.modules.persistence.loadNamedSave(chk.dataset.saveKey)) tagActiveBrowserSave(chk.dataset.saveName); }
+        // `=== true`: 'focused' brought an already-open tab forward, which is not this save's tab.
+        for (const chk of sel) { if ((await tctx.modules.persistence.loadNamedSave(chk.dataset.saveKey)) === true) tagActiveBrowserSave(chk.dataset.saveName); }
       } finally { tctx.modules.persistence.endVersionWarningBatch?.(); }
       hideLoadModal();
     });
@@ -260,12 +301,16 @@ function renderBrowserLoadPane({ pane, footer }, importStats) {
 // --- Load Manager: Google Drive pane ("Your Google Drive Diagrams" library) ---
 function renderDriveLoadPane({ pane, footer, close }) {
   const p = tctx.modules.persistence;
+  // Inside Slot the Picker cannot sign in: the door stays in place, disabled, and says why, instead of closing Load
+  // for a toast that sent the user back to Load (Slot's review, 2026-10-15).
+  const inSlot = isInSlot();
+  const slotNote = inSlot ? ` <span id="df-drive-picker-slot-note">${SLOT_PICKER_NOTE} Open the file from this account's Drive tab instead: right-click it, then Open with &gt; Diagramforce.</span>` : '';
   pane.innerHTML = `
     <p class="df-drive-save-modal__hint">Your Google Drive diagrams, plus ones shared to you (marked <strong>Shared File</strong>). Open them on any device. Delete moves a diagram to Drive trash for 30 days; only the owner can remove a file shared to you.</p>
     <div class="df-drive-library__body"><p style="padding:18px;text-align:center;color:var(--text-secondary)">Loading…</p></div>
     <div class="df-drive-library__more">
-      <p class="df-drive-library__more-hint">Looking for a diagram that isn't listed - one you added to Drive yourself, or that lives on a team Shared Drive?</p>
-      <button class="df-modal__btn df-modal__btn--accent df-drive-library__picker"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Search Google Drive</button>
+      <p class="df-drive-library__more-hint">Looking for a diagram that isn't listed - one you added to Drive yourself, or that lives on a team Shared Drive?${slotNote}</p>
+      <button class="df-modal__btn df-modal__btn--accent df-drive-library__picker"${inSlot ? ' disabled aria-describedby="df-drive-picker-slot-note"' : ''}><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Search Google Drive</button>
     </div>`;
   footer.innerHTML = '<button class="df-modal__btn df-modal__btn--danger-outline df-drive-library__delete" style="margin-right:auto" disabled>Delete Selected</button><button class="df-modal__btn df-modal__btn--amber-outline df-drive-library__load" disabled>Load Selected</button>';
   const deleteBtn = footer.querySelector('.df-drive-library__delete');
@@ -274,7 +319,14 @@ function renderDriveLoadPane({ pane, footer, close }) {
   const status = (html) => { bodyBox.innerHTML = `<p style="padding:18px;text-align:center;color:var(--text-secondary)">${html}</p>`; deleteBtn.disabled = true; loadBtn.disabled = true; };
   // Item 8: search the whole Drive (incl. files added manually / on Shared Drives) via the Google Picker. The
   // library list above only shows the app's own .dgf masters; the picker reaches anything the user can open.
-  pane.querySelector('.df-drive-library__picker')?.addEventListener('click', () => { close(); p.openFromDrive?.(); });
+  // `data-handoff`: this close hands off to the Google Picker, so New Diagram must not re-offer itself over it. It does
+  // once the Picker flow ends with no tab (cancelled, sign-in failed), or the user was left on a tab-less canvas (R10).
+  pane.querySelector('.df-drive-library__picker')?.addEventListener('click', () => {
+    const mgr = pane.closest('.df-load-manager-modal');
+    if (mgr) mgr.dataset.handoff = 'picker';
+    close();
+    Promise.resolve(p.openFromDrive?.()).finally(() => tctx.modules.tabs.reofferIfStranded?.());
+  });
 
   // Chips parity with the Save Manager: a Drive file that's also OPEN locally shows its full storage chips; one
   // that isn't shows "My Drive ✓" with the browser chip off. Map open tabs by their linked Drive fileId.
@@ -332,7 +384,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
     // Mode C: an OWNED fork carries dfSharedFrom - thread it into the open so the refresh-only sharedSource is rebuilt
     // (Refresh-from-original survives a close+re-open), without re-classifying the fork as a shared-in tab.
     const forkAttrs = (!notOwned && f.appProperties?.dfSharedFrom)
-      ? ` data-shared-from="${escHtml(f.appProperties.dfSharedFrom)}" data-shared-edit="${escHtml(f.appProperties.dfSharedEdit || '0')}"` : '';
+      ? ` data-shared-from="${escHtml(f.appProperties.dfSharedFrom)}"` : '';
     const loadBtn = `<button class="df-modal__btn df-modal__btn--accent df-drive-library__open" data-id="${escHtml(f.id)}" data-name="${escHtml(f.name)}"${notOwned ? ' data-shared="1"' : ''}${notOwned && canEdit ? ' data-can-edit="1"' : ''}${onSharedDrive ? ` data-drive-id="${escHtml(f.driveId)}"` : ''}${forkAttrs}>Load</button>`;
     // Mode C: a VIEW (Copy) share now opens with Load - it creates nothing on open and forks to your own
     // "(changed)" My-Drive copy the moment you edit it, so an explicit Clone is no longer needed. A Collaborate
@@ -369,7 +421,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
       p.forgetArchivesForDriveFile?.(id); n++;
       for (const tid of holders.get(id) || []) tabsApi.closeDeletedTab?.(tid);
     }
-    if (n) showToast(`Moved ${n} diagram${n === 1 ? '' : 's'} to Drive trash ✓`, 'info');
+    if (n) showToast(`Moved ${n} diagram${n === 1 ? '' : 's'} to Drive trash ✓`, 'success');
     render();
   };
 
@@ -449,7 +501,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
     });
     checks.forEach(c => c.addEventListener('change', refresh));
     // Disabled while it opens: a second click opened the same file in a second tab (C2).
-    bodyBox.querySelectorAll('.df-drive-library__open').forEach(btn => btn.addEventListener('click', async () => { if (btn.disabled) return; btn.disabled = true; if (await p.openDriveDiagram(btn.dataset.id, btn.dataset.name, btn.dataset.shared !== '1', { knownCanEdit: btn.dataset.canEdit === '1', driveId: btn.dataset.driveId || null, sharedFrom: btn.dataset.sharedFrom || null, sharedEdit: btn.dataset.sharedEdit || null })) close(); else btn.disabled = false; }));
+    bodyBox.querySelectorAll('.df-drive-library__open').forEach(btn => btn.addEventListener('click', async () => { if (btn.disabled) return; btn.disabled = true; if (await p.openDriveDiagram(btn.dataset.id, btn.dataset.name, btn.dataset.shared !== '1', { knownCanEdit: btn.dataset.canEdit === '1', driveId: btn.dataset.driveId || null, sharedFrom: btn.dataset.sharedFrom || null })) close(); else btn.disabled = false; }));
     // Clone a shared file into the user's own Drive as an editable copy, then close (it opens as a new tab) (item 2).
     bodyBox.querySelectorAll('.df-drive-library__clone').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;
@@ -480,7 +532,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
     // Coalesce the version notice across the batch (item 3) - one prompt per old version, not per file.
     p.beginVersionWarningBatch?.();
     try {
-      for (const c of sel) { if (await p.openDriveDiagram(c.dataset.id, c.dataset.name, c.dataset.shared !== '1', { knownCanEdit: c.dataset.canEdit === '1', driveId: c.dataset.driveId || null, sharedFrom: c.dataset.sharedFrom || null, sharedEdit: c.dataset.sharedEdit || null })) opened++; }
+      for (const c of sel) { if (await p.openDriveDiagram(c.dataset.id, c.dataset.name, c.dataset.shared !== '1', { knownCanEdit: c.dataset.canEdit === '1', driveId: c.dataset.driveId || null, sharedFrom: c.dataset.sharedFrom || null })) opened++; }
     } finally { p.endVersionWarningBatch?.(); }
     if (opened) close(); else loadBtn.disabled = false;
   });
@@ -489,7 +541,7 @@ function renderDriveLoadPane({ pane, footer, close }) {
 
 /** What a dropped or picked file may be. Mirrors the `accept` on the Load modal's file input, so the picker and
  *  a drop refuse exactly the same things - a file the picker greys out must not sneak in past a drop. */
-const OPENABLE_EXTENSIONS = new Set(['dgf', 'json', 'xml', 'flow-meta.xml']);
+const OPENABLE_EXTENSIONS = new Set(['dgf', 'json', 'xml', 'flow-meta.xml', 'mmd', 'mermaid', 'txt']);
 // The View menu's checkbox glyph (box + tick, the same SVG as its toggle items), for a `.df-check` label: it follows
 // a real, invisible <input type="checkbox">, which keeps native keyboard, focus and `change` handling.
 const CHECK_GLYPH = '<svg class="df-toolbar__checkbox df-check__box" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path class="df-toolbar__checkbox-tick" d="M4.5 8l2.5 2.5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -516,8 +568,22 @@ export async function openDroppedFile(f, close) {
   else if (P.looksLikeMappingJson?.(text)) await P.loadDataCloudMapping(text, base);
   else if (P.looksLikeDataGraphJson?.(text)) await P.loadDataGraph(text, base);
   else if (P.looksLikeRoleQueryJson?.(text)) await P.loadRoleHierarchy(text, base);
-  else await P.loadJSONText(text, base);
+  else if (looksLikeJson(text)) {
+    // Gated as the Paste box gates it (review D8): a JSON that is no diagram says so, instead of the Compatibility
+    // Warning its missing appVersion raised first, then "No graph data found".
+    const d = P.describePastedJSON(text);
+    if (d.ok) await P.loadJSONText(text, base);
+    else showError(`Could not open "${f.name}": ${d.error}`);
+  }
+  else if (isMermaidText(text)) tctx.modules.mermaidImport.importMermaidText(text, { name: base });
+  else showError(notOpenable(f.name));
 }
+
+/** The Paste chain's last two steps, shared with the file route: JSON is anything that starts with { or [, and
+ *  everything else is Mermaid or nothing this app opens. */
+const looksLikeJson = (text) => /^\s*[{[]/.test(text);
+const isMermaidText = (text) => !!tctx.modules.mermaidImport?.validateMermaid(text)?.ok;
+const notOpenable = (name) => `Could not open "${name}": it is not a Diagramforce diagram, Salesforce metadata this app reads, or Mermaid source.`;
 
 /** One of the four Salesforce formats the Paste chain routes before Diagramforce JSON (they are JSON or XML too). */
 function isSalesforceText(text) {
@@ -533,6 +599,7 @@ async function replaceFromFile(f, close) {
   if (!file) return;
   const P = tctx.modules.persistence;
   if (isSalesforceText(file.text)) { showError(notReplaceable('Salesforce metadata')); return; }
+  if (!looksLikeJson(file.text)) { showError(isMermaidText(file.text) ? notReplaceable('Mermaid') : notOpenable(f.name)); return; }
   const blocker = replaceBlocker(P.describePastedJSON(file.text), tctx.modules.tabs.getReplaceTarget?.());
   if (blocker) { showError(blocker); return; }
   if (await P.replaceActiveWithJSONText(file.text)) close?.();
@@ -577,14 +644,14 @@ async function readOpenableFile(f) {
   const ext = (/\.(flow-meta\.xml|[a-z0-9]+)$/i.exec(f.name) || [])[1]?.toLowerCase() || '';
   if (ext && !OPENABLE_EXTENSIONS.has(ext)) {
     showError(`Diagramforce cannot open .${ext} files. Drop a Diagramforce .dgf or .json export, `
-      + 'or a Salesforce Flow (.flow-meta.xml or its Tooling API .json).');
+      + 'Salesforce metadata as .xml or .json, or Mermaid source (.mmd).');
     return null;
   }
   let text;
   try { text = await f.text(); } catch { showError('Could not read that file.'); return null; }
   // Strip the whole compound extension so "Move_Opp_to_Quote.flow-meta.xml" titles the tab
   // "Move_Opp_to_Quote", not "Move_Opp_to_Quote.flow-meta".
-  return { text, base: f.name.replace(/\.(flow-meta\.xml|dgf|json|xml)$/i, '') };
+  return { text, base: f.name.replace(/\.(flow-meta\.xml|dgf|json|xml|mmd|mermaid|txt)$/i, '') };
 }
 
 // --- Drop a file anywhere on the app window ---------------------------------------------------------------
@@ -620,7 +687,7 @@ export function initWindowFileDrop() {
     overlay.innerHTML = '<div class="df-file-drop-overlay__card">'
       + '<svg class="df-file-drop-overlay__icon" aria-hidden="true"><use href="#upload"></use></svg>'
       + '<p class="df-file-drop-overlay__title">Drop to open</p>'
-      + '<p class="df-file-drop-overlay__sub">Diagramforce .dgf or .json, or a Salesforce Flow</p></div>';
+      + '<p class="df-file-drop-overlay__sub">Diagramforce .dgf or .json, Salesforce metadata, or Mermaid</p></div>';
     document.body.appendChild(overlay);
   };
   const hide = () => { depth = 0; overlay?.remove(); overlay = null; };
@@ -663,8 +730,8 @@ function renderFileLoadPane({ pane, footer, close, replaceState }) {
     <div class="df-load-file" tabindex="0" role="button" aria-label="Choose a file or drop it here">
       <svg class="df-load-file__icon" aria-hidden="true"><use href="#upload"></use></svg>
       <p class="df-load-file__title">Drop a diagram file here, or click to choose</p>
-      <p class="df-load-file__sub">A Diagramforce <strong>.dgf</strong> or <strong>.json</strong> export - single diagram, group bundle, or templates.<br>Or a Salesforce Flow: a <strong>.flow-meta.xml</strong> source file, or the Tooling API JSON for a flow.</p>
-      <input type="file" class="df-load-file__input" accept=".dgf,.json,.xml,application/json,text/xml" hidden>
+      <p class="df-load-file__sub">A Diagramforce <strong>.dgf</strong> or <strong>.json</strong> export - single diagram, group bundle, or templates.<br>Or Salesforce metadata: a Flow (<strong>.flow-meta.xml</strong> or its Tooling API JSON), Data Cloud mappings, a Data Cloud data graph, or a role hierarchy query result.<br>Or Mermaid source: a <strong>.mmd</strong> file.</p>
+      <input type="file" class="df-load-file__input" accept=".dgf,.json,.xml,.mmd,.mermaid,.txt,application/json,text/xml" hidden>
     </div>`;
   // Replace current tab (only while the open tab has content): the picked file replaces its content in place.
   const target = tctx.modules.tabs.getReplaceTarget?.();
@@ -696,8 +763,7 @@ function renderPasteLoadPane({ pane, footer, close, replaceState }) {
     <div class="df-paste-modal">
       <p style="margin:0 0 var(--spacing-sm);color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5">Paste Diagramforce JSON, Salesforce metadata, or Mermaid code - the format is detected automatically:</p>
       <textarea class="df-paste-modal__input" spellcheck="false" rows="9"
-        placeholder='{ "diagramType": "architecture", "graph": { "cells": [ ... ] } }&#10;&#10;OR&#10;&#10;flowchart TD&#10;  A[Start] --> B[Decision]'
-        style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-panel);color:var(--text-primary);resize:vertical"></textarea>
+        placeholder='{ "diagramType": "architecture", "graph": { "cells": [ ... ] } }&#10;&#10;OR&#10;&#10;flowchart TD&#10;  A[Start] --> B[Decision]'></textarea>
       <p class="df-paste-modal__status" style="margin:var(--spacing-sm) 0 0;min-height:1.4em;color:var(--text-secondary);font-size:var(--font-size-sm);line-height:1.5"></p>
       <div class="df-paste-modal__formats">
         <div class="df-paste-modal__fmt" data-fmt="json">
@@ -876,7 +942,7 @@ function renderPasteLoadPane({ pane, footer, close, replaceState }) {
     }
     const v = tctx.modules.mermaidImport.validateMermaid(t);
     if (v.ok) return { kind: 'mermaid', mtype: v.type };
-    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, Data Cloud mappings, a role hierarchy, or a supported Mermaid diagram.' };
+    return { kind: 'error', error: 'Not recognised as Diagramforce JSON, a Salesforce Flow, Data Cloud mappings, a Data Cloud data graph, a role hierarchy, or a supported Mermaid diagram.' };
   };
   const validate = () => {
     resetHighlight();
@@ -962,7 +1028,9 @@ function renderPasteLoadPane({ pane, footer, close, replaceState }) {
       return;
     }
     let ok = false;
-    if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, 'Imported Flow');
+    // No name: loadFlowSource reads its name as the dropped FILE's base name, which becomes the flow's API Name. A
+    // paste has no file, and a tab-title placeholder stamped there would be a made-up identifier.
+    if (mode === 'flow') ok = await tctx.modules.persistence.loadFlowSource(input.value, null);
     else if (mode === 'dcmapping') ok = await tctx.modules.persistence.loadDataCloudMapping(input.value, 'Data Cloud Mappings');
     else if (mode === 'datagraph') ok = await tctx.modules.persistence.loadDataGraph(input.value, null);
     else if (mode === 'roles') ok = await tctx.modules.persistence.loadRoleHierarchy(input.value, null, { includePortal: !!portalCb?.checked });
@@ -1004,17 +1072,16 @@ function buildLoadItem(save) {
   tmp.innerHTML = storageRowHtml({
     checkbox: `<input type="checkbox" class="df-modal__row-check" data-save-key="${escHtml(save.key)}" data-save-name="${escHtml(save.name)}">`,
     diagramType: save.diagramType, typeTitle: typeLabelFor(save.diagramType), name: save.name, count: save.shapes,
-    metaLeft: `<span class="df-save-mgr__chips">${driveChipsHtml(save, { driveOn, sharedFile: !!(save.driveSharedSource && save.driveSharedSource.fileId), onSharedDrive: !!save.driveDriveId })}${savePill}</span>`,
+    metaLeft: `<span class="df-save-mgr__chips">${driveChipsHtml(save, { driveOn, sharedFile: !!(save.driveSharedSource && save.driveSharedSource.fileId), onSharedDrive: !!save.driveDriveId })}${isDeviceOnly(save, save.shapes) ? deviceOnlyChipHtml() : ''}${savePill}</span>`,
     metaRight: `Last Modified ${escHtml(rel)}`,   // no "expires in N days": browser saves no longer expire (2026-09-24)
     trailing: `<button class="df-modal__btn df-modal__btn--accent df-load__row-load">Load</button>`,
   }).trim();
   const item = tmp.content.firstElementChild;
 
   item.querySelector('.df-load__row-load').addEventListener('click', async () => {
-    if (await tctx.modules.persistence.loadNamedSave(save.key)) {
-      tagActiveBrowserSave(save.name);   // light up the Save Manager "In Browser" chip on the loaded tab
-      hideLoadModal();
-    }
+    const r = await tctx.modules.persistence.loadNamedSave(save.key);
+    if (r === true) tagActiveBrowserSave(save.name);   // light up the Save Manager "In Browser" chip on the loaded tab
+    if (r) hideLoadModal();   // 'focused': its Drive diagram was already open, and that tab came forward
   });
   return item;
 }

@@ -11,37 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.25.9';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.25.9';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.26.1';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.26.1';
 // The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
-import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.25.9';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.25.9';
-import { SF_FIELD_TYPES } from './properties.js?v=1.25.9';
-import { keyImpliesRequired } from './field-model.js?v=1.25.9';
-import { buildModal, showToast, showError } from './feedback.js?v=1.25.9';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.25.9';
-import { triggerDownload } from './persistence.js?v=1.25.9';
-import { ganttRowLayout, ganttDependencies, ganttTimelineFor, applyGanttGeometry, resequenceGanttOrders } from './gantt-layout.js?v=1.25.9';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.25.9';
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.1';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.26.1';
+import { SF_FIELD_TYPES } from './properties.js?v=1.26.1';
+import { keyImpliesRequired } from './field-model.js?v=1.26.1';
+import { buildModal, showToast, showError } from './feedback.js?v=1.26.1';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.26.1';
+import { triggerDownload } from './persistence.js?v=1.26.1';
+import { ganttTimelineFor, growTimelineToFitDates, layoutTimelineTasks, resequenceGanttOrders } from './gantt-layout.js?v=1.26.1';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.26.1';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './table-view/builders.js?v=1.25.9';
+} from './table-view/builders.js?v=1.26.1';
 // The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
 // properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
 // debounced input handler - never from render() - so graph-change re-renders stay silent.
-import { announce } from './a11y.js?v=1.25.9';
+import { announce } from './a11y.js?v=1.26.1';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.25.9';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.26.1';
 // 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
 // context shape as gantt-plan.js - it never imports this facade back.
-import { initFlowTable, renderFlowTable, resetFlowTableFilter, exportFlowCsvFromGraph, FLOW_TABLE_TITLE, SEC_CHEVRON } from './table-view/flow-table.js?v=1.25.9';
-import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.25.9';
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, exportFlowCsvFromGraph, FLOW_TABLE_TITLE, SEC_CHEVRON, captureTableView, restoreTableView } from './table-view/flow-table.js?v=1.26.1';
+import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.26.1';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -163,6 +163,21 @@ const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) |
 const barColChanged = (d, o, prop) => prop === 'duration'
   ? durationDays(d.startDate, d.endDate) !== durationDays(o.startDate, o.endDate)
   : (d[prop] ?? '') !== (o[prop] ?? '');
+// Review L8: what is wrong with a draft's dates, or '' when nothing is. A cleared date or an End before its Start used
+// to Save as typed: the bar shrank to a sliver, Duration read "-5d", and a reload rewrote both dates from pixels.
+const barSpanError = (d) => (!d.startDate || !d.endDate) ? 'Start and End are both required'
+  : (d.endDate < d.startDate) ? 'End is before Start' : '';
+// Save is blocked only by dates the user changed in this session; a span that arrived inverted is flagged, not a lock.
+const barSpanBlocks = (d, o) => !!barSpanError(d) && (d.startDate !== o?.startDate || d.endDate !== o?.endDate);
+const ganttDraftBlocked = () => !!_barDraft && [..._barDraft].some(([id, d]) => barSpanBlocks(d, _barOrig?.get(id)));
+const SAVE_BLOCKED_TITLE = 'Fix the highlighted dates first';
+// Paint (or clear) the invalid-date flag on one Start / End input.
+function flagDateInput(input, err) {
+  if (!input) return;
+  input.classList.toggle('df-tbl__input--invalid', !!err);
+  if (err) { input.setAttribute('aria-invalid', 'true'); input.title = err; }
+  else { input.removeAttribute('aria-invalid'); input.removeAttribute('title'); }
+}
 // Link props the session may write (mapping rows only).
 const LINK_PROPS = ['mappingType', 'expressionRule'];
 const linkDirty = (d, o) => !!o && LINK_PROPS.some(p => (d[p] ?? '') !== (o[p] ?? ''));
@@ -327,6 +342,10 @@ function scheduleRerender() {
 }
 
 export function isActive() { return _active; }
+/** An Edit Fields session holds unapplied edits in memory only: the update reload waits for it (app.js). */
+export function isEditing() { return _editing; }
+/** An edit session holding a change not applied yet (an open, untouched one holds nothing to lose). */
+export function hasUnappliedEdits() { return _editing && pendingChangeCount() > 0; }
 
 // (#5) Lets the diagram-edit guard's "Keep editing" flip the toolbar back to Table view. Wired by app.js.
 export function setRequestTableView(fn) { _requestTableView = fn; }
@@ -350,7 +369,7 @@ export function show() {
   // defeated the flow table's section-width alignment: it measured the widest section during render,
   // read 0 for all five, and pinned nothing. Order matters here; do not swap these back.
   container.hidden = false;
-  render();                       // clean re-evaluation of the active graph cells
+  render({ fresh: true });        // clean re-evaluation of the active graph cells, scrolled to the top
   if (paperEl) paperEl.style.visibility = 'hidden';
 }
 
@@ -362,13 +381,16 @@ export function hide() {
 }
 
 
-export function render() {
+export function render({ fresh = false } = {}) {
   if (!container || !graph) return;
   // Flow: a stacked-sections READ-ONLY projection with its own chrome (./table-view/flow-table.js).
   // Early return, because every line below interleaves the field/gantt EDIT-session markup
   // (renderEditableCell / cellChanged / revertCell / actCell are called inline per cell) and flow
   // `details` are import-only by design - there is no session to render and none to protect.
-  if (isFlowMode()) { renderFlowTable(); return; }
+  if (isFlowMode()) { renderFlowTable({ fresh }); return; }
+  // Keep the scroll position and the focused control across the innerHTML rebuild below (review L3). A fresh show
+  // (another tab's table may be in the container) starts at the top.
+  const view = fresh ? null : captureTableView(container);
   const isModel = isModelMode();
   const isGantt = isGanttMode();
   const baseCols = schemaOf();
@@ -457,7 +479,9 @@ export function render() {
       if (!d) return null;
       const bk = escHtml(String(r._barId));
       if (gec.kind === 'date') {
-        return `<input type="date" class="df-tbl__input" data-bk="${bk}" data-bprop="${gec.prop}" value="${escHtml(String(d[gec.prop] ?? ''))}" />`;
+        const err = barSpanError(d);
+        const bad = err ? ` df-tbl__input--invalid" aria-invalid="true" title="${escHtml(err)}` : '';
+        return `<input type="date" class="df-tbl__input${bad}" data-bk="${bk}" data-bprop="${gec.prop}" value="${escHtml(String(d[gec.prop] ?? ''))}" />`;
       }
       if (gec.kind === 'number') {
         const v = key === 'duration' ? durationDays(d.startDate, d.endDate) : d[gec.prop];
@@ -562,7 +586,7 @@ export function render() {
     `<td class="df-tbl__revcol" data-row="${escHtml(rowKeyOf(r))}">${rowChanged(r) ? revertBtnHtml(r) : ''}</td>`;
   // Trailing per-row actions (gantt edit only): a drag-reorder handle + a delete button, keyed by bar id.
   const actCell = (r) => !ganttEdit ? '' :
-    `<td class="df-tbl__actcol"><span class="df-tbl__act-drag" draggable="true" data-bar="${escHtml(String(r._barId))}" title="Drag to reorder" aria-label="Drag to reorder">${ICON_DRAG}</span><button type="button" class="df-tbl__act-del" data-bar="${escHtml(String(r._barId))}" title="Delete task" aria-label="Delete task">${ICON_TRASH}</button></td>`;
+    `<td class="df-tbl__actcol"><span class="df-tbl__act-drag" draggable="true" data-bar="${escHtml(String(r._barId))}" role="button" tabindex="0" title="Drag to reorder, or press Alt+Up / Alt+Down" aria-label="Move task (Alt+Up or Alt+Down)">${ICON_DRAG}</span><button type="button" class="df-tbl__act-del" data-bar="${escHtml(String(r._barId))}" title="Delete task" aria-label="Delete task">${ICON_TRASH}</button></td>`;
   // "+ Add task" appends to the FIRST timeline (the flat table can't disambiguate); name it when there's >1 so
   // the user knows where the task lands.
   const tls = ganttEdit ? ganttTimelines() : [];
@@ -624,9 +648,10 @@ export function render() {
   const colsBtn = (!isGantt && !_editing && (sup.hidden > 0 || relHidden > 0 || _showAllCols))
     ? `<button type="button" id="tbl-show-cols" class="df-toolbar__menu-item df-toolbar__menu-item--icon df-toolbar__menu-item--toggle df-tbl__toggle${_showAllCols ? ' is-checked' : ''}" title="${sup.hidden ? `${sup.hidden} all-blank column${sup.hidden === 1 ? '' : 's'} hidden - toggle the full column set` : 'Showing the full column set'}">${ICON_CHECKBOX}Show All Columns</button>`
     : '';
+  const saveBlocked = _editing && isGantt && ganttDraftBlocked();
   const topbarActions = _editing
     ? `<button type="button" id="tbl-edit-cancel" class="df-tbl__csv df-tbl__push">Cancel</button>
-       <button type="button" id="tbl-edit-save" class="df-tbl__csv df-tbl__csv--primary">Save</button>`
+       <button type="button" id="tbl-edit-save" class="df-tbl__csv df-tbl__csv--primary"${saveBlocked ? ` disabled title="${SAVE_BLOCKED_TITLE}"` : ''}>Save</button>`
     : isGantt
       ? `${editBtn}${mdBtn}${csvBtn}`   // Phase 5b: editable (Edit Plan + Copy MD + CSV)
       : isModel
@@ -680,12 +705,32 @@ export function render() {
       btn.addEventListener('click', () => openDepEditor(btn.dataset.bar, btn)));
     container.querySelectorAll('.df-tbl__act-drag').forEach(h => {
       h.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', h.dataset.bar); h.closest('tr')?.classList.add('df-tbl__row--dragging'); });
-      h.addEventListener('dragend', () => container.querySelectorAll('.df-tbl__row--dragging, .df-tbl__row--drag-over').forEach(r => r.classList.remove('df-tbl__row--dragging', 'df-tbl__row--drag-over')));
+      h.addEventListener('dragend', () => container.querySelectorAll('.df-tbl__row--dragging, .df-tbl__row--drag-over, .df-tbl__row--drag-over-before').forEach(r => r.classList.remove('df-tbl__row--dragging', 'df-tbl__row--drag-over', 'df-tbl__row--drag-over-before')));
+      // Review L12: the keyboard path. Alt+Up / Alt+Down moves the task one row; the re-render keeps focus on this
+      // handle (restoreTableView) and the new position is announced.
+      h.addEventListener('keydown', (e) => {
+        if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        moveGanttRowByKey(h.dataset.bar, e.key === 'ArrowUp' ? -1 : 1);
+      });
     });
+    // The pointer's half of the target row picks the side: top half = before it, bottom half = after it. With only
+    // "after", no drop could make a task the first row (review L12).
+    const dropBefore = (tr, e) => { const r = tr.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; };
     container.querySelectorAll('tr[data-bar]').forEach(tr => {
-      tr.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; tr.classList.add('df-tbl__row--drag-over'); });
-      tr.addEventListener('dragleave', () => tr.classList.remove('df-tbl__row--drag-over'));
-      tr.addEventListener('drop', (e) => { e.preventDefault(); tr.classList.remove('df-tbl__row--drag-over'); const from = e.dataTransfer.getData('text/plain'); if (from && from !== tr.dataset.bar) reorderGanttBar(from, tr.dataset.bar); });
+      tr.addEventListener('dragover', (e) => {
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        const before = dropBefore(tr, e);
+        tr.classList.toggle('df-tbl__row--drag-over-before', before);
+        tr.classList.toggle('df-tbl__row--drag-over', !before);
+      });
+      tr.addEventListener('dragleave', () => tr.classList.remove('df-tbl__row--drag-over', 'df-tbl__row--drag-over-before'));
+      tr.addEventListener('drop', (e) => {
+        e.preventDefault();
+        tr.classList.remove('df-tbl__row--drag-over', 'df-tbl__row--drag-over-before');
+        const from = e.dataTransfer.getData('text/plain');
+        if (from && from !== tr.dataset.bar) reorderGanttBar(from, tr.dataset.bar, !dropBefore(tr, e));
+      });
     });
     // Mapping-level (link) Mapping Type / Expression inputs — same live-update path, keyed by link id.
     container.querySelectorAll('.df-tbl__input[data-lprop]').forEach(el => {
@@ -704,7 +749,6 @@ export function render() {
       el.addEventListener('click', () => { toggleNullable(el.dataset.k); render(); }));
     container.querySelectorAll('.df-tbl__check[data-bool]').forEach(el =>
       el.addEventListener('click', () => { toggleBool(el.dataset.k, el.dataset.bool); render(); }));
-    container.querySelector('.df-tbl__input')?.focus();   // land on the first editable cell
   } else {
     container.querySelector('#tbl-edit')?.addEventListener('click', beginEdit);
     container.querySelector('#tbl-show-unmapped')?.addEventListener('click', () => { _showUnmapped = !_showUnmapped; render(); });
@@ -755,6 +799,7 @@ export function render() {
   // Re-apply the surviving query after ANY re-render (sort click, graph change, edit-session end) -
   // silently: only the debounced input handler above may announce. No-ops mid-edit and in gantt/flow.
   applyFilter();
+  restoreTableView(container, view, ['#tbl-add-task', '#tbl-edit']);   // a deleted last row; Save / Cancel -> Edit
 }
 
 // ── Filter + Search: the visibility pass ────────────────────────────────────
@@ -854,6 +899,9 @@ function beginEdit() {
   _editing = true;
   setLocked(true);    // (#7) undo/redo can't run mid-edit — the draft is the only pending change
   render();
+  // Land on the first editable cell. Only here, on entering the session: every edit-mode re-render (a checkbox, a
+  // revert, a plan add) used to do it too, which jumped the table to row 1 (review L3).
+  container.querySelector('.df-tbl__input')?.focus();
 }
 
 // Snapshot the editable props of each field that appears (as source or target) in the rendered rows.
@@ -946,7 +994,7 @@ function endEditSession(commit) {
 
 // Save/Cancel handlers for the staged edit overlay (wired to #tbl-edit-save/#tbl-edit-cancel above).
 // Internal-only — the external edit-session API is guardLeave (below), wired via tabs.setSwitchGuard.
-function saveEdits() { if (_editing) endEditSession(true); }
+function saveEdits() { if (_editing && !(isGanttMode() && ganttDraftBlocked())) endEditSession(true); }
 function cancelEdits() { if (_editing) endEditSession(false); }
 
 // Commit the draft → graph: for every field whose draft differs from its snapshot, write the merged props
@@ -994,8 +1042,9 @@ function applyEdits() {
 }
 
 // Phase 5b: commit the Gantt plan draft → graph. For every bar whose draft differs, write the five primitive
-// props back (label also mirrored to the on-bar text, assignee to its label) and re-derive geometry from the
-// new dates — all in ONE undo batch, with `_applying` suppressing the diagram-edit watcher.
+// props back (label also mirrored to the on-bar text, assignee to its label), grow each timeline whose dates were
+// written and re-derive geometry ONCE per timeline - all in ONE undo batch, with `_applying` suppressing the
+// diagram-edit watcher.
 function applyGanttEdits() {
   if (!graph || !_barDraft || !_barOrig) return;
   const dirty = [...(_barDraft)].filter(([id, d]) => barDirty(d, _barOrig.get(id)));
@@ -1003,20 +1052,33 @@ function applyGanttEdits() {
   _applying = true;
   startBatch();
   const regroup = new Set();   // timelines whose bar grouping changed → re-slot after the writes
+  const touched = new Set();   // every timeline a written bar belongs to → one layout pass
+  const dated = new Map();     // timeline → the earliest Start written on it (null: only Ends) → grow to the typed dates
   try {
     for (const [id, d] of dirty) {
       const bar = graph.getCell(id);
       if (!bar?.set) continue;
       const o = _barOrig.get(id);
       if (d.taskLabel !== o.taskLabel) { bar.set('taskLabel', d.taskLabel); bar.attr('label/text', d.taskLabel); }
-      if (d.startDate !== o.startDate) bar.set('startDate', d.startDate);
-      if (d.endDate !== o.endDate) bar.set('endDate', d.endDate);
+      // Invalid dates are never written (the table's Save is disabled for them; this covers the leave guard's Save).
+      let wroteDate = false, wroteStart = null;
+      if (!barSpanError(d)) {
+        if (d.startDate !== o.startDate) { bar.set('startDate', d.startDate); wroteDate = true; wroteStart = d.startDate; }
+        if (d.endDate !== o.endDate) { bar.set('endDate', d.endDate); wroteDate = true; }
+      }
       if ((d.progress ?? '') !== (o.progress ?? '')) bar.set('progress', d.progress === '' ? 0 : clampInt(d.progress, 0, 100));
       if (d.assignee !== o.assignee) { bar.set('assignee', d.assignee); bar.attr('assigneeLabel/text', d.assignee); }
       const tl = (d._tlId && graph.getCell(d._tlId)) || ganttTimelineFor(bar);
       if ((d.groupId ?? null) !== (o.groupId ?? null)) { bar.set('groupId', d.groupId || null); if (tl) regroup.add(tl.id); }
-      if (tl) applyGanttGeometry(bar, tl);   // x/width from the new dates (Y from order)
+      if (tl) touched.add(tl);
+      if (tl && wroteDate) { const was = dated.get(tl) || null; dated.set(tl, !wroteStart || (was && was < wroteStart) ? was : wroteStart); }
     }
+    // A typed date past either end grows the timeline, as a drag past the right edge does (review L5): a later End
+    // ran the bar past the axis, an earlier Start drew it over the task list. Only a Save that wrote a date grows, and
+    // the start moves back only to a typed Start: a rename-only Save pulled the axis back to an old Day Marker. Then
+    // x/width from the new dates (Y from order), one pass per timeline rather than one per bar (review L10).
+    for (const [tl, leftTo] of dated) growTimelineToFitDates(tl, { leftTo });
+    for (const tl of touched) layoutTimelineTasks(tl);
     // A group change moves the bar into its group's section → renumber orders + re-layout that timeline.
     for (const tlId of regroup) { const tl = graph.getCell(tlId); if (tl) resequenceGanttOrders(tl); }
   } finally {
@@ -1033,6 +1095,20 @@ function applyGanttEdits() {
 // Every timeline in the active Gantt tab, and the default target for "+ Add task" (the first one — a Gantt
 // almost always has exactly one timeline; the flat table can't disambiguate more, so the first wins).
 const ganttTimelines = () => graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
+
+// Review L12: Alt+Up / Alt+Down on a row's handle moves the task one row, within its timeline. Next to a task of the
+// same group it swaps places; at a group edge it crosses into the neighbouring group and lands at that group's edge
+// (the drag's group adoption), so every row is reachable one step at a time.
+function moveGanttRowByKey(barId, dir) {
+  const rows = [...container.querySelectorAll('tbody tr[data-bar]')].map(tr => tr.dataset.bar);
+  const i = rows.indexOf(barId), nbId = rows[i + dir];
+  const bar = graph.getCell(barId), nb = nbId && graph.getCell(nbId);
+  if (!bar || !nb) return;
+  const sameGroup = (bar.get('groupId') || null) === (nb.get('groupId') || null);
+  if (!reorderGanttBar(barId, nbId, dir > 0 ? sameGroup : !sameGroup)) return;
+  const now = [...container.querySelectorAll('tbody tr[data-bar]')].map(tr => tr.dataset.bar);
+  announce(`${bar.get('taskLabel') || 'Task'} moved to row ${now.indexOf(barId) + 1} of ${now.length}`);
+}
 
 // Re-sync the bar draft to the LIVE graph after a structural op: drop drafts for removed bars, snapshot any
 // new bar (fresh orig === draft so it isn't falsely "changed"), and preserve every in-progress edit.
@@ -1104,6 +1180,11 @@ function onBarInput(el) {
   if (prop === 'startDate' || prop === 'endDate') { const e = sib('duration'); if (e) { e.value = durationDays(d.startDate, d.endDate) ?? ''; retint(e, 'duration'); } }
   else if (prop === 'duration') { const e = sib('endDate'); if (e) { e.value = d.endDate || ''; retint(e, 'endDate'); } }
   retint(el, prop);
+  if (prop === 'startDate' || prop === 'endDate' || prop === 'duration') {
+    const err = barSpanError(d);
+    flagDateInput(sib('startDate'), err);
+    flagDateInput(sib('endDate'), err);
+  }
   updateRowRevert(tr);
   refreshChangeCount();
 }
@@ -1196,6 +1277,13 @@ function refreshChangeCount() {
   if (!el) return;
   const n = pendingChangeCount();
   el.textContent = `${n} unsaved change${n === 1 ? '' : 's'}`;
+  // Review L8: Save waits until every changed Start / End pair is valid.
+  const save = isGanttMode() && container.querySelector('#tbl-edit-save');
+  if (save) {
+    const blocked = ganttDraftBlocked();
+    save.disabled = blocked;
+    if (blocked) save.title = SAVE_BLOCKED_TITLE; else save.removeAttribute('title');
+  }
 }
 
 // ── Leave / dual-source guards ──────────────────────────────────────────────
@@ -1267,6 +1355,14 @@ function showEditGuard(mode, proceed) {
   body.textContent = mode === 'diagram'
     ? `You have ${n} unsaved edit${plural} in the table, and you just changed the diagram too. Save or discard your table edits (the diagram change stays), or undo the diagram change to keep editing the table.`
     : `You have ${n} unsaved edit${plural} in the table. Save them to the diagram or discard them before leaving this tab.`;
+  // Review S6-7: an invalid date blocks the table's own Save, but this Save went ahead and dropped those dates without
+  // a word (applyGanttEdits writes a valid span only). It is off too until the dates are fixed.
+  if (isGanttMode() && ganttDraftBlocked()) {
+    body.textContent += ' Some dates are invalid, so Save is off until you fix the highlighted dates in the table.';
+    const save = footer.querySelector('.df-tbl-guard__save');
+    save.disabled = true;
+    save.title = SAVE_BLOCKED_TITLE;
+  }
   footer.querySelector('.df-tbl-guard__keep').addEventListener('click', () => {
     close();
     if (mode === 'diagram') { revertDiagramEdit(); _requestTableView?.(); }   // undo the diagram edit + go back to the table

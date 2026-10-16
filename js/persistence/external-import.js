@@ -49,14 +49,18 @@ export function isExternalImportBoot() {
  *  @param {(jsonText:string, opts:{format:string, transparent:boolean})=>Promise<object>} [onRender]  import, then
  *         render the tab it opened; resolves {format, mime, dataUrl, width, height}, rejects with a readable error
  *  @param {()=>void} [onTimeout]  reveal the normal new-diagram flow when nothing is ever pushed
- *  @param {number} [timeoutMs] */
+ *  @param {number} [timeoutMs]
+ *  @returns {Promise<void>} settles once the first diagram is handled or the wait times out. app.js holds the update
+ *  reload on it: the trigger is already stripped from the address, so a reload mid-wait lost the diagram (review R4). */
 export function startExternalImport({ onImportJSON, onRender, onTimeout, timeoutMs = DEFAULT_TIMEOUT_MS }) {
   // Drop the trigger from the URL so a refresh doesn't re-enter import-wait mode (matches the share /
   // Drive load paths, which replaceState their hash away). hasPendingUrlLoad already ran in Phase 7.
   try { history.replaceState(null, '', window.location.pathname); } catch { /* noop */ }
 
+  let release;
+  const done = new Promise((resolve) => { release = resolve; });
   let settled = false;
-  const timer = setTimeout(() => { if (!settled) { settled = true; onTimeout?.(); } }, timeoutMs);
+  const timer = setTimeout(() => { if (!settled) { settled = true; onTimeout?.(); } release(); }, timeoutMs);
 
   window.addEventListener('message', (ev) => {
     const d = ev.data;
@@ -70,13 +74,15 @@ export function startExternalImport({ onImportJSON, onRender, onTimeout, timeout
     if (d.json.length > MAX_JSON_BYTES) return;   // oversized → ignore (loadJSONText also caps cells)
     clearTimeout(timer);
     settled = true;                 // cancels the fallback; the listener stays live so a follow-up push
-    if (d.type === 'import') { onImportJSON(d.json); return; }   // opens another tab (each routes through loadJSONText)
-    handleRender(ev, d, onRender);
+    // opens another tab (each routes through loadJSONText). The first one ends the wait once it has opened.
+    const work = d.type === 'import' ? Promise.resolve().then(() => onImportJSON(d.json)) : handleRender(ev, d, onRender);
+    work.finally(release);
   });
 
   // Announce readiness AFTER the listener is live, so the opener (which waits for this) never races us.
   // targetOrigin '*' is safe: the ping carries no data and we don't know the opener's origin.
   try { window.opener?.postMessage(READY, '*'); } catch { /* cross-origin opener quirk → rely on timeout */ }
+  return done;
 }
 
 // The render reply goes to the REQUESTER'S origin only. An opaque-origin requester (a file:// page, a sandboxed frame)
@@ -86,12 +92,12 @@ const RENDER_TIMEOUT_MS = 30000;
 function handleRender(ev, d, onRender) {
   const id = typeof d.id === 'string' || typeof d.id === 'number' ? d.id : null;
   const send = (msg, origin) => { try { ev.source.postMessage({ source: 'diagramforce', v: 1, id, ...msg }, origin); } catch { /* opener gone */ } };
-  if (!ev.origin || ev.origin === 'null') { send({ type: 'render-error', error: 'render needs an http(s) page as the opener' }, '*'); return; }
-  if (typeof onRender !== 'function') { send({ type: 'render-error', error: 'render is not available' }, ev.origin); return; }
+  if (!ev.origin || ev.origin === 'null') { send({ type: 'render-error', error: 'render needs an http(s) page as the opener' }, '*'); return Promise.resolve(); }
+  if (typeof onRender !== 'function') { send({ type: 'render-error', error: 'render is not available' }, ev.origin); return Promise.resolve(); }
   const opts = { format: ['png', 'svg', 'webp'].includes(d.format) ? d.format : 'png', transparent: d.transparent === true };
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('render timed out (a dialog may be waiting in the Diagramforce tab)')), RENDER_TIMEOUT_MS); });
-  Promise.race([Promise.resolve().then(() => onRender(d.json, opts)), timeout])
+  return Promise.race([Promise.resolve().then(() => onRender(d.json, opts)), timeout])
     .then((img) => send({ type: 'rendered', ...img }, ev.origin),
       (err) => send({ type: 'render-error', error: String(err?.message || err || 'render failed') }, ev.origin))
     .finally(() => clearTimeout(timer));

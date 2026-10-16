@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.25.9';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.25.9';
-import { ER_MARKER_D } from '../er-markers.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.26.1';
+import { ER_MARKER_D } from '../er-markers.js?v=1.26.1';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -294,7 +294,10 @@ export function syncFrequencyLabel(link) {
   const color = link.prop('fontColor') || FREQ_LABEL_COLOR;
   // Frequency text reads ~2px smaller than the user label (tracks Font size changes); floored at 8.
   const freqSize = Math.max(8, (userLabel?.attrs?.text?.fontSize ?? 13) - 2);
-  const arr = freq ? [...kept, frequencyLabelSpec(freq, userLabel?.position, color, freqSize)] : kept;
+  // No user label: the overlay keeps its own position. Reset to the midpoint, it undid every move the label
+  // collision pass made to it (that pass moves label 0, which IS the overlay on a frequency-only link).
+  const position = userLabel ? userLabel.position : labels.find(isFrequencyLabel)?.position;
+  const arr = freq ? [...kept, frequencyLabelSpec(freq, position, color, freqSize)] : kept;
   if (JSON.stringify(labels) === JSON.stringify(arr)) return;
   link.labels(arr);
 }
@@ -578,7 +581,8 @@ export function applyFlowLinkStyle(link, opts = {}) {
 // Display toggle. A pure VIEW filter (never persisted, never mutates the model): hides
 // every ER relationship link (linkKind !== 'mapping') so architects can audit field-level
 // mapping curves without the header-level relationship lines. Default ON (visible). Reset
-// to visible on tab change by the toolbar; a fresh tab load renders all links visible.
+// to visible on every tab change by the toolbar, and on every graph reset by link-runtime
+// (a fresh load renders all links visible, so the flag must agree).
 let objectRelsVisible = true;
 export function isObjectRelationshipsVisible() { return objectRelsVisible; }
 export function setObjectRelationshipsVisible(v) {

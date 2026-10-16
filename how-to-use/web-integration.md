@@ -117,7 +117,8 @@ Build a diagram object conforming to [`DIAGRAM_JSON_SPEC.md`](../DIAGRAM_JSON_SP
   import does. If the render doesn't match your numbers, the numbers are the diagram.
 - Set `appVersion` to the current Diagramforce version to avoid a compatibility notice.
 - **Validate before shipping the button:** `npm run validate -- your-diagram.json` catches the errors
-  the loader silently drops (unknown shape types, links to missing cells, wrong `diagramType`).
+  the loader drops or heals (unknown shape types, links to missing cells, wrong `diagramType`). The user sees only
+  a count of what was skipped.
 
 ### 2. Add the button
 

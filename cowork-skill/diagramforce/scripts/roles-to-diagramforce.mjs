@@ -5,9 +5,10 @@
 // the app's paste path uses - so a chart built here and one pasted into Load & Import are identical rather than
 // merely similar. (Same arrangement as datagraph-convert.js; the copy beside this file is asserted identical to
 // js/persistence/role-convert.js by dev/tests/skill-sync.test.js.)
-import { readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { ROLE_QUERY, parseRoles, buildRoleDiagram } from './role-convert.js';
+import { runSf, readText } from './sf-cli.js';
 
 const die = (m) => { console.error(m); process.exit(1); };
 
@@ -21,11 +22,10 @@ const appVersion = (() => {
 })();
 
 /** Run ROLE_QUERY through `sf data query`, which reuses the CLI's own auth - no access token is ever read, printed
- *  or written by this script. A SELECT, so it reads the org and changes nothing. */
+ *  or written by this script. A SELECT, so it reads the org and changes nothing. runSf (sf-cli.js) starts `sf` on
+ *  Windows too, and turns a failure into sf's own reason rather than "Command failed: sf data query ...". */
 function fetchFromOrg(alias) {
-  const body = execFileSync('sf', ['data', 'query', '--query', ROLE_QUERY, '--json', '-o', alias],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return JSON.parse(body);
+  return JSON.parse(runSf(['data', 'query', '--query', ROLE_QUERY, '--json', '-o', alias], { maxBuffer: 64 * 1024 * 1024 }));
 }
 
 function main(argv) {
@@ -35,6 +35,11 @@ function main(argv) {
   const includePortal = args.includes('--include-portal');
   const positional = args.filter((a, i) => !a.startsWith('--') && !['--org', '--title', '--root'].includes(args[i - 1]));
   const [first, second] = positional;
+  // With --org the only path is the OUTPUT. Given a saved result as well, the first positional used to become the
+  // output, so `roles q.json out.json --org x` overwrote q.json with the diagram.
+  if (org && positional.length > 1) {
+    die(`Pass either a saved role query result or --org, not both - with --org the only path is the output file (got ${positional.join(', ')}).`);
+  }
   const inPath = org ? null : first;
   const outPath = org ? first : second;
 
@@ -51,8 +56,8 @@ function main(argv) {
 
   let doc;
   try {
-    doc = org ? fetchFromOrg(org) : JSON.parse(readFileSync(inPath, 'utf8'));
-  } catch (e) { die(`Could not read the role query result: ${e.message}`); }
+    doc = org ? fetchFromOrg(org) : JSON.parse(readText(inPath));
+  } catch (e) { die(org ? `Could not query the roles from ${org}: ${e.message}` : `Could not read the role query result: ${e.message}`); }
 
   let built;
   try {
@@ -71,6 +76,11 @@ function main(argv) {
     console.error('  note: no Users subquery in the input, so the cards carry no holders and no vacancies.');
   }
   if (s.cycles) console.error(`  note: ${s.cycles} role(s) sat in a parent cycle and were drawn as top roles.`);
+  if (s.partial) {
+    console.error(`  note: the input is one page of a longer result (${s.partial.received} of ${s.partial.total ?? '?'} roles). `
+      + '--org, or sf data query --json, fetches every page.');
+  }
+  if (s.missingParents) console.error(`  note: ${s.missingParents} role(s) name a parent missing from the input and were drawn as top roles.`);
   // One uniform card width across the chart, so a wide org is wide - say how wide, because the reader will
   // otherwise meet it at 10% zoom with no warning.
   if (s.width > 8000) {
@@ -79,8 +89,7 @@ function main(argv) {
   }
 }
 
-// File NAME, not the full URL: `import.meta.url` is percent-encoded and symlink-resolved while argv[1] is neither,
-// so an exact compare silently skipped main() for any install path with a space ("Application Support") or a
-// symlink - exit 0, no output. Same check as the sibling scripts.
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+// Entry point: compare REAL paths. The module URL is symlink-resolved and percent-encoded while argv[1] is as typed,
+// and on Windows it uses backslashes, so a name or URL comparison skipped main() (skill-cli-paths.test.js).
+const isMain = (() => { try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
 if (isMain) main(process.argv);

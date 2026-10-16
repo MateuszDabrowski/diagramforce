@@ -7,11 +7,11 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, confirmModal, buildModal } from '../feedback.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
-import { compactGraphForSave } from './json-pipeline.js?v=1.25.9';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
+import { compactGraphForSave } from './json-pipeline.js?v=1.26.1';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -26,77 +26,6 @@ const LAST_REMINDER_KEY  = 'sfdiag::lastBackupReminderAt'; // ms the overlay was
 const FIRST_CONTENT_KEY  = 'sfdiag::firstContentAt';   // ms of earliest stored diagram/template
 
 // --- Named saves ---
-
-export function namedSave() {
-  const { showSaveModal: showSaveModalCallback } = pctx;
-  // Delegate to save modal
-  if (showSaveModalCallback) {
-    showSaveModalCallback();
-    return;
-  }
-  // Fallback: single-tab save via prompt
-  namedSaveSingle();
-}
-
-/** Save a single tab (active) — used as fallback and internally. */
-function namedSaveSingle() {
-  const { tabNameCb: getTabNameCallback, graph, canvas: canvasModule, diagramTypeCb: getDiagramTypeCallback, mappingModeCb: getMappingModeCallback } = pctx;
-  const defaultName = getTabNameCallback ? getTabNameCallback() : 'My Diagram';
-  const existing = prompt('Save diagram as:', defaultName);
-  if (!existing?.trim()) return;
-  const name = existing.trim();
-  saveSingleTab(name, graph.toJSON(), canvasModule.getViewport(),
-    getDiagramTypeCallback ? getDiagramTypeCallback() : 'architecture',
-    getMappingModeCallback ? getMappingModeCallback() : false);
-}
-
-async function saveSingleTab(name, graphJSON, viewport, diagramType, mappingMode = false, silent = false) {
-  const { appVersion: APP_VERSION, onNamedSave: onNamedSaveCallback } = pctx;
-  const key = NAMED_SAVE_PREFIX + name;
-  const alreadyExists = localStorage.getItem(key) !== null;
-  if (alreadyExists && !silent) {
-    const ok = await confirmModal({
-      title: 'Overwrite existing save?',
-      message: `A save named "${name}" already exists.`,
-      okLabel: 'Overwrite',
-      cancelLabel: 'Cancel',
-      tone: 'danger',
-    });
-    if (!ok) return false;
-  }
-
-  const data = {
-    name,
-    timestamp: Date.now(),
-    version: 1,
-    appVersion: APP_VERSION,
-    diagramType,
-    mappingMode,
-    // Drop reconstructed-on-load data (DataObject ports) to shrink the localStorage footprint.
-    graph: compactGraphForSave(graphJSON),
-    viewport,
-  };
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-    if (!silent) {
-      if (onNamedSaveCallback) onNamedSaveCallback(name);
-      showToast(`Saved to browser ✓`, 'success');
-    }
-    return true;
-  } catch (err) {
-    // Gap 22 (v1.12.0) — distinguish quota errors from generic failures so
-    // the user gets actionable recovery advice. Browsers report quota as
-    // either `QuotaExceededError`, the legacy code 22, or (Firefox) the
-    // numeric code 1014. A few Safari builds set neither — fall through
-    // to the human-readable message as a last-resort check.
-    if (isQuotaError(err)) {
-      showError('Browser storage full - export to JSON to keep your work safe, then delete older saves.');
-    } else {
-      showError('Save failed: ' + (err.message || 'unknown error'));
-    }
-    return false;
-  }
-}
 
 /**
  * Gap 22 (v1.12.0) — shared quota-error sniffer. Browsers disagree on the
@@ -287,6 +216,8 @@ export function getNamedSaves() {
   return saves.sort((a, b) => b.timestamp - a.timestamp);
 }
 
+/** Open a Browser save as a new tab. Returns true when it opened, false when it did not, and 'focused' when its Drive
+ *  diagram is already open and that tab was brought forward instead (the caller must not tag that tab as this save). */
 export async function loadNamedSave(key) {
   const { checkVersionWarning, sanitizeGraphJSON, onImport: onImportCallback, normalizeDiagramType, graph, canvas: canvasModule } = pctx;
   try {
@@ -294,7 +225,32 @@ export async function loadNamedSave(key) {
     if (!raw) { showError('Save not found.'); return false; }
     const data = JSON.parse(raw);
     const savedVer = data.appVersion || null;
-    const name = data.name || key.replace(NAMED_SAVE_PREFIX, '');
+    let name = String(data.name || key.replace(NAMED_SAVE_PREFIX, ''));
+    // The archive of a Drive diagram that is open in a tab (drive review C2, the Browser path). Linked again, a second
+    // tab took the archive's old baseline: it read "Synced" while Drive held newer, and "Keep mine" on its first
+    // save's conflict wrote the old content over that newer revision.
+    let driveMeta = data;
+    // An unforked view's archive has no file of its own, only the original it viewed. Any tab holding that original
+    // counts, a fork of it included: linked again, the view's first edit adopted the fork another tab's edit had made,
+    // and two tabs saved to one file. Such an archive is never driveClean, so it opens as a browser copy.
+    const viewOf = data.driveFileId ? null : data.driveSharedSource?.fileId;
+    const openTab = data.driveFileId ? pctx.driveTabHolding?.(data.driveFileId)
+      : viewOf ? pctx.driveTabHolding?.(viewOf, { anyRole: true }) : null;
+    if (openTab != null) {
+      if (data.driveClean) {   // Drive held exactly this content: the open tab has it, or a later version
+        pctx.activateTab?.(openTab);
+        const tabName = (pctx.getAllTabs?.() || []).find((t) => t && t.id === openTab)?.name;
+        showToast(`"${tabName || name}" is already open - switched to its tab.`, 'info');
+        return 'focused';
+      }
+      // It may hold edits Drive never got (a close whose save failed), so it opens as its own diagram, unlinked.
+      driveMeta = null;
+      name = `${name} (browser copy)`;
+    }
+    // A Drive-linked archive reopens under the tab's own name, not the dated archive name. The name is in the dedupe
+    // hash, so "Plan 2026-10-15" wrote the unchanged diagram back under that name, and a pending rename renamed the
+    // file to it (review round 2, S1-3). An older archive has no tabName and keeps the archive name.
+    if (driveMeta && data.tabName && (data.driveFileId || data.driveSharedSource)) name = String(data.tabName);
     const ok = await checkVersionWarning(savedVer, name, data);
     if (!ok) return false;
     if (data?.graph) sanitizeGraphJSON(data.graph);
@@ -303,7 +259,8 @@ export async function loadNamedSave(key) {
       // Item 1.3: pass the archived Drive linkage (driveFileId + driveSharedSource + driveCopies + baseline) so
       // the loaded tab re-marks "In My Drive" and shows the shares it had, instead of becoming a browser-only tab.
       // #7: data.group recreate-or-rejoins the tab group this diagram was saved from.
-      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode, data, data.group || null);
+      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode, driveMeta, data.group || null);
+      if (!driveMeta) showToast('Its Google Drive diagram is already open in a tab, so this browser copy opened as a separate diagram.', 'info', { duration: 6000 });
     } else if (data?.graph) {
       canvasModule.setLoadingJSON(true);
       try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }
@@ -371,7 +328,8 @@ export function getLastBackupAt() {
  *  that backup wrote files but the advisory still read "No full backup yet". */
 export function markFullBackup() { markBackedUp(); }
 
-/** Read a named save's diagram payload by key, or null if missing/corrupt. */
+/** Read a named save's diagram payload by key, or null if missing/corrupt. `appVersion` and the archive's `group` meta
+ *  ride along, so a backup keeps the version the save was written with and the group it was closed from. */
 export function readNamedSave(key) {
   try {
     const data = JSON.parse(localStorage.getItem(key));
@@ -382,6 +340,8 @@ export function readNamedSave(key) {
       mappingMode: data.mappingMode || false,
       graph: data.graph,
       viewport: data.viewport || null,
+      ...(data.appVersion ? { appVersion: data.appVersion } : {}),
+      ...(data.group && typeof data.group === 'object' && data.group.name ? { group: data.group } : {}),
     };
   } catch { return null; }
 }
@@ -393,10 +353,11 @@ export function readNamedSave(key) {
  *   - templates only          → templates file (`df_templates_<date>.json`)
  *   - 2+ elements             → `diagramforce-export` bundle (`df_backup_<date>.json` when
  *                               markBackup, else `df_export_<date>.json`)
- * A "Templates" selection counts as ONE element (the whole library). Named saves
- * whose name matches an included open tab are deduped (the tab is the live copy).
- * `markBackup` (Select-All export, or the reminder overlay) resets the reminder
- * clock. Returns true on a successful download.
+ * A "Templates" selection counts as ONE element (the whole library). A named save
+ * that an included open tab was saved to or loaded from (its browserSaveName) is
+ * deduped (the tab is the live copy). `markBackup` (Back up now, or the reminder
+ * overlay) always writes the bundle and resets the reminder clock. Returns true on
+ * a successful download.
  */
 export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates = false, groups = [] } = {}, { markBackup = false } = {}) {
   const { getAllTabs: getAllTabsCallback, getTabGraph: getTabGraphCallback, getTabDiagramType: getTabDiagramTypeCallback, getTabViewport: getTabViewportCallback, getTabMappingMode: getTabMappingModeCallback, appVersion: APP_VERSION, templatesBackupApi, triggerDownload, dateSuffix } = pctx;
@@ -412,11 +373,13 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
     const allGroups = (groups && groups.length) ? groups : (pctx.getGroups ? (pctx.getGroups() || []) : []);
     const groupById = new Map(allGroups.map(g => [g.id, g]));
     const isGroupExport = groups.length > 0;
+    const includedSaveNames = new Set();   // the named saves the included tabs ARE (browserSaveName)
     for (const id of tabIds) {
       const t = tabById.get(id); if (!t) continue;
       const g = getTabGraphCallback ? getTabGraphCallback(id) : null;
       if (!g || !Array.isArray(g.cells) || g.cells.length === 0) continue; // skip empty drafts
       const grp = t.groupId ? groupById.get(t.groupId) : null;
+      if (t.browserSaveName) includedSaveNames.add(t.browserSaveName);
       diagrams.push({
         name: t.name,
         diagramType: getTabDiagramTypeCallback ? getTabDiagramTypeCallback(id) : 'architecture',
@@ -427,10 +390,12 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
         ...(grp ? { group: grp.name } : {}),
       });
     }
-    const tabNames = new Set(diagrams.map(d => d.name));
+    // Skip a save only when an included tab IS it (linked by browserSaveName, the Load list's rule). A save that
+    // merely shares a tab's NAME is a different diagram - a closed 'Architecture Draft' and the new tab that reused
+    // the name - and the full backup used to drop it (review 2026-10-15, B3). Bundle import renames the clash.
     for (const key of saveKeys) {
       const d = readNamedSave(key);
-      if (!d || tabNames.has(d.name)) continue; // dedup vs an included open tab
+      if (!d || includedSaveNames.has(key.slice(NAMED_SAVE_PREFIX.length))) continue;
       diagrams.push(d);
     }
     // Shrink every exported graph by dropping reconstructed-on-load data (DataObject ports).
@@ -446,8 +411,9 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
     // A group export always uses the bundle format (even for one diagram) so the
     // `groups` metadata + per-diagram `group` tag survive — the single-diagram
     // shortcut would strip them.
+    // A full backup stays a bundle even with one diagram, so it is always named and announced as the backup.
     let ok = true;
-    if (diagrams.length === 1 && templates.length === 0 && !isGroupExport) {
+    if (diagrams.length === 1 && templates.length === 0 && !isGroupExport && !markBackup) {
       const d = diagrams[0];
       // #7: if the single diagram is an open tab inside a group, stamp the group meta so re-import restores it.
       const srcTab = tabIds.length === 1 ? tabById.get(tabIds[0]) : null;
@@ -459,6 +425,9 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
       ok = !!(templatesBackupApi?.exportFn?.());   // templates-only → templates file
     } else {
       const payload = { schema: 'diagramforce-export', version: 1, appVersion: APP_VERSION, exportedAt: Date.now() };
+      // Said, not guessed (review R2): with every tab grouped and no archive, a backup tags every diagram, exactly like
+      // an Export group file, and its restore recreated every group beside the open ones.
+      if (markBackup) payload.backup = true;
       // Groups actually represented in the exported diagrams. `kind:'group'` tells
       // the importer to restore these as grouped tabs (vs the default browser-saves).
       const usedGroups = groups.filter(g => diagrams.some(d => d.group === g.name));
@@ -469,18 +438,16 @@ export function exportSelection({ tabIds = [], saveKeys = [], includeTemplates =
       if (diagrams.length) payload.diagrams = diagrams;
       if (templates.length) payload.templates = templates;
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      // Group export → df_group_<name>_<date>; full backup (Select-All / reminder
-      // overlay) → df_backup_<date>; a partial multi-select export → df_export_<date>.
+      // Group export → df_group_<name>_<date>; full backup (Back up now / reminder
+      // overlay) → df_backup_<date> even when it carries groups; a partial multi-select export → df_export_<date>.
       let prefix = `df_${markBackup ? 'backup' : 'export'}`;
-      if (usedGroups.length === 1) {
-        const safe = usedGroups[0].name.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'group';
-        prefix = `df_group_${safe}`;
-      }
+      // The shared filename rule (letters of any script kept, spaces to dashes), like every other download.
+      if (usedGroups.length === 1 && !markBackup) prefix = `df_group_${sanitizeFilenamePart(usedGroups[0].name, 'group')}`;
       triggerDownload(URL.createObjectURL(blob), `${prefix}_${dateSuffix()}.json`);
       const parts = [];
       if (diagrams.length) parts.push(`${diagrams.length} diagram${diagrams.length === 1 ? '' : 's'}`);
       if (templates.length) parts.push(`${templates.length} template${templates.length === 1 ? '' : 's'}`);
-      if (usedGroups.length === 1) showToast(`Exported group "${usedGroups[0].name}" (${parts.join(' + ')}) ✓`, 'success');
+      if (usedGroups.length === 1 && !markBackup) showToast(`Exported group "${usedGroups[0].name}" (${parts.join(' + ')}) ✓`, 'success');
       else showToast(`Exported ${parts.join(' + ')} ✓`, 'success');
     }
     if (ok && markBackup) markBackedUp();

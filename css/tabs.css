@@ -195,6 +195,28 @@
   min-width: 0;
 }
 
+/* Inline rename of a tab or a group chip (startInlineRename / startGroupRename set only the width). Classes, not
+   inline styles, so the iOS floor below can reach the font size (review S8-5). */
+.df-tab__rename-input,
+.df-tab-group__rename-input {
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 3px;
+  outline: none;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+.df-tab-group__rename-input { height: 18px; font-weight: 600; }
+/* The iOS 16 px focus-zoom floor (css/properties.css, review J1-11), with room for the taller text. */
+@media (max-width: 768px), (pointer: coarse) {
+  .df-tab__rename-input,
+  .df-tab-group__rename-input { height: 24px; font-size: var(--font-size-lg); }   /* 16px - the iOS threshold; do not lower */
+}
+
 /* Dot indicator for unsaved changes */
 .df-tab__dirty {
   width: 5px;
@@ -345,9 +367,10 @@
 .df-tabs--no-hover .df-tab-group:hover .df-tab-group__count { opacity: 1; }
 .df-tabs--no-hover .df-tab-group:hover .df-tab-group__menu { opacity: 0; }
 
-/* Tab-switch cue: a quick fade on the canvas so the content change registers (v1.16.0). */
+/* Tab-switch cue: a quick fade on the canvas so the content change registers (v1.16.0); closing the active tab runs it
+   too. It fades the #paper container, never a cell inside the paper, on the motion tokens. */
 @keyframes df-paper-switch { from { opacity: 0.4; } to { opacity: 1; } }
-#paper.df-paper--switching { animation: df-paper-switch 130ms ease-out; }
+#paper.df-paper--switching { animation: df-paper-switch var(--df-motion-fast) var(--df-ease-out); }
 @media (prefers-reduced-motion: reduce) { #paper.df-paper--switching { animation: none; } }
 
 /* Tab-focus slide: the active tab's own "selection" — its dark, bordered background — travels along
@@ -448,6 +471,9 @@
   padding: 4px;
   font-size: var(--font-size-sm);
   color: var(--text-primary);
+  /* Motion (layout.css): pops in under its trigger, like the toolbar menus. Removed at once on close. */
+  animation: df-motion-pop var(--df-motion-fast) var(--df-ease-out);
+  transform-origin: top left;
 }
 /* Menu items mirror the toolbar dropdown items (.df-toolbar__menu-item): muted text that
    brightens on hover, 6px×14px rows, weight 500, optional leading icon. */
@@ -475,20 +501,20 @@
 
 /* Export-menu format glyph (item 11): a rounded rect with the format token ({ } / CSV / PNG / WEBP / SVG / GIF).
    Filled (amber) for an opaque output; a wire (transparent-fill) rect for the "(transparent)" variants - so the
-   glyph mirrors what you'll get. Darker amber in light mode for text contrast (like the amber Export buttons). */
+   glyph mirrors what you'll get. Ink text on the filled glyph, and an ink label in the light wire (R7). */
 .df-tab-pop__item--fmt { display: flex; align-items: center; gap: 8px; }
 .df-fmt-glyph {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 36px; height: 16px; padding: 0 4px;
   border: 1px solid var(--brand-amber-strong); border-radius: 4px;
-  background: var(--brand-amber-strong); color: #fff;
+  background: var(--brand-amber-strong); color: var(--modal-btn-neutral-fg);
   font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: 0.3px; flex-shrink: 0;
 }
 [data-theme="dark"] .df-fmt-glyph { color: #1a1a1a; }
-.df-fmt-glyph--wire { background: transparent; color: var(--brand-amber-strong); }
+.df-fmt-glyph--wire { background: transparent; color: var(--brand-amber-text); }
 /* The dark filled-glyph rule above (#1a1a1a text) out-specifies the wire rule, which made the transparent
    variants' text dark-on-transparent → invisible on the dark menu. Restore the amber wire text in dark. */
-[data-theme="dark"] .df-fmt-glyph--wire { color: var(--brand-amber-strong); }
+[data-theme="dark"] .df-fmt-glyph--wire { color: var(--brand-amber-text); }
 .df-tab-pop__header {
   padding: 4px 10px 2px;
   font-size: var(--font-size-xs, 11px);
@@ -579,6 +605,13 @@
 .df-tab__close:hover {
   background: var(--toolbar-button-hover);
   color: var(--text-primary);
+}
+
+/* Keyboard focus on a tab or group chip (review R3). Inset: the list scrolls (overflow-x), which clips an outset ring. */
+.df-tab:focus-visible,
+.df-tab-group:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .df-tab__close:focus-visible {
@@ -783,6 +816,7 @@
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
+  animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out);   /* same entry as .df-modal (modals.css) */
 }
 
 .df-new-modal__dialog {
@@ -799,7 +833,10 @@
      strip off-screen. Cap at the viewport and scroll inside, like the mobile rule always has. */
   max-height: min(92vh, 100dvh);
   overflow-y: auto;
+  animation: df-motion-pop var(--df-motion-base) var(--df-ease-out);
 }
+/* The dialog takes focus on open (so keys target it, not the button behind it); it is not a control, so no ring. */
+.df-new-modal__dialog:focus { outline: none; }
 
 .df-new-modal__title {
   font-size: 18px;
@@ -846,6 +883,9 @@
   padding: 8px 10px;
 }
 .df-new-modal__panel:not([data-tab="create"])[hidden] { display: none; }
+/* Motion: a panel fades in when its tab is picked (and with the dialog on open). Opacity only, so the box
+   geometry the rules above hold steady never moves. */
+.df-new-modal__panel:not([hidden]) { animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out); }
 /* Templates: FULLY floating header. The scroll viewport is pulled up past the tab strip to the midpoint between
    the "New Diagram" title and the Create/Load/Templates pill (top:-65px, derived from the fixed title/tab
    heights), so on scroll the cards rise almost to the title - BOTH the tab pill and the filter pill float over
@@ -1068,18 +1108,8 @@
      the comment above already states that the sheet's height follows the ACTIVE panel on purpose. */
   .df-new-modal__panel[data-tab="create"][hidden] { display: none; }
 
-  .df-new-modal__grid {
-    gap: 10px;
-  }
-
+  /* Card padding, grid gap and the single-column reset live in the modals.css mobile block, which loads last. */
   .df-new-modal__card {
-    grid-column: auto;
-    max-width: none;
-    justify-self: auto;
-  }
-
-  .df-new-modal__card {
-    padding: 14px 10px;
     gap: 8px;
   }
 
@@ -1158,9 +1188,21 @@
   .df-tab--active:has(.df-tab__shared) { max-width: 38vw; }
 
   .df-tab__close {
-    width: 20px;
-    height: 20px;
+    width: 28px;    /* touch target (review R12): 20px was under WCAG 2.5.8's 24px; the tab is 34px tall */
+    height: 28px;
     opacity: 1; /* always visible on touch */
+  }
+
+  /* The New Diagram sheet's close and tabs (review R12): 32px and 29px tall were short of the 44px touch target.
+     min-* because the base .df-new-modal__close rule comes later in this file. 18px side padding keeps the three
+     tabs on one row at 320px. */
+  .df-new-modal__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .df-new-modal__tab {
+    min-height: 44px;
+    padding: 8px 18px;
   }
 
   /* Collapse the two labelled "+ Diagram" / "+ Group" buttons into one "+" that opens a picker —
@@ -1197,7 +1239,7 @@
   width: 12px;
   height: 12px;
   flex-shrink: 0;
-  color: var(--brand-amber);
+  color: var(--brand-amber-line);   /* the 3:1 glyph amber in light mode, the brand amber in dark (S8-8) */
   fill: currentColor;
 }
 .df-tab__shared use { fill: currentColor; }
@@ -1207,6 +1249,9 @@
 .df-tab__shared--both { width: 11px; height: 11px; }
 /* The original this tab came from is no longer reachable (unshared / deleted): the glyph stays, dimmed - its tooltip says why. */
 .df-tab__shared--lost { opacity: 0.4; }
+/* Only on this device (Slot's brief, 2026-10-16): no copy in Google Drive, and the browser can clear it. The same amber
+   heads-up as sharing, a laptop icon instead of a share arrow. It reuses the share glyph's slot and hover swap. */
+.df-tab__shared--device { width: 13px; height: 13px; }
 
 /* A collapsed group's lingering active tab, condensed to icon-only: the label + close fold away so the group reads
    as collapsed while the active tab stays clickable. The name is in the title tooltip; switching tabs removes it

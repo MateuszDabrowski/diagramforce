@@ -186,7 +186,8 @@
 /* Error: the SAME detailed multicolour logo, red-tinted via filter (keeps the facet structure +
    centre notch — a flat silhouette loses that). grayscale(1) flattens to luminance, then
    sepia→saturate→hue-rotate pushes it into the red family (coral→deep-red, no amber). */
-.df-sync__btn[data-state="error"] .df-sync__drive { filter: grayscale(1) brightness(0.62) sepia(1) saturate(5) hue-rotate(-42deg); }
+.df-sync__btn[data-state="error"] .df-sync__drive,
+.df-sync__btn[data-state="failed"] .df-sync__drive { filter: grayscale(1) brightness(0.62) sepia(1) saturate(5) hue-rotate(-42deg); }   /* failed: a save Drive did not take, red "Not synced" */
 /* Conflict (sync paused — needs Pull/Keep/Fork): the SAME logo, amber-tinted via filter — a "needs
    attention" state distinct from the red error. grayscale→sepia→saturate→a small hue-rotate lands in
    the amber family (the brand accent), keeping the facet detail like the error tint does. */
@@ -218,7 +219,7 @@
 }
 /* Text shows in the error state (red "Sign in") + conflict (amber "Review"). */
 .df-sync__text { font-size: var(--font-size-sm); font-weight: 500; white-space: nowrap; color: var(--sync-error); }
-.df-sync__btn[data-state="conflict"] .df-sync__text { color: var(--brand-amber); }
+.df-sync__btn[data-state="conflict"] .df-sync__text { color: var(--brand-amber-text); }   /* ink in light (R7) */
 .df-sync__btn[data-state="refresh"] .df-sync__text { color: var(--color-primary); }   /* "Refresh" is an info action — blue */
 .df-sync__btn[data-state="saving"] .df-sync__text { color: var(--text-secondary); }   /* "Saving" is in-progress, not an error — neutral */
 
@@ -230,18 +231,20 @@
 }
 .df-sync__status-text { flex: 1; min-width: 0; white-space: pre-line; }   /* honour any \n in the status text */
 /* The KEY contextual action as a wire button on the right (Sign in / Review / Refresh / Sync now). Tone-coloured
-   per state via --_tone: red (sign-in), amber (review/sync), blue (refresh) - matching the navbar icon's text. */
+   per state via --_tone: red (sign-in), amber (review/sync), blue (refresh) - matching the navbar icon's text.
+   The amber tones keep an amber border with an ink label in light mode (--_tone-text, review R7). */
 .df-sync__status-btn {
   flex-shrink: 0; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
   padding: 4px 12px; border-radius: var(--border-radius-sm);
-  background: transparent; border: 1px solid var(--_tone, var(--brand-amber)); color: var(--_tone, var(--brand-amber));
+  background: transparent; border: 1px solid var(--_tone, var(--brand-amber));
+  color: var(--_tone-text, var(--_tone, var(--brand-amber-text)));
 }
 .df-sync__status-btn:hover { background: color-mix(in srgb, var(--_tone, var(--brand-amber)) 12%, transparent); }
 .df-sync__status-btn[hidden] { display: none; }
 .df-sync__status-btn[data-tone="error"] { --_tone: var(--sync-error); }
-.df-sync__status-btn[data-tone="conflict"] { --_tone: var(--brand-amber); }
+.df-sync__status-btn[data-tone="conflict"] { --_tone: var(--brand-amber); --_tone-text: var(--brand-amber-text); }
 .df-sync__status-btn[data-tone="refresh"] { --_tone: var(--color-primary); }
-.df-sync__status-btn[data-tone="sync"] { --_tone: var(--brand-amber); }
+.df-sync__status-btn[data-tone="sync"] { --_tone: var(--brand-amber); --_tone-text: var(--brand-amber-text); }
 
 /* Menu aligns to the right edge — the control sits in the right cluster. Double class
    beats the base .df-toolbar__menu (which is declared later + sets left:0). Wider so the
@@ -313,6 +316,10 @@
 
 .df-toolbar__dropdown.df-toolbar__dropdown--open .df-toolbar__menu {
   display: block;
+  /* Motion (layout.css): pops in from the corner under its button. Scale, not a slide: a merged menu (View,
+     Drive) must keep its top edge on the button's bottom seam. Closing is instant. */
+  animation: df-motion-pop var(--df-motion-fast) var(--df-ease-out);
+  transform-origin: top left;
 }
 
 /* Help menu sits at the far RIGHT of the toolbar — right-align its menu so it opens leftward and stays
@@ -320,6 +327,7 @@
 #help-dropdown .df-toolbar__menu {
   left: auto;
   right: 0;
+  transform-origin: top right;
 }
 
 /* Display dropdown — same button-merge as the storage managers (2.5): the open button takes the panel surface
@@ -353,6 +361,7 @@
   border-top: none;
   border-top-right-radius: 0;   /* square on the button side (right); top-LEFT stays rounded */
   box-shadow: var(--shadow-dropdown);   /* no upward blur onto the merged button */
+  transform-origin: top right;   /* the open-menu pop grows from the button's corner */
 }
 #sync-dropdown.df-toolbar__dropdown--open .df-sync__menu::before {
   content: '';
@@ -378,6 +387,7 @@
   border-radius: 0;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   z-index: 400;
+  animation: df-motion-reveal var(--df-motion-fast) var(--df-ease-out);   /* a full-width sheet drops from the toolbar */
 }
 
 .df-toolbar__menu-item {
@@ -453,6 +463,11 @@
 }
 .df-toolbar__menu-item--toggle.is-checked .df-toolbar__checkbox-tick {
   display: inline;
+  /* Motion: the tick pops in when turned on (and with its menu as it opens). fill-box centres the scale on the
+     tick itself; an SVG child's default origin is the SVG's top-left corner. */
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: df-motion-tick var(--df-motion-fast) var(--df-ease-out);
 }
 .df-toolbar__menu-item--toggle.is-checked .df-toolbar__checkbox {
   opacity: 1;
@@ -533,6 +548,12 @@
   box-shadow: var(--shadow-md);
   z-index: 300;
   padding: 4px 0;
+  /* Scroll inside the viewport: in phone landscape the menu is taller than the screen, and html/body never
+     scroll, so its last items (Help, About) were unreachable (R5). The top sits ~52px down. */
+  max-height: calc(100vh - 56px);
+  max-height: calc(100dvh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .df-toolbar__hamburger-menu .df-toolbar__menu-item {
@@ -554,6 +575,8 @@
 
 .df-toolbar__hamburger-wrap--open .df-toolbar__hamburger-menu {
   display: block;
+  animation: df-motion-pop var(--df-motion-fast) var(--df-ease-out);
+  transform-origin: top left;   /* the menu drops from the left edge on mobile, its only layout */
 }
 
 /* ── Mobile toolbar ────────────────────────────────────────────── */
@@ -563,6 +586,10 @@
     padding: 0 4px;
     gap: 0;
     justify-content: flex-start;
+    /* Above the properties bottom sheet (z 200): the hamburger menu's z 300 only counts inside this stacking
+       context, so at z 100 the sheet painted over the menu's last items (R5). The sheet's top never reaches
+       the 48px bar, so the bar covers nothing. */
+    z-index: 250;
   }
 
   /* Reorder: hamburger (1) | undo (2) | brand centered (3) | right buttons (4) */

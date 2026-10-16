@@ -1,20 +1,21 @@
 // Selection manager — tracks selected elements
 // Provides single-click, shift-click, rubber-band selection, and alignment ops
 
-import * as history from './history.js?v=1.25.9';
-import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox } from './canvas.js?v=1.25.9';
-import { fieldFocus } from './canvas/focus-state.js?v=1.25.9';
+import * as history from './history.js?v=1.26.1';
+import { isFocusDimmingEnabled, canEmbed, setDragSelectionBBox, setSpacingSelectionSource } from './canvas.js?v=1.26.1';
+import { fieldFocus } from './canvas/focus-state.js?v=1.26.1';
+import { isTouchEvent } from './util.js?v=1.26.1';
 // S9: the corner-drag resize interaction (handles + tracking guides + per-type snap/date logic)
 // extracted to ./selection/resize-handles.js; initResizeHandles wires graph/paper/selectedIds in init().
-import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.25.9';
+import { addResizeHandles, removeResizeHandles, initResizeHandles } from './selection/resize-handles.js?v=1.26.1';
 // S9: the canvas context menu (right-click + touch long-press) + its action helpers extracted to
 // ./selection/context-menu.js; initContextMenu wires the live graph/selection in init(). The 6 app.js
 // action-API setters + copySelectionAsPng live there now and are re-exported below so wiring is unchanged.
-import { showContextMenu, startLongPressMenu, cancelLongPressMenu, initContextMenu } from './selection/context-menu.js?v=1.25.9';
+import { showContextMenu, startLongPressMenu, cancelLongPressMenu, trackLongPressMove, initContextMenu } from './selection/context-menu.js?v=1.26.1';
 export {
   setAutoSizer, setCopyAsPng, setEndpointSetter, setActionProvider, setStyleApi, setCaptureApi, setLaneMatcher,
   copySelectionAsPng,
-} from './selection/context-menu.js?v=1.25.9';
+} from './selection/context-menu.js?v=1.26.1';
 
 let graph, paper;
 const selectedIds = new Set();
@@ -46,7 +47,7 @@ export function init(_graph, _paper) {
   initResizeHandles({ graph, paper, selectedIds });
   // Wire the extracted context-menu module: the live graph + the shared selectedIds Set + the selection
   // ops its items call. Function refs are hoisted declarations, so passing them here is stable.
-  initContextMenu({ graph, selectedIds, getSelectedElements, selectOnly, addToSelection, selectAll, deleteSelected });
+  initContextMenu({ graph, selectedIds, getSelectedElements, selectOnly, selectMany, selectAll, deleteSelected });
 
   // Track whether the user is dragging (to distinguish click vs drag for multi-select)
   let pointerDownId = null;
@@ -56,6 +57,33 @@ export function init(_graph, _paper) {
   // (add/remove/re-endpoint) or a bulk reset invalidates it.
   graph.on('add remove reset change:source change:target', invalidateFieldGraph);
   graph.on('change:linkKind', invalidateFieldGraph);
+
+  // A selected cell that leaves the graph (undo of its add, a Convert, the panel's Delete) leaves the selection too.
+  // The id used to stay: the panel kept showing the removed cell and its Clone re-added it, and after redo the same id
+  // came back "selected" with no outline or handles, so Delete removed a shape that did not look selected (review
+  // I5 / J1-2). One notify per burst (undoing a 300-cell paste removes 300 cells), skipped when the caller has
+  // notified a new selection meanwhile (Convert's selectOnly).
+  graph.on('remove', (cell) => {
+    if (!selectedIds.has(cell.id)) return;
+    removeVisual(cell.id);
+    selectedIds.delete(cell.id);
+    if (_pruneNotifyPending) return;
+    _pruneNotifyPending = true;
+    queueMicrotask(() => { if (_pruneNotifyPending) notifyChange(); });
+  });
+
+  // The async paper renders a just-added cell on a later frame, and ElementView.render empties view.el, which wiped
+  // the handles applyVisual drew in the same tick: a paste, duplicate, Clone, Convert or template insert came out
+  // selected with no handles (review I6). Put them back once the render lands. requireView would render each view
+  // synchronously instead, about 400 ms more on a 300-shape paste.
+  paper.on('render:done', () => {
+    selectedIds.forEach((id) => {
+      const view = paper.findViewByModel(id);
+      if (!view?.model?.isElement?.()) return;
+      const handle = view._sfHandles?.[0]?.g;
+      if (handle && handle.parentNode !== view.el) addResizeHandles(view);
+    });
+  });
 
   // ── Field-hover flow trace (Data Mapping + Data Model) ─────────────────────
   // Hovering a field row lights that field's lineage across connected tables (same engine as selecting a
@@ -95,14 +123,18 @@ export function init(_graph, _paper) {
 
   // Track touch pointers currently holding an element — enables two-finger
   // multi-select: one finger holds, second finger taps another element.
-  const activeTouches = new Map(); // pointerId -> elementId
+  // A JointJS paper event from a finger wraps a TouchEvent, which has no pointerId, so the key is the Touch
+  // identifier. Keyed by the undefined pointerId, a lifted finger was never cleared and the next single tap on
+  // another shape toggled multi-select (review H1-3).
+  const activeTouches = new Map(); // touch identifier -> elementId
+  const touchKey = (evt) => evt.originalEvent?.changedTouches?.[0]?.identifier ?? evt.changedTouches?.[0]?.identifier ?? evt.pointerId;
 
   paper.on('element:pointerdown', (cellView, evt) => {
     evt.stopPropagation();
     pointerDownId = cellView.model.id;
     didDrag = false;
 
-    const isTouch = evt.pointerType === 'touch';
+    const isTouch = isTouchEvent(evt);
     const id = cellView.model.id;
 
     // Multi-touch multi-select: if another finger is already holding a different element, toggle.
@@ -118,13 +150,13 @@ export function init(_graph, _paper) {
         }
         toggle(id);
         if (navigator.vibrate) navigator.vibrate(8);
-        activeTouches.set(evt.pointerId, id);
+        activeTouches.set(touchKey(evt), id);
         return;
       }
     }
 
     if (isTouch) {
-      activeTouches.set(evt.pointerId, id);
+      activeTouches.set(touchKey(evt), id);
       startLongPressMenu(cellView, evt);
     }
 
@@ -138,16 +170,23 @@ export function init(_graph, _paper) {
   });
 
   const clearTouch = (evt) => {
-    if (evt.pointerId != null) activeTouches.delete(evt.pointerId);
+    const k = touchKey(evt);
+    if (k != null) activeTouches.delete(k);
   };
   paper.on('element:pointerup', (cellView, evt) => {
     clearTouch(evt);
     cancelLongPressMenu();
   });
-  document.addEventListener('pointerup', clearTouch);
-  document.addEventListener('pointercancel', (e) => { clearTouch(e); cancelLongPressMenu(); });
+  // Every lifted finger leaves the map, wherever it lifts; the last one empties it.
+  const clearLiftedTouches = (e) => {
+    if (!e.touches?.length) { activeTouches.clear(); return; }
+    for (const t of e.changedTouches || []) activeTouches.delete(t.identifier);
+  };
+  document.addEventListener('touchend', clearLiftedTouches);
+  document.addEventListener('touchcancel', (e) => { clearLiftedTouches(e); cancelLongPressMenu(); });
+  document.addEventListener('pointercancel', cancelLongPressMenu);
 
-  paper.on('element:pointermove', () => {
+  paper.on('element:pointermove', (cellView, evt) => {
     // First drag motion → clear connection-focus dimming so the user
     // can see all components clearly while positioning. Dimming
     // obscures the spatial context the user is reasoning about during
@@ -158,7 +197,7 @@ export function init(_graph, _paper) {
       didDrag = true;
       suspendDimmingForDrag();
     }
-    cancelLongPressMenu();
+    trackLongPressMove(evt);   // tremor keeps the long-press; a real drag cancels it and closes a menu it opened
   });
 
   paper.on('element:pointerup', (cellView, evt) => {
@@ -205,12 +244,12 @@ export function init(_graph, _paper) {
   });
 
   // Touch long-press on the BLANK canvas opens the same Paste / Select-all menu (touch has no right-click).
-  // The element long-press lives in element:pointerdown above; this is its blank-canvas counterpart. A
-  // finger move (pan) or lift cancels it before it fires. Gating lives inside startLongPressMenu (coarse/width).
+  // The element long-press lives in element:pointerdown above; this is its blank-canvas counterpart. A finger
+  // move past the slop (pan) or lift cancels it before it fires. Gating lives inside startLongPressMenu (coarse/width).
   paper.on('blank:pointerdown', (evt) => {
-    if (evt.pointerType === 'touch') startLongPressMenu(null, evt);
+    if (isTouchEvent(evt)) startLongPressMenu(null, evt);
   });
-  paper.on('blank:pointermove', cancelLongPressMenu);
+  paper.on('blank:pointermove', trackLongPressMove);
   paper.on('blank:pointerup', cancelLongPressMenu);
 
   // Paper-root pointer bracket for history batching (v1.12.4).
@@ -258,6 +297,14 @@ export function init(_graph, _paper) {
     // Close any prior batch that hasn't been flushed yet — a new
     // gesture starts a fresh undo entry.
     closeBatchNow();
+    // A press on a SHAPE never blurs the focused panel field or the inline label editor (JointJS prevents the
+    // mousedown default). The properties onChange blurs them, but only after this batch opens, and never for a press
+    // on the already-selected shape: the label commit, or a typing batch still open, landed inside this gesture and
+    // one undo reverted the text AND the drag. Blur here, before the batch opens: the pending edit commits as its own
+    // entry (its handler closes over the old cell) and the typing batch closes. The inline editor's overlay sits
+    // outside paper.el, so a press in the textarea itself never reaches this handler.
+    const active = document.activeElement;
+    if (active?.closest?.('#properties-panel, .df-inline-edit')) active.blur();
     history.startBatch();
     _pointerBatchOpen = true;
   };
@@ -283,6 +330,17 @@ export function init(_graph, _paper) {
   setupMultiDrag();
 }
 
+/** Open the context menu from the keyboard (a11y.js: the ContextMenu key or Shift+F10 on the focused canvas): the
+ *  selection's menu at its first element (a link only when no element is selected, since a mixed selection given a
+ *  link showed the link-only menu), or the blank-canvas menu at the canvas centre. Group and Ungroup live only in
+ *  this menu, which used to open only on a right-click or a long-press (review I12). */
+export function openContextMenuFromKeyboard() {
+  const model = getSelectedElements().find((c) => c.isElement()) || graph.getCell([...selectedIds][0]) || null;
+  const r = (model ? paper.findViewByModel(model)?.el : paper.el)?.getBoundingClientRect();
+  if (!r) return;
+  showContextMenu(r.left + r.width / 2, r.top + r.height / 2, model, { keyboard: true });
+}
+
 export function getSelectedIds() { return [...selectedIds]; }
 
 export function getSelectedElements() {
@@ -294,6 +352,18 @@ export function getCount() { return selectedIds.size; }
 export function addToSelection(id) {
   selectedIds.add(id);
   applyVisual(id);
+  notifyChange();
+}
+
+/** Add many cells (or, with `replace`, select exactly them) with ONE notify. Adding them one by one re-ran focus
+ *  dimming and rebuilt the whole multi panel per cell: a 300-shape paste notified 301 times (review I9). */
+export function selectMany(ids, { replace = false } = {}) {
+  if (replace) { clearVisual(); selectedIds.clear(); }
+  for (const id of ids) {
+    if (id == null || selectedIds.has(id)) continue;
+    selectedIds.add(id);
+    applyVisual(id);
+  }
   notifyChange();
 }
 
@@ -360,7 +430,9 @@ export function onChange(cb) { onChangeCallbacks.push(cb); }
  *  clears) dimming against the current selection without needing the
  *  user to reselect. */
 export function refreshDimming() { updateLinkDimming(); }
+let _pruneNotifyPending = false;   // a removed cell's deferred notify (init's graph 'remove'); any notify settles it
 function notifyChange() {
+  _pruneNotifyPending = false;
   updateLinkDimming();
   onChangeCallbacks.forEach(cb => cb(getSelectedIds()));
 }
@@ -794,6 +866,8 @@ function clearVisual() {
 // Multi-element drag — when dragging one selected element, move all others too.
 // Also moves embedded children of selected containers/zones that aren't themselves selected.
 function setupMultiDrag() {
+  // The guides must not snap to or measure the co-moving members; they read the selection on the drag's first move.
+  setSpacingSelectionSource(() => selectedIds);
   let draggedId = null;
   let lastPos = null;
   // True only once a real (non-zero) drag move occurs. A pure Cmd/Ctrl+click arms draggedId (the

@@ -3,12 +3,22 @@
 // bar CRUD). Build via widgets + finishStandardProps (render-core) + the gantt-layout helpers, reading graph +
 // the panel DOM refs + the showProperties dispatch via prctx (add/delete/reorder re-render the panel); never
 // imports the facade. The showProperties() dispatch imports the five render*Props back.
-import * as history from '../history.js?v=1.25.9';
-import { asUndoBatch, prctx } from './context.js?v=1.25.9';
-import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTimelineFor, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.25.9';
-import { localISODate } from '../gantt-scale.js?v=1.25.9';
-import { finishStandardProps } from './render-core.js?v=1.25.9';
-import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, section, toHex } from './widgets.js?v=1.25.9';
+import * as history from '../history.js?v=1.26.1';
+import { asUndoBatch, prctx } from './context.js?v=1.26.1';
+import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTaskListWidth, ganttTimelineFor, growTimelineToFitDates, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.26.1';
+import { axisEndDate, localISODate, periodsThrough } from '../gantt-scale.js?v=1.26.1';
+import { finishStandardProps } from './render-core.js?v=1.26.1';
+import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, getActiveCell, section, toHex, typingBatch, wireColorSwatchDrag } from './widgets.js?v=1.26.1';
+
+// A Schedule date typed in the inspector: set it, then grow the timeline to cover it (past either end), as a drag past
+// the right edge does. One undo step with the date (review L5). Left growth reaches only the date typed here (a Start,
+// a milestone or marker date), never another element's. `after` runs once the write is done.
+const setGanttDate = (cell, prop, after) => asUndoBatch((v) => {
+  cell.set(prop, v);
+  const tl = ganttTimelineFor(cell);
+  if (tl) growTimelineToFitDates(tl, { leftTo: prop === 'endDate' ? null : v });
+  after?.();
+});
 
 export function renderGanttTaskProps(cell) {
   // Content
@@ -43,7 +53,10 @@ export function renderGanttTaskProps(cell) {
       f.appendChild(dl);
       input.setAttribute('list', dl.id);
     }
-    input.addEventListener('input', asUndoBatch(() => { cell.set('assignee', input.value); cell.attr('assigneeLabel/text', input.value); }));
+    // One undo step per typing run (asUndoBatch per `input` event was one per keystroke - review J2-7).
+    const typing = typingBatch();
+    input.addEventListener('input', () => { typing.touch(); cell.set('assignee', input.value); cell.attr('assigneeLabel/text', input.value); });
+    input.addEventListener('blur', typing.close);
     f.appendChild(input);
   }
 
@@ -51,8 +64,20 @@ export function renderGanttTaskProps(cell) {
   // to its column. A bar with no dates stays where it's dragged (back-compat). Bind a task to a timeline by dropping
   // it onto one (or by having a single timeline in the diagram).
   const schedule = section(prctx.bodyEl, 'Schedule');
-  const startHandle = addDate(schedule, 'Start Date', cell.get('startDate') || '', v => cell.set('startDate', v));
-  const endHandle = addDate(schedule, 'End Date', cell.get('endDate') || '', v => cell.set('endDate', v));
+  // Review L8: an End typed before its Start is saved as typed (fix either field next), but both fields say so.
+  const flagSpan = () => {
+    const s = cell.get('startDate'), e = cell.get('endDate');
+    const bad = !!(s && e && e < s);
+    for (const h of [startHandle, endHandle]) {
+      // Its own class: addDate's 400 ms reject flash removes --invalid, which wiped this outline on one typo.
+      h.input.classList.toggle('df-properties__input--span-invalid', bad);
+      if (bad) { h.input.setAttribute('aria-invalid', 'true'); h.input.title = 'End is before Start'; }
+      else { h.input.removeAttribute('aria-invalid'); h.input.removeAttribute('title'); }
+    }
+  };
+  const startHandle = addDate(schedule, 'Start Date', cell.get('startDate') || '', setGanttDate(cell, 'startDate', flagSpan));
+  const endHandle = addDate(schedule, 'End Date', cell.get('endDate') || '', setGanttDate(cell, 'endDate', flagSpan));
+  flagSpan();
   prctx.bindLiveGanttDates(cell, [{ prop: 'startDate', handle: startHandle }, { prop: 'endDate', handle: endHandle }]);   // item 1: reflect drag/resize live (on mouse-up)
 
   // Appearance — canonical: Fill → Border → typography → custom features
@@ -84,7 +109,7 @@ export function renderGanttMilestoneProps(cell) {
     cell.attr('label/text', v);
     prctx.titleEl.textContent = v || '';
   });
-  prctx.bindLiveGanttDates(cell, [{ prop: 'milestoneDate', handle: addDate(content, 'Date', cell.get('milestoneDate') || '', v => cell.set('milestoneDate', v)) }]);   // item 1: live on drag
+  prctx.bindLiveGanttDates(cell, [{ prop: 'milestoneDate', handle: addDate(content, 'Date', cell.get('milestoneDate') || '', setGanttDate(cell, 'milestoneDate')) }]);   // item 1: live on drag
 
   // Appearance
   const appearance = section(prctx.bodyEl, 'Appearance');
@@ -103,7 +128,7 @@ export function renderGanttMarkerProps(cell) {
     prctx.titleEl.textContent = v || '';
   });
   // Phase 6: a date snaps the triangle to that column (data-first, like a milestone). Blank = free manual position.
-  prctx.bindLiveGanttDates(cell, [{ prop: 'markerDate', handle: addDate(content, 'Date', cell.get('markerDate') || '', v => cell.set('markerDate', v)) }]);   // item 1: live on drag
+  prctx.bindLiveGanttDates(cell, [{ prop: 'markerDate', handle: addDate(content, 'Date', cell.get('markerDate') || '', setGanttDate(cell, 'markerDate')) }]);   // item 1: live on drag
 
   // Direction toggle
   const dirRow = document.createElement('div');
@@ -129,20 +154,22 @@ export function renderGanttMarkerProps(cell) {
     downBtn.style.opacity = down ? '1' : '0.55';
   };
   applyDirStyle(isDown);
-  upBtn.addEventListener('click', () => {
+  // One batch per click: four separate writes were four undo steps, and the first undo flipped `pointDown` back while
+  // the triangle still pointed the new way (review J2-7).
+  upBtn.addEventListener('click', asUndoBatch(() => {
     cell.set('pointDown', false);
     cell.attr('body/refPoints', '0,1 0.5,0 1,1');
     cell.attr('label/y', 'calc(h + 4)');
     cell.attr('label/textVerticalAnchor', 'top');
     applyDirStyle(false);
-  });
-  downBtn.addEventListener('click', () => {
+  }));
+  downBtn.addEventListener('click', asUndoBatch(() => {
     cell.set('pointDown', true);
     cell.attr('body/refPoints', '0,0 1,0 0.5,1');
     cell.attr('label/y', -4);
     cell.attr('label/textVerticalAnchor', 'bottom');
     applyDirStyle(true);
-  });
+  }));
 
   dirRow.appendChild(upBtn);
   dirRow.appendChild(downBtn);
@@ -167,6 +194,9 @@ export function renderGanttMarkerProps(cell) {
 export function renderGanttTimelineProps(cell) {
   const viewMode = cell.get('viewMode') || 'week';
   const periodLabel = viewMode === 'day' ? 'days' : viewMode === 'week' ? 'weeks' : 'months';
+  // A date or Periods field commits on change, which can fire after this timeline is no longer selected (a blank
+  // click clears the selection first). Re-render only while it is, or the panel re-opened empty (review J1-6).
+  const rerender = () => { if (getActiveCell() === cell) prctx.showProperties(cell); };
 
   // Title & Description
   const titleSec = section(prctx.bodyEl, 'Content');
@@ -178,34 +208,19 @@ export function renderGanttTimelineProps(cell) {
     cell.set('timelineDescription', v);
   });
 
-  // Helper: calculate end date from start + periods
-  function calcEndDate(startStr, periods, mode) {
-    if (!startStr) return '';
-    const d = new Date(startStr + 'T00:00:00');
-    if (isNaN(d.getTime())) return '';
-    if (mode === 'day') {
-      d.setDate(d.getDate() + periods);
-    } else if (mode === 'week') {
-      d.setDate(d.getDate() + periods * 7);
-    } else {
-      d.setMonth(d.getMonth() + periods);
-    }
-    return localISODate(d);   // LOCAL day - toISOString() is the UTC day, one early in UTC+ zones
-  }
-
-  // Helper: calculate periods from start to end
-  function calcPeriods(startStr, endStr, mode) {
+  // End Date and Periods follow the columns the view draws: counted from the SNAPPED origin (week -> weekStartDay,
+  // month -> the 1st), a partial period rounded up, so the End Date is always on the axis (review L2). The End Date
+  // is INCLUSIVE, the last day the axis draws (owner call 2026-10-15), so a Periods edit and an End Date edit
+  // round-trip.
+  const axisOf = (startStr, periods) => ({ startDate: startStr, numPeriods: periods, viewMode: cell.get('viewMode') || 'week', weekStartDay: cell.get('weekStartDay') });
+  const calcEndDate = (startStr, periods) => axisEndDate(axisOf(startStr, periods)) || '';
+  function calcPeriods(startStr, endStr) {
     if (!startStr || !endStr) return null;
     const s = new Date(startStr + 'T00:00:00');
     const e = new Date(endStr + 'T00:00:00');
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return null;
-    if (mode === 'day') {
-      return Math.max(1, Math.ceil((e - s) / 86400000) + 1);
-    } else if (mode === 'week') {
-      return Math.max(1, Math.ceil((e - s) / (7 * 86400000)));
-    } else {
-      return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()));
-    }
+    const p = periodsThrough(axisOf(startStr), endStr);
+    return p == null ? null : Math.max(1, p);
   }
 
   // Timeline settings
@@ -218,41 +233,46 @@ export function renderGanttTimelineProps(cell) {
     history.startBatch();
     try {
       cell.set('startDate', v);
-      const end = calcEndDate(v, cell.get('numPeriods') || 12, cell.get('viewMode') || 'week');
+      const end = calcEndDate(v, cell.get('numPeriods') || 12);
       if (end) cell.set('endDate', end);
     } finally { history.endBatch(); }
-    prctx.showProperties(cell);
+    rerender();
   });
 
-  // End Date — changing it recalculates periods and resizes to keep column width constant
-  addDate(content, 'End Date', cell.get('endDate') || calcEndDate(cell.get('startDate'), cell.get('numPeriods') || 12, viewMode), v => {
+  // End Date — changing it recalculates periods and resizes to keep column width constant. The task list width is
+  // the view's own (ganttTaskListWidth): the legacy tasks[] test read 0 on every modern timeline, so the column width
+  // took in the 200 px panel and a Periods 3 edit drew 13 px columns, or ran the axis backwards (review L2).
+  // It stores the last day the axis draws, not the date typed: the 2-period minimum, the 104 maximum and a mid-period
+  // date all move it. An End before the Start is refused with the invalid flash (review S4-11).
+  addDate(content, 'End Date', cell.get('endDate') || calcEndDate(cell.get('startDate'), cell.get('numPeriods') || 12), v => {
+    const start = cell.get('startDate');
+    const p = calcPeriods(start, v);
+    if (!p && start) return false;
     history.startBatch();
     try {
-    cell.set('endDate', v);
-    const oldPeriods = cell.get('numPeriods') || 12;
-    const taskListW = (cell.get('tasks') || []).length ? (cell.get('taskListWidth') || 200) : 0;
-    const currentWidth = cell.size().width;
-    const timelineW = currentWidth - taskListW;
-    const colW = timelineW / oldPeriods;
-    const p = calcPeriods(cell.get('startDate'), v, cell.get('viewMode') || 'week');
-    if (p) {
-      const clamped = Math.max(2, Math.min(104, p));
-      cell.set('numPeriods', clamped);
-      const newWidth = Math.round(taskListW + colW * clamped);
-      cell.resize(newWidth, cell.size().height);
-    }
+      if (p) {
+        const oldPeriods = cell.get('numPeriods') || 12;
+        const taskListW = ganttTaskListWidth(cell);
+        const colW = (cell.size().width - taskListW) / oldPeriods;
+        const clamped = Math.max(2, Math.min(104, p));
+        cell.set('numPeriods', clamped);
+        cell.resize(Math.round(taskListW + colW * clamped), cell.size().height);
+        cell.set('endDate', calcEndDate(start, clamped) || v);
+      } else {
+        cell.set('endDate', v);   // no Start yet: nothing to measure from, keep the date as typed
+      }
     } finally { history.endBatch(); }
-    prctx.showProperties(cell);
+    rerender();
   });
 
   // Phase 6: Today line — a date draws a full-height dashed line at that column (blank = no line).
-  addDate(content, 'Today line', cell.get('todayDate') || '', v => cell.set('todayDate', v));
+  addDate(content, 'Today line', cell.get('todayDate') || '', v => cell.set('todayDate', v), { allowEmpty: true });
 
   // Periods — number input with non-editable unit suffix
   addNumberWithSuffix(content, 'Periods', cell.get('numPeriods') || 12, periodLabel, v => {
     const clamped = Math.max(2, Math.min(104, v));
     const oldPeriods = cell.get('numPeriods') || 12;
-    const taskListW = (cell.get('tasks') || []).length ? (cell.get('taskListWidth') || 200) : 0;
+    const taskListW = ganttTaskListWidth(cell);
     const currentWidth = cell.size().width;
     const timelineW = currentWidth - taskListW;
     const colW = timelineW / oldPeriods;
@@ -262,10 +282,10 @@ export function renderGanttTimelineProps(cell) {
     try {
       cell.set('numPeriods', clamped);
       cell.resize(newWidth, cell.size().height);
-      const end = calcEndDate(cell.get('startDate'), clamped, cell.get('viewMode') || 'week');
+      const end = calcEndDate(cell.get('startDate'), clamped);
       if (end) cell.set('endDate', end);
     } finally { history.endBatch(); }
-    prctx.showProperties(cell);
+    rerender();
   });
 
   // ── Tasks section ──
@@ -337,10 +357,14 @@ export function renderBarTaskEditor(parent, cell) {
   const listEl = document.createElement('div');
   listEl.className = 'df-timeline-task-list';
 
-  // Drop a dragged BAR (its index in timelineBars, carried in the drag data) onto this group → set its groupId.
-  function assignBarToGroup(fromIdx, groupId) {
-    const bars = timelineBars(cell);
-    const moved = bars[Number(fromIdx)];
+  // A bar row's drag data is "bar:<id>". It used to be the row INDEX, but rows are numbered in the grouped layout
+  // order while the handlers indexed the order-sorted bar list; once `order` interleaved across groups, a drag moved
+  // or regrouped a different bar (review J2-5). The prefix also rejects a drop of dragged text or a file (J2-8).
+  const barFromDrag = (data) => (data.startsWith('bar:') ? timelineBars(cell).find(b => b.id === data.slice(4)) : null);
+
+  // Drop a dragged BAR onto this group → set its groupId.
+  function assignBarToGroup(data, groupId) {
+    const moved = barFromDrag(data);
     if (!moved || (moved.get('groupId') || null) === (groupId || null)) return;
     history.startBatch();
     try { moved.set('groupId', groupId); resequenceGanttOrders(cell); } finally { history.endBatch(); }
@@ -364,7 +388,7 @@ export function renderBarTaskEditor(parent, cell) {
     rebuild();
   }
 
-  // A drag handle that carries `dragData` (a bar index, or "group:<id>"); shared by group + bar rows.
+  // A drag handle that carries `dragData` ("group:<id>"); the group rows use it, the bar rows build their own.
   const DRAG_SVG = '<svg viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
   function makeDragHandle(dragData, row) {
     const h = document.createElement('span');
@@ -388,7 +412,7 @@ export function renderBarTaskEditor(parent, cell) {
       row.classList.remove('df-timeline-task-row--drag-over');
       const data = evt.dataTransfer.getData('text/plain');
       if (data.startsWith('group:')) reorderGroup(data.slice(6), group.id);
-      else if (data !== '') assignBarToGroup(data, group.id);
+      else assignBarToGroup(data, group.id);
     });
 
     // Drag handle → reorder this group among the groups (issue 5).
@@ -399,22 +423,27 @@ export function renderBarTaskEditor(parent, cell) {
     colorBtn.type = 'color';
     colorBtn.className = 'df-timeline-task-color';
     colorBtn.value = toHex(group.color || '#5B5FC7');
-    colorBtn.addEventListener('input', asUndoBatch(() => {
-      const gs = (cell.get('groups') || []).map(g => g.id === group.id ? { ...g, color: colorBtn.value } : g);
+    // A colour drag is ONE undo step (wireColorSwatchDrag, as addColor does). asUndoBatch per `input` event made one
+    // step per event, so a few seconds of dragging pushed the earlier history off the stack (review J2-7).
+    wireColorSwatchDrag(colorBtn, (v) => {
+      const gs = (cell.get('groups') || []).map(g => g.id === group.id ? { ...g, color: v } : g);
       cell.set('groups', gs);
-    }));
+    });
     row.appendChild(colorBtn);
 
-    // Label → groups[i].label.
+    // Label → groups[i].label. One undo step per typing run.
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.className = 'df-properties__input df-timeline-task-label';
     labelInput.value = group.label || '';
     labelInput.placeholder = 'Group name';
-    labelInput.addEventListener('input', asUndoBatch(() => {
+    const groupTyping = typingBatch();
+    labelInput.addEventListener('input', () => {
+      groupTyping.touch();
       const gs = (cell.get('groups') || []).map(g => g.id === group.id ? { ...g, label: labelInput.value } : g);
       cell.set('groups', gs);
-    }));
+    });
+    labelInput.addEventListener('blur', groupTyping.close);
     row.appendChild(labelInput);
 
     // Delete → ORPHAN the group's bars to ungrouped (keep the scheduled cells), then drop the group.
@@ -441,14 +470,14 @@ export function renderBarTaskEditor(parent, cell) {
     row.className = 'df-timeline-task-row df-timeline-task-row--task';
     row.dataset.index = i;
 
-    // Drag handle → reorder among bars (rewrite `order` + re-layout); the drag data is the bar index.
+    // Drag handle → reorder among bars (rewrite `order` + re-layout); the drag data is "bar:<id>" (barFromDrag).
     const dragHandle = document.createElement('span');
     dragHandle.className = 'df-timeline-task-drag';
     dragHandle.innerHTML = '<svg viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>';
     dragHandle.draggable = true;
     dragHandle.addEventListener('dragstart', (evt) => {
       evt.dataTransfer.effectAllowed = 'move';
-      evt.dataTransfer.setData('text/plain', String(i));
+      evt.dataTransfer.setData('text/plain', 'bar:' + bar.id);
       row.style.opacity = '0.4';
     });
     dragHandle.addEventListener('dragend', () => {
@@ -464,16 +493,29 @@ export function renderBarTaskEditor(parent, cell) {
       row.classList.remove('df-timeline-task-row--drag-over');
       const data = evt.dataTransfer.getData('text/plain');
       if (data.startsWith('group:')) { reorderGroup(data.slice(6), bar.get('groupId') || null); return; }   // group → before this task's group
-      const fromIdx = parseInt(data, 10);
-      const toIdx = i;
-      if (isNaN(fromIdx) || fromIdx === toIdx) return;
-      const ordered = timelineBars(cell);
+      const from = barFromDrag(data);
+      // The bars in ROW order (the grouped layout the rows are numbered by), so the indexes match what the user sees.
+      const barRows = () => ganttRowLayout(cell).filter(r => r.kind === 'bar');
+      const rowBars = () => barRows().map(r => r.bar);
+      const ordered = rowBars();
+      const fromIdx = from ? ordered.indexOf(from) : -1;
+      const toIdx = ordered.indexOf(bar);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+      // The group the drop target is drawn in (null = the ungrouped tail, which a dangling groupId falls into too).
+      const groupOf = (b) => barRows().find(r => r.bar === b)?.groupId ?? null;
+      const toGroup = groupOf(bar);
       const [moved] = ordered.splice(fromIdx, 1);
       ordered.splice(toIdx > fromIdx ? toIdx : toIdx + 1, 0, moved);   // insert AFTER the drop target (matches the below-indicator)
       history.startBatch();
       try {
+        // A drop on a bar in another group joins that group, as the canvas drag does (ganttDropTarget). The bar
+        // view then takes the group's colour, in this same undo step (review J2-5, owner call 2026-10-15).
+        if (groupOf(moved) !== toGroup) moved.set('groupId', toGroup);
         ordered.forEach((b, idx) => { if (b.get('order') !== idx) b.set('order', idx); });
-        ordered.forEach(b => applyGanttGeometry(b, cell));
+        // Renumber from the grouped layout so `order` stays contiguous per group, the shape every other reader assumes.
+        const seq = rowBars();
+        seq.forEach((b, idx) => { if (b.get('order') !== idx) b.set('order', idx); });
+        seq.forEach(b => applyGanttGeometry(b, cell));
       } finally { history.endBatch(); }
       rebuild();
     });
@@ -483,16 +525,19 @@ export function renderBarTaskEditor(parent, cell) {
     colorBtn.type = 'color';
     colorBtn.className = 'df-timeline-task-color';
     colorBtn.value = toHex(bar.attr('progressBar/fill') || '#1D73C9');
-    colorBtn.addEventListener('input', asUndoBatch(() => { bar.attr('progressBar/fill', colorBtn.value); bar.set('colorManual', true); }));
+    wireColorSwatchDrag(colorBtn, (v) => { bar.attr('progressBar/fill', v); bar.set('colorManual', true); });   // one step per drag
     row.appendChild(colorBtn);
 
-    // Label → taskLabel + the rendered on-bar text. Don't rebuild on input (keeps focus while typing).
+    // Label → taskLabel + the rendered on-bar text. Don't rebuild on input (keeps focus while typing). One undo step
+    // per typing run.
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.className = 'df-properties__input df-timeline-task-label';
     labelInput.value = bar.get('taskLabel') || bar.attr('label/text') || '';
     labelInput.placeholder = 'Task name';
-    labelInput.addEventListener('input', asUndoBatch(() => { bar.set('taskLabel', labelInput.value); bar.attr('label/text', labelInput.value); }));
+    const barTyping = typingBatch();
+    labelInput.addEventListener('input', () => { barTyping.touch(); bar.set('taskLabel', labelInput.value); bar.attr('label/text', labelInput.value); });
+    labelInput.addEventListener('blur', barTyping.close);
     row.appendChild(labelInput);
 
     // Delete → remove the bar CELL + close the order gap.
@@ -544,13 +589,11 @@ export function renderBarTaskEditor(parent, cell) {
     addTaskBtn.textContent = '+ Task';
     addTaskBtn.addEventListener('click', () => {
       const order = timelineBars(cell).length;
-      const pad = (n) => String(n).padStart(2, '0');
-      const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      const startStr = cell.get('startDate') || isoOf(new Date());
+      const startStr = cell.get('startDate') || localISODate(new Date());
       const ed = new Date(startStr + 'T00:00:00'); ed.setDate(ed.getDate() + 7);
       history.startBatch();
       try {
-        const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: isoOf(ed), attrs: { label: { text: 'New Task' } } });
+        const bar = new joint.shapes.sf.GanttTask({ order, groupId: null, taskLabel: 'New Task', startDate: startStr, endDate: localISODate(ed), attrs: { label: { text: 'New Task' } } });
         prctx.graph.addCell(bar);
         cell.embed(bar);
         if (!applyGanttGeometry(bar, cell)) bar.position(cell.position().x + (cell.get('taskListWidth') || 200), orderToY(cell, order), { gantt: true });

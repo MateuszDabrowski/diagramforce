@@ -4,18 +4,19 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.25.9** — matches the app's current `appVersion`; set `"appVersion": "1.25.9"` in generated files.
+> **Spec snapshot: v1.26.1** — matches the app's current `appVersion`; set `"appVersion": "1.26.1"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
-> issues the loader heals or **silently drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped
-> on load), a link pointing at a missing cell id (dropped), duplicate cell ids, a missing/wrong `diagramType`, and a
-> type-specific shape used in the wrong diagram type. It exits non-zero on errors, so it doubles as a CI gate. The CLI
+> issues the loader heals or **drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped on
+> load), a link pointing at a missing cell id (dropped), duplicate cell ids, a missing/wrong `diagramType`, and a
+> type-specific shape used in the wrong diagram type. The app's load warning gives only a count of what it skipped.
+> The validator names each one. It exits non-zero on errors, so it doubles as a CI gate. The CLI
 > shares the **same shape allowlist** the app loads with (`js/persistence/diagram-schema.js`), so it can't drift.
 
 > **Agent self-correction loop.** When you generate a diagram programmatically (e.g. from an LLM CLI like Claude
 > Code), don't stop at "it parsed as JSON". Run the loop: **generate -> `validate-diagram.mjs file.json` -> fix every
 > ERROR and re-run until the file is clean -> then open it in the app (Load > Paste, or Load > File) and eyeball the render.**
-> ERRORS mean cells or links will silently vanish on load; WARNINGS are quiet-degrade traps (a shape that loads but
+> ERRORS mean cells or links will vanish on load; WARNINGS are quiet-degrade traps (a shape that loads but
 > renders wrong - a one-sided embed, a name in the wrong field, a stale field-port id, a link with no router). The
 > validator proves the diagram will **load intact** - it does **not** judge whether the layout **reads well** (spacing,
 > overlaps, flow), so the final visual pass is on you: fix ERRORS, then WARNINGS, then look at it.
@@ -25,7 +26,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -48,7 +49,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.25.9"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
+| `appVersion` | string | Yes | Semver string, currently `"1.26.1"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
@@ -63,8 +64,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.9", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.9" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.1", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.1" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -97,20 +98,26 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.25.9", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.1", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.25.9" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.1" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
-> recreates the group(s) and opens each diagram as a **grouped tab** (group names
-> deduped, tab names deduped) — an intentional "bring my whole project back as a
-> working set" — whereas a generic bundle (no `kind`) still lands its diagrams in
-> **browser saves**. A generic Export-Manager / Select-All export passes no
-> `groups`, so the `kind`/`groups`/`group` keys never appear there. A group
-> bundle opened in a **pre-1.16.0** build degrades gracefully: the older importer
-> ignores `kind`/`groups` and the diagrams simply become browser saves.
+> recreates the group(s) and opens each diagram TAGGED with a group name as a
+> **grouped tab** (group names deduped, tab names deduped) — an intentional "bring
+> my whole project back as a working set" — whereas a generic bundle (no `kind`)
+> still lands its diagrams in **browser saves**. A full backup (**Back up now**,
+> `df_backup_<date>.json`) also carries `kind`/`groups` when any tab is grouped,
+> and `"backup": true`;
+> its untagged entries (ungrouped tabs, closed browser saves) land in browser
+> saves like a generic bundle, and grouped diagrams already open are skipped. A
+> backup entry from a browser save may carry `group` as an OBJECT
+> (`{ "name", "icon", "color" }`, the group it was closed from): that is not a tag,
+> it is kept on the save. A group bundle opened in a **pre-1.16.0** build degrades
+> gracefully: the older importer ignores `kind`/`groups` and the diagrams simply
+> become browser saves.
 
 > **Opening this JSON programmatically.** Another web app can open a diagram straight into Diagramforce
 > in a new tab (no backend, no URL size limit) with an **"Open in Diagramforce"** button — it hands this
@@ -125,7 +132,7 @@
 | `architecture` | System architecture, integrations | SimpleNode, Container, Zone, Note, TextLabel, Image, Placeholder |
 | `process` | BPMN workflows, flowcharts | BpmnEvent, BpmnTask, BpmnGateway, BpmnSubprocess, BpmnLoop, BpmnPool, BpmnDataObject, `sf.Flow*` flowchart shapes (not the `df.Flow*` Salesforce Flow elements), Annotation |
 | `datamodel` | ERDs, Salesforce object models (pure ER) | DataObject |
-| `datamapping` | Data Cloud / Data 360 field mapping (mapping mode always on — all-field ports, Category, source→DMO mapping links) | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone` with `layerStage`: `source`/`datastream`/`dlo`/`dmo`/`activation`) |
+| `datamapping` | Field-level mapping and lineage: which source fields feed each target field, through which transform (ETL jobs, warehouse lineage such as Raw → Staging → Mart, and Salesforce Data Cloud / Data 360, its main case). Mapping mode is always on: every field has ports, links style as mappings | DataObject + mapping links (`linkKind:"mapping"`) + labelled **layer Zones** (`sf.Zone`: a generic layer with no `layerStage`, or a Data Cloud stage `source`/`datastream`/`dlo`/`dmo`/`activation`) |
 | `org` | Org charts, team structures, RACI workflows | OrgPerson, Container (Team), Zone (Department), Task, TaskGroup (RACI section) |
 | `gantt` | Project timelines | GanttTimeline, GanttTask, GanttMilestone, GanttGroup, GanttMarker |
 | `sequence` | UML sequence diagrams, message flows | SequenceParticipant, SequenceActor, SequenceActivation, SequenceFragment |
@@ -165,7 +172,7 @@ as a convenience when you're working in a Salesforce context; ignore it for non-
 | "How does a specific **Salesforce Flow** work - its screens, decisions, record operations, and elements?" | `flow` | Interaction / Process and Flow (Salesforce Flow) |
 | "In what time-order do systems or actors message each other?" | `sequence` | Interaction / Process and Flow (UML sequence) |
 | "What objects / fields exist and how are they related?" (schema, keys, cardinality) | `datamodel` | Data Model (ERD) |
-| "How do source fields map into Data Cloud DLOs / DMOs?" | `datamapping` | Data Model + Solution Architecture (Data Cloud) |
+| "Which source fields feed each target field, and through which transform?" (ETL or warehouse lineage, Data Cloud DLO / DMO mappings) | `datamapping` | Data Model; + Solution Architecture for Data Cloud |
 | "What gets delivered when - the plan / roadmap over time?" | `gantt` | Roadmap |
 
 ### Don't confuse these (the mis-picks that produce a wrong-looking diagram)
@@ -173,10 +180,10 @@ as a convenience when you're working in a Salesforce context; ignore it for non-
 - ✗ Drawing **people or teams** (two teams on a project, an org chart, who-does-what, reporting lines) as boxes-and-arrows in `architecture` → ✓ that is an **`org`** diagram. `architecture` is for SYSTEMS and integrations, never people. Use `sf.OrgPerson`, `sf.Container` (Team), and `sf.Task` + `sf.TaskGroup` for RACI. *(In Salesforce's framework this is the Role Hierarchy diagram - people are not free-floating actors in a system landscape.)*
 - ✗ Using `architecture` for a **step-by-step process** (an approval, an onboarding flow) → ✓ `process`. When the message is the ORDER of steps, use BPMN events / tasks / gateways, and number the steps.
 - ✗ Using `process` (generic BPMN) to document an **actual Salesforce Flow** → ✓ `flow`. `process` is for GENERIC business processes / non-Salesforce flowcharts; `flow` is specifically for documenting a Salesforce Flow with its real element vocabulary (Screen, Decision, Assignment, Loop, Get/Create/Update/Delete Records, Subflow, …). When the reader needs to see *this org's flow* - screen flow, record-triggered, or a marketing/campaign flow - use `flow` and its `df.Flow*` elements.
-- ✗ Using `architecture` (or any generic boxes) for a **data schema** (objects, fields, keys) → ✓ `datamodel`. You need field rows + crow's-foot cardinality, which only `sf.DataObject` provides.
+- ✗ Using `architecture` (or any generic boxes) for a **data schema** (objects, fields, keys) → ✓ `datamodel`. You need field rows + crow's-foot cardinality, which only `sf.DataObject` provides. For **field lineage** (which field feeds which) the same cards go in a `datamapping` diagram (next rule).
 - ✗ Using `process` (one BPMN pool) when the point is **who messages whom, in what order**, across systems → ✓ `sequence`. Lifelines + ordered messages read an interaction better than a flowchart.
 - ✗ Drawing a **project plan / timeline** as a flowchart → ✓ `gantt`. Dates, dependencies, and a time axis are the message (Salesforce's Roadmap).
-- ✗ Reaching for `datamapping` for **any** field mapping (e.g. a Salesforce → Snowflake ETL, or any non-Data-Cloud mapping) → ✓ `datamapping` is **Data Cloud-specific** (its layers are Source / DLO / DMO / Activation). For a general source→target field relationship, model it in `datamodel` with a relationship link between objects.
+- ✗ Drawing **field lineage or an ETL mapping** (a Salesforce → Snowflake job, a warehouse's Raw → Staging → Mart, a SQL view's sources) in `datamodel` → ✓ `datamapping`. It is the field-level mapping type for ANY source → target pipeline, with Data Cloud as its main case, not its limit: one mapping link per source field → target field, `mappingType: "Formula"` plus an `expressionRule` for the transform, and a Table view that lists every source → target row. Use generic layer Zones (`sf.Zone` with no `layerStage`) for non-Data-Cloud layers. `datamodel` has none of that: no field-to-field mapping links, no transform type, no expression. Keep `datamodel` for entity relationships (PK / FK, cardinality), and never put Data Cloud-only settings (`layerStage`, `category`, the `ST` / `BT` / `CI` types) on a non-Data-Cloud lineage. See [Generating Data Mapping and Lineage Diagrams](#generating-data-mapping-and-lineage-diagrams-datamapping).
 
 > **One diagram, one message.** Scope ruthlessly - exclude anything not required to convey the message (a principle
 > Salesforce's framework states too). If a request spans two questions (e.g. the systems AND the rollout plan),
@@ -237,10 +244,10 @@ Each rule is `✗ wrong → ✓ right`.
 - ✗ a relationship between two DataObjects with NO ER marker on either end (an omitted `targetMarker` becomes a plain arrow) → ✓ set BOTH `sourceMarker` and `targetMarker` to Marker Types ER paths; a marker-less link loads and draws, but carries no cardinality - the Table view reads an em-dash (`validate-diagram.mjs` warns).
 - ✗ tagging a plain object-to-object relationship with `linkKind:"mapping"` → ✓ a pure ER relationship link carries NO `linkKind` - its absence is what marks it.
 
-**`datamapping`** (additive - see the Data Cloud mapping checklist below)
-- ✗ `category` omitted, nested in `attrs`, or keyed `objectCategory` → ✓ top-level `"category": "Profile"`|`"Engagement"`|`"Other"` on each DLO/DMO cell.
-- ✗ a mapping link with explicit `router`/`connector` or ER markers, or no `linkKind` → ✓ `linkKind:"mapping"` + a `mappingType` from `Standard`/`Formula`/`Streaming Transform`/`Batch Transform`/`Calculated Insight`; the loader applies `sfMappingRouter`/`sfMappingConnector` **and the amber 1 px line** itself (v1.22.0).
-- ✗ a layer as `sf.Container`, or `layerStage` on the DataObject → ✓ each layer is an `sf.Zone` with top-level `layerStage` in `source`/`datastream`/`dlo`/`dmo`/`activation`.
+**`datamapping`** (additive - see the [mapping checklist](#8-validation-checklist-avoid-the-common-mistakes) below)
+- ✗ a mapping link with explicit `router`/`connector` or ER markers, or no `linkKind` → ✓ `linkKind:"mapping"` + a `mappingType`: `Standard` or `Formula` in any pipeline, and also `Streaming Transform`/`Batch Transform`/`Calculated Insight` in Data Cloud; the loader applies `sfMappingRouter`/`sfMappingConnector` **and the amber 1 px line** itself (v1.22.0).
+- ✗ a layer as `sf.Container`, or `layerStage` on the DataObject → ✓ each layer is an `sf.Zone` that embeds its cards. A Data Cloud stage carries top-level `layerStage` in `source`/`datastream`/`dlo`/`dmo`/`activation`; any other layer (Raw, Staging, Mart) carries NO `layerStage`. An invented value (`"raw"`, `"bronze"`) does nothing a generic layer does not.
+- ✗ (Data Cloud) `category` omitted on a DLO / DMO, nested in `attrs`, or keyed `objectCategory` → ✓ top-level `"category": "Profile"`|`"Engagement"`|`"Other"` on each DLO/DMO cell. Source cards, Data Stream cards and every card of a non-Data-Cloud lineage omit it.
 
 **`org`**
 - ✗ name/title in `attrs` (`nameLabel`/`positionLabel`) → ✓ top-level `personName` and `jobTitle` (the prop is `jobTitle`, NOT `position`/`title`/`role`); the view overwrites the attrs from the props every render.
@@ -367,9 +374,9 @@ Links connect two elements via ports:
 | `vertices` | No | Array of `{ "x": n, "y": n }` waypoints for manual routing |
 | `labels` | No | Array of label objects (see below) |
 | `lineStyle` | No | Dashed/dotted dash pattern as a raw SVG `stroke-dasharray` string (`"8 4"` dashed, `"2 4"` dotted, `"6 4"` for sequence replies). Stored as a **top-level cell property** — NOT `attrs.line.strokeDasharray`. Rendered as a bg-coloured overlay clone because Safari leaks `stroke-dasharray` into `<marker>` content. Omitted / `null` means solid. |
-| `linkKind` | No | `"mapping"` marks a Data Cloud source→DMO field mapping; `"ganttDep"` a Gantt dependency. Top-level cell property; absent on an ER relationship. Set the prop and nothing else: the loader applies the mapping look (amber `#A06F03`, 1 px, one arrow, its own field-port routing) or the dependency look. |
-| `mappingType` | No | Data Cloud transform classification of a mapping link (v1.15.0): one of `"Standard"` (direct copy, the default applied to a fresh mapping), `"Formula"`, `"Streaming Transform"`, `"Batch Transform"`, or `"Calculated Insight"`. Top-level cell property, authored via the link inspector's **Mapping type** picklist; surfaced in the table view's **Mapping Type** column. A **non-Standard** value renders an outlined **monospace** code token (`F` / `ST` / `BT` / `CI`, tinted to the connector colour) as a link label on the target stub (see Link Labels); **Standard renders no token**. `migrateLinks` re-syncs tokens on load. |
-| `expressionRule` | No | The transform **expression / rule** note for a non-Standard mapping link (v1.15.0; was briefly `mappingLabel` pre-release, still read as a fallback). Top-level cell property, authored via the link inspector's progressively-disclosed **Expression / rules** field (shown whenever `mappingType` ≠ `"Standard"`); surfaced in the table view's **Expression / Rule** column (empty ⇒ dimmed em-dash). Distinct from the link's visual `labels`. |
+| `linkKind` | No | `"mapping"` marks a field-level mapping (source field → target field, in any `datamapping` pipeline); `"ganttDep"` a Gantt dependency. Top-level cell property; absent on an ER relationship. Set the prop and nothing else: the loader applies the mapping look (amber `#A06F03`, 1 px, one arrow, its own field-port routing) or the dependency look. |
+| `mappingType` | No | Transform classification of a mapping link (v1.15.0): `"Standard"` (direct copy, the default applied to a fresh mapping) or `"Formula"` (an expression: SQL, a Data Cloud formula, any transform) in any pipeline, plus the Data Cloud-only `"Streaming Transform"`, `"Batch Transform"` and `"Calculated Insight"`. The Table view reads any other value as `Standard`, and it draws no badge. Top-level cell property, authored via the link inspector's **Mapping type** picklist; surfaced in the table view's **Mapping Type** column. A **non-Standard** value renders an outlined **monospace** code token (`F` / `ST` / `BT` / `CI`, tinted to the connector colour) as a link label on the target stub (see Link Labels); **Standard renders no token**. `migrateLinks` re-syncs tokens on load. |
+| `expressionRule` | No | The transform **expression / rule** note for a non-Standard mapping link (v1.15.0; was briefly `mappingLabel` pre-release, still read as a fallback). Top-level cell property, authored via the link inspector's progressively-disclosed **Expression / rules** field (shown whenever `mappingType` ≠ `"Standard"`); surfaced in the table view's **Expression / Rule** column (empty shows a dimmed dash) and in the badge's hover tooltip. Distinct from the link's visual `labels`. Switching a link to **Relationship** keeps both props, so switching back restores them. |
 | `connectionFrequency` | No | Integration **frequency** for an Architecture connector (v1.15.0): a free-text cadence string (e.g. `"Real-time"`, `"Every 15 mins"`, `"Nightly"`). Top-level cell property, authored via the link inspector's **Frequency** field (shown only for `architecture` diagrams). When non-empty it auto-renders a secondary link label — a small clock icon + the text in muted grey — **below** the connector line (see Link Labels). Clearing it removes the label. `migrateLinks` rebuilds the label from this prop on load, so a spec may set just the prop. |
 
 **Why `lineStyle` and not `attrs.line.strokeDasharray` (v1.7.0+):** Safari propagates a path's `stroke-dasharray` into its SVG `<marker>` elements at the renderer level, causing arrowheads / ER notation to render dashed along with the line. The app keeps the real path solid and paints a canvas-bg-coloured clone (with the dash pattern) on top to simulate dashes. `lineStyle` is the canonical storage; legacy `attrs.line.strokeDasharray` values on loaded diagrams are auto-migrated to `lineStyle` and the attr is cleared.
@@ -673,6 +680,8 @@ Background grouping area with dashed border. Always renders behind other element
 
 No ports. A Zone groups by **embedding**, not by geometry: set `parent: "<zone-id>"` on every child AND list each child id in the Zone's `embeds[]` - both sides, every child. A Zone merely drawn behind cards is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them). The one deliberate exception is a Salesforce Flow's stage bands (see below).
 
+In a `datamapping` diagram each Zone is a mapping **layer**: a generic one (no `layerStage`) or a Data Cloud stage with a top-level `layerStage`. See [the layer Zones](#1-the-layer-zones-sfzone).
+
 ### sf.TextLabel
 
 Standalone text annotation with no background or border.
@@ -868,7 +877,7 @@ DataObjects below).
 | `required` | boolean | Shows asterisk if true. Auto-set `true` for a PK/FQK field. |
 | `deprecated` | boolean | Strikes through the field if true. *(Formerly `decommissioned`; loaders migrate the old key to `deprecated` on load.)* |
 | `sampleValues` | string | Optional representative example value(s), e.g. `"jane@example.com, john@acme.com"`. **Display/export-only** — surfaced in the field editor, the Data Mapping table view (Source/Target **Sample Values** columns) and CSV exports; **never drawn on the node**. Omit when blank. (v1.15.7) |
-| `fid` | string | Stable per-field identity (e.g. `"f3k9x2a"`), auto-generated; field-level port IDs derive from it. Survives reorder / delete / rename so connected links stay anchored. Present in saves ≥ v1.15.0; generators MAY omit it (the app assigns one on load, and older saves are migrated). |
+| `fid` | string | Stable per-field identity (e.g. `"f3k9x2a"`), auto-generated; field-level port IDs derive from it. Survives reorder / delete / rename so connected links stay anchored. Present in saves ≥ v1.15.0; generators MAY omit it (the app assigns one on load, and older saves are migrated). Unique within its object and not all digits (`"1"` reads as a legacy index port); the validator warns on either. |
 
 **Display flags:**
 
@@ -879,7 +888,7 @@ DataObjects below).
 | `keyFieldsOnly` | `false` | When `true`, only fields with `keyType` (PK/FK) are rendered; the object height shrinks to fit |
 | `collapsed` | `false` | When `true`, the object renders **header-only** (all field rows hidden, height = `32 + 18`); a bottom toggle row flips it. Mapping links converge to the header while collapsed. Top-level prop; omit it for a normal expanded object. |
 
-**Data Cloud metadata (mapping mode, v1.15.0):** an optional object-level attribute, omitted when blank. Editable in the DataObject panel's **Data Mapping** section (a three-position segmented slider) and drawn as a hollow header pill only in a Data Mapping diagram; it round-trips in any type.
+**Data Cloud metadata (mapping mode, v1.15.0):** an optional object-level attribute, omitted when blank. Editable in the DataObject panel's **Data Mapping** section (a three-position segmented slider) and drawn as a hollow header pill only in a Data Mapping diagram; it round-trips in any type. It is a Data Cloud platform setting: set it on Data Cloud DLO / DMO cards only, never on a non-Data-Cloud lineage, where the pill would claim a category the system does not have.
 
 | Attr | Type | Description |
 |------|------|-------------|
@@ -1166,7 +1175,8 @@ Pool/lane container, horizontal by default.
 
 Has a narrow left `header` panel with a rotated vertical label. For a VERTICAL pool set top-level
 `"poolDirection": "vertical"`, size `250 x 600`, `attrs.header` `{ "width": "calc(w)", "height": 30 }` and
-`attrs.label` `{ "x": "calc(0.5 * w)", "y": 15, "transform": "rotate(0)" }` (what the stencil builds). No ports. A Pool groups by **embedding**, not by geometry: set `parent: "<pool-id>"` on every child AND list each child id in the Pool's `embeds[]` - both sides, every child. A Pool drawn behind tasks without that is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
+`attrs.label` `{ "x": "calc(0.5 * w)", "y": 15, "transform": "rotate(0)" }` (what the stencil builds). Without
+those attrs the pool keeps its left band, and the app fits its content clear of that band. No ports. A Pool groups by **embedding**, not by geometry: set `parent: "<pool-id>"` on every child AND list each child id in the Pool's `embeds[]` - both sides, every child. A Pool drawn behind tasks without that is decorative (no group-move, no auto-size; `validate-diagram.mjs` warns). See [Capture](#capture-put-cards-inside-a-frame-dont-just-draw-one-behind-them).
 
 #### sf.BpmnDataObject
 
@@ -1393,7 +1403,7 @@ The date-ruler backbone: a header row of period columns (days / weeks / months) 
 **Properties (all top-level, not under `attrs`):**
 - `viewMode` — `"day"`, `"week"`, or `"month"` (column granularity). Default `"week"`.
 - `numPeriods` — number of columns (default `12`; stencil presets: day `14`, week `12`, month `12`).
-- `startDate` / `endDate` — `"YYYY-MM-DD"`. `endDate` auto-computes from `startDate` + `numPeriods` when blank (day → +N days, week → +N×7 days, month → +N months). The view snaps `startDate` to the configured `weekStartDay` (week) or the 1st (month). `startDate` is the **origin** every bar's dates are measured from.
+- `startDate` / `endDate` — `"YYYY-MM-DD"`. The view snaps `startDate` to the configured `weekStartDay` (week) or the 1st (month). `startDate` is the **origin** every bar's dates are measured from. **`numPeriods` sets the axis length, not `endDate`.** `endDate` is the timeline's End Date, **inclusive**: the last day the axis draws, the day before its right edge (right edge = the snapped origin + `numPeriods`: day → +N days, week → +N×7 days, month → +N months). The loader re-derives it from `startDate` + `numPeriods`, so you may omit it; to make a chart run through a given date, set `numPeriods` to cover it. A bar's `endDate` (below) is the bar's right edge instead, so a bar that fills the axis ends the day after the timeline's `endDate`.
 - `todayDate` — `"YYYY-MM-DD"` (optional). Draws a full-height dashed **today line** at that date's column (omit / blank = no line). Data-first: the line's x is derived from the date.
 - `weekStartDay` — `0`–`6` (0 = Sunday … 6 = Saturday), the first day of the week — controls where the **week** view splits its columns. Default `1` (Monday). The View menu's "Week Starts:" control cycles the three practical conventions: Monday (ISO 8601), Sunday (Americas), Saturday (MENA).
 - `weekendStartDay` — `6` (Saturday → Sat–Sun weekend) or `5` (Friday → Fri–Sat weekend). The first day of the 2-day weekend block shaded as non-working columns in the **day** view. Default `6` (Saturday). Cycled from the View menu's "Weekend Starts:" control.
@@ -1404,7 +1414,7 @@ The date-ruler backbone: a header row of period columns (days / weeks / months) 
 - `rowHeight` — height (px) per row (default / min `48`).
 - `timelineTitle` / `timelineDescription` — header text for the panel (default `"Tasks"` / `""`).
 
-> **Legacy:** a `tasks` array (`{ id, type:"group"|"task", label, groupId?, color? }`) from older diagrams is still accepted and **auto-migrated to bars + `groups` on load** — do **not** emit it for new diagrams; create `sf.GanttTask` bars instead.
+> **Legacy:** a `tasks` array (`{ id, type:"group"|"task", label, groupId?, color? }`) from older diagrams is still accepted and **auto-migrated to bars + `groups` on load** (the array is then cleared) — do **not** emit it for new diagrams; create `sf.GanttTask` bars instead.
 
 ```json
 {
@@ -1416,7 +1426,7 @@ The date-ruler backbone: a header row of period columns (days / weeks / months) 
   "viewMode": "week",
   "numPeriods": 12,
   "startDate": "2026-06-01",
-  "endDate": "2026-08-24",
+  "endDate": "2026-08-23",
   "taskListWidth": 200,
   "rowHeight": 48,
   "timelineTitle": "Tasks",
@@ -1435,7 +1445,7 @@ A scheduled bar. **The dates are the source of truth** — `startDate`/`endDate`
 
 **Properties (top-level):**
 - `taskLabel` — the bar's label.
-- `startDate` / `endDate` — `"YYYY-MM-DD"`. Position + width derive from these against the timeline's axis.
+- `startDate` / `endDate` — `"YYYY-MM-DD"`. Position + width derive from these against the timeline's axis. `endDate` is the bar's right edge: `2026-06-01` to `2026-06-15` spans 14 days (1-14 Jun).
 - `order` — integer row slot (0-based). The bar's Y derives from it; any group headers above it shift it down a row. **Emit it** — an `order`less bar keeps its manual Y while the panel rows it last, so it paints in the wrong row (an old diagram, or one built by dropping stencil tasks, is auto-healed on load: `order` is back-filled from each bar's current Y order).
 - `groupId` — id of a `timeline.groups[]` entry, or omit / `null` for ungrouped. A grouped bar takes its group's `color` on load; set top-level `colorManual: true` (and `attrs.progressBar.fill`) to keep a colour of your own.
 - `progress` — `0`–`100` (fills the progress bar).
@@ -1711,49 +1721,75 @@ For a dashed response, set top-level `lineStyle` on the link to `"6 4"` (the app
 
 ---
 
-## Generating Data Cloud Mapping Diagrams (`datamapping`)
+## Generating Data Mapping and Lineage Diagrams (`datamapping`)
 
-This section is the authoritative guide for producing **valid Salesforce Data Cloud / Data 360 field-mapping diagrams**. It composes the atomic [`sf.DataObject`](#sfdataobject), [`sf.Zone`](#sfzone), and [Link](#link-structure) grammar above into a coherent pipeline, and adds the platform rules an LLM must apply. Use `"diagramType": "datamapping"` (mapping mode is then always on — every field is connectable, the `category` badge shows, links auto-style as mappings). The whole section's individual facts are defined above; here is how to assemble them.
+This section is the authoritative guide for **field-level mapping and lineage diagrams**: which source fields feed each target field, and through which transform. That covers any source → target pipeline (an ETL job, a warehouse lineage such as Raw → Staging → Mart, a SQL view and the tables it reads) and Salesforce **Data Cloud / Data 360** ingestion and harmonisation, the type's main case and the one the bundled templates show. It composes the atomic [`sf.DataObject`](#sfdataobject), [`sf.Zone`](#sfzone), and [Link](#link-structure) grammar above into a coherent pipeline. Use `"diagramType": "datamapping"`: mapping mode is then always on, so every field is connectable and links auto-style as mappings. The individual facts are defined above; here is how to assemble them.
 
-> **Mental model:** a Data Cloud mapping diagram is a **left → right pipeline**. Source systems on the left, harmonized Data Model Objects toward the right, optional activation targets at the far right. **Objects live inside labelled layer Zones**; **field-level mapping links** carry attributes from one layer to the next; optional **object-level relationship links** show ER cardinality between whole tables.
+**What is generic and what is Data Cloud-only.** Everything outside the right-hand column works the same in any pipeline.
 
-### 1. The layer Zones (`sf.Zone` with `layerStage`)
+| | Any pipeline (lineage, ETL, Data Cloud) | Data Cloud only |
+|---|---|---|
+| Layers | one `sf.Zone` per layer, cards embedded, the label names the layer; a generic layer has NO `layerStage` (§1a) | `layerStage` `source` / `datastream` / `dlo` / `dmo` / `activation` and their accents (§1b) |
+| Mapping links | `linkKind: "mapping"`; `mappingType` `Standard`, or `Formula` with an `expressionRule` (§4) | `Streaming Transform` (`ST`), `Batch Transform` (`BT`), `Calculated Insight` (`CI`) |
+| Cards | fields with keys (`pk` / `fk` / `fqk`) and each system's own type spelling (§3) | `category` (Profile / Engagement / Other) on DLO and DMO cards (§2); Data Cloud types on DLO / DMO fields |
+| Structure | object-level ER links between cards (§5) | the Data Stream companion card, Formulas companion cards, the Identity Resolution spine |
 
-A layer is an `sf.Zone` carrying a `layerStage` property. **Place every DataObject inside its layer by embedding it** — set the object's `parent` to the Zone id AND list the object id in the Zone's `embeds` array (geometry alone is not enough: the table view's *Data Layer* column reads the object's `parent`, so a loose object reports `[No Mapping Layer]`). Lay the layers out as vertical columns, left → right in pipeline order:
+> **Mental model:** a mapping diagram is a **left → right pipeline**. Sources on the left, each later layer to the right of the layers that feed it. **Objects live inside labelled layer Zones**; **field-level mapping links** carry each field from one layer to the next, with the transform on the link; optional **object-level relationship links** show ER cardinality between whole tables. In Data Cloud the layers are Source → Data Lake Object → Data Model Object → Activation.
+
+### 1. The layer Zones (`sf.Zone`)
+
+A layer is an `sf.Zone`. **Place every DataObject inside its layer by embedding it** - set the object's `parent` to the Zone id AND list the object id in the Zone's `embeds` array (geometry alone is not enough: the table view's *Data Layer* column reads the object's `parent`, so a loose object reports `[No Mapping Layer]`). Lay the layers out as vertical columns, left → right in pipeline order, with the numbers in §3b: 260 px cards inset 48 px in a 356 px zone, zones 556 px apart (a 200 px gutter), so zone `x` = 0 / 556 / 1112 / 1668 and each card `x` = zone `x` + 48.
+
+**Auto Layout** (the View menu; import never runs it) re-flows a mapping diagram into these columns: every column starts at one top edge, cards stack 36 px apart inside each zone, zones hug their cards at 48 px, columns sit 200 px apart, and the order inside a column shortens the links. **Generic layers come first, one column each; then one column per Data Cloud stage** (§1b). Authored to §3b, with the columns in flow order and each column's cards ordered by where their links come from, a diagram is already where Auto Layout would put it (measured: a three-layer lineage and the `data360-contact-mapping` template move by 0 px).
+
+#### 1a. Generic layers (any pipeline)
+
+A generic layer is an `sf.Zone` with **no `layerStage`**: the stencil's **Layer** preset. Use it for every layer that is not a Data Cloud stage.
+
+- **Label:** `attrs.label.text` names the layer (`Raw`, `Staging`, `Mart`, `Snowflake`). The Table view's *Data Layer* column reports it (`[Layer]` when it is empty).
+- **Colour:** with no colour attrs a Zone renders its class default, a blue dashed border and a muted grey caption, so every layer looks alike. To tell the layers apart, give each one accent the way the Data Cloud presets do: `body/stroke` and `label/fill` = one [palette](#the-both-themes-rule-pick-colours-from-this-palette) colour, `body/fill` = the same colour at 5% alpha. Take the colours in the palette's order (blue `#1D73C9`, orange `#BE5C2A`, green `#008B46`, …) and give each card's `headerColor` its layer's accent.
+- **No invented `layerStage`.** A value outside the five Data Cloud stages (`"raw"`, `"bronze"`) changes nothing: the app treats that zone as a generic layer anyway. Omit the key.
+- **Auto Layout order:** each generic layer gets a column of its own, ordered by the mapping links between layers. A layer goes right of every layer that maps into it; otherwise the layers keep their current left-to-right order; a cycle breaks at the layer with the fewest mappings coming in. Generic columns sit left of any Data Cloud columns, even a generic layer that a Data Cloud layer feeds.
+
+#### 1b. Data Cloud layers (`layerStage`)
+
+A Data Cloud layer carries a top-level `layerStage`. Lay them out left → right in pipeline order:
 
 | Layer (Zone `label`) | `layerStage` | Accent (`body/stroke` + `label/fill`, `body/fill` = same at ~5% alpha) | Role |
 |---|---|---|---|
 | `Source` | `"source"` | `#1D73C9` (blue) | External/origin systems as they exist (CRM, ERP, S3, Marketing Cloud, DB). Native source data types. |
-| `Data Stream` | `"datastream"` | `#1D73C9` (blue — same as Source; the stencil's Data Stream preset and the stacked-in-the-Source-column layout make the two zones read as one ingestion column) | The OOTB Data Stream mapping step — statics + calculated key + system timestamp (see below). **Not its own column**: stack this Zone in the Source column, below the Source Zone. |
-| `Data Lake Object` | `"dlo"` | `#A06F03` (amber) | Raw ingestion — data as landed in Data Cloud, one DLO per source stream. |
+| `Data Stream` | `"datastream"` | `#1D73C9` (blue - same as Source; the stencil's Data Stream preset and the stacked-in-the-Source-column layout make the two zones read as one ingestion column) | The OOTB Data Stream mapping step - statics + calculated key + system timestamp (see below). **Not its own column**: stack this Zone in the Source column, below the Source Zone. |
+| `Data Lake Object` | `"dlo"` | `#A06F03` (amber) | Raw ingestion - data as landed in Data Cloud, one DLO per source stream. |
 | `Data Model Object` | `"dmo"` | `#DA4E55` (red) | Harmonized target entities unified by Identity Resolution (Individual, Account Contact Point, …). |
 | `Activation` | `"activation"` | `#008B46` (green) | Outbound targets where harmonized data is pushed (Email, SMS, Ad Audience, Snowflake share, webhook). |
 
-- **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO — omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
-- **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* — its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do. Only the stream's own companion object lives in the Data Stream Zone - every real source table (in an org import, the suffix-less DSO names; DLOs carry `__dll`, DMOs `__dlm`) MUST stay in the Source Zone above. Start the Data Stream Zone ~56 px below the Source Zone's bottom edge so the two read as one ingestion column.
-- **Coordinates:** one column per layer, using the numbers in §3b: 260 px cards inset 48 px in a 356 px zone, zones 556 px apart (a 200 px gutter), so zone `x` = 0 / 556 / 1112 / 1668 and each card `x` = zone `x` + 48.
-- A generic `Layer` Zone (no `layerStage`) is available for grouping that isn't one of the canonical tiers; it reports its own label as the Data Layer.
+- **Use only the layers the prompt needs.** A "map this source into a DLO" request uses just Source + DLO - omit the DMO and Activation Zones entirely; do **not** stretch the remaining columns to fill the canvas (omit `viewport` and the app auto-fits).
+- **The Data Stream layer models the fields a DLO carries that no source provides.** In Data Cloud the Data Stream (not the payload) sets: **statics** (Data Source, Internal Organization / MID, a static channel value like `'EMAIL'`), the **calculated source-qualified primary key** (e.g. `CONCAT(DataSource, '-', Id)`), and the **system ingestion timestamp**. Model one "Data Stream: <Name>" DataObject per stream whose fields **`Formula`-link into the DLO** (`expressionRule` = the static value or formula); source key fields that feed the calculated key get a `src → Data Stream` input link. It is a mapping *step*, not a pipeline *stage* - its Zone shares the Source column (stacked below with its own y-cursor), feeding the DLO column from the left like the sources do. Only the stream's own companion object lives in the Data Stream Zone - every real source table (in an org import, the suffix-less DSO names; DLOs carry `__dll`, DMOs `__dlm`) MUST stay in the Source Zone above. Start the Data Stream Zone ~56 px below the Source Zone's bottom edge so the two read as one ingestion column.
+- **Auto Layout** gives each stage ONE column, however many zones carry it, in the order Source → DLO → DMO → Activation. Zones of one stage stack 56 px apart, a Data Stream zone always below the Source zones, and an empty zone keeps its height at the foot of its column.
 
-### 2. Objects — `category` is mandatory for DLO/DMO
+### 2. Objects - `category` (Data Cloud DLO / DMO only)
 
-Every `sf.DataObject` that represents a **Data Cloud-native** resource (DLOs and DMOs) **must set `category`** — it is platform-enforced and drives execution (Identity Resolution eligibility, time-series indexing). Source-system objects (raw CRM/ERP tables) and Data Stream companion objects MUST omit the `category` key entirely - it belongs on Data-Cloud-native cards only. When converting real org metadata, keep only these three values: an org category outside the set (`Related`, `Segment_Membership`, ...) normalises to `"Other"` (the shipped template sets AccountContact to `Other` the same way).
+**Outside Data Cloud, omit `category` on every card**: it is a Data Cloud platform setting, and its header pill would claim one the system does not have. A lineage card's role is the layer it sits in.
+
+In Data Cloud, every `sf.DataObject` that represents a **Data Cloud-native** resource (DLOs and DMOs) **must set `category`** - it is platform-enforced and drives execution (Identity Resolution eligibility, time-series indexing). Source-system objects (raw CRM/ERP tables) and Data Stream companion objects MUST omit the `category` key entirely - it belongs on Data-Cloud-native cards only. When converting real org metadata, keep only these three values: an org category outside the set (`Related`, `Segment_Membership`, ...) normalises to `"Other"` (the shipped template sets AccountContact to `Other` the same way).
 
 | `category` | Use for | Platform effect |
 |---|---|---|
-| `"Profile"` | Core identity / master entities — Individual, Account, Contact Point, subscriber/master profiles. | Eligible for **Identity Resolution** match rules. |
-| `"Engagement"` | Time-series behavioural events — orders, email/web/app interactions, transactions, logs. Must carry an event timestamp field. | Time-series indexed; used for streaming insights & segmentation recency. |
-| `"Other"` | Reference / lookup / catalog data — product, store, picklist value sets. | Neither identity nor time-series. |
+| `"Profile"` | Core identity / master entities - Individual, Account, Contact Point, subscriber/master profiles. | Eligible for **Identity Resolution** match rules. |
+| `"Engagement"` | Time-series behavioural events - orders, email/web/app interactions, transactions, logs. Must carry an event timestamp field. | Time-series indexed; used for streaming insights & segmentation recency. |
+| `"Other"` | Reference / lookup / catalog data - product, store, picklist value sets. | Neither identity nor time-series. |
 
-Set it as a **top-level cell property**: `"category": "Profile"`. (It is *not* `objectCategory`, and it is not nested under `attrs`.) Object **role/tier is expressed by which layer Zone the object sits in** — there is deliberately no `dataSource`/`kind` attribute.
+Set it as a **top-level cell property**: `"category": "Profile"`. (It is *not* `objectCategory`, and it is not nested under `attrs`.) Object **role/tier is expressed by which layer Zone the object sits in** - there is deliberately no `dataSource`/`kind` attribute.
 
-### 3. Fields — keys, Data Cloud types, and normalization
+### 3. Fields - keys, types, and normalization
 
 Populate `fields` as an array of field **objects** (never bare strings); see the [`sf.DataObject` field table](#sfdataobject) for every key. For mappings, mind these:
 
-- **`fid`** — give each field a short stable id (`"c_email"`, `"dlo_email"`, …). Field-level link ports derive from it (§4). If you omit it the app assigns one on load, but then *you can't reference the field from a link*, so **always set `fid` on any field you map**.
-- **`keyType`** — `"pk"` (primary key, amber), `"fk"` (foreign key, blue), or `"fqk"` (**Fully Qualified Key**, brand red). In Data Cloud the FQK is the primary key **qualified by its data source / source object** so identical ids from different sources stay distinct — mark a DLO/DMO primary key as `"fqk"` when it must be source-qualified. `"pk"`/`"fqk"` auto-set `required: true`.
-- **`deprecated`** — `true` strikes the row through (field still present but slated for removal). *(Replaces the old `decommissioned` flag — loaders migrate it.)*
-- **Type normalization (document the evolution across layers).** Source objects may use native source types (`varchar(255)`, `Id`, `nvarchar`, `timestamp`, `picklist`, `number(18,0)`). **DLO and DMO fields use Data Cloud's own type set** in the `type` string - the Data 360 field types are Text, Number, Percent, Date, DateTime, Boolean, Email, Phone and URL (plus Lookup on DMOs, which a diagram draws as a relationship link, not as a type):
+- **`fid`** - give each field a short stable id (`"c_email"`, `"dlo_email"`, …). Field-level link ports derive from it (§4). If you omit it the app assigns one on load, but then *you can't reference the field from a link*, so **always set `fid` on any field you map**. Each `fid` must be unique within its object and start with a letter: a repeated one is re-assigned on load (so a link meant for it lands on the first field), and an all-digit one reads as a legacy index port.
+- **`keyType`** - `"pk"` (primary key, amber), `"fk"` (foreign key, blue), or `"fqk"` (**Fully Qualified Key**, brand red). In Data Cloud the FQK is the primary key **qualified by its data source / source object** so identical ids from different sources stay distinct - mark a DLO/DMO primary key as `"fqk"` when it must be source-qualified. `"pk"`/`"fqk"` auto-set `required: true`.
+- **`deprecated`** - `true` strikes the row through (field still present but slated for removal). *(Replaces the old `decommissioned` flag - loaders migrate it.)*
+- **Types outside Data Cloud: keep each system's own spelling** (`varchar(255)`, `timestamp`, `numeric(12,2)`, `int`, `bit`, `datetime2`); the `type` string is free text. The Table view sorts the common spellings into five groups (Text, Number, Boolean, Date, DateTime) and puts a warning badge on a **`Standard`** mapping whose two ends fall in different groups, because a direct copy cannot change the type. A mapping that converts the type (`CAST(order_ts AS DATE)`) is a `Formula` with that `expressionRule`. A spelling it cannot place never warns.
+- **Data Cloud type normalization (document the evolution across layers).** Source objects may use native source types (`varchar(255)`, `Id`, `nvarchar`, `timestamp`, `picklist`, `number(18,0)`). **DLO and DMO fields use Data Cloud's own type set** in the `type` string - the Data 360 field types are Text, Number, Percent, Date, DateTime, Boolean, Email, Phone and URL (plus Lookup on DMOs, which a diagram draws as a relationship link, not as a type):
 
   | Data Cloud type (`type`) | Absorbs source types | Where |
   |---|---|---|
@@ -1763,7 +1799,7 @@ Populate `fields` as an array of field **objects** (never bare strings); see the
   | `"Date"` / `"DateTime"` | date, datetime, timestamp | DLO and DMO |
   | `"Boolean"` | true/false flags | DLO, and custom DMO fields |
 
-  A DLO keeps the type its data stream gave it: a Salesforce CRM stream keeps `email`, `phone` and `url` (measured on an org's `Contact_Home__dll`), while the standard DMO fields those map to (`ContactPointEmail.EmailAddress`, `ContactPointPhone.TelephoneNumber`, `Individual.PhotoURL`) are `Text`. Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** — real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
+  A DLO keeps the type its data stream gave it: a Salesforce CRM stream keeps `email`, `phone` and `url` (measured on an org's `Contact_Home__dll`), while the standard DMO fields those map to (`ContactPointEmail.EmailAddress`, `ContactPointPhone.TelephoneNumber`, `Individual.PhotoURL`) are `Text`. Showing the type changing from (e.g.) `varchar(255)` on the Source field to `Text` on the DLO/DMO field is the correct, expected way to document a transformation. Caveat: **standard Data 360 DMOs have no Boolean fields** - real DMO flags (`IsActive`, `PrimaryFlag`, `IsTestSend`, …) are `Text`. Use `Boolean` on a DMO only for a custom field you know stores one.
 
 ### 3b. Geometry and layers
 
@@ -1783,7 +1819,7 @@ usual way a generated diagram looks nothing like the app's own.
 > straight line between anchors. Mapping links are healed on load from `linkKind:"mapping"`; ER relationships
 > are **not**, so an authored data model has to say it.
 
-> ⚠️ **A `datamapping` layer Zone needs FOUR things, not one.** `layerStage` is what Auto-Layout reads, but a
+> ⚠️ **A Data Cloud layer Zone needs FOUR things, not one.** `layerStage` is what Auto Layout reads, but a
 > zone carrying only that renders as the generic "Layer" preset and reads as a custom layer duplicating the
 > built-in one. Match what the stencil produces:
 > ```json
@@ -1792,7 +1828,12 @@ usual way a generated diagram looks nothing like the app's own.
 >              "label": { "text": "Data Lake Object", "fill": "#A06F03" } } }
 > ```
 > Accents: `source`/`datastream` `#1D73C9`, `dlo` `#A06F03`, `dmo` `#DA4E55`, `activation` `#008B46`. Each
-> card's `headerColor` takes its own lane's accent (the loader paints the header from it).
+> card's `headerColor` takes its own lane's accent (the loader paints the header from it). A generic layer
+> needs the same three accent attrs and no `layerStage` (§1a).
+
+> **The validator runs two [layout rules](#layout-rules-what-a-reader-notices) on a `datamapping` diagram**: rule 5
+> (a frame owns its internal links) and rule 6 (48 px between a card and its lane's edge on a side an in-lane link
+> leaves from). Nothing checks the grid, the gutters or a card's inset otherwise, so author to the table above.
 
 **Field mix on an ERD card:** 105 of the official model's 167 fields carry NO key, 42 are fk, 20 are pk. Do not
 fill a card with foreign keys - a standard object has ~15 lookups and they will consume the whole budget before
@@ -1800,7 +1841,7 @@ a single business field. A reader identifies a record by its name, not its `Mast
 
 ### 4. Field-level mapping links (`linkKind: "mapping"`)
 
-A mapping link carries one attribute from a source-side field to a target-side field, drawn **left → right**. Reference the field **ports** — `field-right-<fid>` on the left/source object, `field-left-<fid>` on the right/target object — via the endpoint's **`port`** key (it is **not** a `<fid>#fieldRight` suffix, and field ports are **never** listed in `ports.items` — they are generated):
+A mapping link carries one attribute from a source-side field to a target-side field, drawn **left → right**. Reference the field **ports** - `field-right-<fid>` on the left/source object, `field-left-<fid>` on the right/target object - via the endpoint's **`port`** key (it is **not** a `<fid>#fieldRight` suffix, and field ports are **never** listed in `ports.items` - they are generated):
 
 ```json
 {
@@ -1813,23 +1854,25 @@ A mapping link carries one attribute from a source-side field to a target-side f
 }
 ```
 
-That is the **minimal** correct form — endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#A06F03`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
+That is the **minimal** correct form - endpoints, `linkKind` and `mappingType`, with **no `attrs` at all**. On load the app **auto-heals the rest** from `linkKind` + `mappingType` (`migrateLinks`): the amber 1 px line (`#A06F03`) with its arrowhead and source stub, the smooth left→right router (`sfMappingRouter`) + connector (`sfMappingConnector`), the field-port anchors (`connectionPoint` offset 12), and the type-code badge.
 
-The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour — which is how a user's deliberate recolour survives a reload. So author NO line attrs, or author BOTH `stroke: "#A06F03"` and `strokeWidth: 1`: either one alone switches the heal off and leaves a grey 1 px or an amber 2 px line.
+The style heal is **gated on the line being untouched** (`standard.Link`'s `#333333` + `strokeWidth: 2` default), so a link that authors its own `line/stroke` keeps that colour - which is how a user's deliberate recolour survives a reload. So author NO line attrs, or author BOTH `stroke: "#A06F03"` and `strokeWidth: 1`: either one alone switches the heal off and leaves a grey 1 px or an amber 2 px line.
 
-| `mappingType` | Code badge on target | Meaning |
-|---|---|---|
-| `"Standard"` (default) | *(none)* | Direct 1:1 copy, no transformation. |
-| `"Formula"` | `F` | Field-level formula/expression. |
-| `"Streaming Transform"` | `ST` | Real-time stream transform. |
-| `"Batch Transform"` | `BT` | Scheduled batch transform. |
-| `"Calculated Insight"` | `CI` | Multi-dimensional metric (CI). |
+| `mappingType` | Code badge on target | Use in | Meaning |
+|---|---|---|---|
+| `"Standard"` (default) | *(none)* | any pipeline | Direct 1:1 copy, no transformation. |
+| `"Formula"` | `F` | any pipeline | A transform written as an expression: SQL, a dbt model column, a Data Cloud formula. |
+| `"Streaming Transform"` | `ST` | Data Cloud only | Real-time stream transform. |
+| `"Batch Transform"` | `BT` | Data Cloud only | Scheduled batch transform. |
+| `"Calculated Insight"` | `CI` | Data Cloud only | Multi-dimensional metric (CI). |
 
-For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` — it surfaces in the link inspector and the table's *Expression / Rule* column. (`expressionRule` superseded the pre-release `mappingLabel`, which is still read as a fallback.)
+For any **non-`Standard`** type, add **`expressionRule`** (top-level string) with the formula/rule note, e.g. `"expressionRule": "PROPERCASE(FirstName)"` or `"expressionRule": "CAST(order_ts AS DATE)"` - it surfaces in the link inspector, the table's *Expression / Rule* column and the badge's hover tooltip. (`expressionRule` superseded the pre-release `mappingLabel`, which is still read as a fallback.) Outside Data Cloud, a transform that is not an expression (a lookup join, a dedupe, an aggregation step) is still a `Formula`: describe it in `expressionRule` (`"LEFT JOIN customers ON customer_id"`) rather than borrowing a Data Cloud type.
 
-**Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column — e.g. a Source object feeding the Data Stream Zone stacked below it — anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
+**Several inputs, one target (any pipeline).** A target field computed from several source fields gets one mapping link from each input, all with the same `mappingType: "Formula"` and `expressionRule` (`full_name` from `first_name` and `last_name`: two links, both `first_name || ' ' || last_name`). The Table view then lists each input on its own row, and tracing the target's lineage lights every input. Data Cloud models a Data Stream formula another way (below).
 
-**Formula inputs are explicit links.** A Data Stream formula row that READS source data - the calculated key, or any expression over payload fields - MUST receive one input link per source field it references: source row `field-left-<fid>` to formula row `field-left-<fid>`, a plain `linkKind:"mapping"` + `mappingType:"Standard"` link with NO `expressionRule` (the formula itself lives on the Data-Stream-to-DLO `Formula` link, not on its inputs). A static row (Data Source, Internal Organization / MID, a literal channel like `'EMAIL'`, the system timestamp) reads nothing, so it MUST get no input link. A formula that reads ANOTHER formula's output (`formulaField['X']` in Data Cloud expressions) chains **between two rows of the same Data Stream card**: referenced formula row `field-left-<fid>` to reading formula row `field-left-<fid>`, same link shape - the router draws it as a small loop off the card's left edge. Chain only to a row that EXISTS as a formula output on that card; a `formulaField` reference to a directly-mapped column is not a derived field and gets no link.
+**Port-side convention.** `field-right → field-left` is the default only for **left-to-right** pairs. When both endpoints share a column - e.g. a Source object feeding the Data Stream Zone stacked below it - anchor **both ends on the same outer side** (`field-left-<fid>` at source *and* target) so the link routes down the column's edge instead of crossing the rightward traffic. For vertically stacked objects linked at object level (e.g. an identity spine), use `port-top`/`port-bottom` rather than the er side anchors.
+
+**Formula inputs are explicit links (Data Cloud Data Stream).** A Data Stream formula row that READS source data - the calculated key, or any expression over payload fields - MUST receive one input link per source field it references: source row `field-left-<fid>` to formula row `field-left-<fid>`, a plain `linkKind:"mapping"` + `mappingType:"Standard"` link with NO `expressionRule` (the formula itself lives on the Data-Stream-to-DLO `Formula` link, not on its inputs). A static row (Data Source, Internal Organization / MID, a literal channel like `'EMAIL'`, the system timestamp) reads nothing, so it MUST get no input link. A formula that reads ANOTHER formula's output (`formulaField['X']` in Data Cloud expressions) chains **between two rows of the same Data Stream card**: referenced formula row `field-left-<fid>` to reading formula row `field-left-<fid>`, same link shape - the router draws it as a small loop off the card's left edge. Chain only to a row that EXISTS as a formula output on that card; a `formulaField` reference to a directly-mapped column is not a derived field and gets no link.
 
 ```json
 { "id": "in-key", "type": "standard.Link",
@@ -1840,7 +1883,7 @@ For any **non-`Standard`** type, add **`expressionRule`** (top-level string) wit
 
 ### 5. Object-level relationships (ER, optional)
 
-To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER model in the Source layer) draw an ordinary relationship link — **no `linkKind`** — between the objects' **header ports** (`er-left` / `er-right`, the round relationship anchors), or the pre-seeded `port-top` / `port-bottom`. Use `sfManhattan` routing and crow's-foot cardinality markers (see [Marker Types](#marker-types)):
+To show a **whole-table** relationship (a DMO lookup to another DMO, a foreign key between two warehouse tables, or an ER model in the Source layer) draw an ordinary relationship link - **no `linkKind`** - between the objects' **header ports** (`er-left` / `er-right`, the round relationship anchors), or the pre-seeded `port-top` / `port-bottom`. Use `sfManhattan` routing and crow's-foot cardinality markers (see [Marker Types](#marker-types)):
 
 ```json
 {
@@ -1849,20 +1892,22 @@ To show a **whole-table** relationship (a DMO lookup to another DMO, or an ER mo
   "target": { "id": "obj-dmo-account", "port": "er-left" },
   "router": { "name": "sfManhattan" },
   "connector": { "name": "rounded", "args": { "radius": 8 } },
-  "attrs": { "line": { "stroke": "#888888", "strokeWidth": 2,
-    "sourceMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#888888", "stroke-width": 2 },
-    "targetMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#888888", "stroke-width": 2 } } }
+  "attrs": { "line": { "stroke": "#74797F", "strokeWidth": 2,
+    "sourceMarker": { "type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2 },
+    "targetMarker": { "type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2 } } }
 }
 ```
 
-Keep the two link kinds distinct: **field-level = `linkKind:"mapping"`, amber, field ports**; **object-level = no `linkKind`, grey, header ports, crow's-foot**. Don't mix them on one link.
+Use the palette's neutral `#74797F` for these lines (the converter and the worked examples do): structure must not compete with the amber field links between the same cards. Two objects in the SAME column relate `er-right` → `er-right` (what the mapping converter draws between two DMOs), so the line runs down the column's right edge instead of looping across it; use `port-bottom` → `port-top` when the two cards are neighbours in the stack.
+
+Keep the two link kinds distinct by `linkKind`, not by port: **a mapping = `linkKind:"mapping"`, amber, field ports**; **a relationship = no `linkKind`, grey `#74797F`, `sfManhattan`**. A relationship goes on the header ports when you know it at table grain, and on field ports when a join names its columns: a join between two tables of one column runs `field-left-<fid>` → `field-left-<fid>`, so the right edge stays free for the mappings. Draw one relationship link per column pair of the join, with crow's-foot markers only where a key settles the cardinality (one end is a primary key) and none where nothing does. Never make one link both: an amber relationship or a grey mapping reads as the other kind. The header's X/Y counts mapping links only (1.26.1), so a table that is only joined reads 0/N, and the Table view lists joins in its Relationships grid, not as mapping rows. The app draws joins that share a field as one line and gives every other join its own vertical, 16 px further out (1.26.1). Leave 48 px plus 16 px per extra lane between the cards and the zone's left edge; an import widens a zone that has less, and Auto Layout keeps the room. Send no `vertices` on joins: a join with vertices keeps them and takes no lane.
 
 Two composition rules that make a large mapping read well:
 
-- **Pair overlay: one grey ER link per mapped object pair.** For every object pair that exchanges field mappings, also draw a single header-level relationship link (`er-right → er-left`, grey, ONE at the feeding object, ONE-OR-MANY into the fed object - a mapped record can land in one fed record or several; skip `→ Activation` pairs and source→Data-Stream key inputs). The diagram then reads at two levels — object relationships at a glance, field lineage in detail. Derive the pair list from the mapping links themselves so it can't drift.
-- **Identity Resolution is a relationship, never a field mapping.** IR *generates* the Unified records — their keys and attributes are reconciled, not copied — so **no mapping link may point into Unified Individual** (a `Batch Transform` into the unified PK is the tell-tale mistake). Draw the identity spine `Individual → Unified Link Individual → Unified Individual` as grey ER relationship links (no `linkKind`, labelled "Identity Resolution", `port-top`/`port-bottom` when the three are stacked in one column), and give the unified objects no Source/DLO feed.
+- **Pair overlay: one grey ER link per mapped object pair.** For every object pair that exchanges field mappings, also draw a single header-level relationship link (`er-right → er-left`, grey, ONE at the feeding object, ONE-OR-MANY into the fed object - a mapped record can land in one fed record or several; skip `→ Activation` pairs and source→Data-Stream key inputs). The diagram then reads at two levels - object relationships at a glance, field lineage in detail. Derive the pair list from the mapping links themselves so it can't drift.
+- **(Data Cloud) Identity Resolution is a relationship, never a field mapping.** IR *generates* the Unified records - their keys and attributes are reconciled, not copied - so **no mapping link may point into Unified Individual** (a `Batch Transform` into the unified PK is the tell-tale mistake). Draw the identity spine `Individual → Unified Link Individual → Unified Individual` as grey ER relationship links (no `linkKind`, labelled "Identity Resolution", `port-top`/`port-bottom` when the three are stacked in one column), and give the unified objects no Source/DLO feed.
 
-### 6. Worked example — Contact → DLO → Individual and Contact Point Email
+### 6. Worked example (Data Cloud) - Contact → DLO → Individual and Contact Point Email
 
 A complete, importable three-layer mapping, built on real object and field names. It follows §3 (types per layer),
 §3b (geometry), §4 (minimal mapping links), §5 (one grey ER link per mapped pair, plus the DMO-to-DMO relationship)
@@ -1871,7 +1916,7 @@ Individual DMO has no email or phone field - contact points are their own object
 
 ```json
 {
-  "version": 1, "appVersion": "1.25.9", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.26.1", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
     {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
@@ -1896,37 +1941,66 @@ Individual DMO has no email or phone field - contact points are their own object
 }
 ```
 
+### 6b. Worked example (lineage) - Raw → Staging → Mart
+
+The same grammar for a warehouse lineage, the way a SQL tool would emit it. Three generic layers (no `layerStage`,
+one palette accent each, §1a), the system's own type spellings and no `category` (§2, §3), `Formula` links carrying
+the SQL (§4), and `full_name` fed by two inputs that share one expression. It is laid out by §3b, so Auto Layout moves
+nothing.
+
+```json
+{
+  "version": 1, "appVersion": "1.26.1", "title": "Customer lineage - Raw to Staging to Mart", "diagramType": "datamapping",
+  "graph": { "cells": [
+    {"id": "zone-raw", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 234}, "z": 0, "embeds": ["raw-cust"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Raw", "fill": "#1D73C9"}}},
+    {"id": "raw-cust", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 138}, "z": 2000, "parent": "zone-raw", "objectName": "raw.customers", "headerColor": "#1D73C9", "fields": [{"label": "customer_id", "apiName": "customer_id", "type": "int", "keyType": "pk", "fid": "r_id", "required": true}, {"label": "email", "apiName": "email", "type": "varchar(255)", "keyType": null, "fid": "r_email"}, {"label": "first_name", "apiName": "first_name", "type": "varchar(100)", "keyType": null, "fid": "r_first"}, {"label": "last_name", "apiName": "last_name", "type": "varchar(100)", "keyType": null, "fid": "r_last"}]},
+    {"id": "zone-stg", "type": "sf.Zone", "position": {"x": 596, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "embeds": ["stg-cust"], "attrs": {"body": {"fill": "rgba(190,92,42,0.05)", "stroke": "#BE5C2A"}, "label": {"text": "Staging", "fill": "#BE5C2A"}}},
+    {"id": "stg-cust", "type": "sf.DataObject", "position": {"x": 644, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-stg", "objectName": "stg_customers", "headerColor": "#BE5C2A", "fields": [{"label": "customer_id", "apiName": "customer_id", "type": "int", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "email", "apiName": "email", "type": "varchar(255)", "keyType": null, "fid": "s_email"}, {"label": "full_name", "apiName": "full_name", "type": "varchar(201)", "keyType": null, "fid": "s_name"}]},
+    {"id": "zone-mart", "type": "sf.Zone", "position": {"x": 1152, "y": 40}, "size": {"width": 356, "height": 234}, "z": 0, "embeds": ["dim-cust"], "attrs": {"body": {"fill": "rgba(0,139,70,0.05)", "stroke": "#008B46"}, "label": {"text": "Mart", "fill": "#008B46"}}},
+    {"id": "dim-cust", "type": "sf.DataObject", "position": {"x": 1200, "y": 88}, "size": {"width": 260, "height": 138}, "z": 2000, "parent": "zone-mart", "objectName": "dim_customers", "headerColor": "#008B46", "fields": [{"label": "customer_id", "apiName": "customer_id", "type": "int", "keyType": "pk", "fid": "m_id", "required": true}, {"label": "email", "apiName": "email", "type": "varchar(255)", "keyType": null, "fid": "m_email"}, {"label": "full_name", "apiName": "full_name", "type": "varchar(201)", "keyType": null, "fid": "m_name"}, {"label": "email_domain", "apiName": "email_domain", "type": "varchar(255)", "keyType": null, "fid": "m_domain"}]},
+    {"id": "map-1", "type": "standard.Link", "source": {"id": "raw-cust", "port": "field-right-r_id"}, "target": {"id": "stg-cust", "port": "field-left-s_id"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-2", "type": "standard.Link", "source": {"id": "raw-cust", "port": "field-right-r_email"}, "target": {"id": "stg-cust", "port": "field-left-s_email"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "LOWER(TRIM(email))"},
+    {"id": "map-3", "type": "standard.Link", "source": {"id": "raw-cust", "port": "field-right-r_first"}, "target": {"id": "stg-cust", "port": "field-left-s_name"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "first_name || ' ' || last_name"},
+    {"id": "map-4", "type": "standard.Link", "source": {"id": "raw-cust", "port": "field-right-r_last"}, "target": {"id": "stg-cust", "port": "field-left-s_name"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "first_name || ' ' || last_name"},
+    {"id": "map-5", "type": "standard.Link", "source": {"id": "stg-cust", "port": "field-right-s_id"}, "target": {"id": "dim-cust", "port": "field-left-m_id"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-6", "type": "standard.Link", "source": {"id": "stg-cust", "port": "field-right-s_email"}, "target": {"id": "dim-cust", "port": "field-left-m_email"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-7", "type": "standard.Link", "source": {"id": "stg-cust", "port": "field-right-s_name"}, "target": {"id": "dim-cust", "port": "field-left-m_name"}, "linkKind": "mapping", "mappingType": "Standard"},
+    {"id": "map-8", "type": "standard.Link", "source": {"id": "stg-cust", "port": "field-right-s_email"}, "target": {"id": "dim-cust", "port": "field-left-m_domain"}, "linkKind": "mapping", "mappingType": "Formula", "expressionRule": "SPLIT_PART(email, '@', 2)"}
+  ] }
+}
+```
+
 ### 7. Connectivity completeness (audit before delivering)
 
-A syntactically valid mapping can still be **incomplete** — a box or field with no lineage reads as a mistake, not a footnote. Audit connectivity at both levels before delivering:
+A syntactically valid mapping can still be **incomplete** - a box or field with no lineage reads as a mistake, not a footnote. Audit connectivity at both levels before delivering. **In any pipeline:** no card sits unconnected; every field of the first and middle layers feeds a later layer (or the diagram is scoped to leave it out, and says so); every field of the last layer has at least one input. **In Data Cloud**, stricter rules apply:
 
 - **Object level: no object may sit unconnected.** Even reference DMOs (Consent Status, Data Use Purpose, …) get their `Name` seeded from a DLO value (a normalising `Formula` link) rather than floating linkless.
 - **Field level**, per layer:
 
   | Layer | Rule |
   |---|---|
-  | Source | Every field maps somewhere — including key fields feeding the Data Stream's calculated key (draw the `src → Data Stream` input). |
+  | Source | Every field maps somewhere - including key fields feeding the Data Stream's calculated key (draw the `src → Data Stream` input). |
   | Data Stream | Every field maps into the DLO. |
   | DLO | Every field has ≥1 link (in or out). |
-  | DMO | The only layer where fields *may* be unmapped — but **not keys** (next rule). |
+  | DMO | The only layer where fields *may* be unmapped - but **not keys** (next rule). |
   | Activation | Every field receives a mapping. |
 
-- **A keyed DMO field is unmapped only with a stated reason.** The DLO record key maps into each fed DMO's **PK** (and PartyId where present); reference DMO PKs derive from the driving value (`Formula`, e.g. "Key derived from <Name>"); resolvable FKs get a `Formula` "Resolve X by Y" link. The legitimate exceptions: the **IR-generated identity spine** (Unified Individual / Unified Link — never source-mapped, §5), **FKs to objects outside the diagram's scope**, and **reference-only FKs with no source**.
+- **A keyed DMO field is unmapped only with a stated reason.** The DLO record key maps into each fed DMO's **PK** (and PartyId where present); reference DMO PKs derive from the driving value (`Formula`, e.g. "Key derived from <Name>"); resolvable FKs get a `Formula` "Resolve X by Y" link. The legitimate exceptions: the **IR-generated identity spine** (Unified Individual / Unified Link - never source-mapped, §5), **FKs to objects outside the diagram's scope**, and **reference-only FKs with no source**.
 
 ### 8. Validation checklist (avoid the common mistakes)
 
 - ✅ `"diagramType": "datamapping"` (`"mapping"` is an accepted alias; `"data"` opens a Data Model instead).
-- ✅ Layers are `sf.Zone` with `layerStage` (`source`/`datastream`/`dlo`/`dmo`/`activation`) — **not** a `sf.Container` named "Source".
+- ✅ Layers are `sf.Zone`s - **not** a `sf.Container` named "Source". A Data Cloud stage carries `layerStage` (`source`/`datastream`/`dlo`/`dmo`/`activation`) and its accent; any other layer (a lineage's Raw / Staging / Mart) carries NO `layerStage` and an accent from the palette (§1).
 - ✅ Every DataObject is **embedded** in its layer Zone: object `parent` = zone id **and** zone `embeds` includes the object id.
-- ✅ Object typing is `category` = `Profile`/`Engagement`/`Other` (top-level, set on every DLO/DMO) — **not** `objectCategory`.
-- ✅ Field links reference ports via the endpoint **`port`** key as `field-right-<fid>` / `field-left-<fid>` — **not** `<fid>#fieldRight`. Source side uses `field-right-…`, target side `field-left-…`.
-- ✅ Mapping links: `linkKind:"mapping"` and a `mappingType` from the five-value set, NO `attrs` (the loader applies the amber 1 px look; author both `stroke` and `strokeWidth` or neither); add `expressionRule` for non-`Standard`. Do **not** set a router on a mapping link — the app applies `sfMappingRouter`.
+- ✅ (Data Cloud) Object typing is `category` = `Profile`/`Engagement`/`Other` (top-level, set on every DLO/DMO) - **not** `objectCategory`. No `category` on Source and Data Stream cards, or on any card of a non-Data-Cloud lineage.
+- ✅ Field links reference ports via the endpoint **`port`** key as `field-right-<fid>` / `field-left-<fid>` - **not** `<fid>#fieldRight`. Source side uses `field-right-…`, target side `field-left-…`.
+- ✅ Mapping links: `linkKind:"mapping"` and a `mappingType` (`Standard` / `Formula` anywhere; `Streaming Transform` / `Batch Transform` / `Calculated Insight` only in Data Cloud), NO `attrs` (the loader applies the amber 1 px look; author both `stroke` and `strokeWidth` or neither); add `expressionRule` for non-`Standard`. Do **not** set a router on a mapping link - the app applies `sfMappingRouter`.
 - ✅ ER relationship links: **no** `linkKind`, header ports (`er-left`/`er-right`), `sfManhattan` router, crow's-foot markers.
 - ✅ Mark any field you connect with a `fid`; omit `ports` entirely (never a partial list - the app builds every port, and a dropped one is an attachment point the user loses).
-- ✅ DLO/DMO field `type` from Data Cloud's set (`Text`/`Number`/`Percent`/`Date`/`DateTime`/`Boolean`/`Email`/`Phone`/`URL`); keep native types only on Source objects, and remember a **standard** DMO field is `Text` for flags, emails, phones and URLs (§3).
-- ✅ Every `data-icon-id` token comes from the **Icon ID reference** tables — never invent an SLDS-sounding name (an unknown ID renders an invisible blank). No fitting token → `href: ""`. Icons are all-or-none per diagram: a mix of iconed and icon-less objects reads as a bug.
-- ✅ No unconnected objects; field-level connectivity audited per §7 (Source/Data Stream/DLO/Activation fields all linked; keyed DMO fields mapped or exempted with a reason).
-- ✅ No mapping link points into Unified Individual — the identity spine is grey ER links (§5).
+- ✅ (Data Cloud) DLO/DMO field `type` from Data Cloud's set (`Text`/`Number`/`Percent`/`Date`/`DateTime`/`Boolean`/`Email`/`Phone`/`URL`); keep native types only on Source objects, and remember a **standard** DMO field is `Text` for flags, emails, phones and URLs (§3). Outside Data Cloud keep each system's own types, and make a type-changing mapping a `Formula`.
+- ✅ Every `data-icon-id` token comes from the **Icon ID reference** tables - never invent an SLDS-sounding name (an unknown ID renders an invisible blank). No fitting token → `href: ""`. Icons are all-or-none per diagram: a mix of iconed and icon-less objects reads as a bug.
+- ✅ No unconnected objects; field-level connectivity audited per §7 (in Data Cloud: Source/Data Stream/DLO/Activation fields all linked; keyed DMO fields mapped or exempted with a reason).
+- ✅ (Data Cloud) No mapping link points into Unified Individual - the identity spine is grey ER links (§5).
 - ✅ Same-column pairs (Source → Data Stream) anchor both link ends on the outer side (`field-left` at both); `field-right → field-left` is for left-to-right pairs only (§4).
 
 ---
@@ -1944,7 +2018,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -1977,7 +2051,7 @@ row), so the Table view reports it as a field-level `1:Many`.
 
 ```json
 {
-  "version": 1, "appVersion": "1.25.9", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "version": 1, "appVersion": "1.26.1", "title": "Account-Contact ERD", "diagramType": "datamodel",
   "graph": { "cells": [
     {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
     {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
@@ -1998,7 +2072,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2028,7 +2102,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2061,7 +2135,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2104,7 +2178,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2153,7 +2227,7 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.25.9",
+  "appVersion": "1.26.1",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
@@ -2202,7 +2276,11 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ### Layout rules: what a reader notices
 
 These come from diagrams that validated clean yet needed hand fixes before going into a document. The validator
-warns on the first seven (on rule 5, only for a link with `vertices`). The last three need you to look at a render.
+warns on the first seven (on rule 5, only for a link with `vertices`). Rules 1-4 and 6 are checked on `architecture`,
+`process`, `datamodel` and `org` diagrams, rule 7 on `datamodel` only, and rule 5 on every type. A converted `flow`
+keeps Flow Builder's coordinates, `gantt` bars come from their dates and a `sequence` lays out on its lifelines; a
+`datamapping` follows the lane geometry of its own section (§3b there), which the converter and Auto Layout produce.
+The last three need you to look at a render.
 
 1. **A gateway or event label goes on a side no link uses.** The default is below the shape
    (`y: calc(h + 10)`), so a link leaving `port-bottom` is drawn through the text. Above is
@@ -2222,8 +2300,8 @@ warns on the first seven (on rule 5, only for a link with `vertices`). The last 
    It matters most for a link with `vertices`: moving the frame otherwise leaves its bends behind.
 6. **Leave 48 px between a card and its frame's edge on any side its in-frame links leave from.** A link turns
    32 px out of its port and keeps 16 px clear, so a loop out of a card's bottom port in a pool whose edge is 28 px
-   below the card runs along the pool's border. Measure from below a Container's title bar and right of a Pool's
-   band.
+   below the card runs along the pool's border. Measure from below a Container's title bar and past a Pool's
+   title band: right of it by default, below it on a vertical pool with the stencil's top header.
 7. **In a data model, leave 128 px between columns of objects.** Every field row and side port turns its link 32 px
    out, so in a narrower gap the links of both columns turn onto the same few lines, and links of different colours
    run on one line (at 64 px the turns of the two columns meet exactly). Auto Layout and the skill's ERD generator

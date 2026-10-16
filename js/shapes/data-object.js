@@ -1,10 +1,11 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.25.9';
-import { ensureFieldFids, fieldHasLink, getVisibleDataObjectFields } from './fields.js?v=1.25.9';
-import { portGroups } from './ports.js?v=1.25.9';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.25.9';
+import { sctx } from './context.js?v=1.26.1';
+import { ensureFieldFids, fieldHasMappingLink, getVisibleDataObjectFields } from './fields.js?v=1.26.1';
+import { portGroups } from './ports.js?v=1.26.1';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.26.1';
+import { textUnits, sliceUnits } from '../util.js?v=1.26.1';
 
 export function registerDataObject() {
   // --- DataObject ---
@@ -223,7 +224,7 @@ export function registerDataObject() {
       // link, of the total. Always shown in mapping mode, always the label colour.
       const fields = model.get('fields') || [];
       const total = fields.length;
-      const mapped = fields.filter(f => fieldHasLink(model, f)).length;
+      const mapped = fields.filter(f => fieldHasMappingLink(model, f)).length;   // a join is not a mapping
       chip(`${mapped}/${total}`);
       // Category chip (only when set).
       const category = model.get('category');
@@ -445,8 +446,10 @@ export function registerDataObject() {
         const typeW = typeStr ? typeStr.length * 5.6 + 8 : 4;   // ~px, font-size 10
         const avail = width - labelX - typeW - 8;               // px left for the label
         const maxChars = Math.max(3, Math.floor(avail / 6.3));  // ~px per char, font-size 11
+        // A CJK / fullwidth character is a full 11 px em, not 6.3 px; count and cut by code point (K10).
+        const WIDE = 11 / 6.3;
         let labelText = fullLabel;
-        if (labelText.length > maxChars) labelText = labelText.slice(0, maxChars - 1).trimEnd() + '…';
+        if (textUnits(labelText, WIDE) > maxChars) labelText = sliceUnits(labelText, maxChars - 1, WIDE).trimEnd() + '…';
         const label = document.createElementNS(ns, 'text');
         label.setAttribute('x', String(labelX));
         label.setAttribute('y', String(textY));
@@ -530,14 +533,17 @@ export function registerDataObject() {
           // an expand pushes room open — by shifting same-parent siblings BELOW this object by the
           // height delta. Runs inside the same undo batch (synchronous after the resize). No global
           // reshuffle / no viewport re-frame; the parent then re-fits via its change:size trigger.
+          // Only the cards in this card's COLUMN (x-spans overlap) move: shifting every lower card in the
+          // zone ran the other columns into their neighbours (K2, the MCN Consent template, 2026-10-15).
           if (sctx.autoFitGetter && sctx.autoFitGetter()) {
             const delta = m.size().height - beforeH;
             const gr = m.graph, parentId = m.get('parent');
             if (gr && parentId && delta) {
-              const myTop = m.position().y;
+              const myTop = m.position().y, mx = m.position().x, mw = m.size().width;
               gr.getElements().forEach(c => {
                 if (c !== m && c.get('parent') === parentId && c.get('type') === 'sf.DataObject'
-                    && c.position().y > myTop) {
+                    && c.position().y > myTop
+                    && c.position().x < mx + mw && mx < c.position().x + c.size().width) {
                   c.position(c.position().x, c.position().y + delta);
                 }
               });

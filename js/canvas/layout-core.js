@@ -676,24 +676,69 @@ export function layoutGraphSubset(units, edges = [], opts = {}) {
 
   components.forEach(comp => layoutComponent(comp));
 
+  // gridSingletons (review H2-7): every unlinked unit is a component of its own, so the stacking below put 20 unlinked
+  // cards in a 180 x 2496 px column (a 4816 px row in horizontal mode). Opt-in like M6/M7: the unlinked units leave the
+  // stack and pack into a grid AFTER the connected components instead, so a layout without them is unchanged.
+  const singles = opts.gridSingletons ? components.filter((c) => c.length === 1).map((c) => c[0]) : [];
+  const stacked = singles.length ? components.filter((c) => c.length > 1) : components;
+
   // Arrange disconnected components: horizontal stacks side-by-side, vertical stacks top-to-bottom
   const COMP_GAP = opts.compGap ?? DEFAULT_GAPS.compGap;
+  let compX = 0, compY = 0, blockW = 0, blockH = 0;   // the stack's next free offset and its extent across the flow
   if (isHorizontal) {
-    let compX = 0;
-    for (const comp of components) {
+    for (const comp of stacked) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const id of comp) { const p = pos.get(id), sz = sizes.get(id); minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x + sz.w); maxY = Math.max(maxY, p.y + sz.h); }
       for (const id of comp) { const p = pos.get(id); p.x += compX - minX; p.y += -minY; }
       compX += (maxX - minX) + COMP_GAP;
+      blockH = Math.max(blockH, maxY - minY);
     }
   } else {
-    let compY = 0;
-    for (const comp of components) {
+    for (const comp of stacked) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const id of comp) { const p = pos.get(id), sz = sizes.get(id); minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x + sz.w); maxY = Math.max(maxY, p.y + sz.h); }
       for (const id of comp) { const p = pos.get(id); p.x += -minX; p.y += compY - minY; }
       compY += (maxY - minY) + COMP_GAP;
+      blockW = Math.max(blockW, maxX - minX);
     }
+  }
+
+  if (singles.length) {
+    // A row-major table in units order: each column as wide as its widest card, each row as tall as its tallest.
+    const grid = (cols) => {
+      const colW = new Array(cols).fill(0), rowH = new Array(Math.ceil(singles.length / cols)).fill(0);
+      singles.forEach((id, i) => {
+        const s = sizes.get(id);
+        colW[i % cols] = Math.max(colW[i % cols], s.w);
+        rowH[Math.floor(i / cols)] = Math.max(rowH[Math.floor(i / cols)], s.h);
+      });
+      const span = (xs, gap) => xs.reduce((a, b) => a + b, 0) + (xs.length - 1) * gap;
+      return { colW, rowH, w: span(colW, GAP_X), h: span(rowH, GAP_Y) };
+    };
+    const n = singles.length;
+    // Square-ish on its own: the fewest columns that make the grid at least as wide as it is tall.
+    let cols = n;
+    for (let c = 1; c <= n; c++) { const g = grid(c); if (g.w >= g.h) { cols = c; break; } }
+    if (stacked.length) {
+      // Next to connected components it matches their extent across the flow: below a vertical layout as many columns
+      // as fit its width, beside a horizontal one as few as fit its height. Never narrower (vertical) or wider
+      // (horizontal) than the square grid, so a single linked pair does not bring the column back.
+      if (!isHorizontal) {
+        for (let c = cols + 1; c <= n && grid(c).w <= blockW; c++) cols = c;
+      } else {
+        for (let c = 1; c < cols; c++) if (grid(c).h <= blockH) { cols = c; break; }
+      }
+    }
+    const { colW, rowH } = grid(cols);
+    const colX = [], rowY = [];
+    colW.reduce((x, w, i) => { colX[i] = x; return x + w + GAP_X; }, 0);
+    rowH.reduce((y, h, i) => { rowY[i] = y; return y + h + GAP_Y; }, 0);
+    // After the stack: below it on a vertical layout, right of it on a horizontal one. Each card centred in its cell.
+    const x0 = isHorizontal ? compX : 0, y0 = isHorizontal ? 0 : compY;
+    singles.forEach((id, i) => {
+      const s = sizes.get(id), c = i % cols, r = Math.floor(i / cols);
+      pos.set(id, { x: x0 + colX[c] + (colW[c] - s.w) / 2, y: y0 + rowY[r] + (rowH[r] - s.h) / 2 });
+    });
   }
 
   // Overlap removal — prefer horizontal push to preserve layer structure
@@ -875,4 +920,120 @@ export function planLaneNormalisation(lanes, links = [], opts = {}) {
     height,
     lanes: filled.map((l) => ({ id: l.id, y: top, height, cards: result.get(l.id) })),
   };
+}
+
+// ── Flow annotation zones (review H2-4) ─────────────────────────────
+// Stage bands and Flow Builder Group zones are plain sf.Zone rectangles BEHIND the cards, deliberately not their
+// JointJS parents (limits/gotchas-converters.md), so Flow Auto Layout has to carry them itself. A card belongs to a
+// zone when its box lies fully inside the zone's box before the layout.
+const boxInside = (a, b) => a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height;
+
+/** The converter's band padding (js/persistence/flow-convert.js BAND_PAD_X / _TOP / _BOTTOM; a unit test holds them
+ *  equal), so a refitted zone matches a freshly converted one. */
+export const FLOW_ZONE_PAD = { x: 24, top: 34, bottom: 24 };
+
+/**
+ * Zones whose member cards form a single-entry, single-exit chain - a stage band: the stage card and its steps. Flow
+ * Auto Layout places such a chain as ONE stacked unit (computeFlowLayout `stack`), exactly as the converter does, so
+ * the same-rank resolver cannot push a foreign card in between. A zone that holds another zone is never a chain.
+ *
+ * @param {Array<{id:string, box:{x:number,y:number,width:number,height:number}}>} zones
+ * @param {Array<{id:string, box:{x:number,y:number,width:number,height:number}}>} cards  current card boxes
+ * @param {Array<{source:string, target:string, kind?:string}>} edges  'fault' and 'goto' edges do not shape a chain
+ * @returns {Map<string, string[]>}  chain head id -> the rest of the chain, in order
+ */
+export function planFlowZoneChains(zones = [], cards = [], edges = []) {
+  const out = new Map();
+  const claimed = new Set();
+  const shaping = edges.filter((e) => e && e.kind !== 'fault' && e.kind !== 'goto' && e.source !== e.target);
+  for (const z of zones) {
+    if (zones.some((o) => o !== z && boxInside(o.box, z.box))) continue;
+    const members = cards.filter((c) => boxInside(c.box, z.box)).map((c) => c.id);
+    if (members.length < 2 || members.some((id) => claimed.has(id))) continue;
+    const inZone = new Set(members);
+    const internal = shaping.filter((e) => inZone.has(e.source) && inZone.has(e.target));
+    if (internal.length !== members.length - 1) continue;
+    const next = new Map();
+    const hasIn = new Set();
+    let branches = false;
+    for (const e of internal) {
+      if (next.has(e.source) || hasIn.has(e.target)) branches = true;
+      next.set(e.source, e.target);
+      hasIn.add(e.target);
+    }
+    if (branches) continue;
+    const heads = members.filter((id) => !hasIn.has(id));
+    if (heads.length !== 1) continue;
+    const chain = [heads[0]];
+    while (next.has(chain[chain.length - 1]) && chain.length <= members.length) chain.push(next.get(chain[chain.length - 1]));
+    if (chain.length !== members.length) continue;
+    const head = chain[0], tail = chain[chain.length - 1];
+    // One way in and one way out: nothing outside enters past the head or leaves before the tail.
+    if (shaping.some((e) => (!inZone.has(e.source) && inZone.has(e.target) && e.target !== head)
+      || (inZone.has(e.source) && !inZone.has(e.target) && e.source !== tail))) continue;
+    chain.forEach((id) => claimed.add(id));
+    out.set(head, chain.slice(1));
+  }
+  return out;
+}
+
+/**
+ * New boxes for the zones after a re-layout. Each zone hugs the cards that sat fully inside it before, padded like
+ * the converter's bands; a zone that sat inside another is fitted first and its new box is wrapped by the outer one,
+ * as the converter nests Group zones. A zone with no member card is left out, so it stays where it is.
+ *
+ * @param {Array<{id:string, box:{x:number,y:number,width:number,height:number}}>} zones  boxes before the layout
+ * @param {Array<{id:string, before:object, after:object}>} cards  card boxes before and after the layout
+ * @param {{x:number, top:number, bottom:number}} [pad]
+ * @returns {Map<string, {x:number, y:number, width:number, height:number}>}
+ */
+export function planFlowZoneRefit(zones = [], cards = [], pad = FLOW_ZONE_PAD) {
+  const out = new Map();
+  const area = (b) => b.width * b.height;
+  const ordered = [...zones].sort((a, b) => area(a.box) - area(b.box));   // innermost first
+  for (const z of ordered) {
+    const members = cards.filter((c) => boxInside(c.before, z.box));
+    if (!members.length) continue;
+    const boxes = members.map((c) => c.after);
+    for (const o of ordered) if (o !== z && out.has(o.id) && boxInside(o.box, z.box)) boxes.push(out.get(o.id));
+    const x0 = Math.min(...boxes.map((b) => b.x)) - pad.x;
+    const y0 = Math.min(...boxes.map((b) => b.y)) - pad.top;
+    const x1 = Math.max(...boxes.map((b) => b.x + b.width)) + pad.x;
+    const y1 = Math.max(...boxes.map((b) => b.y + b.height)) + pad.bottom;
+    out.set(z.id, { x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+  }
+  return out;
+}
+
+// ── Data Mapping generic layers (2026-10-15) ────────────────────────
+// A layer zone with no Data Cloud `layerStage` (the stencil's "Layer", or a lineage tool's Raw / Staging / Mart) gets a
+// column of its own. They all shared ONE column until then, so a three-layer lineage collapsed into a single stack.
+
+/**
+ * Left-to-right order for the generic layers. A layer comes after every layer that maps into it, so a Raw -> Staging
+ * -> Mart lineage reads left to right whatever order its zones were drawn in. Among the layers free to go next, the
+ * leftmost goes first (then the topmost, then the input order), so an order that already follows the flow is kept. A
+ * cycle is broken at the layer with the fewest mappings coming in from the layers not yet placed.
+ *
+ * @param {Array<{id:string, x:number, y:number}>} layers  each layer's current top-left
+ * @param {Array<{source:string, target:string}>} edges  one per mapping link, layer to layer; a repeat weighs more
+ * @returns {string[]}  layer ids, left to right
+ */
+export function orderLayerColumns(layers = [], edges = []) {
+  const ids = new Set(layers.map((l) => l.id));
+  const flow = edges.filter((e) => e && ids.has(e.source) && ids.has(e.target) && e.source !== e.target);
+  const rank = new Map(layers.map((l, i) => [l.id, i]));
+  const left = [...layers];
+  const out = [];
+  while (left.length) {
+    const open = new Set(left.map((l) => l.id));
+    const inn = new Map(left.map((l) => [l.id, 0]));
+    for (const e of flow) if (open.has(e.source) && open.has(e.target)) inn.set(e.target, inn.get(e.target) + 1);
+    const fewest = Math.min(...inn.values());
+    const next = left.filter((l) => inn.get(l.id) === fewest)
+      .sort((a, b) => (a.x - b.x) || (a.y - b.y) || (rank.get(a.id) - rank.get(b.id)))[0];
+    out.push(next.id);
+    left.splice(left.indexOf(next), 1);
+  }
+  return out;
 }

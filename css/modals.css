@@ -77,6 +77,21 @@
   overflow: hidden;
 }
 
+/* Motion (layout.css keyframes): the scrim fades and the dialog pops in, on mount or when a pre-rendered
+   `.df-modal--hidden` modal is shown. Enter only - close() removes the modal at once. Skipped for:
+   - `--origin`: the Save / Load / Share managers scale in from their navbar button in JS (buildModal), and two
+     animations on one element would fight;
+   - `--swap` (the scrim only): a modal opened right after another closed keeps its scrim solid, so the dim
+     does not blink off and on between them. */
+.df-modal:not(.df-modal--origin):not(.df-modal--swap) > .df-modal__overlay {
+  animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out);
+}
+.df-modal:not(.df-modal--origin) > .df-modal__dialog {
+  animation: df-motion-pop var(--df-motion-base) var(--df-ease-out);
+}
+/* An anchored dialog without an origin (the Gantt dependency editor) grows from its corner under the trigger. */
+.df-modal--anchored .df-modal__dialog { transform-origin: top left; }
+
 .df-modal__header {
   display: flex;
   align-items: center;
@@ -226,8 +241,8 @@
   gap: var(--spacing-sm);
 }
 .df-save-mgr__backup-text { flex: 1; min-width: 0; }
-/* "Back up now" — brand-amber OUTLINE (no fill). Darker amber in light mode for
-   WCAG text contrast; fills on hover. The `.df-modal__btn` compound selector
+/* "Back up now" — brand-amber OUTLINE (no fill); the label is ink in light mode for WCAG text contrast (R7);
+   fills on hover. The `.df-modal__btn` compound selector
    keeps it ahead of the neutral `.df-modal__btn` base (which is defined later
    in the file). */
 .df-modal__btn.df-save-mgr__backup-now {
@@ -235,7 +250,7 @@
   white-space: nowrap;
   background: transparent;
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 .df-modal__btn.df-save-mgr__backup-now:hover {
   background: var(--brand-amber-strong);
@@ -249,23 +264,23 @@
 .df-modal__btn.df-save-mgr__backup-now.is-backed:hover {
   background: var(--brand-green);
   border-color: var(--brand-green);
-  color: #fff;
+  color: var(--modal-btn-neutral-fg);   /* ink on green: white was 2.87:1 (R7) */
 }
 
 /* Reusable brand-amber OUTLINE (wire) button — the EXPORT role across the managers (per-row Export, Export
-   Selected). Transparent fill; darker amber in light mode for text contrast; fills on hover. Mirrors the
+   Selected). Transparent fill; amber border with an ink label in light mode for text contrast (R7). Mirrors the
    backup-now treatment. The compound `.df-modal__btn` selector keeps it ahead of the neutral base. */
 .df-modal__btn.df-modal__btn--amber-outline {
   background: transparent;
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 /* Hover stays a WIRE (a faint amber wash, never a solid fill) - uniform with "Save to Google Drive" so every amber
    wire button reads the same. */
 .df-modal__btn.df-modal__btn--amber-outline:hover:not(:disabled) {
   background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent);
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 
 /* Legacy save-item aliases — now handled by .df-modal__row */
@@ -450,7 +465,8 @@
    at 30%. */
 .df-prompt-modal__input:focus,
 .df-prompt-modal__input:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;   /* forced colors drop the box-shadow ring and paint this one (review R10) */
+  outline-offset: 1px;
   box-shadow: 0 0 0 3px rgba(29, 115, 201, 0.30);
 }
 .df-prompt-modal__input:required:placeholder-shown:focus,
@@ -459,17 +475,20 @@
 }
 
 /* ── Toast (v1.12.0) ────────────────────────────────
-   Non-blocking transient notifications. Stack in a fixed bottom-centre
-   container; each toast slides in from below, auto-dismisses after 2s,
-   click-to-dismiss available. Four kinds: success / info / warning /
-   error — each with its own accent colour drawn from the brand tokens. */
+   Non-blocking transient notifications. Stack in a fixed top-centre
+   container; each toast slides down into view, auto-dismisses after 4s
+   (TOAST_DEFAULT_DURATION), click-to-dismiss available. Four kinds: success /
+   info / warning / error — each with its own accent colour drawn from the brand tokens. */
 /* Toasts at the TOP, centered, just below the tab bar (the `top` is set in JS from the live tab-bar bottom;
-   this is the pre-JS fallback). The user's eyes + the toast-firing actions live up here, not at the bottom. */
+   this is the pre-JS fallback). The user's eyes + the toast-firing actions live up here, not at the bottom.
+   The container spans the viewport less a 16px gutter and centres each toast in it. A `left: 50%` +
+   translateX(-50%) container shrink-to-fits into HALF the viewport, so a wrapping toast got 195px of a 390px
+   phone and a one-line toast broke onto two. pointer-events: none keeps the empty span click-through. */
 .df-toast-container {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 80px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
+  right: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -494,23 +513,42 @@
   pointer-events: auto;
   cursor: pointer;
   opacity: 0;
-  transform: translateY(-12px);   /* slides DOWN into view from above (toasts now sit at the top) */
-  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+  transform: translateY(-8px);   /* slides DOWN into view from above (toasts now sit at the top) */
+  /* The un-shown state is also the EXIT, so this is the exit transition (FAST); --shown carries the enter. */
+  transition: opacity var(--df-motion-fast) var(--df-ease-out), transform var(--df-motion-fast) var(--df-ease-out);
 }
 .df-toast--shown {
   opacity: 1;
   transform: translateY(0);
+  transition-duration: var(--df-motion-base);
+}
+/* Dismissal (feedback.js): the toast fades, then its box collapses (--collapsing, height pinned and zeroed inline)
+   so the newer toasts below slide up instead of jumping. The -8px margin takes the container's gap with it, and
+   overflow: hidden lets the flex item shrink below its content height. This is the one motion that animates a
+   layout property, on an element already at opacity 0. The fading toast keeps taking clicks: it is still visible,
+   so a second click of a double-click must not fall through to the canvas (clearing the selection, starting a
+   pan). dismiss() and the buttons are once-only. Only the collapsing box is click-through. */
+.df-toast--collapsing {
+  pointer-events: none;
+  padding-block: 0;
+  border-block-width: 0;
+  margin-bottom: -8px;
+  overflow: hidden;
+  transition: height var(--df-motion-fast) var(--df-ease-out), padding var(--df-motion-fast) var(--df-ease-out),
+    border-width var(--df-motion-fast) var(--df-ease-out), margin var(--df-motion-fast) var(--df-ease-out);
 }
 .df-toast__icon {
   display: inline-flex;
   flex-shrink: 0;
 }
+/* The message wraps: an ellipsis cut the second half of long errors, which is where the fix is stated ("sign in
+   as X ... or Disconnect Drive"). A short toast still sits on one line, since the toast shrinks to fit. A
+   multiline toast (import notes) also keeps its line breaks. */
 .df-toast__message {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
-.df-toast--action .df-toast__message { white-space: normal; }
+.df-toast--multiline { align-items: flex-start; }
+.df-toast--multiline .df-toast__message { white-space: pre-line; }
 .df-toast__action {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -538,7 +576,7 @@
 .df-toast__close:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 1px; }
 .df-toast--success .df-toast__icon { color: var(--brand-green); }
 .df-toast--info    .df-toast__icon { color: var(--brand-blue); }
-.df-toast--warning .df-toast__icon { color: var(--brand-amber); }
+.df-toast--warning .df-toast__icon { color: var(--brand-amber-line); }   /* glyph amber, 3:1 in light (S8-8) */
 .df-toast--error   .df-toast__icon { color: var(--brand-red); }
 
 /* ── About modal ───────────────────────────────────── */
@@ -685,6 +723,12 @@
   border-bottom-color: var(--color-primary);
 }
 .df-load-mgr__tab.is-active .df-toolbar__icon { opacity: 1; }
+/* Phone width: the four tabs with icons ran ~60px past the strip, leaving Paste a clipped sliver with no scroll cue
+   (Q12). Drop the icons and tighten the padding so every label fits down to a 360px screen. */
+@media (max-width: 480px) {
+  .df-load-mgr__tab { padding: 9px 10px; }
+  .df-load-mgr__tab .df-toolbar__icon { display: none; }
+}
 
 /* Pane holds whichever tab is active; a min-height keeps the overlay from jumping between tabs. */
 .df-load-mgr__pane {
@@ -773,7 +817,7 @@
   display: inline-flex; align-items: center;
   font-size: 11px; font-weight: 600; line-height: 1; text-transform: none; letter-spacing: 0;
   padding: 3px 8px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
-  color: var(--brand-amber);
+  color: var(--brand-amber-text);   /* the amber is the border + tint; ink label in light (R7) */
   border: 1px solid color-mix(in srgb, var(--brand-amber) 55%, transparent);
   background: color-mix(in srgb, var(--brand-amber) 12%, transparent);
 }
@@ -782,10 +826,13 @@
 .df-share-pill.df-share-pill--sm { padding: 1px 7px; margin-left: 8px; font-size: 10px; }
 /* A "Shared File" / "Shared Drive" storage chip is brand-amber (item 4): sharing should stand out from the
    green ownership chips (This browser / My Drive). Applies wherever the chip appears (Load, Save, Close & Delete).
-   The `.is-on` variant needs 3-class specificity to beat `.df-save-mgr__chip.is-on { color: green }` below. */
-.df-save-mgr__chip.df-save-mgr__chip--shared { color: var(--brand-amber); border-color: var(--brand-amber); }
-.df-save-mgr__chip.is-on.df-save-mgr__chip--shared { color: var(--brand-amber); }
-.df-save-mgr__chip--shared .df-save-mgr__check { color: var(--brand-amber); }
+   The `.is-on` variant needs 3-class specificity to beat `.df-save-mgr__chip.is-on { color: green }` below.
+   In light mode the label is ink and the check glyph carries the amber at the line stop (3:1 for a glyph, R7). */
+.df-save-mgr__chip.df-save-mgr__chip--shared { color: var(--brand-amber-text); border-color: var(--brand-amber); }
+.df-save-mgr__chip.is-on.df-save-mgr__chip--shared { color: var(--brand-amber-text); }
+.df-save-mgr__chip--shared .df-save-mgr__check { color: var(--brand-amber-line); }
+/* "This device only" on a browser archive with no Drive copy (deviceOnlyChipHtml): the same amber heads-up, no check. */
+.df-save-mgr__chip.df-save-mgr__chip--device { color: var(--brand-amber-text); font-weight: 600; }
 /* Shared-with-you rows stack Clone ABOVE Load (item 2) instead of side by side. */
 .df-drive-library__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex-shrink: 0; }
 .df-drive-library__actions .df-modal__btn { width: 100%; }
@@ -999,17 +1046,6 @@
 .df-modal__row-name:hover {
   border-color: var(--border-color);
 }
-/* When the editable Save name sits inside the info column (with the "Modified …"
-   meta below it), it must size to one line, not flex-grow vertically — and its
-   text must sit FLUSH-LEFT so it aligns with the "Modified …" meta below and
-   matches the static name in Export / Close-Tabs. Drop the left padding only
-   (keep the right so a long name still has breathing room when editing). */
-.df-save-modal__row-info .df-modal__row-name {
-  flex: 0 0 auto;
-  width: 100%;
-  padding-left: 0;
-}
-
 .df-modal__row-name:focus {
   border-color: var(--color-primary);
   background: var(--bg-app);
@@ -1073,7 +1109,7 @@
    hover above). Covers both the link Copy buttons and the per-row "Copy link" in Shared copies (#1, #2). */
 .df-share__copy.is-copied,
 .df-share__copy-json.is-copied,
-.df-share__copy-copy.is-copied { color: #fff; background: var(--brand-green); border-color: var(--brand-green); }
+.df-share__copy-copy.is-copied { color: var(--modal-btn-neutral-fg); background: var(--brand-green); border-color: var(--brand-green); }   /* ink: white was 2.87:1 (R7) */
 /* Item 15: in DARK mode the Share Copy + Create-link primaries are brand AMBER (they stay brand-blue in light).
    Excludes the green "✓ Copied!" success state so that flash still shows. The blue `--primary:hover` opacity rule
    still applies, so hover stays a (slightly faded) amber - consistent with "hover follows the base fill". */
@@ -1152,13 +1188,13 @@
 .df-share__status-row { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); line-height: 1.45; color: var(--text-secondary); }
 .df-share__status-text { flex: 1 1 auto; min-width: 0; }
 .df-share__status-row strong { color: var(--text-primary); font-weight: 600; }
-.df-share__status-icon { flex: 0 0 auto; width: 15px; height: 15px; color: var(--brand-amber); fill: currentColor; }
+.df-share__status-icon { flex: 0 0 auto; width: 15px; height: 15px; color: var(--brand-amber-line); fill: currentColor; }   /* glyph amber (S8-8) */
 .df-share__status-icon use { fill: currentColor; }
 /* "Manage" / "View original" - a compact amber WIRE button (wash on hover), right-aligned + vertically centred. */
 .df-share__manage-btn {
   flex: 0 0 auto; display: inline-flex; align-items: center; white-space: nowrap;
   padding: 4px 10px; font-size: 12px; font-weight: 600; text-decoration: none;
-  border: 1px solid var(--brand-amber-strong); border-radius: var(--border-radius-sm); color: var(--brand-amber-strong);
+  border: 1px solid var(--brand-amber-strong); border-radius: var(--border-radius-sm); color: var(--brand-amber-text);
 }
 .df-share__manage-btn:hover { background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent); }
 /* (i) panel: Copy / Collab in point form (vs the pros/cons two-column layout). */
@@ -1193,7 +1229,7 @@
 .df-share__copy-label { flex: 1 1 auto; min-width: 0; font-size: var(--font-size-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .df-share__copy-status { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); }
-.df-share__copy-row.is-conflict .df-share__copy-status { color: var(--brand-amber); font-weight: 600; }
+.df-share__copy-row.is-conflict .df-share__copy-status { color: var(--brand-amber-text); font-weight: 600; }
 .df-share__copy-row .df-modal__btn { flex-shrink: 0; padding: 3px 10px; font-size: 12px; }
 .df-share__copy-resolve { background: var(--brand-amber); color: #1a1a1a; border-color: var(--brand-amber); }
 /* Item 4: name the share TYPE (bold) before the recipient (muted), + a quiet danger Remove that revokes it. */
@@ -1211,7 +1247,7 @@
   color: var(--text-muted); cursor: pointer; }
 .df-history__iconbtn:hover { color: var(--text-primary); border-color: var(--text-muted); }
 .df-history__preview.is-active,
-.df-history__pin.is-pinned { color: var(--brand-amber); border-color: var(--brand-amber); }
+.df-history__pin.is-pinned { color: var(--brand-amber-line); border-color: var(--brand-amber-line); }   /* icon-only: the 3:1 line amber (R7) */
 /* Inline per-revision preview: a LANDSCAPE (laptop-aspect) thumbnail under the row, shown ONLY when opened (the
    [hidden] attr must collapse it — the base display:flex would otherwise leave an empty bar between rows). */
 .df-history__preview-box[hidden] { display: none; }
@@ -1240,6 +1276,7 @@
 /* The transient review banner — a fixed pill bottom-centre over the canvas while a review is active. */
 .df-review-bar {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 2500;
+  animation: df-motion-rise var(--df-motion-base) var(--df-ease-out);   /* `translate` composes with the centring transform */
   display: flex; align-items: center; gap: 16px; padding: 9px 12px 9px 18px;
   background: var(--bg-app); border: 1px solid var(--border-color); border-radius: 999px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
@@ -1310,19 +1347,15 @@
 .df-history__preview-thumb svg { max-width: 100%; max-height: 100%; }
 .df-history__preview-loading { font-size: var(--font-size-sm); color: var(--text-secondary); padding: 8px 0; }
 
-/* --- Load from Paste (df-paste-modal): two-column format recognition ------------------------------------- */
-/* Two side-by-side cards (Diagramforce JSON | Mermaid), muted by default. The recognised format lights brand
-   GREEN; unrecognised input flags BOTH brand RED. Driven by setFormat() in showPasteImportModal. */
-/* WRAPS, and each card has a floor. This started as two cards and is now four (Diagramforce JSON, Salesforce
-   Flow, Data Cloud mappings, Mermaid); four `flex:1 1 0` columns on a phone give ~70px each, which turns every
-   card into a column of single words. flex-wrap + a min-width lets them fall to two rows instead. */
-.df-paste-modal__formats { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 0; }
-.df-paste-modal__fmt {
-  flex: 1 1 180px; min-width: 180px; padding: 8px 10px;
-  border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);
-  color: var(--text-muted); transition: color var(--transition-fast), border-color var(--transition-fast);
+/* --- Load from Paste (df-paste-modal): the paste box, then format-card text ------------------------------------- */
+/* A class, not an inline style: an inline font size outranks the iOS 16 px floor at the end of this file (S8-5). */
+.df-paste-modal__input {
+  width: 100%; box-sizing: border-box; padding: 8px; resize: vertical;
+  font-family: var(--font-mono); font-size: var(--font-size-sm);
+  border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-panel); color: var(--text-primary);
 }
-.df-paste-modal__fmt-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--font-size-sm); margin-bottom: 4px; color: inherit; }
+/* The cards themselves (grid, padding, border, is-on / is-err) are the "collapsible cards" block further down.
+   These are the pieces inside a card that block does not style. Driven by setFormat() in showPasteImportModal. */
 .df-paste-modal__fmt-sub { font-size: 11px; line-height: 1.5; color: inherit; }
 .df-paste-modal__fmt-list { margin: 4px 0 0; padding-left: 16px; font-size: 11px; line-height: 1.5; color: inherit; }
 .df-paste-modal__fmt-list li { transition: color var(--transition-fast); }
@@ -1336,18 +1369,14 @@
 .df-paste-modal__fmt-body a:hover,
 .df-paste-modal__fmt-how a:hover,
 .df-paste-modal__fmt-note a:hover { color: var(--brand-green); }
-/* Recognised JSON → green the "Diagramforce JSON" title + its card border. Recognised Mermaid → green ONLY the
-   matched type name (the <li>, which also gains its "→ Target" mapping). Unrecognised → both cards red. */
-.df-paste-modal__fmt.is-on { border-color: var(--brand-green); }
-.df-paste-modal__fmt.is-on .df-paste-modal__fmt-title { color: var(--brand-green); }
-.df-paste-modal__fmt-list li.is-on { color: var(--brand-green); font-weight: 600; }
-/* Recognised-JSON "rawType → Friendly Type" line inside the Diagramforce JSON card (item 5). Brand green;
-   hidden until populated. */
-.df-paste-modal__fmt-detected { margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--brand-green); }
+/* Recognised Mermaid → green the matched type name (the <li>, which also gains its "→ Target" mapping). */
+.df-paste-modal__fmt-list li.is-on { color: var(--brand-green-text); font-weight: 600; }
+/* The recognised format's "rawType → Friendly Type" line, between the card head and its body (item 5). Green;
+   hidden until populated. Inset like the head's title, since the card itself has no padding. */
+.df-paste-modal__fmt-detected { margin: -2px 10px 8px; font-size: 11px; font-weight: 600; color: var(--brand-green-text); }
 .df-paste-modal__fmt-detected:empty { display: none; }
 .df-paste-modal__fmt-detected code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
 .df-paste-modal__load { margin-left: auto; }   /* right-aligned, with or without the Replace box on its left */
-.df-paste-modal__fmt.is-err { color: var(--brand-red); border-color: var(--brand-red); }
 /* The role-hierarchy card's one control. Readable text colour rather than the card's muted inherit: it is a
    control, not a description. */
 .df-paste-modal__roles-portal { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--text-primary); cursor: pointer; }
@@ -1428,7 +1457,7 @@
   white-space: nowrap;
 }
 .df-save-mgr__chip:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--text-muted); }
-.df-save-mgr__chip.is-on { color: var(--brand-green); font-weight: 600; }
+.df-save-mgr__chip.is-on { color: var(--brand-green-text); font-weight: 600; }
 .df-save-mgr__check { width: 10px; height: 10px; flex-shrink: 0; }
 /* Footer: "Add to Shared Drive" is a blue WIREFRAME secondary (transparent, brand-blue outline, fills on
    hover) pinned left; "Save to Drive" stays the primary. Wrap rather than overflow the 520px width. */
@@ -1442,10 +1471,10 @@
   display: inline-flex; align-items: center; gap: 6px;
   background: transparent;
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 /* Hover stays a WIRE (transparent fill) - a faint amber wash, not a solid fill, so it never reads as the primary. */
-.df-modal__btn.df-save-mgr__drivebtn:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent); color: var(--brand-amber-strong); }
+.df-modal__btn.df-save-mgr__drivebtn:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-amber-strong) 12%, transparent); color: var(--brand-amber-text); }
 .df-save-mgr__drivebtn .df-toolbar__icon { width: 15px; height: 15px; }
 /* "Add to Shared Drive" is brand-amber outline (item 5) but still carries the Drive glyph + label, so it needs
    the inline-flex icon layout the blue drivebtn provided. The class is the JS hook (btnShared), kept for wiring. */
@@ -1523,7 +1552,7 @@
 .df-backup-modal__btn.is-backed:hover {
   background: var(--brand-green);
   border-color: var(--brand-green);
-  color: #fff;
+  color: var(--modal-btn-neutral-fg);   /* ink on green: white was 2.87:1 (R7) */
   opacity: 1;
 }
 
@@ -1733,14 +1762,6 @@
   font-size: 11px;
 }
 
-.df-field-modal__check {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
-  justify-self: center;
-}
-
 .df-field-modal__col--del {
   justify-self: center;
 }
@@ -1887,8 +1908,18 @@
   .df-srow--open .df-srow__line--bottom { flex-wrap: wrap; align-items: flex-start; }
 
   .df-modal__row-check {
-    width: 22px;
-    height: 22px;
+    width: 24px;    /* WCAG 2.5.8's 24px minimum (review R12) */
+    height: 24px;
+  }
+
+  /* A dialog's header x and the Share (i) buttons are touch targets too (review R12: 36x32 and 18x18). */
+  .df-modal__header .df-modal__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .df-share__info-btn {
+    width: 32px;
+    height: 32px;
   }
 
   .df-modal__row-name {
@@ -1907,8 +1938,8 @@
   }
 
   .df-modal__select-all input {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
   }
 
   .df-modal__footer {
@@ -1953,12 +1984,7 @@
   min-width: 168px;
   display: flex;
   flex-direction: column;
-  animation: df-ctx-menu-in 120ms ease-out;
-}
-
-@keyframes df-ctx-menu-in {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
+  animation: df-motion-pop var(--df-motion-fast) var(--df-ease-out);   /* layout.css motion system */
 }
 
 .df-ctx-menu__item {
@@ -2031,7 +2057,10 @@
    A non-library tour overlay: a full-screen click-catcher, a spotlight cutout
    (box-shadow dims everything but the target), and a positioned card. Sits above
    the app (z 5000); never shifts page layout (all fixed-position). */
-.df-tour { position: fixed; inset: 0; z-index: 5000; pointer-events: none; }
+/* Motion: the whole layer (dim + spotlight + card) fades in ONCE when the tour opens. Not per step: the dim
+   moves between the catcher (centred steps) and the spotlight's box-shadow (targeted steps), and fading either
+   one on a step change would blink the dim off and back on. */
+.df-tour { position: fixed; inset: 0; z-index: 5000; pointer-events: none; animation: df-motion-fade var(--df-motion-base) var(--df-ease-out); }
 .df-tour__catcher { position: fixed; inset: 0; pointer-events: auto; }
 .df-tour__catcher--dim { background: rgba(0, 0, 0, 0.55); }
 .df-tour__spotlight {
@@ -2055,7 +2084,16 @@
   padding: var(--spacing-md);
   pointer-events: auto;
   transition: left .18s ease, top .18s ease;
+  animation: df-motion-pop var(--df-motion-base) var(--df-ease-out);   /* once, when the tour opens */
+  /* Cap at the viewport and let the body scroll, so the footer (Skip / Back / Next) stays on screen on a short
+     viewport such as phone landscape (M11). positionCard reads offsetHeight, which respects the cap. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
 }
+.df-tour__card > .df-tour__title,
+.df-tour__card > .df-tour__footer { flex-shrink: 0; }
 .df-tour__close {
   position: absolute; top: 8px; right: 8px;
   background: none; border: none; cursor: pointer;
@@ -2064,7 +2102,7 @@
 }
 .df-tour__close:hover { color: var(--text-primary); background: var(--stencil-item-hover); }
 .df-tour__title { margin: 0 24px 8px 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
-.df-tour__body { font-size: var(--font-size-sm); line-height: 1.55; color: var(--text-secondary); }
+.df-tour__body { font-size: var(--font-size-sm); line-height: 1.55; color: var(--text-secondary); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .df-tour__body a { color: var(--color-primary); }
 /* Compact bullet hints (e.g. the closing keyboard-shortcuts step). */
 .df-tour__list { margin: 4px 0; padding-left: 18px; }
@@ -2092,12 +2130,12 @@
 }
 .df-tour__nav { display: flex; align-items: center; gap: var(--spacing-sm); margin-left: auto; }
 
-/* Skip — brand-amber OUTLINE (no fill); fills amber on hover. Darker amber in light mode for
-   WCAG text contrast (mirrors the export "Back up now" button); brand-amber in dark mode. */
+/* Skip — brand-amber OUTLINE (no fill); fills amber on hover. Ink label in light mode for WCAG text contrast
+   (mirrors the export "Back up now" button, R7); brand-amber in dark mode. */
 .df-tour__skip {
   background: transparent;
   border-color: var(--brand-amber-strong);
-  color: var(--brand-amber-strong);
+  color: var(--brand-amber-text);
 }
 .df-tour__skip:hover { background: var(--brand-amber-strong); border-color: var(--brand-amber-strong); color: #1C1E21; }
 
@@ -2202,7 +2240,7 @@
   height: 20px;
   margin-top: 1px;
   fill: currentColor;
-  color: var(--brand-amber);
+  color: var(--brand-amber-line);   /* glyph amber, 3:1 in light (S8-8) */
 }
 /* A parent highlight's text + its nested sub-features. The sub-list is indented with a left rule so the grouping
    (e.g. all Google Drive capabilities under "Google Drive") reads clearly. */
@@ -2235,33 +2273,6 @@
   border-top: 1px solid var(--border-color);
 }
 
-/* --- Paste pane: "How do I get this out of Salesforce?" (1.22.0) -----------------------------------------
-   A <details>, collapsed by default. It sits between the textarea and the format roster because that is
-   exactly where the question occurs to someone: they have opened Paste, and they do not have anything to
-   paste. Native <details> so it needs no JS, keyboard-toggles for free, and is inert when collapsed. */
-.df-paste-guide { margin: var(--spacing-sm) 0 0; border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); }
-.df-paste-guide__summary {
-  cursor: pointer; padding: 7px 10px; font-size: var(--font-size-sm); font-weight: 600;
-  color: var(--color-primary); list-style-position: inside;
-}
-.df-paste-guide__summary::-webkit-details-marker { color: var(--text-muted); }
-.df-paste-guide__summary:hover { background: var(--bg-hover, rgba(127,127,127,.08)); }
-.df-paste-guide[open] .df-paste-guide__summary { border-bottom: 1px solid var(--border-color); }
-.df-paste-guide__body { padding: 10px; font-size: 11px; line-height: 1.6; color: var(--text-secondary); }
-.df-paste-guide__lead { margin: 0 0 8px; }
-.df-paste-guide__steps { margin: 0 0 8px; padding-left: 18px; }
-.df-paste-guide__urls { margin: 0; }
-.df-paste-guide__urls dt { font-weight: 600; color: var(--text-primary); margin-top: 8px; }
-.df-paste-guide__urls dd { margin: 3px 0 0; }
-/* The URLs are long and must stay COPYABLE, so they wrap rather than truncate - an ellipsis here would hand
-   the user a broken request. `overflow-wrap: anywhere` breaks mid-token, which a query string needs. */
-.df-paste-guide__body code {
-  display: inline-block; max-width: 100%; overflow-wrap: anywhere;
-  padding: 1px 4px; border-radius: 3px;
-  background: var(--bg-panel); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
-}
-.df-paste-guide__note { display: block; margin-top: 3px; color: var(--text-muted); }
-
 /* Window-wide file-drop affordance. Shown only while an OS FILE drag is over the app (see
    initWindowFileDrop) - internal drags of shapes, templates and tabs never raise it.
    `pointer-events: none` is load-bearing: an overlay that took the pointer would sit between the cursor and
@@ -2277,6 +2288,7 @@
   pointer-events: none;
   background: color-mix(in srgb, var(--bg-canvas) 72%, transparent);
   backdrop-filter: blur(2px);
+  animation: df-motion-fade var(--df-motion-fast) var(--df-ease-out);
 }
 .df-file-drop-overlay__card {
   display: flex;
@@ -2348,7 +2360,7 @@
    as one object. Reported: "the hover effect does not cover whole card". */
 .df-paste-modal__fmt:hover { background: var(--bg-elevated); }
 .df-paste-modal__fmt-head:hover { background: transparent; }
-.df-paste-modal__fmt-title { font-weight: 600; font-size: var(--font-size-sm); color: var(--text-primary); }
+.df-paste-modal__fmt-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--font-size-sm); color: var(--text-primary); }
 .df-paste-modal__fmt-lead {
   grid-column: 1;
   font-size: var(--font-size-xs);
@@ -2424,4 +2436,15 @@
   line-height: 1.5;
   white-space: pre;
   overflow: auto;
+}
+
+/* The iOS 16 px focus-zoom floor (css/properties.css, review J1-11) for every modal dialog and tab popover, which sit
+   outside the panel. It started with the two staged editors, Edit Fields and Edit Table (review S4-7); the Paste box,
+   the prompt dialog, the Share email box and the group icon search were still 12-13 px (review S8-5), so it now
+   covers any dialog or popover and a control added to one later. The :is() takes its most specific argument, so
+   this outranks `.df-field-modal__row select.df-field-input` and `.df-share__email-field .df-share__emails`. */
+@media (max-width: 768px), (pointer: coarse) {
+  :is(.df-modal__dialog, .df-tab-pop) :is(input:not([type="color"]):not([type="checkbox"]):not([type="range"]), select, textarea) {
+    font-size: var(--font-size-lg);   /* 16px - the iOS threshold; do not lower */
+  }
 }

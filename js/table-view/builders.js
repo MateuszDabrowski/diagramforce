@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.25.9';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.25.9';
-import { durationDays } from '../gantt-scale.js?v=1.25.9';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.25.9';
+import { keyImpliesRequired } from '../field-model.js?v=1.26.1';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.26.1';
+import { durationDays } from '../gantt-scale.js?v=1.26.1';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.1';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -266,6 +266,15 @@ export function buildModelData(graph) {
   return { rows, mappingCount: 0, objectCount: objects.length, unmappedCount: 0, fieldCount: rows.length };
 }
 
+/** One predecessor as the plan table, its CSV and Markdown show it: the task name, plus a non-default type or lag in
+ *  brackets ("Research (SS +2d)", "Design (FS -1d)"). A plain finish-to-start link with no lag stays just the name.
+ *  The link panel still edits type and lag, and the table showed neither, so an SS +2d read like FS 0 (review L11). */
+export function ganttDepLabel(name, depType, lag) {
+  const type = depType || 'FS', n = Number(lag) || 0;
+  if (type === 'FS' && !n) return name;
+  return `${name} (${type}${n ? ` ${n > 0 ? '+' : ''}${n}d` : ''})`;
+}
+
 // Phase 5: project the Gantt plan — one row per sf.GanttTask bar across every timeline, in ganttRowLayout
 // order (grouped bars stay together). Dates are the source of truth; Duration / Dependencies / Group are
 // derived. Read-only in phase 5. `_barId`/`_tlId` are carried for the (5b) edit write-back + per-row keys.
@@ -280,7 +289,7 @@ export function buildGanttData(graph) {
       const bar = lr.bar;
       const start = bar.get('startDate') || '', end = bar.get('endDate') || '';
       const dur = (start && end) ? durationDays(start, end) : null;
-      const deps = ganttDependencies(bar).map(d => labelOf(d.predecessorId)).join(', ');
+      const deps = ganttDependencies(bar).map(d => ganttDepLabel(labelOf(d.predecessorId), d.depType, d.lag)).join(', ');
       const g = bar.get('groupId') ? groups.find(x => x.id === bar.get('groupId')) : null;
       const prog = bar.get('progress');
       rows.push({

@@ -1,14 +1,13 @@
 // Process-diagram property renderers (CLEANUP S2, slice 11) — the BPMN family (renderBpmnEvent/Task/Gateway/
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
-// Build via widgets + finishStandardProps (render-core) + TYPE_LABELS (type-meta), reading graph + the panel DOM
-// refs via prctx; never imports the facade. The showProperties() dispatch imports the eight back.
-import * as history from '../history.js?v=1.25.9';
-import { prctx } from './context.js?v=1.25.9';
-import { contrastTextColor } from '../components.js?v=1.25.9';
-import { BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from '../persistence/diagram-schema.js?v=1.25.9';
-import { finishStandardProps } from './render-core.js?v=1.25.9';
-import { TYPE_LABELS } from './type-meta.js?v=1.25.9';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.25.9';
+// Build via widgets + finishStandardProps (render-core), reading graph + the panel DOM refs via prctx; never imports
+// the facade. The showProperties() dispatch imports the eight back.
+import * as history from '../history.js?v=1.26.1';
+import { prctx } from './context.js?v=1.26.1';
+import { contrastTextColor } from '../components.js?v=1.26.1';
+import { BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from '../persistence/diagram-schema.js?v=1.26.1';
+import { finishStandardProps } from './render-core.js?v=1.26.1';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.26.1';
 
 export function renderBpmnEventProps(cell) {
   // Content
@@ -164,7 +163,6 @@ export function renderBpmnDataObjectProps(cell) {
 
 export function renderFlowShapeProps(cell) {
   const type = cell.get('type');
-  const typeLabel = TYPE_LABELS[type] || 'Shape';
 
   // Content
   const content = section(prctx.bodyEl, 'Content');

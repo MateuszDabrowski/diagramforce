@@ -357,7 +357,10 @@ export function validateDiagram(diagram) {
       const has = (m) => !!(m && typeof m.d === 'string' && ER_MARKER.test(m.d));
       if (has(line.sourceMarker) !== has(line.targetMarker)) {
         warnings.push(`Link "${c.id ?? '?'}" relates "${s.id}" to "${t.id}" with an ER marker on ONE end only - the Table view reads the other end as an em-dash (e.g. "1:—"). Set both \`sourceMarker\` and \`targetMarker\`.`);
-      } else if (!has(line.sourceMarker) && !has(line.targetMarker)) {
+      } else if (!has(line.sourceMarker) && !has(line.targetMarker)
+        // A lineage join on field ports with no key behind it has no cardinality to draw: SQL Studio marks one only
+        // where a key settles it (spec "Object-level relationships", 2026-10-16). A header-port relationship still warns.
+        && !(type === 'datamapping' && /^field-(left|right)-/.test(String(s.port || '')) && /^field-(left|right)-/.test(String(t.port || '')))) {
         warnings.push(`Link "${c.id ?? '?'}" relates "${s.id}" to "${t.id}" with no ER marker on either end - it loads, but carries no cardinality (the Table view reads an em-dash). Set \`attrs.line.sourceMarker\` / \`targetMarker\` to the Marker Types ER paths (bar = 1, crow's foot = Many, circle = 0), drawn FROM the one end TO the many end.`);
       }
     }
@@ -419,6 +422,26 @@ export function validateDiagram(diagram) {
     }
   }
 
+  // Field ids within one DataObject (K3, 2026-10-15). Two fields sharing a fid would build two ports with one id,
+  // which JointJS rejects; the loader gives the repeat a new fid, so a link meant for it lands on the first field. An
+  // all-digit fid reads like the pre-1.15 array-index port form. Warnings, not errors: the loader copes with both.
+  for (const c of cells) {
+    if (!c || c.type !== 'sf.DataObject' || !Array.isArray(c.fields)) continue;
+    const seen = new Set();
+    for (const f of c.fields) {
+      if (!f || typeof f !== 'object' || f.fid == null || f.fid === '') continue;
+      const fid = String(f.fid);
+      if (seen.has(fid)) {
+        warnings.push(`DataObject "${c.id ?? '?'}" repeats field id "${fid}" - every \`fid\` must be unique within its object (the loader gives the repeat a new one, so a link meant for it lands on the first field).`);
+        continue;
+      }
+      seen.add(fid);
+      if (/^\d+$/.test(fid)) {
+        warnings.push(`DataObject "${c.id ?? '?'}" has an all-digit field id "${fid}" - start it with a letter ("f${fid}"): \`field-left-${fid}\` reads like the legacy array-index port form.`);
+      }
+    }
+  }
+
   // BpmnGateway: the decision glyph lives in `attrs.marker.text` and is NOT derived from `gatewayType` on load
   // (it's applied only at stencil-drop). Since 2026-09-25 the loader DOES derive it (propAttrPlan above), so an
   // authored gateway without a glyph renders right; what still renders wrong is covered by the prop/attrs check below.
@@ -442,8 +465,11 @@ export function validateDiagram(diagram) {
 
   frameLinkWarnings(cells, byId, warnings);
   // Geometry checks run only where the author owns the geometry: a converted Flow keeps Flow Builder's coordinates,
-  // Data Mapping and Gantt positions are computed, and a Sequence lays out on its lifelines.
+  // Gantt positions are computed, and a Sequence lays out on its lifelines. A Data Mapping is hand-written now that the
+  // type covers any pipeline (2026-10-15), so it gets the frame-room check alone (owner call): the near-miss grid
+  // fires on every shipped MCN template (cards 10-12 px off across lanes), and the rest were not measured there.
   if (['architecture', 'process', 'datamodel', 'org'].includes(type)) layoutWarnings(cells, warnings, type);
+  else if (type === 'datamapping') frameRoomWarnings(elementsById(cells), cells.filter((c) => isLink(c)), warnings);
 
   return { errors, warnings };
 }
@@ -480,6 +506,10 @@ const listSome = (items, n = 4) => items.slice(0, n).join(', ') + (items.length 
 // that loads fine but reads as a mistake. Each fires only in a band no author means (a near miss, not a deliberate
 // offset), and each is ONE grouped warning, like the router check above.
 const SIDE_OF_PORT = Object.assign(Object.create(null), { 'port-top': 'top', 'port-bottom': 'bottom', 'port-left': 'left', 'port-right': 'right' });
+// A data model's field-row and header ports face a side too (`field-left-<fid>`, `er-right`): they turn their link
+// 32 px out like any other, so the frame-room check must measure them (2026-10-15 review).
+const sideOfPort = (port) => SIDE_OF_PORT[port]
+  || (/^(field-left-|er-left$)/.test(String(port || '')) ? 'left' : /^(field-right-|er-right$)/.test(String(port || '')) ? 'right' : null);
 const FRAME_TYPES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
 // Text and badges placed relative to something else, so their edges carry no grid.
 const NOT_CARDS = new Set(['sf.TextLabel', 'sf.Annotation', 'sf.Line', 'df.Pill', 'df.Legend']);
@@ -492,17 +522,71 @@ const PAIR_GAP_MIN = 40;    // one link between offset facing cards: under this 
 const PAIR_GAP_ALIGNED = 16; // the same cards lined up draw a straight arrow from here; closer, it runs into the card
 const FRAME_ROOM = 48;      // a link turns 32 px out of its port and keeps 16 px off what is in its way (the app's frame pad)
 const DM_COLUMN_GAP = 128;  // data models: the app's DATAMODEL_COLUMN_GAP (Auto Layout) and the ERD generator's COL_GAP
-// Header bands a line must not run through: a Container's 41 px title bar on top, a Pool's 30 px band on the left.
-const FRAME_BAND = Object.assign(Object.create(null), { 'sf.Container': { top: 41 }, 'sf.BpmnPool': { left: 30 } });
+// Which side a BPMN pool's 30 px title band is DRAWN on, read from its header rect's attrs as the renderer reads them,
+// not from poolDirection. The stencil's vertical pool draws a full-width band across the top (width calc(w), height
+// 30); a pool written with only "poolDirection": "vertical" keeps the class default, a full-height band down the left
+// (corpus comparison, 2026-10-15). A calc() size spans the pool; a missing one is the class default (30 by calc(h)).
+// Read by the pool fit, tuck and drop ghost (js/canvas/embedding.js) and the frame-room check below.
+export function poolHeaderSide(header) {
+  const w = header?.width ?? 30, h = header?.height ?? 'calc(h)';
+  const spans = (v) => typeof v === 'string' && v.includes('calc(');
+  if (spans(w) !== spans(h)) return spans(w) ? 'top' : 'left';
+  return Number(w) > Number(h) ? 'top' : 'left';
+}
+// Header bands a line must not run through: a Container's 41 px title bar on top, a Pool's 30 px band on the side its
+// header attrs draw it (the left by default, the top for the stencil's vertical pool).
+const frameBand = (f, side) => (f.type === 'sf.Container' ? (side === 'top' ? 41 : 0)
+  : f.type === 'sf.BpmnPool' && side === poolHeaderSide(f.attrs?.header) ? 30 : 0);
 const NEAR_MISS_MAX = 15;  // an offset up to this reads as a slip; beyond it, as a choice
 
-function layoutWarnings(cells, warnings, type) {
-  const box = (c) => (c && c.position && c.size && [c.position.x, c.position.y, c.size.width, c.size.height].every(Number.isFinite)
-    ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height, r: c.position.x + c.size.width, b: c.position.y + c.size.height,
-      cx: c.position.x + c.size.width / 2, cy: c.position.y + c.size.height / 2 }
-    : null);
+const box = (c) => (c && c.position && c.size && [c.position.x, c.position.y, c.size.width, c.size.height].every(Number.isFinite)
+  ? { x: c.position.x, y: c.position.y, w: c.size.width, h: c.size.height, r: c.position.x + c.size.width, b: c.position.y + c.size.height,
+    cx: c.position.x + c.size.width / 2, cy: c.position.y + c.size.height / 2 }
+  : null);
+const elementsById = (cells) => {
   const els = new Map();
   for (const c of cells) if (c && !isLink(c) && typeof c.id === 'string') els.set(c.id, c);
+  return els;
+};
+
+// 5. A frame too tight for its own links. A link between two cards of one frame that leaves a card towards the
+//    frame's edge turns 32 px out of its port and keeps 16 px clear, so a card closer than 48 px to that edge draws
+//    the line on or past the border (a "No" loop along a pool's bottom edge, cards 28 px above it: Arada HLD
+//    figure 6, 2026-10-14). The app never re-fits a frame on load, so it renders as authored. A link to a card
+//    outside the frame crosses the border anyway and is not counted.
+function frameRoomWarnings(els, links, warnings) {
+  const frameOf = (c) => {
+    for (let p = els.get(c?.parent), n = 0; p && n < 32; p = els.get(p.parent), n++) if (FRAME_TYPES.has(p.type)) return p;
+    return null;
+  };
+  const roomHits = [];
+  const roomSeen = new Set();
+  for (const l of links) {
+    const sc = els.get(l.source?.id), tc = els.get(l.target?.id);
+    const f = sc && tc ? frameOf(sc) : null;
+    if (!f || frameOf(tc) !== f) continue;
+    const fb = box(f);
+    if (!fb) continue;
+    for (const [c, end] of [[sc, l.source], [tc, l.target]]) {
+      const side = sideOfPort(end?.port);
+      const cb = box(c);
+      if (!side || !cb || roomSeen.has(`${c.id}|${side}`)) continue;
+      const band = frameBand(f, side);
+      const gap = side === 'bottom' ? fb.b - cb.b : side === 'top' ? cb.y - (fb.y + band)
+        : side === 'right' ? fb.r - cb.r : cb.x - (fb.x + band);
+      if (gap >= 0 && gap < FRAME_ROOM) {
+        roomSeen.add(`${c.id}|${side}`);
+        roomHits.push(`"${c.id}" ${side} ${Math.round(gap)} px inside "${f.id}"`);
+      }
+    }
+  }
+  if (roomHits.length) {
+    warnings.push(`${roomHits.length} card side(s) where a link leaves sit too close to their frame's edge (${listSome(roomHits)}) - a link turns 32 px out of its port and keeps 16 px clear, so the line runs on or past the frame's border. Leave ${FRAME_ROOM} px between those cards and the frame's edge (below a Container's title bar, past a Pool's title band).`);
+  }
+}
+
+function layoutWarnings(cells, warnings, type) {
+  const els = elementsById(cells);
   const links = cells.filter((c) => isLink(c));
   const bent = (l) => Array.isArray(l.vertices) && l.vertices.length > 0;
 
@@ -613,39 +697,8 @@ function layoutWarnings(cells, warnings, type) {
       if (m != null && !between(a, b, what)) gridHits.push(`"${A.c.id}"/"${B.c.id}" ${what} ${Math.round(m)} px`);
     }
   }
-  // 5. A frame too tight for its own links. A link between two cards of one frame that leaves a card towards the
-  //    frame's edge turns 32 px out of its port and keeps 16 px clear, so a card closer than 48 px to that edge draws
-  //    the line on or past the border (a "No" loop along a pool's bottom edge, cards 28 px above it: Arada HLD
-  //    figure 6, 2026-10-14). The app never re-fits a frame on load, so it renders as authored. A link to a card
-  //    outside the frame crosses the border anyway and is not counted.
-  const frameOf = (c) => {
-    for (let p = els.get(c?.parent), n = 0; p && n < 32; p = els.get(p.parent), n++) if (FRAME_TYPES.has(p.type)) return p;
-    return null;
-  };
-  const roomHits = [];
-  const roomSeen = new Set();
-  for (const l of links) {
-    const sc = els.get(l.source?.id), tc = els.get(l.target?.id);
-    const f = sc && tc ? frameOf(sc) : null;
-    if (!f || frameOf(tc) !== f) continue;
-    const fb = box(f);
-    if (!fb) continue;
-    for (const [c, end] of [[sc, l.source], [tc, l.target]]) {
-      const side = SIDE_OF_PORT[end?.port];
-      const cb = box(c);
-      if (!side || !cb || roomSeen.has(`${c.id}|${side}`)) continue;
-      const band = FRAME_BAND[f.type]?.[side] || 0;
-      const gap = side === 'bottom' ? fb.b - cb.b : side === 'top' ? cb.y - (fb.y + band)
-        : side === 'right' ? fb.r - cb.r : cb.x - (fb.x + band);
-      if (gap >= 0 && gap < FRAME_ROOM) {
-        roomSeen.add(`${c.id}|${side}`);
-        roomHits.push(`"${c.id}" ${side} ${Math.round(gap)} px inside "${f.id}"`);
-      }
-    }
-  }
-  if (roomHits.length) {
-    warnings.push(`${roomHits.length} card side(s) where a link leaves sit too close to their frame's edge (${listSome(roomHits)}) - a link turns 32 px out of its port and keeps 16 px clear, so the line runs on or past the frame's border. Leave ${FRAME_ROOM} px between those cards and the frame's edge (below a Container's title bar, right of a Pool's band).`);
-  }
+  // 5. A frame too tight for its own links (also run alone on a Data Mapping, see validateDiagram).
+  frameRoomWarnings(els, links, warnings);
 
   // 6. Data models: a link across a gap under 128 px between two columns. Every field row and side port turns its link
   //    32 px out, so in a narrower gap the turns of both columns land on the same few lines, and links of different

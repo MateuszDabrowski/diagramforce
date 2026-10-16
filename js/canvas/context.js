@@ -15,6 +15,7 @@ export const cctx = {
   // ── Forward-ref closures (wired by canvas.js init() or a register*(cctx) hook) ──
   fitParentToChildren: null,            // (parent) => void  — embedding auto-fit (wired by registerEmbedding, Slice 12)
   scheduleCrossingBumpRecompute: null,  // () => void        — debounced bump redraw
+  retintCrossingBumps: null,            // () => void        — re-apply the focus tint to freshly drawn bump arcs (wired by registerSelectionViz)
   isConnectorGroupingEnabled: null,     // () => bool        — read by the router (display-flag, wired at module-eval)
   refreshAllIconHrefs: null,            // () => void        — re-resolve every icon href after a theme/viewBox change (wired in init(); read by migration.js)
   syncMappingTypeBadge: null,           // (link) => void    — rebuild a mapping link's type-code token label (wired in init(); read by migration.js on load)

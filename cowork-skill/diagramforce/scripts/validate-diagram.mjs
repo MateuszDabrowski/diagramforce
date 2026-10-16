@@ -13,11 +13,11 @@
 // js/persistence/diagram-schema.js, bundled so this skill is self-contained. Keep it in sync with the app on
 // each release (it is the SAME allowlist the renderer loads with, so a stale copy would accept shapes the app
 // then drops). See the skill's SKILL.md "Staying in sync" note.
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { validateFile } from './diagram-schema.js';
+import { readText } from './sf-cli.js';
 
-const tryRead = (p) => { try { return { text: readFileSync(p, 'utf8') }; } catch (e) { return { err: e.message }; } };
+const tryRead = (p) => { try { return { text: readText(p) }; } catch (e) { return { err: e.message }; } };
 
 function report(source, json) {
   let errors = 0, warnings = 0;
@@ -35,7 +35,7 @@ function report(source, json) {
 const args = process.argv.slice(2);
 const inputs = args.length
   ? args.map((p) => ({ source: p, ...tryRead(resolve(process.cwd(), p)) }))
-  : [{ source: '<stdin>', text: (() => { try { return readFileSync(0, 'utf8'); } catch { return ''; } })() }];
+  : [{ source: '<stdin>', text: (() => { try { return readText(0); } catch { return ''; } })() }];
 
 let totalErrors = 0, totalWarnings = 0;
 for (const { source, text, err } of inputs) {

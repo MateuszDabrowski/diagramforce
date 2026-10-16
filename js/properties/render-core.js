@@ -8,23 +8,31 @@
 // Reads graph/selection + the panel DOM refs (bodyEl/footerEl) via prctx; imports the convert/widgets/clipboard/
 // components/type-meta leaves; never imports the facade. The facade re-exports autoSizeCell + buildCellActions
 // (app.js namespace access) and the staying renderers import finishStandardProps + autoSizeCell back.
-import { prctx } from './context.js?v=1.25.9';
-import { cctx } from '../canvas/context.js?v=1.25.9';   // leaf context object (no imports of its own) — safe here
-import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.25.9';
-import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.25.9';   // the exact set fitParentToChildren wraps
-import { showToast } from '../feedback.js?v=1.25.9';
-import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.25.9';
-import { resizeDataObjectToFit } from '../components.js?v=1.25.9';
-import { saveCellAsShape } from '../templates.js?v=1.25.9';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.25.9';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.25.9';
-import { DEFAULT_SIZES } from './type-meta.js?v=1.25.9';
-import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.25.9';
+import { prctx } from './context.js?v=1.26.1';
+import * as history from '../history.js?v=1.26.1';
+import { cctx } from '../canvas/context.js?v=1.26.1';   // leaf context object (no imports of its own) — safe here
+import { matchContainerHeights } from '../canvas/auto-layout.js?v=1.26.1';
+import { HALO_PARENT_TYPES } from '../canvas/embedding.js?v=1.26.1';   // the exact set fitParentToChildren wraps
+import { showToast } from '../feedback.js?v=1.26.1';
+import { cloneElementWithConnectors, copy as clipboardCopy, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.26.1';
+import { resizeDataObjectToFit } from '../components.js?v=1.26.1';
+import { saveCellAsShape } from '../templates.js?v=1.26.1';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.26.1';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode } from './convert.js?v=1.26.1';
+import { DEFAULT_SIZES } from './type-meta.js?v=1.26.1';
+import { addApplySizeBtn, addAutoSizeBtn, addCloneBtn, addConvertBtn, addDeleteBtn, addNumber, addNumberPair, addOrderButtons, addRotationField, bringToFront, cloneCellPlain, copyCellStyle, hasStyleClip, pasteCellStyle, section, sendToBack } from './widgets.js?v=1.26.1';
 
 /** Auto-size one element to its sensible default: DataObjects fit their field rows; everything else resets to
  *  DEFAULT_SIZES for its type. The single source of truth shared by the properties-pane "Auto Size" button and
- *  the canvas right-click "Auto size" (wired via prctx.selection.setAutoSizer in app.js). No-op for links. */
+ *  the canvas right-click "Auto size" (wired via prctx.selection.setAutoSizer in app.js). No-op for links.
+ *  ONE undo step: an icon node's resize lands through the 80 ms merge while its inset attrs record at once, so
+ *  unbatched it took two undos (review J1-13). Batches nest, so a multi-select caller wraps the loop in its own. */
 export function autoSizeCell(cell) {
+  history.startBatch();
+  try { fitCell(cell); } finally { history.endBatch(); }
+}
+
+function fitCell(cell) {
   if (!cell || !cell.isElement || !cell.isElement()) return;
   const type = cell.get('type');
   // "Auto size" ALWAYS releases a user-pinned size first (v1.23.0), on EVERY capture frame - not just
@@ -49,6 +57,14 @@ export function autoSizeCell(cell) {
     return;
   }
   if (type === 'df.Legend' && typeof cell._fitWidth === 'function') { cell.set('manualWidth', false); cell._fitWidth(); return; }   // Auto size = back to label-fit
+  // df.Pill: its 32x32 default is a 1-2 character circle, so falling to DEFAULT_SIZES squeezed longer text out of the
+  // stadium (K4). Back to the default height, then the model's text fit sets the width.
+  if (type === 'df.Pill' && typeof cell._fitWidth === 'function') {
+    const h = DEFAULT_SIZES['df.Pill']?.height || 32;
+    if (cell.size().height !== h) cell.resize(cell.size().width, h);
+    cell._fitWidth();
+    return;
+  }
   // V8 reconcile: fold in the smart per-type auto-sizes the property PANEL used to do on its own, so the
   // right-click "Auto size" (and multi-select Auto Size) reach the same result as the panel button.
   //  · Icon SimpleNode → a 64×64 square with the icon inset.

@@ -22,6 +22,7 @@ import { basename, delimiter, dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url';
 import { validateFile } from './diagram-schema.js';
 import { checkForUpdate } from './check-update.mjs';
+import { readText } from './sf-cli.js';
 
 export const DEFAULT_APP = 'https://diagramforce.com/';
 // The version this skill's bundled spec targets (its "Spec snapshot: vX" marker), as the converters read it.
@@ -296,7 +297,8 @@ const HELP = `Render Diagramforce JSON to an image with a local headless browser
 export function rasterScale(job, img) {
   if (/\.svg$/i.test(job.out)) return Infinity;
   let cells = [];
-  try { cells = JSON.parse(job.text)?.graph?.cells || []; } catch { return Infinity; }
+  // A flat file (top-level `cells`) opens in the app too, so measure it the same way.
+  try { const d = JSON.parse(job.text); cells = d?.graph?.cells || (Array.isArray(d?.cells) ? d.cells : []); } catch { return Infinity; }
   const boxes = cells.filter((c) => c?.position && c?.size);
   if (!boxes.length) return Infinity;
   const w = Math.max(...boxes.map((c) => c.position.x + c.size.width)) - Math.min(...boxes.map((c) => c.position.x));
@@ -323,7 +325,7 @@ async function main() {
   const jobs = [];
   for (const input of opts.inputs) {
     let text, json;
-    try { text = readFileSync(input, 'utf8'); json = JSON.parse(text); } catch (e) { console.log(`✗ ${input}: ${e.message}`); failed++; continue; }
+    try { text = readText(input); json = JSON.parse(text); } catch (e) { console.log(`✗ ${input}: ${e.message}`); failed++; continue; }
     const errors = validateFile(json).flatMap((r) => r.errors);
     if (errors.length) { console.log(`✗ ${input}: not rendered - ${errors.length} validation error(s), run validate-diagram.mjs`); failed++; continue; }
     // A file with no appVersion opens behind the app's compatibility dialog, which nobody can answer headless. Stamp

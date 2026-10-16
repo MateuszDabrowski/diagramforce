@@ -11,7 +11,7 @@
 // and embedding's auto-fit reacts to the resulting change events — so the drop must settle first.
 // Reads cctx.graph/paper; imports the pure Gantt geometry helpers from gantt-layout.js.
 
-import { deriveGanttDates, deriveGanttMove, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.25.9';
+import { deriveGanttDates, deriveGanttMove, deriveGanttMilestoneDate, deriveGanttMarkerDate, resequenceGanttOrders, ganttTimelineFor, snapGanttX, snapGanttRowCentreY, ganttDropTarget, growTimelineToFitDates } from '../gantt-layout.js?v=1.26.1';
 
 export function registerGanttDrag(cctx) {
   const { graph, paper } = cctx;
@@ -30,7 +30,7 @@ export function registerGanttDrag(cctx) {
   const ganttDropLayer = () => {
     if (!_ganttDropLayer || !_ganttDropLayer.parentNode) {
       _ganttDropLayer = document.createElementNS(SVG_NS_DROP, 'g');
-      _ganttDropLayer.setAttribute('class', 'df-gantt-droplines');
+      _ganttDropLayer.setAttribute('class', 'df-gantt-droplines df-transient');   // df-transient: exports strip it
       (paper.svg.querySelector('.joint-layers') || paper.svg).appendChild(_ganttDropLayer);
     }
     return _ganttDropLayer;

@@ -1,6 +1,6 @@
 // DataObject field helpers (CLEANUP S3) — the stable-fid machinery + the visible-fields rule, moved out of
 // shapes.js so the data-object registrar (and the external importers via the facade re-export) share one copy.
-import { sctx } from './context.js?v=1.25.9';
+import { sctx } from './context.js?v=1.26.1';
 
 // ── Stable field identity (fid) ────────────────────────────────────
 // Pre-1.15.0, sf.DataObject field ports were keyed by ARRAY INDEX
@@ -9,9 +9,11 @@ import { sctx } from './context.js?v=1.25.9';
 // carries an immutable `fid`; ports are `field-left-<fid>` / `field-right-<fid>`
 // so a link follows its field across reorder / delete / apiName rename. A fid
 // only needs to be unique WITHIN one DataObject (port IDs are cell-scoped), so
-// duplicated objects may safely share fids. The leading 'f' keeps a fid from
-// ever matching the legacy numeric-index form, which lets the load migration
-// (migration.js) distinguish old positional ports from new fid ports.
+// duplicated objects may safely share fids. The leading 'f' keeps a minted fid
+// from ever matching the legacy numeric-index form, which lets the load migration
+// (migration.js) distinguish old positional ports from new fid ports. A
+// hand-authored fid can be all digits ("1"); the migration leaves a port alone
+// when a field owns that fid.
 //
 // INVARIANT: every field must have a fid before its ports are built. Guaranteed
 // by sf.DataObject.initialize (construction: load / paste / factory) and
@@ -23,15 +25,26 @@ export function newFid(existing) {
   return id;
 }
 
+// Also heals hand-authored JSON (K3, 2026-10-15): a REPEATED fid builds two ports with one id, which JointJS rejects
+// ("found id duplicities in ports") and the diagram cannot open. The first field keeps the fid, so links stay on
+// it; a repeat gets a fresh one. A non-object entry is dropped and a non-array `fields` becomes [], since either
+// throws in the view. A clean list is not rewritten.
 export function ensureFieldFids(cell) {
-  const fields = cell.get('fields');
-  if (!Array.isArray(fields) || fields.length === 0) return;
-  if (fields.every(f => f && f.fid)) return; // idempotent no-op once all fids exist
-  const seen = new Set(fields.filter(f => f && f.fid).map(f => f.fid));
-  cell.set('fields', fields.map(f => {
-    if (f && !f.fid) { const id = newFid(seen); seen.add(id); return { ...f, fid: id }; }
-    return f;
-  }), { silent: true });
+  const raw = cell.get('fields');
+  if (raw == null) return;
+  const fields = Array.isArray(raw) ? raw : [];
+  const taken = new Set(fields.filter(f => f && typeof f === 'object' && f.fid).map(f => String(f.fid)));
+  const used = new Set();
+  let changed = fields !== raw;
+  const out = [];
+  for (const f of fields) {
+    if (!f || typeof f !== 'object') { changed = true; continue; }
+    if (f.fid && !used.has(String(f.fid))) { used.add(String(f.fid)); out.push(f); continue; }
+    const id = newFid(taken); taken.add(id); used.add(id);
+    out.push({ ...f, fid: id });
+    changed = true;
+  }
+  if (changed) cell.set('fields', out, { silent: true });
 }
 
 // Does a field have a live link on either of its ports? Drives "Show Only Mapped"
@@ -41,6 +54,23 @@ export function fieldHasLink(model, field) {
   if (!graph || !field || !field.fid) return false;
   const left = `field-left-${field.fid}`, right = `field-right-${field.fid}`;
   for (const link of graph.getConnectedLinks(model)) {
+    for (const end of ['source', 'target']) {
+      const ep = link.get(end);
+      if (ep && ep.id === model.id && (ep.port === left || ep.port === right)) return true;
+    }
+  }
+  return false;
+}
+
+// Does a field carry a MAPPING link (linkKind 'mapping')? Drives the header's X/Y counter. A join between two source
+// tables is a grey relationship link on the same field ports (SQL Studio's lineage, 2026-10-16): counted as mapped, a
+// table that is only joined read 1/1, where 0/1 told the reader it feeds no column. Visibility keeps fieldHasLink.
+export function fieldHasMappingLink(model, field) {
+  const graph = model.graph;
+  if (!graph || !field || !field.fid) return false;
+  const left = `field-left-${field.fid}`, right = `field-right-${field.fid}`;
+  for (const link of graph.getConnectedLinks(model)) {
+    if (link.get('linkKind') !== 'mapping') continue;
     for (const end of ['source', 'target']) {
       const ep = link.get(end);
       if (ep && ep.id === model.id && (ep.port === left || ep.port === right)) return true;

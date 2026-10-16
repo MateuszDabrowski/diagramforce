@@ -5,19 +5,32 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.25.9';
-import { diagramEmbedsImages } from '../image-component.js?v=1.25.9';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.25.9';
-import { escHtml, formatBytes } from '../util.js?v=1.25.9';
-import { sharePillHtml } from '../storage-ui.js?v=1.25.9';
-import { pctx } from './context.js?v=1.25.9';
-import { compactGraphForSave } from './json-pipeline.js?v=1.25.9';   // the export's compaction, for Copy JSON
-import { buildSingleDiagram } from './storage.js?v=1.25.9';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.25.9';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.25.9';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.25.9';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.25.9';
-import { noteError } from '../diagnostics.js?v=1.25.9';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.26.1';
+import { diagramEmbedsImages } from '../image-component.js?v=1.26.1';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.1';
+import { escHtml, formatBytes } from '../util.js?v=1.26.1';
+import { sharePillHtml } from '../storage-ui.js?v=1.26.1';
+import { pctx } from './context.js?v=1.26.1';
+import { compactGraphForSave, loadWarning } from './json-pipeline.js?v=1.26.1';   // Copy JSON's compaction; a load's skip warning
+import { buildSingleDiagram } from './storage.js?v=1.26.1';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.26.1';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.26.1';
+import { isInSlot, SLOT_PICKER_NOTE } from './host-env.js?v=1.26.1';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.26.1';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.1';
+import { noteError } from '../diagnostics.js?v=1.26.1';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.1';
+
+/** Flash "✓ Copied!" on a Share pane copy button, then restore its label. The label is read once and kept, and a
+ *  click inside the window restarts the flash: each click used to save the CURRENT text as the label to restore, so
+ *  a second click stored "✓ Copied!" and the button stayed on it, without the green, until the pane re-rendered. */
+function flashCopied(btn, ms = 2000) {
+  if (btn.dataset.copyLabel == null) btn.dataset.copyLabel = btn.textContent;
+  clearTimeout(btn.__dfCopiedTimer);
+  btn.textContent = '✓ Copied!';
+  btn.classList.add('is-copied');
+  btn.__dfCopiedTimer = setTimeout(() => { btn.textContent = btn.dataset.copyLabel; btn.classList.remove('is-copied'); }, ms);
+}
 
 /** Build the single public group share URL (`#dfg=g1.…`) — carries the member Drive file ids + the group's
  *  display metadata, NOT diagram content (each diagram lives in its own Drive file). */
@@ -41,9 +54,15 @@ function buildShareURL() {
   return `${window.location.origin}${window.location.pathname}#diagram=${encodeShare(data)}`;   // v2, or v3 when a key collides
 }
 
+// The toolbar Share button is disabled on an empty diagram; the hamburger, the tab menu and right-click reach these
+// functions directly, so they refuse an empty graph too rather than hand out a link to nothing (M13, Q7).
+const EMPTY_DIAGRAM_MSG = 'Add a shape to enable export.';
+const isEmptyGraph = (graph) => !graph || graph.getCells().length === 0;
+
 export function shareAsURL() {
   const { graph, tabNameCb, diagramTypeCb } = pctx;
   if (!tabNameCb || !diagramTypeCb) return;
+  if (isEmptyGraph(graph)) { showToast(EMPTY_DIAGRAM_MSG, 'info'); return; }
   // Belt-and-braces: the dropdown button is already disabled when images are
   // present, but keyboard shortcut / hamburger entry / `share` action route
   // straight into this function and need the same gate.
@@ -56,12 +75,18 @@ export function shareAsURL() {
   }
 }
 
+// Past this length, chat apps / email / QR codes start truncating the classic link.
+const LONG_URL_WARN = 8000;
+
 /** Right-click the Share-URL toolbar icon: copy the inline link straight to the clipboard — no
  *  modal. Images can't be URL-shared, so those fall back to the explanatory modal; a blocked
- *  clipboard also falls back to the modal so the link is never lost. */
+ *  clipboard also falls back to the modal so the link is never lost. A link past LONG_URL_WARN opens the pane
+ *  instead, with its warning and the shorter options: it used to be copied with a plain success toast, and the
+ *  recipient's truncated copy then failed as "check that you copied the whole link" (review 2026-10-15, B5). */
 export function copyShareURL() {
   const { graph, tabNameCb, diagramTypeCb } = pctx;
   if (!tabNameCb || !diagramTypeCb) return;
+  if (isEmptyGraph(graph)) { showToast(EMPTY_DIAGRAM_MSG, 'info'); return; }
   if (diagramEmbedsImages(graph)) { showShareModal(null, { reason: 'image' }); return; }
   let url;
   try { url = buildShareURL(); }
@@ -70,6 +95,7 @@ export function copyShareURL() {
     showError('Failed to generate share URL - diagram may be too large.');
     return;
   }
+  if (url.length > LONG_URL_WARN) { showShareModal(url); return; }
   navigator.clipboard.writeText(url).then(
     () => showToast('Share link copied ✓', 'success'),
     () => showShareModal(url),
@@ -103,14 +129,23 @@ export async function shareGroupToDrive(tabIds, label, meta = {}) {
   const ok = results.filter((r) => r.status === 'ok' && r.shareUrl && r.fileId);
   const empty = results.filter((r) => r.status === 'empty').length;
   const failed = results.filter((r) => r.status === 'error');
-  if (failed.length) console.error('Diagramforce: group share failures:', failed);
+  const ownerOnly = failed.filter((r) => r.ownerOnly);   // someone else's file you edit directly: theirs to share
+  const otherFailed = failed.length - ownerOnly.length;
+  if (otherFailed) console.error('Diagramforce: group share failures:', failed.filter((r) => !r.ownerOnly));
 
   let groupUrl = '';
   try { if (ok.length) groupUrl = buildGroupShareURL({ name: label, ids: ok.map((r) => r.fileId), color: meta.color || null, icon: meta.icon || null }); }
   catch (e) { console.error('Diagramforce: could not build the group link:', e); }
 
+  const ownerNote = ownerOnly.length
+    ? `${ownerOnly.map((r) => `"${escHtml(r.name)}"`).join(', ')} ${ownerOnly.length === 1 ? "is someone else's file, so only its owner can share it" : "are other people's files, so only their owners can share them"}.`
+    : '';
   const skipNote = (empty || failed.length)
-    ? `<p class="df-group-share__skip" style="margin:6px 0 0;color:var(--text-secondary);font-size:var(--font-size-sm)">${empty ? `${empty} empty diagram${empty === 1 ? '' : 's'} skipped.` : ''}${empty && failed.length ? ' ' : ''}${failed.length ? `${failed.length} couldn't be shared (see console).` : ''}</p>`
+    ? `<p class="df-group-share__skip" style="margin:6px 0 0;color:var(--text-secondary);font-size:var(--font-size-sm)">${[
+      empty ? `${empty} empty diagram${empty === 1 ? '' : 's'} skipped.` : '',
+      ownerNote,
+      otherFailed ? `${otherFailed} couldn't be shared (see console).` : '',
+    ].filter(Boolean).join(' ')}</p>`
     : '';
 
   if (!ok.length) {
@@ -153,9 +188,8 @@ export async function shareGroupToDrive(tabIds, label, meta = {}) {
   body.innerHTML = groupSection + individualSection + collabNote + skipNote;
 
   // Copy buttons (group + per-diagram) — flash a check on success.
-  const flash = (btn) => { const o = btn.textContent; btn.textContent = '✓ Copied!'; btn.classList.add('is-copied'); setTimeout(() => { btn.textContent = o; btn.classList.remove('is-copied'); }, 1500); };
   body.querySelectorAll('.df-share__copy').forEach((btn) => {
-    btn.addEventListener('click', () => navigator.clipboard.writeText(btn.dataset.link).then(() => flash(btn), () => showToast('Could not copy automatically.', 'warning')));
+    btn.addEventListener('click', () => navigator.clipboard.writeText(btn.dataset.link).then(() => flashCopied(btn, 1500), () => showToast('Could not copy automatically.', 'warning')));
   });
 
   // Auto-copy the group link (it's the headline action), like the single-diagram Create-link flow.
@@ -202,13 +236,22 @@ function openNewDiagramFromHash(hash) {
  *  file in place (a file already open comes forward - see loadDriveRef). Both are same-document navigations, so
  *  neither reloads the editor: that is what lets Slot drop Drive's "Open with" into the tab without a boot. The
  *  hash is stripped either way, so the same address twice is two changes. The content share hashes (`#diagram=`,
- *  `#dfg=`) stay boot-only: they carry payloads the boot path validates and version-checks. */
+ *  `#dfg=`) RELOAD instead, so the boot path validates and version-checks the payload as it always has. They used
+ *  to be ignored without a word: a link pasted into a running tab did nothing (review 2026-10-15, B4). The
+ *  pagehide flush keeps this session across the reload. */
 function handleLiveHash(hash) {
   if (openNewDiagramFromHash(hash)) return true;
+  if (typeof hash === 'string' && (/[#&]dfg=g\d+\./.test(hash) || hash.includes('diagram='))) {
+    // An open Table-view edit gets the tab switch's Save / Discard prompt first, and the reload runs once it is
+    // answered ("Keep editing" stays, with the link left in the address). The reload used to drop the edits (R6).
+    const reload = () => window.location.reload();
+    if (!pctx.leaveGuard || pctx.leaveGuard(reload)) reload();
+    return true;
+  }
   const gd = typeof hash === 'string' && hash.match(/[#&]gd=([A-Za-z0-9_-]+)/);
   if (gd) {
     history.replaceState(null, '', window.location.pathname);
-    void loadDriveRef(gd[1]);
+    void holdUpdateReload(loadDriveRef(gd[1]));   // the address is gone now: an update reload must wait for the open
     return true;
   }
   return false;
@@ -319,20 +362,26 @@ export async function loadFromURL() {
       return false;
     }
 
-    // Sanitize graph data from untrusted URL source
-    sanitizeGraphJSON(data.graph);
+    // Sanitize graph data from untrusted URL source. `stats` counts what it dropped, for the warning below.
+    const stats = { unknownShapes: 0, unknownLinks: 0, danglingLinks: 0 };
+    sanitizeGraphJSON(data.graph, { stats });
 
     // Clear the hash so it doesn't reload on refresh
     history.replaceState(null, '', window.location.pathname);
 
     const savedVer = data.av || null;
-    const ok = await checkVersionWarning(savedVer, data.name || 'Shared Diagram', data);
+    const name = String(data.name || 'Shared Diagram');   // a numeric title (LLM-authored link) broke the tab bar
+    const ok = await checkVersionWarning(savedVer, name, data);
     if (!ok) return false;
 
     // Import the diagram using the existing import handler
     if (onImportCallback) {
       const type = normalizeDiagramType(data.type);
-      onImportCallback(data.name || 'Shared Diagram', type, data.graph, data.viewport || null, data.mappingMode);
+      onImportCallback(name, type, data.graph, data.viewport || null, data.mappingMode);
+      // The file and paste loads' count-only warning (D9). A share link, the skill's main hand-off, dropped unknown
+      // shapes and dangling connectors with no word (review 2026-10-15, XS7-1).
+      const warning = loadWarning('Opened', name, stats, data.type);
+      if (warning) showToast(warning, 'warning', { duration: 8000 });
       return true;
     }
     return false;
@@ -442,8 +491,6 @@ function showShareModal(url, opts = {}) {
   // token dead) is "connected" but can't actually use the controls, so it must read like disconnected — the
   // unlock/Sign-in prompt, never the dead controls (and never an auto-popup; see GOTCHAS 2.7c).
   const connected = isDriveConfigured() && isSignedIn();
-  // Past this length, chat apps / email / QR codes start truncating the classic link.
-  const LONG_URL_WARN = 8000;
   const tooLong = !isWarning && typeof url === 'string' && url.length > LONG_URL_WARN;
   const longWarnHtml = tooLong
     ? `<div class="df-share-modal__longwarn" role="alert">
@@ -505,8 +552,10 @@ function showShareModal(url, opts = {}) {
           <button type="button" class="df-modal__btn df-modal__btn--amber-outline df-share__copy-invite">Copy invite text</button>
         </div>
         <div class="df-share__shared-drive">
-          <span class="df-share__shared-drive-hint">Put an editable copy in a team Shared Drive so everyone there can edit it together.</span>
-          <button type="button" class="df-modal__btn df-modal__btn--amber-outline df-share__add-drive"><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>
+          ${isInSlot()
+            ? `<span class="df-share__shared-drive-hint" id="df-share-slot-note">${SLOT_PICKER_NOTE} Save to Drive here, then right-click the Diagramforce tab and choose Open in Browser.</span>`
+            : '<span class="df-share__shared-drive-hint">Put an editable copy in a team Shared Drive so everyone there can edit it together.</span>'}
+          <button type="button" class="df-modal__btn df-modal__btn--amber-outline df-share__add-drive"${isInSlot() ? ' disabled aria-describedby="df-share-slot-note"' : ''}><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg><span class="df-share__add-drive-label">Add to Shared Drive</span></button>
         </div>
         <div class="df-share__status-section">
           <div class="df-share__label">Google Drive shares <button type="button" class="df-share__info-btn" data-info="shares" aria-label="What Copy and Collab mean" aria-expanded="false">${INFO_GLYPH}</button></div>
@@ -566,10 +615,7 @@ function showShareModal(url, opts = {}) {
   // Copy buttons (classic + drive) — copy the adjacent field, flash "✓ Copied!".
   const copyFrom = (btn, field) => {
     if (!field?.value) return;
-    navigator.clipboard.writeText(field.value).then(() => {
-      const o = btn.textContent; btn.textContent = '✓ Copied!'; btn.classList.add('is-copied');
-      setTimeout(() => { btn.textContent = o; btn.classList.remove('is-copied'); }, 2000);
-    }).catch(() => { field.select(); showToast('Could not copy automatically - press ⌘C / Ctrl+C on the selected link.', 'warning'); });
+    navigator.clipboard.writeText(field.value).then(() => flashCopied(btn)).catch(() => { field.select(); showToast('Could not copy automatically - press ⌘C / Ctrl+C on the selected link.', 'warning'); });
   };
   body.querySelectorAll('.df-share__copy').forEach((btn) => {
     btn.addEventListener('click', () => copyFrom(btn, body.querySelector(btn.dataset.copy === 'drive' ? '.df-share__gd-field' : '.df-share-modal__url')));
@@ -578,10 +624,7 @@ function showShareModal(url, opts = {}) {
   // Copy JSON - the text was built when the pane opened; flash like the link buttons.
   const jsonBtn = body.querySelector('.df-share__copy-json');
   jsonBtn?.addEventListener('click', () => {
-    navigator.clipboard.writeText(jsonText).then(() => {
-      const o = jsonBtn.textContent; jsonBtn.textContent = '✓ Copied!'; jsonBtn.classList.add('is-copied');
-      setTimeout(() => { jsonBtn.textContent = o; jsonBtn.classList.remove('is-copied'); }, 2000);
-    }).catch(() => showToast('Could not copy automatically - use Save > Export instead.', 'warning'));
+    navigator.clipboard.writeText(jsonText).then(() => flashCopied(jsonBtn)).catch(() => showToast('Could not copy automatically - use Save > Export instead.', 'warning'));
   });
 
   // "Sign in to Google Drive" — sign in, then reopen the overlay (now signed-in → the Drive controls render).
@@ -658,7 +701,9 @@ function showShareModal(url, opts = {}) {
     // to Google Drive's own sharing dialog for the authoritative "who has access" (incl. view-only recipients
     // the app can't enumerate). Re-rendered alongside the copies list so it stays in step after Create/Resolve.
     const statusBox = body.querySelector('.df-share__status');
-    const renderShareStatus = (grants = []) => {
+    // `grantsState`: 'live' (grants is the permissions.list answer), 'loading' (asked, not answered yet), 'cached'
+    // (not asked: no live token) or 'failed'. Only 'live' may say "Not shared yet" for a master with direct grants.
+    const renderShareStatus = (grants = [], grantsState = 'live') => {
       if (!statusBox) return;
       const st = activeShareStatus ? activeShareStatus() : { role: 'local', copies: [], source: null, manageUrl: null };
       // Direct grants = people / the public link you invited DIRECTLY on this master (reader/writer permissions, no
@@ -705,6 +750,18 @@ function showShareModal(url, opts = {}) {
         if (anyoneLink) parts.push('anyone with the link');
         text = `<strong>Shared with ${parts.join(' and ')}.</strong> They see your latest version; the details are listed below.`;
         if (st.manageUrl) { manageUrl = st.manageUrl; manageLabel = 'Manage'; }
+      } else if (grantsState === 'failed') {
+        // The live list did not load (offline, an expired token, a 403). "Not shared yet" could be false, and it is
+        // the privacy line people act on (review 2026-10-15, B7). Say what is known.
+        text = `<strong>Could not load who has access.</strong> Check the sharing in Google Drive before you rely on it.`;
+        if (st.manageUrl) { manageUrl = st.manageUrl; manageLabel = 'Manage'; }
+      } else if (grantsState !== 'live' && st.outgoingGrants > 0) {
+        // The last live count says this master has direct invites or a public link; the list is not in yet.
+        icon = GLYPH_ICON.out;
+        text = grantsState === 'loading'
+          ? `<strong>Shared directly.</strong> Loading who has access...`
+          : `<strong>Shared directly.</strong> Google Drive lists who has access.`;
+        if (st.manageUrl) { manageUrl = st.manageUrl; manageLabel = 'Manage'; }
       } else {
         text = `<strong>Not shared yet.</strong> Only you can see this diagram. Create a Google Drive link above to share it with others.`;
       }
@@ -728,12 +785,16 @@ function showShareModal(url, opts = {}) {
     // Renders the LOCAL copies immediately (no network wait), then merges the LIVE permissions.list grants when they
     // arrive (best-effort - a blocked/failed/absent token leaves the copies-only view). Never `await`s the grants
     // fetch before painting, so the modal isn't blocked on a slow / popup-gated token call.
+    // Each render starts its own permissions.list; only the LATEST may paint. A late answer to an older one (a slow
+    // failure after a Revoke's fresh list) wiped the correct roster and status (review R5).
+    let sharesGen = 0;
     const renderDriveShares = () => {
-      if (!peopleBox) { renderShareStatus(); return; }
+      const gen = ++sharesGen;
+      if (!peopleBox) { renderShareStatus([], 'cached'); return; }
       const copies = activeShareCopies ? activeShareCopies() : [];
       const roleLabel = (role) => role === 'reader' ? 'Can view' : role === 'commenter' ? 'Can comment' : 'Can edit';
-      const paint = (grants) => {
-      renderShareStatus(grants);   // status reflects the live grants too (so direct invites stop reading "Not shared yet")
+      const paint = (grants, grantsState) => {
+      renderShareStatus(grants, grantsState);   // status reflects the live grants too (so direct invites stop reading "Not shared yet")
       const edit = [], view = [], sharedDrive = [];
       for (const g of grants) {
         if (g.inherited) sharedDrive.push({ kind: 'member', permId: g.permissionId, who: g.recipient, sub: roleLabel(g.role) });
@@ -822,7 +883,7 @@ function showShareModal(url, opts = {}) {
         const fileId = btn.closest('[data-file]')?.dataset.file;
         const c = copies.find((x) => x.fileId === fileId);
         if (!c) return;
-        navigator.clipboard.writeText(c.shareUrl).then(() => { const o = btn.textContent; btn.textContent = '✓ Copied!'; btn.classList.add('is-copied'); setTimeout(() => { btn.textContent = o; btn.classList.remove('is-copied'); }, 1500); })
+        navigator.clipboard.writeText(c.shareUrl).then(() => flashCopied(btn, 1500))
           .catch(() => showToast('Could not copy automatically.', 'warning'));
       }));
       peopleBox.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', async () => {
@@ -842,13 +903,17 @@ function showShareModal(url, opts = {}) {
         } catch (e) { btn.disabled = false; showError('Could not remove the share: ' + (e.message || 'unknown error')); }
       }));
       };   // end paint
-      paint([]);   // immediate: the local copies (Edit / Shared Drive) - no network wait
+      const fetchGrants = !!(listActiveShareGrants && isSignedIn());
+      paint([], fetchGrants ? 'loading' : 'cached');   // immediate: the local copies (Edit / Shared Drive) - no network wait
       // then merge the live permissions.list grants (Edit / View / Shared-Drive members) when they resolve — but
       // ONLY when a live token already exists. listActiveShareGrants → getToken would otherwise pop Google's
       // account picker just from OPENING the Share Manager (a passive surface): a timed-out Drive must read like
       // disconnected, never auto-popping. The local copies still render; the Drive action buttons sign in on the
-      // user's explicit click. (See GOTCHAS 2.7c.)
-      if (listActiveShareGrants && isSignedIn()) listActiveShareGrants().then((g) => paint(g || [])).catch(() => {});
+      // user's explicit click. (See GOTCHAS 2.7c.) A failed list repaints the status as unknown, never as unshared.
+      if (fetchGrants) {
+        listActiveShareGrants().then((g) => { if (gen === sharesGen) paint(g || [], 'live'); })
+          .catch((e) => { noteError('share:list-grants', e); if (gen === sharesGen) paint([], 'failed'); });
+      }
     };
 
     accessOpts.forEach((opt) => opt.addEventListener('click', () => {
@@ -947,13 +1012,15 @@ function showShareModal(url, opts = {}) {
     addDriveBtn?.addEventListener('click', async () => {
       const tabId = pctx.activeTabIdCb ? pctx.activeTabIdCb() : null;
       if (!tabId) return;
-      const orig = addDriveBtn.textContent; addDriveBtn.disabled = true; addDriveBtn.textContent = 'Choose a folder…';
+      // Swap the LABEL only: setting the button's textContent removed its Drive icon for good (review 2026-10-15, B9).
+      const label = addDriveBtn.querySelector('.df-share__add-drive-label') || addDriveBtn;
+      const orig = label.textContent; addDriveBtn.disabled = true; label.textContent = 'Choose a folder…';
       try {
         if (await publishTabsToSharedDrive([tabId])) { showToast('Added to a Shared Drive ✓', 'success'); renderDriveShares(); }
       } catch (err) {
         showError('Could not add to a Shared Drive: ' + (err.message || 'unknown error'));
       } finally {
-        addDriveBtn.textContent = orig; addDriveBtn.disabled = false;
+        label.textContent = orig; addDriveBtn.disabled = false;
       }
     });
 

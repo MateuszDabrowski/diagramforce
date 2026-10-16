@@ -5,7 +5,7 @@
 // stays in canvas.js (selection-viz) and reads the layer via getBumpLayer().
 // Reads the live graph/paper via cctx; initCrossingBumps() returns the scheduler
 // for canvas.js to wire into cctx.scheduleCrossingBumpRecompute.
-import { cctx } from './context.js?v=1.25.9';
+import { cctx } from './context.js?v=1.26.1';
 
 // ── Bridge notation at link crossings (CR-5.2 PoC) ───────────────────
 // EDA-style "jump over" arcs at points where two orthogonal links cross
@@ -62,9 +62,15 @@ let _bumpRecomputeTimer = null;
 let scheduleCrossingBumpRecompute = null;
 // True while an element is being dragged. The bumps are a pure overlay
 // recomputed from link routes, so we clear them on drag start and redraw once
-// on drop — rather than re-running the O(S²) crossing detection + SVG rebuild
+// on drop — rather than re-running the crossing detection + SVG rebuild
 // every pointermove, which lagged a frame behind the live-rerouting connectors.
 let _draggingElement = false;
+// What the hops on the layer were drawn from (see recomputeCrossingBumps). Null whenever the layer was emptied.
+let _drawnSignature = null;
+function clearBumpLayer() {
+  _drawnSignature = null;
+  if (_bumpLayer) while (_bumpLayer.firstChild) _bumpLayer.removeChild(_bumpLayer.firstChild);
+}
 
 export function initCrossingBumps() {
   const { graph, paper } = cctx;
@@ -100,9 +106,7 @@ export function initCrossingBumps() {
   // SYNCHRONOUSLY here so stale arcs never outlive their graph, then schedule a
   // recompute to draw the incoming graph's bumps once its routes settle.
   graph.on('reset', () => {
-    if (_bumpLayer) {
-      while (_bumpLayer.firstChild) _bumpLayer.removeChild(_bumpLayer.firstChild);
-    }
+    clearBumpLayer();
     scheduleCrossingBumpRecompute();
   });
   // render:done fires after each JointJS render pass completes — covers
@@ -114,14 +118,14 @@ export function initCrossingBumps() {
 
   // Element-drag lifecycle: hide the bumps while an element is being dragged and
   // recompute them once on drop. Tracking the arcs per-frame would re-run the
-  // O(S²) crossing detection and rebuild the overlay on every pointermove — and
+  // crossing detection and rebuild the overlay on every pointermove — and
   // they'd still visibly trail the live-rerouting connectors — so we clear on
   // drag start and redraw at the settled positions on release. (Pan/zoom need no
   // handling here: the overlay rides the .joint-layers transform for free.)
   paper.on('element:pointermove', () => {
     if (_draggingElement) return;
     _draggingElement = true;
-    while (_bumpLayer.firstChild) _bumpLayer.removeChild(_bumpLayer.firstChild);
+    clearBumpLayer();
   });
   paper.on('element:pointerup', () => {
     const wasDragging = _draggingElement;
@@ -155,11 +159,13 @@ function refreshCrossingBumpOpacity() {
   });
 }
 
-// Perf guard: the pairwise crossing detection is O(segments²) and runs on a debounced recompute after every
-// edit. On a very large diagram the segment count can reach thousands, enough to jank the main thread. Past this
-// conservative cap we skip the whole bump pass - the jump-over arcs are a cosmetic nicety, and the links still
-// render + route correctly without them. (~1200 segments ≈ 720k cheap range tests worst case.)
-const MAX_BUMP_SEGMENTS = 1200;
+// Perf guard: past this many segments the whole bump pass is skipped (links still render and route; only the hops go).
+// It was 1200, set for an all-pairs search, and switched the hops off on exactly the busy diagrams that need them
+// (about 250 links and up; review P3, 2026-10-15). With findSegmentCrossings, measured in Chromium under load: 1896
+// segments 22.6 -> 2.3 ms to find the crossings and 9.6 ms for the whole redraw; 4705 segments 243 -> 15.9 ms and
+// 51 ms with 2807 hops drawn. In Node, 10000 segments take 16 ms against 448 ms for all pairs. The redraw is debounced
+// and does not run during a drag.
+const MAX_BUMP_SEGMENTS = 10000;
 let _bumpGuardLogged = false;
 
 function recomputeCrossingBumps() {
@@ -168,8 +174,7 @@ function recomputeCrossingBumps() {
   // Suppressed mid-drag: the bumps were cleared on drag start and stay hidden
   // until the drop (element:pointerup) recomputes them at the settled routes.
   if (_draggingElement) return;
-  while (_bumpLayer.firstChild) _bumpLayer.removeChild(_bumpLayer.firstChild);
-  if (!isCrossingBumpsEnabled()) return;
+  if (!isCrossingBumpsEnabled()) { clearBumpLayer(); return; }
 
   // Collect every orthogonal segment with per-link styling.
   const segments = [];
@@ -189,15 +194,30 @@ function recomputeCrossingBumps() {
     }
   }
 
-  // Perf short-circuit on very large diagrams (the bump layer is already cleared above, so links just render
-  // without arcs). Logged once so it's discoverable without spamming the console on every recompute.
+  // Perf short-circuit on very large diagrams (the bump layer is cleared, so links just render without arcs). Logged
+  // once so it's discoverable without spamming the console on every recompute.
   if (segments.length > MAX_BUMP_SEGMENTS) {
+    clearBumpLayer();
     if (!_bumpGuardLogged) { _bumpGuardLogged = true; console.info(`SF Diagrams: crossing-bump arcs skipped (${segments.length} segments > ${MAX_BUMP_SEGMENTS} cap) to keep large diagrams responsive.`); }
     return;
   }
 
-  // Pairwise orthogonal-crossing detection.  O(S²) but S is small in
-  // practice (tens of segments) and each test is cheap range arithmetic.
+  // Every change:attrs on any cell and every render:done schedules this pass, so most runs follow an edit that moved
+  // no line (typing a card label). The hops depend only on these segments, their order and their links' stroke, width
+  // and z, so while those are unchanged the search and the rebuild are skipped: 10-51 ms on 1900-4700 segments
+  // (review S5-6). Only the selection dim and tint are re-applied.
+  const signature = segments.map(({ link, seg, stroke, strokeWidth, z }) =>
+    `${link.id}|${seg.a.x},${seg.a.y},${seg.b.x},${seg.b.y}|${stroke}|${strokeWidth}|${z}`).join(';');
+  if (signature === _drawnSignature) {
+    refreshCrossingBumpOpacity();
+    cctx.retintCrossingBumps?.();
+    return;
+  }
+  clearBumpLayer();
+  _drawnSignature = signature;
+
+  // Orthogonal-crossing detection: findSegmentCrossings tests each horizontal segment only against the vertical
+  // segments inside its x range, and returns exactly what the all-pairs loop found, in the same order.
   //
   // Bus-cluster dedupe: when several sibling links share a horizontal
   // "bus" at the same Y and one V drop crosses through, every parallel
@@ -218,23 +238,19 @@ function recomputeCrossingBumps() {
   // bumps where one sibling's vertical stub crossed another sibling's
   // horizontal bus.
   const crossings = [];
-  for (let i = 0; i < segments.length; i++) {
-    for (let j = i + 1; j < segments.length; j++) {
-      const a = segments[i];
-      const b = segments[j];
-      if (a.link === b.link) continue;       // same link self-bend — skip
-      const cross = findOrthoCrossing(a.seg, b.seg, BUMP_ENDPOINT_BUFFER);
-      if (!cross) continue;
-      // No separate sibling/bundled check needed — the OR-endpoint
-      // skip inside findOrthoCrossing handles every "lines branch or
-      // meet" geometry (sibling stubs, escapes, T-junctions) by virtue
-      // of the crossing being close to a segment endpoint in all those
-      // cases. Only true 4-way crossings get past findOrthoCrossing.
-      const [under, over] = a.z <= b.z ? [a, b] : [b, a];
-      const underIsH = Math.abs(under.seg.a.y - under.seg.b.y) < BUMP_ORTHO_TOL;
-      crossings.push({ cross, under, over, underIsH, zGap: Math.abs(a.z - b.z) });
-    }
+  for (const { i, j, cross } of findSegmentCrossings(segments, BUMP_ENDPOINT_BUFFER)) {
+    const a = segments[i];
+    const b = segments[j];
+    // No separate sibling/bundled check needed — the OR-endpoint
+    // skip inside findOrthoCrossing handles every "lines branch or
+    // meet" geometry (sibling stubs, escapes, T-junctions) by virtue
+    // of the crossing being close to a segment endpoint in all those
+    // cases. Only true 4-way crossings get past findOrthoCrossing.
+    const [under, over] = a.z <= b.z ? [a, b] : [b, a];
+    const underIsH = Math.abs(under.seg.a.y - under.seg.b.y) < BUMP_ORTHO_TOL;
+    crossings.push({ cross, under, over, underIsH, zGap: Math.abs(a.z - b.z) });
   }
+  // Stable sort: equal zGaps keep the (i, j) order, so the same pair wins each 8 px grid cell as before.
   crossings.sort((x, y) => x.zGap - y.zGap);
   const drawnCells = new Set();
   const GRID = 8;
@@ -248,6 +264,8 @@ function recomputeCrossingBumps() {
   // re-apply the current selection-dim state so newly-drawn bumps don't
   // pop to full brightness when selection-driven dimming is active.
   refreshCrossingBumpOpacity();
+  // ...and the focus tint of a hovered or selected link's arcs (selection-viz.js), for the same reason.
+  cctx.retintCrossingBumps?.();
 }
 
 // Exported for unit testing (S7 coverage gap — the router.js precedent). Pure given a
@@ -307,6 +325,38 @@ export function getLinkOrthogonalSegments(linkView) {
   return out;
 }
 
+// Every crossing among `items` ([{ seg, link }]) as [{ i, j, cross }], i < j, sorted by (i, j): exactly what testing
+// every pair with findOrthoCrossing returns for a buffer above 0, skipping pairs from one link (review P3, 2026-10-15).
+// findOrthoCrossing needs one horizontal and one vertical segment with the vertical's x inside the horizontal's x
+// range, so each horizontal segment is tested only against the vertical segments in that range (binary search on x).
+// A segment shorter than BUMP_ORTHO_TOL both ways counts as both, so it goes in both lists. Two such segments meet
+// twice, and findOrthoCrossing returns null for that pair both times. Exported for unit testing.
+export function findSegmentCrossings(items, buffer) {
+  const hs = [], vs = [];
+  for (let k = 0; k < items.length; k++) {
+    const s = items[k].seg;
+    if (Math.abs(s.a.y - s.b.y) < BUMP_ORTHO_TOL) hs.push(k);
+    if (Math.abs(s.a.x - s.b.x) < BUMP_ORTHO_TOL) vs.push(k);
+  }
+  const vx = (k) => items[k].seg.a.x;   // findOrthoCrossing reads a vertical segment's x from its `a` end
+  vs.sort((p, q) => vx(p) - vx(q));
+  const out = [];
+  for (const h of hs) {
+    const hSeg = items[h].seg;
+    const lo = Math.min(hSeg.a.x, hSeg.b.x), hi = Math.max(hSeg.a.x, hSeg.b.x);
+    let l = 0, r = vs.length;   // first vertical with x >= lo
+    while (l < r) { const m = (l + r) >> 1; if (vx(vs[m]) < lo) l = m + 1; else r = m; }
+    for (let n = l; n < vs.length && vx(vs[n]) <= hi; n++) {
+      const v = vs[n];
+      if (items[v].link === items[h].link) continue;   // a self-bend, or the segment itself
+      const i = Math.min(h, v), j = Math.max(h, v);
+      const cross = findOrthoCrossing(items[i].seg, items[j].seg, buffer);
+      if (cross) out.push({ i, j, cross });
+    }
+  }
+  return out.sort((p, q) => p.i - q.i || p.j - q.j);
+}
+
 // Exported for unit testing (S7 coverage gap). PURE geometry: given two orthogonal
 // segments ({a:{x,y}, b:{x,y}}) + an endpoint buffer, returns the {x,y} of a TRUE 4-way
 // crossing (both segments pass through, neither ends near it) or null. Reads only BUMP_ORTHO_TOL.
@@ -362,6 +412,12 @@ function drawBumpOverlay(layer, cx, cy, underIsH, under, over) {
   // each side, so the arc joins the bumped line cleanly without a visible
   // gap where the stroke caps meet perpendicular to each other.
   const STUB = 0.5;
+  // One group per crossing, naming both links: a partial Copy as PNG keeps a crossing only when it copies both
+  // (image-export.js), else the hop of a link left out stayed in the image.
+  const crossing = document.createElementNS(SVG_NS, 'g');
+  crossing.setAttribute('data-under-id', under.link.id);
+  crossing.setAttribute('data-over-id', over.link.id);
+  layer.appendChild(crossing);
 
   // 1. Eraser — minimal bg-coloured rect aligned along the bumped segment,
   //    just thick enough to hide the line's stroke at the crossing.
@@ -380,7 +436,7 @@ function drawBumpOverlay(layer, cx, cy, underIsH, under, over) {
   eraser.setAttribute('fill', 'var(--bg-canvas, #1A1A1A)');
   // No data-link-id on the eraser — it's always bg-coloured so dimming
   // wouldn't change anything visually.
-  layer.appendChild(eraser);
+  crossing.appendChild(eraser);
 
   // 2. Restoration — short perpendicular segment in the THROUGH link's
   //    stroke that re-paints the line across the eraser gap, so the
@@ -403,7 +459,7 @@ function drawBumpOverlay(layer, cx, cy, underIsH, under, over) {
   // The restoration line paints the THROUGH link's stroke across the
   // eraser gap; its dim state follows the OVER link.
   restore.setAttribute('data-link-id', over.link.id);
-  layer.appendChild(restore);
+  crossing.appendChild(restore);
 
   // 3. Bump arc — semicircle in the BUMPED link's stroke. The path starts
   //    with a tiny straight stub OUTSIDE the eraser boundary, runs the
@@ -425,7 +481,7 @@ function drawBumpOverlay(layer, cx, cy, underIsH, under, over) {
   // Arc represents the BUMPED link going over the through line; dim
   // state follows the UNDER link.
   arc.setAttribute('data-link-id', under.link.id);
-  layer.appendChild(arc);
+  crossing.appendChild(arc);
 }
 
 // Accessor for the bump overlay layer — canvas.js focus-tinting re-strokes the

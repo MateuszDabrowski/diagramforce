@@ -1,23 +1,24 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.25.9';
-import { applyGanttGeometry, deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks } from './gantt-layout.js?v=1.25.9';
-import { getAllIcons, getCategories } from './icons.js?v=1.25.9';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.25.9';
-import { startImageAddFlow } from './image-component.js?v=1.25.9';
-import * as history from './history.js?v=1.25.9';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.25.9';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.25.9';
-import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.25.9';
-import { SVG } from './components/stencil-kit.js?v=1.25.9';
-import { confirmModal } from './feedback.js?v=1.25.9';
-import { escHtml } from './util.js?v=1.25.9';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.25.9'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.26.1';
+import { deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks, clampGanttDateToAxis, clampGanttSpanToAxis, growTimelineToFitDates } from './gantt-layout.js?v=1.26.1';
+import { getAllIcons, getCategories } from './icons.js?v=1.26.1';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, HALO_PARENT_TYPES, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.26.1';
+import { startImageAddFlow } from './image-component.js?v=1.26.1';
+import * as history from './history.js?v=1.26.1';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.26.1';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.26.1';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.26.1';
+import { SVG } from './components/stencil-kit.js?v=1.26.1';
+import { confirmModal, showToast } from './feedback.js?v=1.26.1';
+import { escHtml } from './util.js?v=1.26.1';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.26.1'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
-let panelEl, searchEl, bodyEl;
+let panelEl, searchEl, bodyEl, clearBtn;
 let currentDiagramType = 'architecture';
+let filterTimer = null;
 
 // ── Quick add (2026-09-24) ──
 // One click, or Enter / Space on a focused item, adds a single shape at the canvas centre. Double-click used to be
@@ -61,6 +62,23 @@ export function init(_graph, _paper) {
 
   renderCategories();
 
+  // Motion (css/stencil.css): a category the user opens reveals its items. One delegated listener covers every
+  // section builder; a class set here, not at render, keeps re-renders from replaying the animation.
+  bodyEl.addEventListener('click', (e) => {
+    const header = e.target.closest?.('.df-stencil__category-header');
+    header?.closest('.df-stencil__category')?.classList.add('df-stencil__category--animate');
+    // Runs after the header's own toggle (this listener is on an ancestor), so the state is final here.
+    if (header) syncCategoryExpanded(header);
+  });
+  // Headers are keyboard buttons (review R4): Enter / Space go through click() so every header's own toggle runs.
+  // Stopped here so keyboard.js does not take Space as type-to-rename for a selected shape.
+  bodyEl.addEventListener('keydown', (e) => {
+    if (!e.target.matches?.('.df-stencil__category-header') || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.repeat) e.target.click();
+  });
+
   // Re-render when the saved-template library changes (save / delete) so the
   // "My {Type} Templates" / "My Other Templates" categories appear, update their
   // counts, or disappear.
@@ -69,18 +87,13 @@ export function init(_graph, _paper) {
   // Gap 17 (v1.12.0) — clear-× button shows when the search has a value;
   // clicks wipe the field and re-run the filter so the user can return to
   // the full palette without selecting + deleting.
-  const clearBtn = document.getElementById('btn-stencil-search-clear');
-  const refreshClearVisibility = () => {
-    if (!clearBtn) return;
-    clearBtn.hidden = searchEl.value === '';
-  };
+  clearBtn = document.getElementById('btn-stencil-search-clear');
   // Gap 28 (v1.12.0) — debounce the filter pass to 120 ms so fast typers
   // don't trigger one full re-render per keystroke. The clear-× visibility
   // refresh stays immediate (it's a single classList toggle) so the chrome
   // feels live even while the heavier category re-render is queued.
   // 120 ms picked over 150 to stay below the ~150 ms "feels instant"
   // threshold while still coalescing typical typing bursts.
-  let filterTimer = null;
   searchEl.addEventListener('input', () => {
     refreshClearVisibility();
     clearTimeout(filterTimer);
@@ -126,11 +139,21 @@ export function hide() {
   if (btn) btn.classList.remove('df-toolbar__button--active');
 }
 
+// Gap 17: the clear-× shows only while the search has a value.
+function refreshClearVisibility() {
+  if (!clearBtn) return;
+  clearBtn.hidden = searchEl.value === '';
+}
+
 export function setDiagramType(type) {
   if (type === currentDiagramType) return;
   currentDiagramType = type;
-  renderCategories();
+  // Empty the search BEFORE the re-render (which re-applies a live query) and drop a pending filter pass, so the new
+  // palette shows in full and the × goes with the query (K6).
   searchEl.value = '';
+  clearTimeout(filterTimer);
+  renderCategories();
+  refreshClearVisibility();
 }
 
 // Lazy-section observers still waiting for their first reveal. A re-render (every diagram-type switch) throws the old
@@ -141,6 +164,8 @@ function renderCategories() {
   for (const io of _pendingSectionObservers) io.disconnect();
   _pendingSectionObservers.clear();
   bodyEl.innerHTML = '';
+  bodyEl.classList.remove('df-stencil__body--filtered');   // a re-render shows every section, unfiltered
+  _preSearchCollapsed = null;   // those sections are gone; a live query re-snapshots the new ones below
 
   // The stencil is grouped into THREE bands (v1.17.0; first band renamed 1.19.5): "{Type} Templates"
   // (official starters + the user's own saved shapes + templates for THIS type), "{Type} Shapes" (this
@@ -260,6 +285,13 @@ function renderCategories() {
     if (tTemplates.length) bodyEl.appendChild(cx(buildTemplatesSection(`${s} · My Templates`, `my-templates-${type || 'untyped'}`, tTemplates, true, 'rows')));
     if (cross) bodyEl.appendChild(cross);
   }
+
+  // A template change (save, delete, every Drive template sync) re-renders mid-search: keep the results filtered to
+  // what the box still says (K6), instead of the whole palette under a typed query.
+  const query = searchEl?.value.trim().toLowerCase();
+  if (query) filterStencil(query);
+  // After the filter: aria-expanded follows each header's final collapsed state (R4).
+  syncAllCategoryExpanded();
 }
 
 // A non-collapsible band divider that introduces a run of related sections ({Type} Templates / {Type}
@@ -686,25 +718,6 @@ function buildShapePackSection(pack, label, categoryId) {
   return section;
 }
 
-/** Insert a resolved pack component at `localPoint` exactly like the generic component-drop tail:
- *  fresh element, inherited display flags, grid snap, layout no-ops, Zone/Container capture. Packs
- *  contain only sf.DataObjects, so the gantt-specific drop branches don't apply. */
-function insertComponentAt(component, localPoint) {
-  const gridSize = paper.options.gridSize || 4;
-  const element = createElementFromComponent(component, { x: 0, y: 0 });
-  if (!element) return;
-  applyDisplayFlags(element);
-  const size = element.size();
-  element.position(
-    Math.round((localPoint.x - size.width / 2) / gridSize) * gridSize,
-    Math.round((localPoint.y - size.height / 2) / gridSize) * gridSize,
-  );
-  graph.addCell(element);
-  updateSimpleNodeLayout(element);
-  updateContainerHeaderLayout(element);
-  tryEmbed(element);
-}
-
 function buildIconSection(cat, icons, displayLabel) {
   const section = document.createElement('div');
   section.className = 'df-stencil__category df-stencil__category--collapsed';
@@ -760,9 +773,23 @@ function buildIconSection(cat, icons, displayLabel) {
   return section;
 }
 
+// aria-expanded mirrors the section's collapsed class. Called after a render, a header toggle and a search (which
+// auto-expands matches), the three places that change it.
+function syncCategoryExpanded(header) {
+  const section = header.closest('.df-stencil__category');
+  if (section) header.setAttribute('aria-expanded', String(!section.classList.contains('df-stencil__category--collapsed')));
+}
+function syncAllCategoryExpanded() {
+  bodyEl.querySelectorAll('.df-stencil__category-header').forEach(syncCategoryExpanded);
+}
+
 function buildCategoryHeader(label, count) {
   const header = document.createElement('div');
   header.className = 'df-stencil__category-header';
+  // A keyboard control (review R4): most categories start collapsed, and a click-only div kept their items out of
+  // reach. The Enter / Space handler and aria-expanded are wired once on the stencil body (init).
+  header.setAttribute('role', 'button');
+  header.tabIndex = 0;
   // Chevron + label on the left, count on the right. The chevron sits inside
   // a wrapper so CSS can rotate it based on the parent category's collapsed
   // class (`.df-stencil__category--collapsed`).
@@ -954,7 +981,7 @@ function setupDropZone() {
       const localPoint = paper.clientToLocalPoint(evt.clientX, evt.clientY);
       loadOfficialShapePack(ref.packId).then((comps) => {
         const comp = comps?.find((c) => c.objectName === ref.objectName);
-        if (comp) insertComponentAt(comp, localPoint);
+        if (comp) placeComponentAt(comp, localPoint);
       });
       return;
     }
@@ -982,110 +1009,166 @@ function setupDropZone() {
     }
 
     try {
-      const gridSize = paper.options.gridSize || 4;
-
-      // Create element at origin first, then center on drop point
-      const element = createElementFromComponent(template, { x: 0, y: 0 });
-      if (element) {
-        applyDisplayFlags(element);
-        const size = element.size();
-        const cx = localPoint.x - size.width / 2;
-        const cy = localPoint.y - size.height / 2;
-        element.position(
-          Math.round(cx / gridSize) * gridSize,
-          Math.round(cy / gridSize) * gridSize,
-        );
-        if (element.get('type') === 'sf.GanttTimeline') {
-          // Phase 4.6: a dropped timeline seeds a real plan (like a fresh Gantt) - all phases + their key tasks, gate
-          // milestones, and a Today marker - so it's editable immediately, never a tasks[]-only timeline. Everything
-          // lands in ONE history batch (one undo); layoutTimelineTasks positions every element type in one pass.
-          const { bars, milestones = [], marker } = createGanttBarsFor(element);
-          history.startBatch();
-          try {
-            graph.addCell(element);
-            for (const c of [...bars, ...milestones, ...(marker ? [marker] : [])]) { graph.addCell(c); element.embed(c); }
-            layoutTimelineTasks(element);
-          } finally { history.endBatch(); }
-        } else if (element.get('type') === 'sf.GanttGroup' && element.get('phaseLabel')) {
-          // Item 4: a dropped Project Phase ADDS a timeline group (a header row), like a dropped task adds a task —
-          // not a floating shape that does nothing. We never add the shape; we append a `groups[]` entry to the
-          // timeline under the drop point (or the sole timeline). The plain "Summary Bar" GanttGroup (no
-          // phaseLabel) still drops as a manual floating bar via the generic branch below.
-          const pos = element.position(), sz = element.size();
-          const pt = { x: pos.x + sz.width / 2, y: pos.y + sz.height / 2 };
-          const timelines = graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
-          let tl = timelines.find(e => e.getBBox().containsPoint(pt));
-          if (!tl && timelines.length === 1) tl = timelines[0];
-          if (tl) {
-            const existing = (tl.get('groups') || []);
-            const palette = ['#5B5FC7', '#1D73C9', '#2A9D8F', '#E8881A', '#DA4E55', '#7C5CBF'];
-            // Insert at the drop position — by default (dropped below everything) at the BOTTOM (last), but a drop
-            // onto a specific row inserts there; existing groups at/after that slot shift down (item 4).
-            const at = ganttGroupInsertOrder(tl, pt.y);
-            const gs = existing.map(g => ({ ...g, order: (g.order ?? 0) >= at ? (g.order ?? 0) + 1 : (g.order ?? 0) }));
-            // Colour from the library phase (phaseColor) when present, else cycle the palette (the generic "Phase").
-            const color = element.get('phaseColor') || palette[existing.length % palette.length];
-            gs.push({ id: 'g' + Date.now() + '_' + existing.length, label: element.get('phaseLabel'), color, order: at });
-            tl.set('groups', gs);   // single undoable change; the group row + its auto summary bar render from this
-          }
-        } else {
-          graph.addCell(element);
-          updateSimpleNodeLayout(element);
-          updateContainerHeaderLayout(element);   // flush an icon-less Container's title left (no-op otherwise)
-          tryEmbed(element);
-          // Phase B1: a milestone dropped over a timeline is date-driven — seed its `milestoneDate` from the drop
-          // column so it's real schedule data immediately (and snaps to that column via the view listener), the
-          // same way a dropped bar seeds dates. No-op if it didn't land on a timeline (derive... → null).
-          if (element.get('type') === 'sf.GanttMilestone') {
-            const d = deriveGanttMilestoneDate(element);
-            if (d) element.set('milestoneDate', d);
-          }
-          // Same for a Day Marker — seed `markerDate` from the drop column so it's dated (and its full-height
-          // line draws) immediately AND it snaps onto the nearest day, instead of landing dateless mid-column
-          // with no line (the "no line unless perfectly between two days" report).
-          if (element.get('type') === 'sf.GanttMarker') {
-            const d = deriveGanttMarkerDate(element);
-            if (d) element.set('markerDate', d);
-          }
-          // Both point markers also snap their Y to the nearest ROW CENTRE on drop (issue 4) so they land lined up
-          // on a task row instead of floating between rows (the X already snapped to a day via the date above).
-          if (element.get('type') === 'sf.GanttMilestone' || element.get('type') === 'sf.GanttMarker') {
-            const tl = ganttTimelineFor(element);
-            const sy = tl && snapGanttRowCentreY(tl, element.position().y + element.size().height / 2);
-            if (sy != null) element.position(element.position().x, Math.round(sy - element.size().height / 2));
-          }
-          // A dropped task bar must get an ORDER, or it floats at its drop Y while the panel rows it by `order` —
-          // the "dragging scrambles / bars don't match their labels" bug (a chart built by dropping tasks scatters).
-          // It also INHERITS the group it was dropped into (the group region at its drop Y) so it lands in a phase
-          // and gets summarized. Seed dates from its drop column, then back-fill orders from every bar's current Y
-          // (slotting the new bar among the rest) and re-lay-out so each bar snaps to its row + date column. One undo.
-          if (element.get('type') === 'sf.GanttTask') {
-            const tl = ganttTimelineFor(element);
-            if (tl) {
-              history.startBatch();
-              try {
-                const tgt = ganttDropTarget(tl, element.position().y + element.size().height / 2, null);
-                if (tgt && tgt.groupId) element.set('groupId', tgt.groupId);
-                if (!element.get('startDate') || !element.get('endDate')) {
-                  const d = deriveGanttDates(element, tl);
-                  if (d) element.set({ startDate: d.start, endDate: d.end });
-                }
-                backfillGanttOrders(tl);
-                recolorGroupTasks(tl);   // issue 7: the dropped bar takes its group's colour (not the stencil default)
-                layoutTimelineTasks(tl);
-              } finally { history.endBatch(); }
-            }
-          }
-          // Capture: drop-on-lifeline snaps activation's X to the lifeline centre.
-          if (element.get('type') === 'sf.SequenceActivation') {
-            snapActivationToLifeline(element);
-          }
-        }
-      }
+      placeComponentAt(template, localPoint);
     } catch (err) {
       console.warn('SF Diagrams: Drop failed:', err);
     }
   });
+}
+
+/** The one placement pipeline every stencil add runs (K1, 2026-10-15): the desktop drop, the touch long-press drop,
+ *  quick add (click, tap, Enter) and a shape-pack add. It centres the component on `localPoint`, snaps it to the grid,
+ *  then applies the type rules: a timeline seeds its plan, a Project Phase becomes a timeline group, a task bar gets
+ *  its group, dates and order, a milestone or marker its date and row, an activation its lifeline, and anything else
+ *  is captured by the container under it. Quick add used to stop at `addCell`, so the same tile gave a broken bar on
+ *  click and a placed one on drag. `nudge` (quick add) steps a free shape 20 px down-right while another element
+ *  already sits at that exact spot; Gantt children skip it, since their branches re-lay them out and a nudged phase
+ *  could miss its timeline. The image tile never comes here: each caller keeps its own synchronous gesture chain to
+ *  the file picker (js/image-component.js). */
+function placeComponentAt(template, localPoint, { nudge = false } = {}) {
+  const gridSize = paper.options.gridSize || 4;
+  // Create element at origin first, then center on the point
+  const element = createElementFromComponent(template, { x: 0, y: 0 });
+  if (!element) return null;
+  applyDisplayFlags(element);
+  const size = element.size();
+  let cx = Math.round((localPoint.x - size.width / 2) / gridSize) * gridSize;
+  let cy = Math.round((localPoint.y - size.height / 2) / gridSize) * gridSize;
+  const type = element.get('type');
+  if (nudge && (type === 'sf.GanttTimeline' || !type.startsWith('sf.Gantt'))) {
+    // Offset if there's already an element at the same position
+    const OFFSET = 20;
+    for (let attempts = 0; attempts < 20; attempts++) {
+      const occupied = graph.getElements().some(el => {
+        const p = el.position();
+        return Math.abs(p.x - cx) < 4 && Math.abs(p.y - cy) < 4;
+      });
+      if (!occupied) break;
+      cx += OFFSET;
+      cy += OFFSET;
+    }
+  }
+  element.position(cx, cy);
+  // One add is ONE undo step (review S6-4): the add, the embed, a Gantt element's dates, order and row snap. Outside a
+  // batch the `add` was its own entry and the rest a second one, so the first Cmd+Z left an undated bar off its row.
+  // The timeline and task branches open their own batches, which nest into this one.
+  history.startBatch();
+  try { applyPlacementRules(element); } finally { history.endBatch(); }
+  return element;
+}
+
+/** A Gantt child whose centre is right of `tl`'s frame: a quick add at a canvas centre beside the timeline, laid in
+ *  through the sole-timeline fallback. Its dates are clamped onto the axis instead of growing it, up to 104 columns,
+ *  to reach a far-right drop (review S6-2 follow-up). Only x counts: the frame's height hugs its rows, so a drop just
+ *  below the last row adds a row. A drop over the frame still grows it, as a drag does. */
+const rightOfTimeline = (el, tl) => !!tl && el.getBBox().center().x > tl.position().x + tl.size().width;
+
+/** placeComponentAt's type rules for a positioned, not yet added element (see there). */
+function applyPlacementRules(element) {
+  if (element.get('type') === 'sf.GanttTimeline') {
+    // Phase 4.6: a dropped timeline seeds a real plan (like a fresh Gantt) - all phases + their key tasks, gate
+    // milestones, and a Today marker - so it's editable immediately, never a tasks[]-only timeline. Everything
+    // lands in ONE history batch (one undo); layoutTimelineTasks positions every element type in one pass.
+    const { bars, milestones = [], marker } = createGanttBarsFor(element);
+    history.startBatch();
+    try {
+      graph.addCell(element);
+      for (const c of [...bars, ...milestones, ...(marker ? [marker] : [])]) { graph.addCell(c); element.embed(c); }
+      layoutTimelineTasks(element);
+    } finally { history.endBatch(); }
+  } else if (element.get('type') === 'sf.GanttGroup' && element.get('phaseLabel')) {
+    // Item 4: a dropped Project Phase ADDS a timeline group (a header row), like a dropped task adds a task —
+    // not a floating shape that does nothing. We never add the shape; we append a `groups[]` entry to the
+    // timeline under the drop point (or the sole timeline). The plain "Summary Bar" GanttGroup (no
+    // phaseLabel) still drops as a manual floating bar via the generic branch below.
+    const pos = element.position(), sz = element.size();
+    const pt = { x: pos.x + sz.width / 2, y: pos.y + sz.height / 2 };
+    const timelines = graph.getElements().filter(e => e.get('type') === 'sf.GanttTimeline');
+    let tl = timelines.find(e => e.getBBox().containsPoint(pt));
+    if (!tl && timelines.length === 1) tl = timelines[0];
+    if (tl) {
+      const existing = (tl.get('groups') || []);
+      const palette = ['#5B5FC7', '#1D73C9', '#2A9D8F', '#E8881A', '#DA4E55', '#7C5CBF'];
+      // Insert at the drop position — by default (dropped below everything) at the BOTTOM (last), but a drop
+      // onto a specific row inserts there; existing groups at/after that slot shift down (item 4).
+      const at = ganttGroupInsertOrder(tl, pt.y);
+      const gs = existing.map(g => ({ ...g, order: (g.order ?? 0) >= at ? (g.order ?? 0) + 1 : (g.order ?? 0) }));
+      // Colour from the library phase (phaseColor) when present, else cycle the palette (the generic "Phase").
+      const color = element.get('phaseColor') || palette[existing.length % palette.length];
+      gs.push({ id: 'g' + Date.now() + '_' + existing.length, label: element.get('phaseLabel'), color, order: at });
+      tl.set('groups', gs);   // single undoable change; the group row + its auto summary bar render from this
+    } else {
+      // K9: with no timeline, or two and the drop between them, the phase has nowhere to go. Say so.
+      showToast('Drop a phase onto a timeline to add it as a group.', 'warning');
+    }
+  } else {
+    graph.addCell(element);
+    updateSimpleNodeLayout(element);
+    updateContainerHeaderLayout(element);   // flush an icon-less Container's title left (no-op otherwise)
+    tryEmbed(element);
+    // Phase B1: a milestone dropped over a timeline is date-driven — seed its `milestoneDate` from the drop
+    // column so it's real schedule data immediately (and snaps to that column via the view listener), the
+    // same way a dropped bar seeds dates. No-op if it didn't land on a timeline (derive... → null).
+    if (element.get('type') === 'sf.GanttMilestone') {
+      const d = deriveGanttMilestoneDate(element), tl = ganttTimelineFor(element);
+      if (d) element.set('milestoneDate', clampGanttDateToAxis(tl, d, { toEnd: rightOfTimeline(element, tl) }));
+    }
+    // Same for a Day Marker — seed `markerDate` from the drop column so it's dated (and its full-height
+    // line draws) immediately AND it snaps onto the nearest day, instead of landing dateless mid-column
+    // with no line (the "no line unless perfectly between two days" report).
+    if (element.get('type') === 'sf.GanttMarker') {
+      const d = deriveGanttMarkerDate(element), tl = ganttTimelineFor(element);
+      if (d) element.set('markerDate', clampGanttDateToAxis(tl, d, { toEnd: rightOfTimeline(element, tl) }));
+    }
+    // Both point markers also snap their Y to the nearest ROW CENTRE on drop (issue 4) so they land lined up
+    // on a task row instead of floating between rows (the X already snapped to a day via the date above). A date
+    // before the axis takes its start (above), and one past the right edge grows the timeline, as a drag does (S6-2),
+    // unless the element was added right of the timeline: then it takes the axis end (rightOfTimeline).
+    if (element.get('type') === 'sf.GanttMilestone' || element.get('type') === 'sf.GanttMarker') {
+      const tl = ganttTimelineFor(element);
+      // Off the timeline, the sole-timeline fallback dates and rows the point: bind it there too, as a task is bound
+      // below, or a second timeline added later leaves it with none (owner call 2026-10-15). With two or more and none
+      // under it, ganttTimelineFor finds none and it stays free: nothing binds to the nearest of several.
+      if (tl && !element.get('parent')) history.suppressEmbedTracking(() => tl.embed(element));
+      const sy = tl && snapGanttRowCentreY(tl, element.position().y + element.size().height / 2);
+      if (sy != null) element.position(element.position().x, Math.round(sy - element.size().height / 2));
+      if (tl) growTimelineToFitDates(tl);
+    }
+    // A dropped task bar must get an ORDER, or it floats at its drop Y while the panel rows it by `order` —
+    // the "dragging scrambles / bars don't match their labels" bug (a chart built by dropping tasks scatters).
+    // It also INHERITS the group it was dropped into (the group region at its drop Y) so it lands in a phase
+    // and gets summarized. Seed dates from its drop column, then back-fill orders from every bar's current Y
+    // (slotting the new bar among the rest) and re-lay-out so each bar snaps to its row + date column. One undo.
+    // The span starts no earlier than the axis (a first-column drop drew it over the task list), and an end past
+    // the right edge grows the timeline, as a drag does (review S6-2). Added right of the timeline, it ends by the axis end.
+    if (element.get('type') === 'sf.GanttTask') {
+      const tl = ganttTimelineFor(element);
+      if (tl) {
+        const rightOf = rightOfTimeline(element, tl);
+        // Off the timeline (a quick add at the canvas centre, below a short timeline) the sole-timeline fallback still
+        // lays the bar into its rows: bind it there too, or a second timeline later leaves it with none.
+        if (!element.get('parent')) history.suppressEmbedTracking(() => tl.embed(element));
+        history.startBatch();
+        try {
+          const tgt = ganttDropTarget(tl, element.position().y + element.size().height / 2, null);
+          if (tgt && tgt.groupId) element.set('groupId', tgt.groupId);
+          if (!element.get('startDate') || !element.get('endDate')) {
+            const d = deriveGanttDates(element, tl);
+            const s = d && clampGanttSpanToAxis(tl, d, { toEnd: rightOf });
+            if (s) element.set({ startDate: s.start, endDate: s.end });
+          }
+          backfillGanttOrders(tl);
+          recolorGroupTasks(tl);   // issue 7: the dropped bar takes its group's colour (not the stencil default)
+          growTimelineToFitDates(tl);
+          layoutTimelineTasks(tl);
+        } finally { history.endBatch(); }
+      }
+    }
+    // Capture: drop-on-lifeline snaps activation's X to the lifeline centre.
+    if (element.get('type') === 'sf.SequenceActivation') {
+      snapActivationToLifeline(element);
+    }
+  }
 }
 
 /**
@@ -1147,7 +1230,6 @@ function getCanvasCenterLocalPoint() {
 
 function addToCenter(template) {
   const localCenter = getCanvasCenterLocalPoint();
-  const gridSize = paper.options.gridSize || 4;
 
   // Dblclick on the Image stencil — same callback flow as drag-drop so the
   // picker click stays in the user-gesture chain (Safari requirement).
@@ -1156,34 +1238,7 @@ function addToCenter(template) {
     return;
   }
 
-  const element = createElementFromComponent(template, { x: 0, y: 0 });
-  if (!element) return;
-  applyDisplayFlags(element);
-
-  const size = element.size();
-  let cx = localCenter.x - size.width / 2;
-  let cy = localCenter.y - size.height / 2;
-  cx = Math.round(cx / gridSize) * gridSize;
-  cy = Math.round(cy / gridSize) * gridSize;
-
-  // Offset if there's already an element at the same position
-  const OFFSET = 20;
-  let attempts = 0;
-  while (attempts < 20) {
-    const occupied = graph.getElements().some(el => {
-      const p = el.position();
-      return Math.abs(p.x - cx) < 4 && Math.abs(p.y - cy) < 4;
-    });
-    if (!occupied) break;
-    cx += OFFSET;
-    cy += OFFSET;
-    attempts++;
-  }
-
-  element.position(cx, cy);
-  graph.addCell(element);
-  updateSimpleNodeLayout(element);
-  updateContainerHeaderLayout(element);   // flush an icon-less Container's title left (no-op otherwise)
+  placeComponentAt(template, localCenter, { nudge: true });
 }
 
 /** Create a styled HTML drag preview that resembles the target shape */
@@ -1265,7 +1320,7 @@ function setDragPreview(evt, template) {
 /** After drop, try to embed the element into a container/zone at its position */
 function tryEmbed(element) {
   // Suppress change:parent recording: a stencil drop's `add` command already captures
-  // the final embedded state (its JSON re-capture round-trips `parent`), so recording
+  // `parent` (its JSON re-capture) and its redo re-links the parent's `embeds`, so recording
   // the embed as its own command would split one drop into two undo steps.
   history.suppressEmbedTracking(() => {
     const bbox = element.getBBox();
@@ -1279,6 +1334,9 @@ function tryEmbed(element) {
       .sort((a, b) => (b.get('z') || 0) - (a.get('z') || 0));
     for (const candidate of overlap) {
       if (canEmbed(candidate.get('type'), childType)) {
+        // Tuck below a free-form parent's header first, as a canvas drag does on drop and as the drop ghost
+        // previews; embedding in place left a drop on a Container header covering its title (review H1-6).
+        if (HALO_PARENT_TYPES.has(candidate.get('type'))) tuckChildInside(element, candidate);
         candidate.embed(element);
         return;
       }
@@ -1307,8 +1365,20 @@ function applyDisplayFlags(element) {
   if (keyFieldsOnly != null) element.set('keyFieldsOnly', keyFieldsOnly);
 }
 
+// Each section's collapsed state from just before a search began (K6). A search opens every section with a match, the
+// ~1,700-tile SLDS grids included; clearing it puts each section back as the user left it. Snapshot on the change from
+// no query to a query only: a snapshot per keystroke would capture the search's own expansion.
+let _preSearchCollapsed = null;
+
 function filterStencil(query) {
+  bodyEl.classList.toggle('df-stencil__body--filtered', !!query);   // results fade in while searching (css/stencil.css)
   const sections = bodyEl.querySelectorAll('.df-stencil__category');
+  if (query && !_preSearchCollapsed) {
+    _preSearchCollapsed = new Map([...sections].map(s => [s, s.classList.contains('df-stencil__category--collapsed')]));
+  } else if (!query && _preSearchCollapsed) {
+    for (const [s, collapsed] of _preSearchCollapsed) s.classList.toggle('df-stencil__category--collapsed', collapsed);
+    _preSearchCollapsed = null;
+  }
   // A search looks inside the lazily-built icon sections too.
   if (query) sections.forEach(section => section._dfEnsureBuilt?.());
 
@@ -1330,6 +1400,7 @@ function filterStencil(query) {
       section.classList.remove('df-stencil__category--collapsed');
     }
   });
+  syncAllCategoryExpanded();
 }
 
 export function toggle() {
@@ -1465,24 +1536,7 @@ function dropTemplateAtClient(template, clientX, clientY) {
       startImageAddFlow(graph, (result) => addImageCellAt(result, localPoint));
       return;
     }
-    const gridSize = paper.options.gridSize || 4;
-    const element = createElementFromComponent(template, { x: 0, y: 0 });
-    if (!element) return;
-    applyDisplayFlags(element);
-    const size = element.size();
-    const cx = localPoint.x - size.width / 2;
-    const cy = localPoint.y - size.height / 2;
-    element.position(
-      Math.round(cx / gridSize) * gridSize,
-      Math.round(cy / gridSize) * gridSize,
-    );
-    graph.addCell(element);
-    updateSimpleNodeLayout(element);
-    updateContainerHeaderLayout(element);   // flush an icon-less Container's title left (no-op otherwise)
-    tryEmbed(element);
-    if (element.get('type') === 'sf.SequenceActivation') {
-      snapActivationToLifeline(element);
-    }
+    placeComponentAt(template, localPoint);
   } catch (err) {
     console.warn('SF Diagrams: Touch drop failed:', err);
   }

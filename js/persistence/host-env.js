@@ -27,6 +27,14 @@ export function isInSlot(win = (typeof window !== 'undefined' ? window : undefin
   } catch { return false; }
 }
 
+/** What the Picker doors say inside Slot, instead of opening Google's dead end (Slot's review, 2026-10-15). One home,
+ *  so every door uses the same words. Drive's own Open with grants the app the file under drive.file, and Slot drops
+ *  the launch into its running tab as #gd=, so that is the route that works for a file the app was never given. */
+export const SLOT_PICKER_NOTE = "Needs a browser: Google's file picker can't sign in inside Slot.";
+export const SLOT_OPEN_IN_BROWSER = 'Right-click the Diagramforce tab and choose Open in Browser to use it there.';
+export const SLOT_OPEN_WITH_ROUTE = "In this account's Drive tab, open Shared with me, right-click the file and choose "
+  + 'Open with > Diagramforce. It opens in this tab.';
+
 /** When to refresh a token silently: 60 s before it expires, never sooner than 5 s from now (a token handed back
  *  already-expired must not spin), and at once (0) when it has already lapsed. Milliseconds. */
 export function silentRefreshDelay(expiryMs, nowMs = Date.now()) {

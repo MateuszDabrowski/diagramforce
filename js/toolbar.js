@@ -1,32 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.25.9';
-import { showToast, showError, confirmModal, trapFocus, buildModal } from './feedback.js?v=1.25.9';
-import { resizeDataObjectToFit } from './components.js?v=1.25.9';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.25.9';
-import { escHtml, formatRelativeTime, countDiagramShapes, getDiagramTypeIcon, tabInGroup, formatBytes, gaugeLevel, isViewForkTab, diffGraphs, compareSemver } from './util.js?v=1.25.9';
+import { diagramEmbedsImages } from './image-component.js?v=1.26.1';
+import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.1';
+import { resizeDataObjectToFit } from './components.js?v=1.26.1';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.1';
+import { escHtml, compareSemver } from './util.js?v=1.26.1';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.25.9';
-import { storageRowHtml, groupSelectHtml, refreshSplitTableCounts, splitTableHeadHtml, bindSplitHeads, setTriStateCheckbox, SPLIT_CHEVRON_SVG, shareChipIconHtml, sharePillHtml, driveChipsHtml, tabRowChipsHtml } from './storage-ui.js?v=1.25.9';
-import { dedupeSharedInWorkingCopies } from './persistence/drive-sync-logic.js?v=1.25.9';
-import { exportObjectSchemaCsv } from './data-export.js?v=1.25.9';
-import { renderTemplateThumbnail } from './templates.js?v=1.25.9';
-import { showWhatsNewNow } from './whats-new.js?v=1.25.9';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.25.9';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.25.9';
-import { tctx, btn, setupDropdown, renderDriveSignIn } from './toolbar/context.js?v=1.25.9';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.25.9';
-import { showDriveHistoryModal } from './toolbar/drive-history.js?v=1.25.9';
-import { showLoadManagerModal, hideLoadModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.25.9';
-import { showSaveModal, showSaveManagerModal } from './toolbar/save-manager.js?v=1.25.9';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker, reviewAgainstRevision } from './toolbar/review.js?v=1.25.9';
+import { pctx } from './persistence/context.js?v=1.26.1';
+import { showWhatsNewNow } from './whats-new.js?v=1.26.1';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.1';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.1';
+import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.1';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.1';
+import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.1';
+import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.1';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.1';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.25.9';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.25.9';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.25.9';
-import { noteError } from './diagnostics.js?v=1.25.9';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.1';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.1';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.1';
+import { noteError } from './diagnostics.js?v=1.26.1';
 
 let modules = {};
 export function init(_modules) {
@@ -113,12 +108,21 @@ export function init(_modules) {
         : hasImg ? (connected ? SHARE_IMAGE_DRIVE_MSG : (driveOn ? SHARE_IMAGE_MSG : SHARE_IMAGE_NO_DRIVE_MSG))
         : 'Share - right-click to copy the link';
     }
+    // The hamburger twin follows the same lock (gotchas-ui 8.9), or a phone shares an empty diagram (M13). Save's
+    // twin stays live: the Save Manager lists the OTHER open diagrams and refuses empty and GIF-busy rows itself.
+    const hShare = document.querySelector('#hamburger-menu [data-action="share"]');
+    if (hShare) {
+      hShare.disabled = isEmpty || gifBusy;
+      if (hShare.disabled) hShare.title = isEmpty ? EMPTY_DIAGRAM_MSG : GIF_ENCODING_MSG;
+      else hShare.removeAttribute('title');
+    }
     // Save button (top-level navbar "Save") — locked when the active diagram is empty (nothing to save) or GIF
     // is encoding, mirroring the Share lock so an empty canvas can't open a Save/Export that would no-op.
     const saveBtn = btn('btn-save');
     if (saveBtn) {
       saveBtn.disabled = isEmpty || gifBusy;
-      saveBtn.title = gifBusy ? GIF_ENCODING_MSG : (isEmpty ? EMPTY_DIAGRAM_MSG : 'Save (Ctrl+S)');
+      // kbd(): a literal "(Ctrl+S)" here undid the boot's platform rewrite on a Mac after the first edit (S8-10).
+      saveBtn.title = gifBusy ? GIF_ENCODING_MSG : (isEmpty ? EMPTY_DIAGRAM_MSG : `Save (${kbd('Ctrl+S')})`);
     }
     // (Export/CSV gating moved into the Save Manager itself — per-row Export is enabled per diagram, and the
     // canvas-only image/CSV exports gate inside their own modals.)
@@ -137,8 +141,6 @@ export function init(_modules) {
   modules.persistence.setGifEncodingListener?.(refreshShareAvailability);
   refreshShareAvailability();
 
-  // Wire save modal callback so persistence.namedSave() can also open it
-  modules.persistence.setShowSaveModal(() => showSaveModal());
   // Wire Load-from-Browser modal so a bundle import can reveal the restored
   // diagrams (persistence opens it after saving them to localStorage).
   modules.persistence.setShowLoadModal?.((importStats) => showLoadModal(importStats));
@@ -146,6 +148,8 @@ export function init(_modules) {
   modules.persistence.setShowDriveLibrary?.(() => showDriveLibraryModal());
   // Wire the unified Load-from-Paste modal so the New-Diagram modal's "Open" tab can offer it.
   modules.persistence.setShowPasteImport?.((opts) => showPasteImportModal(opts));
+  // ...and its File card, which opens Load on the File tab (review D3: it had its own JSON-only picker).
+  modules.persistence.setShowFileImport?.(() => showLoadManagerModal('file'));
 
   // Load → the tabbed Load Manager overlay (Browser / Google Drive / File / Paste), opened directly. The old
   // per-source dropdown items are now its tabs.
@@ -158,7 +162,7 @@ export function init(_modules) {
   setupDropdown('btn-display');
   // Re-read the toggle checkmarks each time the Display button is clicked (menu open) - Collapse Objects can be
   // changed by the per-object chevron OUTSIDE this menu, so its checked state must reflect the live graph on open.
-  btn('btn-display').addEventListener('click', () => updateDisplayToggleLabels());
+  btn('btn-display').addEventListener('click', () => refreshViewMenuState());
 
   // Gap 14 (v1.12.0) — see `refreshDisplayDotIndicator()` at module scope.
   // Convenience alias inside init() so the local toggle handlers can call
@@ -373,17 +377,21 @@ export function init(_modules) {
   // composite, and bypasses the merge entirely.
   const runAutoLayout = (direction, opts) => {
     const type = modules.tabs.getActiveTabType?.();
-    modules.history.recordPositionsBatch(() => {
+    // False when the layout found fewer than two top-level shapes to arrange (everything inside one pool, say). The
+    // port snap, reroute and label passes below then stay off: they cleared vertices and reset labels on a run
+    // that moved nothing, with no word to the user (review H2-5).
+    let placed = true;
+    const layout = () => modules.history.recordPositionsBatch(() => {
       if (type === 'datamapping') {
         // Dedicated lane layout: top-aligned lanes + 36px-spaced objects inside Layer
         // zones. Mapping links are field-port anchored, so DON'T snap them to side ports.
-        modules.canvas.applyDataMappingLayout();
+        placed = modules.canvas.applyDataMappingLayout() !== false;
       } else if (type === 'flow') {
         // Flow (S3): a type-owned vertical tree layout (positions only; NOT the barycentre core; it frames itself
         // via fitToCells). applyFlowLayout ALSO snaps each link's ports (bottom→top by vertical direction, Go To
         // excepted) + re-centres labels — it must NOT go through the generic snapLinksToPorts, whose "facing port"
         // heuristic side-attaches a decision's off-column branches (the reported fork side-attach).
-        modules.canvas.applyFlowLayout();
+        placed = modules.canvas.applyFlowLayout() !== false;
       } else if (type === 'process') {
         // Process uses the barycentre layered layout (now WITH full-spine straightening, auto-layout.js), in
         // the chosen direction. Full-spine keeps a flow's SPINE straight - including the branch that CONTINUES
@@ -391,7 +399,8 @@ export function init(_modules) {
         // hierarchical layout (the previous flat-flow path) could NOT do at single-child continuations.
         // autoLayout also treats BPMN pools / subprocesses / loops as rigid container units (children translate
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
-        modules.canvas.autoLayout(direction, { align: 'barycenter' });
+        placed = modules.canvas.autoLayout(direction, { align: 'barycenter' }) > 0;
+        if (!placed) return;
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
         // Route the final pass NOW (shared bus, separation, trunk merging) so the labels below are placed on the
         // routes that will stay - otherwise two merged "Morphes into" labels landed on the same spot. Inside the batch.
@@ -412,8 +421,12 @@ export function init(_modules) {
         // sub-row still sits column-aligned under the first). M7 stays on for architecture/org, where it was
         // measured and tuned. (b) join labels get the flow-style target-centred placement afterwards -
         // snapLinksToPorts reseeds every label to its route midpoint, which can sit on top of a card.
-        modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0, crossGap: DATAMODEL_COLUMN_GAP });
+        placed = modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0, crossGap: DATAMODEL_COLUMN_GAP }) > 0;
+        if (!placed) return;
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        // Data models route on the shared bus since 1.25.8, so they need the final pass before labels too (see the
+        // process branch): without it 5 of mcn-consent's 40 lines moved out from under their join labels.
+        try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }
         try { modules.canvas.resolveConnectorLabels(); } catch (e) { noteError('layout:labels', e); }
       } else {
         // Architecture + org. snapLinksToPorts reseeds every label to its route midpoint, and until 1.22.0
@@ -423,13 +436,38 @@ export function init(_modules) {
         // architecture corridor + 3-label org chart): target-centring dragged an org label 151px onto its
         // target card's axis and moved non-colliding labels 23-58px; collision-only fixed the same overlaps
         // (0 label-label, 0 label-card) moving ONLY the colliding label, 8-99px to the nearest clear spot.
-        modules.canvas.autoLayout(direction, opts);
+        placed = modules.canvas.autoLayout(direction, opts) > 0;
+        if (!placed) return;
         try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
         try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }   // final routes first: see the process branch
         try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch (e) { noteError('layout:labels', e); }
       }
     }, () => { try { modules.canvas.fitContent(); } catch {} });   // re-fit on undo/redo so the camera follows the layout
+    // First step (owner decision, 2026-10-15): a shape lying wholly inside a frame's body but embedded nowhere is
+    // embedded into that frame, so it moves with the frame instead of being laid out on its own
+    // (embedding.js captureEnclosedShapes). Not on a flow: its stage bands and Group zones frame their cards without
+    // embedding them, by design. The embeds join the layout's undo step. When nothing moved they are put back unseen,
+    // so that run still changes nothing, and so does a layout that threw (`ran`).
+    let capture = null, ran = false;
+    modules.history.startBatch();
+    try {
+      if (type !== 'flow') capture = modules.canvas.captureEnclosedShapes();
+      layout();
+      ran = true;
+    } finally {
+      if (capture && ran && placed) {
+        modules.canvas.commitCaptured(capture);
+        const { pairs } = capture;
+        modules.history.recordCommand(() => modules.canvas.setCaptured(pairs, false), () => modules.canvas.setCaptured(pairs, true));
+      } else if (capture) modules.canvas.releaseCaptured(capture);
+      modules.history.endBatch();
+    }
     document.getElementById('display-dropdown')?.classList.remove('df-toolbar__dropdown--open');
+    if (!placed) {
+      // Stacked pools move as one (review S3-1), so two pools with everything inside also land here.
+      const pools = type === 'process' ? ' Stacked pools count as one.' : '';
+      showToast(`Nothing moved: Auto Layout arranges top-level shapes, and this diagram has fewer than two.${pools} Shapes inside a container keep their places.`, 'info', { duration: 5000 });
+    }
   };
   btn('btn-auto-layout-h').addEventListener('click', () => runAutoLayout('horizontal'));
   btn('btn-auto-layout-v').addEventListener('click', () => runAutoLayout('vertical'));
@@ -524,6 +562,8 @@ export function init(_modules) {
       if (hUndo) hUndo.disabled = !canUndo;
       if (hRedo) hRedo.disabled = !canRedo;
     }
+    // An undone or redone View flag (showBottomLabel, showAssignee, collapse) changes the menu's checkmarks and dot.
+    refreshViewMenuState();
   });
 
   // Zoom
@@ -620,13 +660,6 @@ export function init(_modules) {
 // showPasteImportModal) survive as thin redirects so the persistence callbacks + the New-Diagram modal keep
 // working unchanged. `importStats` (optional) is passed by persistence right after a bundle import to render a
 // transient success summary on the Browser tab.
-/**
- * Build a unique save name: "Name YYYYMMDD", or "Name 2 YYYYMMDD" etc.
- * If the base name already ends with the date suffix, don't double it —
- * instead insert an autonumber before the date: "Name 2 YYYYMMDD".
- */
-// --- Save Modal ---
-
 // --- Sequence Auto Layout Confirmation Modal ---
 // Shown when the current port counts differ across lanes (or any lane has
 // custom port ratios) AND there are connectors that might shift. Lists each
@@ -690,8 +723,10 @@ function showSequenceAutoLayoutConfirm(plan, onConfirm) {
 // Combos run through kbd() so macOS shows ⌘-glyphs and other platforms show Ctrl/Alt words.
 function openShortcutsModal() {
   // kbd('+') would split to nothing (it splits on '+'); the +/- zoom keys are platform-neutral single keys.
+  // "Left / Right" lists alternative keys: one badge each, joined by a slash.
   const keyBadges = (combo) => {
     if (combo === '+' || combo === '-') return `<kbd class="df-kbd">${escHtml(combo)}</kbd>`;
+    if (combo.includes(' / ')) return combo.split(' / ').map(keyBadges).join('<span class="df-kbd-sep">/</span>');
     return kbd(combo).split('+').map((k) => `<kbd class="df-kbd">${escHtml(k)}</kbd>`).join('<span class="df-kbd-sep">+</span>');
   };
   const row = (combo, desc) => `<div class="df-shortcuts__row"><span class="df-shortcuts__keys">${keyBadges(combo)}</span><span class="df-shortcuts__desc">${escHtml(desc)}</span></div>`;
@@ -882,6 +917,7 @@ function setupHamburgerMenu() {
         showLoadManagerModal();
         break;
       case 'display':
+        refreshViewMenuState();   // the desktop button's open-time refresh never runs on this route
         openDropdownAsMobileOverlay(document.getElementById('display-dropdown'));
         break;
       case 'view-toggle':
@@ -965,21 +1001,26 @@ function setupToolbarCentering() {
   if (!left || !center || !right) return;
 
   function checkOverlap() {
-    // Temporarily remove compact to measure absolute-centered position
+    // Remove compact to measure the absolutely centred position, then decide, all in one task: the reads force
+    // layout, and no frame paints between the remove and the add. Measuring a frame later painted one frame of the
+    // cluster over Undo/Redo on every tab switch between two compact types.
     toolbar.classList.remove('df-toolbar--compact');
-    requestAnimationFrame(() => {
-      const leftR = left.getBoundingClientRect().right;
-      const rightL = right.getBoundingClientRect().left;
-      const centerR = center.getBoundingClientRect();
-      const pad = 12;
-      if (centerR.left - pad < leftR || centerR.right + pad > rightL) {
-        toolbar.classList.add('df-toolbar--compact');
-      }
-    });
+    const leftR = left.getBoundingClientRect().right;
+    const rightL = right.getBoundingClientRect().left;
+    const centerR = center.getBoundingClientRect();
+    const pad = 12;
+    if (centerR.left - pad < leftR || centerR.right + pad > rightL) {
+      toolbar.classList.add('df-toolbar--compact');
+    }
   }
 
+  // Observe the side groups too: a tab switch shows the Diagram|Table switch or the Map button inside the left
+  // group (and Drive adds its sync control on the right) without resizing #toolbar (Q1). Both groups are
+  // flex-shrink:0 and the compact class restyles only the centre, so toggling it cannot re-trigger this observer.
   const ro = new ResizeObserver(checkOverlap);
   ro.observe(toolbar);
+  ro.observe(left);
+  ro.observe(right);
   checkOverlap();
 }
 

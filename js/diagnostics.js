@@ -41,28 +41,41 @@ function persist() {
 
 const clip = (s, n = MAX_TEXT) => { const t = String(s ?? ''); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
+// The report promises no ids or emails. A Drive file id (25+ id characters) is a bearer capability: `#gd=<id>` opens a
+// link-shared diagram, Drive's 404 message embeds it, and some app logs name it. A run without a digit is left alone,
+// so long code identifiers (applyDataMappingLayoutWithFrames) survive. Stack frames are not scrubbed: they hold only
+// the app's own file URLs. Runs BEFORE clip, or a clipped id prefix would slip under the length rule.
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const ID_RE = /[A-Za-z0-9_-]{25,}/g;
+const scrub = (s) => String(s ?? '').replace(EMAIL_RE, '<email>').replace(ID_RE, (m) => (/\d/.test(m) ? '<id>' : m));
+// A logged object keeps its keys and codes, but a name-like or email-like string value (a diagram name in a list of
+// save failures) is dropped: such free text cannot be scrubbed by pattern.
+const json = (v) => JSON.stringify(v, (k, x) => (typeof x === 'string' && /name$|title$|email/i.test(k) ? '<redacted>' : x));
+
 function describe(err) {
   if (err == null) return { name: '', message: '' };
   if (typeof err === 'string') return { name: '', message: err };
   const name = err.name || err.constructor?.name || '';
   let message = err.message;
-  if (message == null) { try { message = JSON.stringify(err); } catch { message = String(err); } }
+  if (message == null) { try { message = json(err); } catch { message = String(err); } }
   // Two frames are enough to place it; a full stack is noise in a pasted report.
   const stack = typeof err.stack === 'string' ? err.stack.split('\n').filter((l) => /\w/.test(l)).slice(1, 3).map((l) => l.trim()) : [];
   return { name: name === 'Error' ? '' : name, message, stack };
 }
 
-function push(kind, where, err) {
+function push(kind, rawWhere, err) {
   const d = describe(err);
+  const where = clip(scrub(rawWhere), 80);
+  const message = clip(scrub(d.message));
   const last = entries[entries.length - 1];
   // A failure repeating in a loop (a sweep retrying every tab) is one line with a count, not fifty.
-  if (last && last.page === PAGE_ID && last.kind === kind && last.where === where && last.message === clip(d.message)) {
+  if (last && last.page === PAGE_ID && last.kind === kind && last.where === where && last.message === message) {
     last.count += 1;
     last.at = Date.now();
     persist();
     return;
   }
-  entries.push({ at: Date.now(), page: PAGE_ID, kind, where: clip(where, 80), name: d.name, message: clip(d.message), stack: d.stack || [], count: 1 });
+  entries.push({ at: Date.now(), page: PAGE_ID, kind, where, name: d.name, message, stack: d.stack || [], count: 1 });
   if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
   persist();
 }
@@ -96,7 +109,7 @@ export function installErrorCapture(win = typeof window !== 'undefined' ? window
     // data-icon-id=".."/>`) that refreshAllIconHrefs swaps for the full icon right after render, and an <image> with
     // an empty href fails the same way: every boot logged two or three of these, which would bury real failures.
     if (t && !/^https?:/i.test(target)) return;
-    push('uncaught', t ? `resource ${clip(target, 60)}` : `${clip(ev.filename || '', 60)}:${ev.lineno || 0}`, ev.error || ev.message || 'load failed');
+    push('uncaught', t ? `resource ${clip(scrub(target), 60)}` : `${clip(ev.filename || '', 60)}:${ev.lineno || 0}`, ev.error || ev.message || 'load failed');
   }, true);
   win.addEventListener('unhandledrejection', (ev) => push('unhandled', 'promise', ev.reason));
   const con = win.console;
@@ -106,7 +119,7 @@ export function installErrorCapture(win = typeof window !== 'undefined' ? window
     con[level] = function (...args) {
       try {
         const err = args.find((a) => a instanceof Error);
-        const text = args.map((a) => (a instanceof Error ? a.message : typeof a === 'string' ? a : (() => { try { return JSON.stringify(a); } catch { return String(a); } })())).join(' ');
+        const text = args.map((a) => (a instanceof Error ? a.message : typeof a === 'string' ? a : (() => { try { return json(a); } catch { return String(a); } })())).join(' ');
         push(`console.${level}`, 'console', err ? { name: err.name || 'Error', message: text, stack: err.stack } : text);
       } catch { /* never break logging */ }
       return original.apply(this, args);
