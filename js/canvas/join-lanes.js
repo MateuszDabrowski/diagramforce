@@ -6,104 +6,14 @@
 // joins on it), and buses whose vertical spans overlap take different lanes, 16 px apart, the shortest innermost so
 // nested spans do not cross. Pure: the router draws the lanes, Auto Layout leaves room for them.
 
-export const JOIN_LANE_GAP = 16;
-const COLUMN_TOL = 64;   // cards whose outer edges are this close stand in one column
+import { JOIN_LANE_GAP, JOIN_COLUMN_TOL, joinPortSide, assignJoinLanes, joinLaneCounts, joinItemsByZone } from '../persistence/diagram-schema.js?v=1.26.4';
+
+// The lane assignment for a Data Mapping column (assignJoinLanes, joinLaneCounts, joinItemsByZone) is pure and JSON-only,
+// so it lives in diagram-schema.js, where the validator counts lanes too (2026-10-19). Re-exported for the app.
+export { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts };
+const COLUMN_TOL = JOIN_COLUMN_TOL;   // cards whose outer edges are this close stand in one column
 const LEVEL_TOL = 4;     // two stubs closer than this in y read as one line
-
-/**
- * items: [{ id, side: 'left' | 'right', edge, ports: [key, key], y1, y2 }] - one per join link. `edge` is the cards'
- * outer edge on that side (the smaller x for 'left'), `ports` the two port keys, y1 <= y2 the ports' heights.
- * Returns Map(id -> { lane, x }): x is the lane's vertical, `stub` px out from the column's outermost edge plus one
- * JOIN_LANE_GAP per lane. A column's lane count is max(lane) + 1 over its items.
- */
-export function assignJoinLanes(items, { stub = 32, gap = JOIN_LANE_GAP } = {}) {
-  const out = new Map();
-  for (const side of ['left', 'right']) {
-    const sideItems = items.filter((it) => it.side === side).sort((a, b) => a.edge - b.edge);
-    // Columns: cards whose outer edges lie within COLUMN_TOL of the previous one's.
-    const columns = [];
-    for (const it of sideItems) {
-      const col = columns[columns.length - 1];
-      if (col && it.edge - col[col.length - 1].edge <= COLUMN_TOL) col.push(it); else columns.push([it]);
-    }
-    for (const col of columns) {
-      const origin = side === 'left' ? Math.min(...col.map((it) => it.edge)) : Math.max(...col.map((it) => it.edge));
-      // Buses: joins that share a port (union-find over the port keys).
-      const parent = col.map((_, i) => i);
-      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-      const byPort = new Map();
-      col.forEach((it, i) => it.ports.forEach((k) => {
-        if (byPort.has(k)) parent[find(i)] = find(byPort.get(k)); else byPort.set(k, i);
-      }));
-      const buses = new Map();
-      col.forEach((it, i) => {
-        const r = find(i);
-        const b = buses.get(r) || { members: [], y1: Infinity, y2: -Infinity };
-        b.members.push(it); b.y1 = Math.min(b.y1, it.y1); b.y2 = Math.max(b.y2, it.y2);
-        buses.set(r, b);
-      });
-      // Lanes: shortest span innermost; each bus takes the innermost lane no overlapping bus holds (touching overlaps).
-      const placed = [];
-      const order = [...buses.values()].sort((a, b) => (a.y2 - a.y1) - (b.y2 - b.y1) || a.y1 - b.y1);
-      for (const b of order) {
-        let lane = 0;
-        while (placed.some((p) => p.lane === lane && p.y1 <= b.y2 && b.y1 <= p.y2)) lane++;
-        b.lane = lane; placed.push(b);
-        const x = side === 'left' ? origin - stub - gap * lane : origin + stub + gap * lane;
-        for (const m of b.members) out.set(m.id, { lane, x });
-      }
-    }
-  }
-  return out;
-}
-
-/** How many lanes a set of items needs on each side: { left, right }. 0 when none. */
-export function joinLaneCounts(lanes, items) {
-  const counts = { left: 0, right: 0 };
-  for (const it of items) {
-    const l = lanes.get(it.id);
-    if (l) counts[it.side] = Math.max(counts[it.side], l.lane + 1);
-  }
-  return counts;
-}
-
-const sideOf = (port) => (/^(field-left-|er-left$)/.test(String(port || '')) ? 'left'
-  : /^(field-right-|er-right$)/.test(String(port || '')) ? 'right' : null);
-
-/** A DataObject port's height inside its card, from the JSON alone: the header is 32 px and each field row 22 px, the
- *  port at the row's middle; the header's er-left / er-right sit mid-header. Null for a collapsed or key-only card,
- *  whose rows the JSON does not settle. */
-function portYInCard(card, port) {
-  if (!card || card.type !== 'sf.DataObject' || card.collapsed || card.keyFieldsOnly) return null;
-  if (port === 'er-left' || port === 'er-right') return 16;
-  const m = /^field-(?:left|right)-(.+)$/.exec(String(port || ''));
-  if (!m) return null;
-  const i = (card.fields || []).findIndex((f) => f && f.fid === m[1]);
-  return i < 0 ? null : 32 + i * 22 + 11;
-}
-
-/** The join links of a Data Mapping JSON, as assignJoinLanes items, grouped by the zone that holds both cards. */
-export function joinItemsByZone(cells) {
-  const byId = new Map(cells.filter((c) => c && c.id).map((c) => [c.id, c]));
-  const out = new Map();
-  for (const l of cells) {
-    if (!l || l.type !== 'standard.Link' || l.linkKind === 'mapping' || l.router?.name !== 'sfManhattan' || (l.vertices || []).length) continue;
-    const sc = byId.get(l.source?.id), tc = byId.get(l.target?.id);
-    if (!sc || !tc || sc === tc || !sc.parent || sc.parent !== tc.parent) continue;
-    const side = sideOf(l.source.port);
-    if (!side || side !== sideOf(l.target.port)) continue;
-    const sy = portYInCard(sc, l.source.port), ty = portYInCard(tc, l.target.port);
-    if (sy == null || ty == null) continue;
-    const sb = { x: sc.position.x, r: sc.position.x + sc.size.width }, tb = { x: tc.position.x, r: tc.position.x + tc.size.width };
-    if (Math.max(sb.x, tb.x) >= Math.min(sb.r, tb.r)) continue;   // not one column
-    const y1 = sc.position.y + sy, y2 = tc.position.y + ty;
-    const item = { id: l.id, side, edge: side === 'left' ? Math.min(sb.x, tb.x) : Math.max(sb.r, tb.r),
-      ports: [`${sc.id}::${l.source.port}`, `${tc.id}::${l.target.port}`], y1: Math.min(y1, y2), y2: Math.max(y1, y2) };
-    if (!out.has(sc.parent)) out.set(sc.parent, []);
-    out.get(sc.parent).push(item);
-  }
-  return out;
-}
+const sideOf = joinPortSide;
 
 /** An imported Data Mapping (SQL Studio sends the standard 48 px of zone padding): grow each zone outward by the room
  *  its join lanes need, so the outer lanes draw inside the dashed border. The first lane fits the 48 px (32 px stub, 16

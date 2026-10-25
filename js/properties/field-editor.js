@@ -5,16 +5,16 @@
 // (prctx) only to replay the modal's undo entry by id. Never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
 // handler import renderFieldEditor / openFieldEditorModal back; table-view.js keeps importing SF_FIELD_TYPES
 // from properties.js (facade re-export).
-import * as history from '../history.js?v=1.26.3';
-import { prctx } from './context.js?v=1.26.3';
-import { resizeDataObjectToFit } from '../components.js?v=1.26.3';
-import { buildModal, confirmModal } from '../feedback.js?v=1.26.3';
-import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.26.3';
-import { triggerDownload } from '../persistence.js?v=1.26.3';
-import { newFid } from '../shapes.js?v=1.26.3';
-import { getActiveTabName } from '../tabs.js?v=1.26.3';
-import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.26.3';
-import { typingBatch } from './widgets.js?v=1.26.3';
+import * as history from '../history.js?v=1.26.4';
+import { prctx } from './context.js?v=1.26.4';
+import { resizeDataObjectToFit } from '../components.js?v=1.26.4';
+import { buildModal, confirmModal } from '../feedback.js?v=1.26.4';
+import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.26.4';
+import { triggerDownload } from '../persistence.js?v=1.26.4';
+import { newFid } from '../shapes.js?v=1.26.4';
+import { getActiveTabName } from '../tabs.js?v=1.26.4';
+import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.26.4';
+import { typingBatch } from './widgets.js?v=1.26.4';
 
 export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',

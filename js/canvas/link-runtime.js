@@ -7,9 +7,9 @@
 // getMappingMode, scheduleCrossingBumpRecompute) via cctx; imports the style
 // constant/helpers from link-styles.js. Uses the `joint` GLOBAL (never an import).
 
-import { cctx } from './context.js?v=1.26.3';
-import { MAPPING_LINK_COLOR, GANTT_DEP_STROKE, isObjectRelationshipsVisible, setObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.26.3';
-import { beginRoutePass, endRoutePass, separateForeignRuns, endChangeMovesOthers, forgetSeparation, isSharedBusDiagram } from './router.js?v=1.26.3';
+import { cctx } from './context.js?v=1.26.4';
+import { MAPPING_LINK_COLOR, GANTT_DEP_STROKE, isObjectRelationshipsVisible, setObjectRelationshipsVisible, syncFrequencyLabel } from './link-styles.js?v=1.26.4';
+import { beginRoutePass, endRoutePass, separateForeignRuns, endChangeMovesOthers, forgetSeparation, isSharedBusDiagram, routeStats } from './router.js?v=1.26.4';
 
 // Set by the cascade (scheduleReroute), cleared by every pass: when Auto Layout or Re-face has already routed
 // synchronously, the queued frame's pass would repaint the same routes, so it is skipped.
@@ -23,15 +23,17 @@ let _rerouteDirty = false;
 // the bumps would otherwise stay anchored to stale route coordinates and
 // either float in empty space (where the old route used to cross) or
 // stop showing at the new crossing points.
-// `separate: false` skips the separation of different-looking links: the cascade's passes during a pointer gesture
-// (see registerLinkRuntime). Every other caller gets the full pass.
+// `separate: false` skips the separation of different-looking links (a gesture frame that routes every link, see
+// registerLinkRuntime). Every other caller gets the full pass.
 export function rerouteAllLinks({ separate = true } = {}) {
   routePass(null, separate);
 }
 
 // One reroute pass over `links` (every link when null, else a subset in graph order), separating when `separate`.
+// `separate === 'scoped'` (a drag frame's subset) separates only the subset's links, against everyone's settled lines.
 // rerouteAllLinks and the cascade below are its only callers.
 function routePass(links, separate) {
+  const t0 = performance.now();
   _rerouteDirty = false;   // the pass mutates no model, so nothing re-dirties it mid-pass
   const { graph, paper } = cctx;
   if (!graph || !paper) return;
@@ -46,9 +48,12 @@ function routePass(links, separate) {
   beginRoutePass(graph);
   try {
     for (const l of links || graph.getLinks()) paper.findViewByModel(l)?.update?.();
-    if (separate) separateForeignRuns(graph, paper);   // inside the pass: the re-routes reuse its obstacle snapshot
+    // Inside the pass: the re-routes reuse its obstacle snapshot.
+    if (separate === 'scoped') { if (links) separateForeignRuns(graph, paper, new Set(links.map((l) => l.id))); }
+    else if (separate) separateForeignRuns(graph, paper);
   } finally {
     endRoutePass();
+    routeStats.passMs += performance.now() - t0;
   }
   cctx.scheduleCrossingBumpRecompute?.();
 }
@@ -204,18 +209,20 @@ export function registerLinkRuntime(cctx) {
       // not detour around the moving card. The drop's full pass depends only on the geometry, so it settles the same.
       if (_gesture) {
         _separationDeferred = true;
-        routePass(all || !live ? null : linksAroundCells(live, moved), false);
+        // The subset separates within itself and against the settled lines, so a grabbed trunk keeps the shape the drop
+        // will give it (2026-10-24). A frame that routes every link still skips separation: that is the expensive case.
+        if (all || !live) routePass(null, false); else routePass(linksAroundCells(live, moved), 'scoped');
       } else rerouteAllLinks();
     });
   }
 
-  // A pointer gesture on the canvas (a card drag, a resize, a connector drag). Its frames route without separating
-  // different-looking links (and, when only elements moved, only the links around them), and its end runs one full
-  // pass. Separation tries four full link updates per clashing pair and repeats up to three sweeps, from scratch every
-  // frame: 55-100 ms per frame at 70-110 links in three looks, against 4-5 ms for the plain pass. A pass depends only
-  // on the geometry, so the routes after the drop are the ones per-frame separation gave; only the frames in between
-  // show different-looking lines that may overlap. Capture phase, so a resize handle that stops propagation still
-  // counts. Keyboard nudges keep full passes: each press is a final state.
+  // A pointer gesture on the canvas (a card drag, a resize, a connector drag). When only elements moved, a frame routes the
+  // links around them and separates just those against everyone's settled lines, in one sweep (2026-10-24): skipping
+  // separation re-drew a grabbed card's trunk unseparated, so it jumped onto a different-looking line and back on the
+  // drop. Full separation per frame (four link updates per clashing pair, up to three sweeps, every link) cost 55-100 ms
+  // at 70-110 links; the scoped one 3.9 ms against 1.2 ms unseparated on a 150-card, 240-link grid. A frame that routes
+  // every link still skips it. The gesture's end runs one full pass. Capture phase, so a resize handle that stops
+  // propagation still counts. Keyboard nudges keep full passes: each press is a final state.
   paper.el.addEventListener('pointerdown', () => { _gesture = true; }, true);
   const endGesture = () => {
     if (!_gesture) return;

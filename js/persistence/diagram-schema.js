@@ -297,11 +297,12 @@ export function validateDiagram(diagram) {
   // documented behaviour. Capture is a structural claim on every other type.
   const CAPTURE_FRAMES = new Set(type === 'flow' ? [] : ['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
   // Whether frame `p` could own a nested frame `ch` - mirrors canEmbed in js/canvas/embedding.js for the frame
-  // pairs (a Zone cannot embed a Zone or a TaskGroup; a Container cannot embed a Container / Zone / TaskGroup /
-  // Task; a TaskGroup owns only Tasks). Kept inline because this module is a zero-dependency leaf.
+  // pairs (a Zone cannot embed a Zone or a TaskGroup; a Container cannot embed a Container, nor a frame from a lower z
+  // tier - Zone, TaskGroup, Task, Pool, Subprocess, Loop; a TaskGroup owns only Tasks). Kept inline because this module
+  // is a zero-dependency leaf.
   const frameCanEmbed = (p, ch) => (
     p === 'sf.Zone' ? (ch !== 'sf.Zone' && ch !== 'sf.TaskGroup')
-    : p === 'sf.Container' ? !['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.Task'].includes(ch)
+    : p === 'sf.Container' ? !['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.Task', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop'].includes(ch)
     : p === 'sf.TaskGroup' ? ch === 'sf.Task'
     : p === 'sf.BpmnPool' ? ch !== 'sf.BpmnPool'
     : p === 'sf.BpmnSubprocess' ? (ch !== 'sf.BpmnPool' && ch !== 'sf.BpmnSubprocess')
@@ -469,7 +470,7 @@ export function validateDiagram(diagram) {
   // type covers any pipeline (2026-10-15), so it gets the frame-room check alone (owner call): the near-miss grid
   // fires on every shipped MCN template (cards 10-12 px off across lanes), and the rest were not measured there.
   if (['architecture', 'process', 'datamodel', 'org'].includes(type)) layoutWarnings(cells, warnings, type);
-  else if (type === 'datamapping') frameRoomWarnings(elementsById(cells), cells.filter((c) => isLink(c)), warnings);
+  else if (type === 'datamapping') frameRoomWarnings(elementsById(cells), cells.filter((c) => isLink(c)), warnings, cells);
 
   return { errors, warnings };
 }
@@ -554,7 +555,125 @@ const elementsById = (cells) => {
 //    the line on or past the border (a "No" loop along a pool's bottom edge, cards 28 px above it: Arada HLD
 //    figure 6, 2026-10-14). The app never re-fits a frame on load, so it renders as authored. A link to a card
 //    outside the frame crosses the border anyway and is not counted.
-function frameRoomWarnings(els, links, warnings) {
+// ── Join lanes (SQL Studio's lineage, 2026-10-16) ────────────────────────────────────────────────────────────────────
+// Pure and JSON-only, so they live in this leaf: the validator's frame-room check counts them (backlog, 2026-10-19), and
+// js/canvas/join-lanes.js imports them for the router, the zone fit, Auto Layout and the import, so the validator and
+// the app read one copy.
+export const JOIN_LANE_GAP = 16;
+export const JOIN_COLUMN_TOL = 64;   // cards whose outer edges are this close stand in one column
+const COLUMN_TOL = JOIN_COLUMN_TOL;
+
+/**
+ * items: [{ id, side: 'left' | 'right', edge, ports: [key, key], y1, y2 }] - one per join link. `edge` is the cards'
+ * outer edge on that side (the smaller x for 'left'), `ports` the two port keys, y1 <= y2 the ports' heights.
+ * Returns Map(id -> { lane, x }): x is the lane's vertical, `stub` px out from the column's outermost edge plus one
+ * JOIN_LANE_GAP per lane. A column's lane count is max(lane) + 1 over its items.
+ */
+export function assignJoinLanes(items, { stub = 32, gap = JOIN_LANE_GAP } = {}) {
+  const out = new Map();
+  for (const side of ['left', 'right']) {
+    const sideItems = items.filter((it) => it.side === side).sort((a, b) => a.edge - b.edge);
+    // Columns: cards whose outer edges lie within COLUMN_TOL of the previous one's.
+    const columns = [];
+    for (const it of sideItems) {
+      const col = columns[columns.length - 1];
+      if (col && it.edge - col[col.length - 1].edge <= COLUMN_TOL) col.push(it); else columns.push([it]);
+    }
+    for (const col of columns) {
+      const origin = side === 'left' ? Math.min(...col.map((it) => it.edge)) : Math.max(...col.map((it) => it.edge));
+      // Buses: joins that share a port (union-find over the port keys).
+      const parent = col.map((_, i) => i);
+      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const byPort = new Map();
+      col.forEach((it, i) => it.ports.forEach((k) => {
+        if (byPort.has(k)) parent[find(i)] = find(byPort.get(k)); else byPort.set(k, i);
+      }));
+      const buses = new Map();
+      col.forEach((it, i) => {
+        const r = find(i);
+        const b = buses.get(r) || { members: [], y1: Infinity, y2: -Infinity };
+        b.members.push(it); b.y1 = Math.min(b.y1, it.y1); b.y2 = Math.max(b.y2, it.y2);
+        buses.set(r, b);
+      });
+      // Lanes: shortest span innermost; each bus takes the innermost lane no overlapping bus holds (touching overlaps).
+      const placed = [];
+      const order = [...buses.values()].sort((a, b) => (a.y2 - a.y1) - (b.y2 - b.y1) || a.y1 - b.y1);
+      for (const b of order) {
+        let lane = 0;
+        while (placed.some((p) => p.lane === lane && p.y1 <= b.y2 && b.y1 <= p.y2)) lane++;
+        b.lane = lane; placed.push(b);
+        const x = side === 'left' ? origin - stub - gap * lane : origin + stub + gap * lane;
+        for (const m of b.members) out.set(m.id, { lane, x });
+      }
+    }
+  }
+  return out;
+}
+
+/** How many lanes a set of items needs on each side: { left, right }. 0 when none. */
+export function joinLaneCounts(lanes, items) {
+  const counts = { left: 0, right: 0 };
+  for (const it of items) {
+    const l = lanes.get(it.id);
+    if (l) counts[it.side] = Math.max(counts[it.side], l.lane + 1);
+  }
+  return counts;
+}
+
+export const joinPortSide = (port) => (/^(field-left-|er-left$)/.test(String(port || '')) ? 'left'
+  : /^(field-right-|er-right$)/.test(String(port || '')) ? 'right' : null);
+
+/** A DataObject port's height inside its card, from the JSON alone: the header is 32 px and each field row 22 px, the
+ *  port at the row's middle; the header's er-left / er-right sit mid-header. Null for a collapsed or key-only card,
+ *  whose rows the JSON does not settle. */
+function portYInCard(card, port) {
+  if (!card || card.type !== 'sf.DataObject' || card.collapsed || card.keyFieldsOnly) return null;
+  if (port === 'er-left' || port === 'er-right') return 16;
+  const m = /^field-(?:left|right)-(.+)$/.exec(String(port || ''));
+  if (!m) return null;
+  const i = (card.fields || []).findIndex((f) => f && f.fid === m[1]);
+  return i < 0 ? null : 32 + i * 22 + 11;
+}
+
+/** The join links of a Data Mapping JSON, as assignJoinLanes items, grouped by the zone that holds both cards. */
+export function joinItemsByZone(cells) {
+  const byId = new Map(cells.filter((c) => c && c.id).map((c) => [c.id, c]));
+  const out = new Map();
+  for (const l of cells) {
+    if (!l || l.type !== 'standard.Link' || l.linkKind === 'mapping' || l.router?.name !== 'sfManhattan' || (l.vertices || []).length) continue;
+    const sc = byId.get(l.source?.id), tc = byId.get(l.target?.id);
+    if (!sc || !tc || sc === tc || !sc.parent || sc.parent !== tc.parent) continue;
+    const side = joinPortSide(l.source.port);
+    if (!side || side !== joinPortSide(l.target.port)) continue;
+    const sy = portYInCard(sc, l.source.port), ty = portYInCard(tc, l.target.port);
+    if (sy == null || ty == null) continue;
+    const sb = { x: sc.position.x, r: sc.position.x + sc.size.width }, tb = { x: tc.position.x, r: tc.position.x + tc.size.width };
+    if (Math.max(sb.x, tb.x) >= Math.min(sb.r, tb.r)) continue;   // not one column
+    const y1 = sc.position.y + sy, y2 = tc.position.y + ty;
+    const item = { id: l.id, side, edge: side === 'left' ? Math.min(sb.x, tb.x) : Math.max(sb.r, tb.r),
+      ports: [`${sc.id}::${l.source.port}`, `${tc.id}::${l.target.port}`], y1: Math.min(y1, y2), y2: Math.max(y1, y2) };
+    if (!out.has(sc.parent)) out.set(sc.parent, []);
+    out.get(sc.parent).push(item);
+  }
+  return out;
+}
+
+
+// `laneCells` (a Data Mapping): the side of a card that carries joins needs room for every join lane on that side of its
+// zone, 16 px per lane past the first (the zone fit and the import keep the same room). Without it a lineage whose
+// joins need three lanes validated clean with its outer lanes past the border.
+function frameRoomWarnings(els, links, warnings, laneCells = null) {
+  const laneNeed = new Map();   // `${cardId}|${side}` -> px a join side needs
+  if (laneCells) {
+    for (const items of joinItemsByZone(laneCells).values()) {
+      const counts = joinLaneCounts(assignJoinLanes(items), items);
+      for (const it of items) {
+        if (counts[it.side] < 2) continue;
+        const need = FRAME_ROOM + JOIN_LANE_GAP * (counts[it.side] - 1);
+        for (const key of it.ports) laneNeed.set(`${key.split('::')[0]}|${it.side}`, need);
+      }
+    }
+  }
   const frameOf = (c) => {
     for (let p = els.get(c?.parent), n = 0; p && n < 32; p = els.get(p.parent), n++) if (FRAME_TYPES.has(p.type)) return p;
     return null;
@@ -574,14 +693,15 @@ function frameRoomWarnings(els, links, warnings) {
       const band = frameBand(f, side);
       const gap = side === 'bottom' ? fb.b - cb.b : side === 'top' ? cb.y - (fb.y + band)
         : side === 'right' ? fb.r - cb.r : cb.x - (fb.x + band);
-      if (gap >= 0 && gap < FRAME_ROOM) {
+      const need = laneNeed.get(`${c.id}|${side}`) || FRAME_ROOM;
+      if (gap >= 0 && gap < need) {
         roomSeen.add(`${c.id}|${side}`);
-        roomHits.push(`"${c.id}" ${side} ${Math.round(gap)} px inside "${f.id}"`);
+        roomHits.push(`"${c.id}" ${side} ${Math.round(gap)} px inside "${f.id}"${need > FRAME_ROOM ? ` (its join lanes need ${need})` : ''}`);
       }
     }
   }
   if (roomHits.length) {
-    warnings.push(`${roomHits.length} card side(s) where a link leaves sit too close to their frame's edge (${listSome(roomHits)}) - a link turns 32 px out of its port and keeps 16 px clear, so the line runs on or past the frame's border. Leave ${FRAME_ROOM} px between those cards and the frame's edge (below a Container's title bar, past a Pool's title band).`);
+    warnings.push(`${roomHits.length} card side(s) where a link leaves sit too close to their frame's edge (${listSome(roomHits)}) - a link turns 32 px out of its port and keeps 16 px clear, so the line runs on or past the frame's border. Leave ${FRAME_ROOM} px between those cards and the frame's edge (below a Container's title bar, past a Pool's title band), plus ${JOIN_LANE_GAP} px for each join lane past the first on that side of a Data Mapping zone.`);
   }
 }
 

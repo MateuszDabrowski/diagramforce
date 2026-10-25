@@ -13,8 +13,8 @@
 // Reads the live graph/paper via cctx; the guide <g> lives under .joint-layers so
 // it inherits the paper transform. registerSpacingGuides(cctx) mounts the three
 // listeners after cctx.graph/paper are wired. Export-neutral (all internal).
-import { cctx } from './context.js?v=1.26.3';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.3';
+import { cctx } from './context.js?v=1.26.4';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.4';
 
 /** `cell` sits somewhere inside `ancestor`. Replaces JointJS's isEmbeddedIn here, which walks ancestors with no
  *  visited set (a parent loop hangs the tab) and dereferences a missing parent (a dangling `parent` throws) - and this
@@ -33,12 +33,12 @@ function isDescendantOf(cell, ancestor) {
 }
 
 // ── Tolerances ──────────────────────────────────────────────────────
-const SNAP_THRESHOLD = 8;   // px in model space (edge alignment)
-// Sequential-spacing detection (CR-6.1): SPACING_TOL is the looser "show the
-// hint" tolerance (10 px); SPACING_SNAP_TOL is the tighter magnetic-pull
-// tolerance (4 px, the grid step) so we don't yank the user off course.
+// Both snaps reach SNAP_PX SCREEN pixels, divided by the zoom (owner decision 2026-10-22). They were canvas units: 4 screen
+// px at 50% zoom, 16 at 200%. And the even-spacing pull acted only strictly under 4 canvas px, the drag grid's step, so
+// on a 4 px grid it never fired: the labels counted near misses (44px / 48px) while the card stepped past the spot.
+const SNAP_PX = 8;
+// findSequentialSpacing's default reach in canvas px, for callers without a zoom (the unit tests).
 const SPACING_TOL = 10;
-const SPACING_SNAP_TOL = 4;
 
 // ── State ───────────────────────────────────────────────────────────
 // Cache built at pointerdown (lazily, on first move) so per-frame work is small;
@@ -119,7 +119,7 @@ function buildSpacingDragContext(moved, originParent) {
 // dragged element's bbox, the row/column peer bboxes ({bb}), and an axis ('x'|'y'), returns
 // the closest sequential-rhythm match ({delta, expectedCenter, gap, A, B, proximity}) within
 // SPACING_TOL, or null. Depends only on args + the util/geometry helpers + SPACING_TOL.
-export function findSequentialSpacing(movedBB, peers, axis) {
+export function findSequentialSpacing(movedBB, peers, axis, tol = SPACING_TOL) {
   // Helper: get "near" and "far" edges along the axis
   const edgeNear = (bb) => axis === 'x' ? bb.x : bb.y;
   const edgeFar  = (bb) => axis === 'x' ? right(bb) : bottom(bb);
@@ -149,7 +149,7 @@ export function findSequentialSpacing(movedBB, peers, axis) {
   let best = null;
   const considerMatch = (Apeer, Bpeer, expectedCenter, gap) => {
     const delta = Math.abs(mCenter - expectedCenter);
-    if (delta > SPACING_TOL) return;
+    if (delta > tol) return;
     // Spatial proximity tiebreaker: when multiple matches fall within
     // tolerance, pick the one whose peers sit nearest the dragged element
     // (the visually obvious rhythm), not a faraway pair that aligns by chance.
@@ -194,10 +194,14 @@ export function findSequentialSpacing(movedBB, peers, axis) {
   return best;
 }
 
-// Render two dimension lines + per-segment px labels showing the EDGE-TO-EDGE
-// visible gaps. Labels reflect the actual current distance — they update live
-// as the user drags within the snap tolerance.
+// Render two dimension lines + per-segment px labels showing the EDGE-TO-EDGE visible gaps, only when the two gaps are
+// EQUAL (owner decision 2026-10-22): the labels confirm a snap. They used to show near misses too (44px / 52px), which
+// read as the helper working while the card sat off the rhythm.
 function drawSpacingDimensions(match, axis, movedBB) {
+  const edges = (axis === 'x'
+    ? [match.A, match.B, movedBB].map((b) => ({ near: b.x, far: right(b) }))
+    : [match.A, match.B, movedBB].map((b) => ({ near: b.y, far: bottom(b) }))).sort((p, q) => p.near - q.near);
+  if (Math.abs((edges[1].near - edges[0].far) - (edges[2].near - edges[1].far)) >= 0.5) return;
   const layer = getGuideLayer();
   const amber = 'var(--brand-amber, #F6B355)';
   const TICK = 4;
@@ -337,12 +341,15 @@ export function registerSpacingGuides(cctx) {
     clearGuides();
   });
 
-  paper.on('element:pointermove', (cellView) => {
+  paper.on('element:pointermove', (cellView, evt) => {
     clearGuides();
     const movedEl = cellView.model;
     // Gantt bars / milestones / markers do their OWN column + row snapping (canvas.js gantt drag) — alignment
     // guides here would fight that snap and add noise, so skip every Gantt shape.
     if (/^sf\.Gantt/.test(movedEl.get('type') || '')) return;
+    // Option (Alt) held: place freely, with no snap and no guides (owner decision 2026-10-22). Cmd, Ctrl and Shift
+    // already mean multi-select on the press; Option was unused during a drag. Read on every move, so it works mid-drag.
+    if (evt?.altKey) return;
     // Guides are computed/drawn for everyone (so distance helpers show inside a Layer and
     // between Layer zones). The position SNAP is suppressed for ordinary containers whose
     // children shouldn't be tugged — but NOT for Layer/group shapes (Zones, Pools…): for
@@ -362,6 +369,7 @@ export function registerSpacingGuides(cctx) {
     const excluded = _spacingDragContext?.excluded || new Set();   // co-selected shapes moving with this one
     const movedBBox = movedEl.getBBox();
     const movedType = movedEl.get('type');
+    const tol = SNAP_PX / (paper.scale().sx || 1);
     const allElements = graph.getElements().filter(el => {
       if (el.id === movedEl.id || el.id === homeParent || excluded.has(el.id)) return false;
       if (isDescendantOf(el, movedEl) || isDescendantOf(movedEl, el)) return false;
@@ -372,7 +380,7 @@ export function registerSpacingGuides(cctx) {
       return true;
     });
 
-    // Find best snap for X and Y independently, tracking which edges matched
+    // Find the nearest edge/centre alignment on X and Y independently.
     let bestX = null; // { dx, snapX, bb } — closest edge/centre match on X
     let bestY = null; // { dx, snapY, bb } — closest edge/centre match on Y
 
@@ -387,7 +395,7 @@ export function registerSpacingGuides(cctx) {
       // X-axis: check moved edges vs other edges
       for (const [mv, ov] of [[movedL, oL], [movedL, oR], [movedR, oL], [movedR, oR], [movedCx, oCx]]) {
         const diff = ov - mv;
-        if (Math.abs(diff) < SNAP_THRESHOLD && (!bestX || Math.abs(diff) < Math.abs(bestX.dx))) {
+        if (Math.abs(diff) < tol && (!bestX || Math.abs(diff) < Math.abs(bestX.dx))) {
           bestX = { dx: diff, snapX: ov, bb };
         }
       }
@@ -395,7 +403,7 @@ export function registerSpacingGuides(cctx) {
       // Y-axis
       for (const [mv, ov] of [[movedT, oT], [movedT, oB], [movedB, oT], [movedB, oB], [movedCy, oCy]]) {
         const diff = ov - mv;
-        if (Math.abs(diff) < SNAP_THRESHOLD && (!bestY || Math.abs(diff) < Math.abs(bestY.dx))) {
+        if (Math.abs(diff) < tol && (!bestY || Math.abs(diff) < Math.abs(bestY.dx))) {
           bestY = { dx: diff, snapY: ov, bb };
         }
       }
@@ -414,23 +422,37 @@ export function registerSpacingGuides(cctx) {
       const cb = ce.getBBox();
       const ceCx = centerX(cb), ceCy = centerY(cb);
       const ddx = ceCx - movedCx;
-      if (Math.abs(ddx) < SNAP_THRESHOLD && (!connBestX || Math.abs(ddx) < Math.abs(connBestX.dx))) connBestX = { dx: ddx, snapX: ceCx, bb: cb };
+      if (Math.abs(ddx) < tol && (!connBestX || Math.abs(ddx) < Math.abs(connBestX.dx))) connBestX = { dx: ddx, snapX: ceCx, bb: cb };
       const ddy = ceCy - movedCy;
-      if (Math.abs(ddy) < SNAP_THRESHOLD && (!connBestY || Math.abs(ddy) < Math.abs(connBestY.dx))) connBestY = { dx: ddy, snapY: ceCy, bb: cb };
+      if (Math.abs(ddy) < tol && (!connBestY || Math.abs(ddy) < Math.abs(connBestY.dx))) connBestY = { dx: ddy, snapY: ceCy, bb: cb };
     }
     if (connBestX) bestX = connBestX;
     if (connBestY) bestY = connBestY;
 
-    const dx = bestX ? bestX.dx : 0;
-    const dy = bestY ? bestY.dx : 0;
+    // Even spacing (CR-6.1): the same-parent peers in the card's row (x) or column (y), within the same reach.
+    const peers = _spacingDragContext?.peers || [];
+    const spaceX = peers.length >= 2 ? findSequentialSpacing(movedBBox, peers, 'x', tol) : null;
+    const spaceY = peers.length >= 2 ? findSequentialSpacing(movedBBox, peers, 'y', tol) : null;
+    // One snap per axis, the NEARER of alignment and even spacing (a tie keeps the alignment). Until 2026-10-22 any
+    // alignment within reach hid even spacing on that axis, so a card in another row whose edge sat near the spot made
+    // equal gaps unreachable: the drag jumped from 4 px short of the spot straight to the alignment 6 px past it.
+    const spaceDx = spaceX ? spaceX.expectedCenter - movedCx : 0;
+    const spaceDy = spaceY ? spaceY.expectedCenter - movedCy : 0;
+    const useSpaceX = !!spaceX && (!bestX || Math.abs(spaceDx) < Math.abs(bestX.dx));
+    const useSpaceY = !!spaceY && (!bestY || Math.abs(spaceDy) < Math.abs(bestY.dx));
+    const dx = useSpaceX ? spaceDx : (bestX ? bestX.dx : 0);
+    const dy = useSpaceY ? spaceDy : (bestY ? bestY.dx : 0);
 
-    if (!skipSnap && (dx !== 0 || dy !== 0)) {
+    if (!skipSnap && (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)) {
       // translate (not position) so a snapped group carries its embedded children —
       // position() would move only the parent and leave the children behind.
       movedEl.translate(dx, dy, { skipHistory: true });
     }
 
-    // Draw guides only for the snapped axis, plus any secondary edge matches on the same element
+    // Guides for everything that HOLDS at the final position, whichever snap won: alignment lines where an edge now
+    // matches, and the equal-gap labels where the gaps are now equal. Drawn only for the winner until 2026-10-24, so a
+    // card both evenly spaced and aligned with the next column (a tie, which keeps the alignment) showed no labels: the
+    // middle card of an even stack looked unspaced (owner's test).
     const finalBBox = movedEl.getBBox();
     const fL = finalBBox.x, fR = right(finalBBox), fCx = centerX(finalBBox);
     const fT = finalBBox.y, fB = bottom(finalBBox), fCy = centerY(finalBBox);
@@ -463,39 +485,9 @@ export function registerSpacingGuides(cctx) {
         }
       }
     }
-
-    // Sequential-spacing hint + snap (CR-6.1) — only on axes where edge
-    // alignment didn't fire. Absolute alignment beats relative spacing, so we
-    // don't draw both kinds of guide on the same axis. Magnetic pull (within
-    // SPACING_SNAP_TOL) lands the labels on an exact rhythm; same skipHistory
-    // contract as the edge-alignment snap (part of the active drag, not an undo).
-    if (_spacingDragContext?.peers?.length >= 2) {
-      const peers = _spacingDragContext.peers;
-      // X-axis spacing
-      if (!bestX) {
-        const matchX = findSequentialSpacing(finalBBox, peers, 'x');
-        if (matchX) {
-          const movedCx = centerX(finalBBox);
-          const dxSnap = matchX.expectedCenter - movedCx;
-          if (!skipSnap && Math.abs(dxSnap) > 0.5 && Math.abs(dxSnap) < SPACING_SNAP_TOL) {
-            movedEl.translate(dxSnap, 0, { skipHistory: true });   // carry children
-          }
-          drawSpacingDimensions(matchX, 'x', movedEl.getBBox());
-        }
-      }
-      // Y-axis spacing
-      if (!bestY) {
-        const fresh = movedEl.getBBox();   // refresh in case X-snap moved us
-        const matchY = findSequentialSpacing(fresh, peers, 'y');
-        if (matchY) {
-          const movedCy = centerY(fresh);
-          const dySnap = matchY.expectedCenter - movedCy;
-          if (!skipSnap && Math.abs(dySnap) > 0.5 && Math.abs(dySnap) < SPACING_SNAP_TOL) {
-            movedEl.translate(0, dySnap, { skipHistory: true });   // carry children
-          }
-          drawSpacingDimensions(matchY, 'y', movedEl.getBBox());
-        }
-      }
-    }
+    const heldX = peers.length >= 2 ? findSequentialSpacing(finalBBox, peers, 'x', 0.5) : null;
+    const heldY = peers.length >= 2 ? findSequentialSpacing(finalBBox, peers, 'y', 0.5) : null;
+    if (heldX) drawSpacingDimensions(heldX, 'x', finalBBox);
+    if (heldY) drawSpacingDimensions(heldY, 'y', finalBBox);
   });
 }

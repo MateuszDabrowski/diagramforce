@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.26.3';
-import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.3';
-import { resizeDataObjectToFit } from './components.js?v=1.26.3';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.3';
-import { escHtml, compareSemver } from './util.js?v=1.26.3';
+import { diagramEmbedsImages } from './image-component.js?v=1.26.4';
+import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.4';
+import { resizeDataObjectToFit } from './components.js?v=1.26.4';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.4';
+import { escHtml, compareSemver } from './util.js?v=1.26.4';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.26.3';
-import { showWhatsNewNow } from './whats-new.js?v=1.26.3';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.3';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.3';
-import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.3';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.3';
-import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.3';
-import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.3';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.3';
+import { pctx } from './persistence/context.js?v=1.26.4';
+import { showWhatsNewNow } from './whats-new.js?v=1.26.4';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.4';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.4';
+import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.4';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.4';
+import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.4';
+import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.4';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.4';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.3';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.3';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.3';
-import { noteError } from './diagnostics.js?v=1.26.3';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.4';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.4';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.4';
+import { noteError } from './diagnostics.js?v=1.26.4';
 
 let modules = {};
 // The diagram type's own Auto Layout, as the View menu offers it (set in init; null before it). The suggestion prompt

@@ -93,6 +93,7 @@ export const SHORTCUT_GROUPS = [
 export const MOUSE_TIPS = [
   [`${kbd('Ctrl')} + click`, 'Add or remove a shape from the selection'],
   [`${kbd('Shift')} + drag`, 'Rubber-band select an area'],
+  [`${kbd('Alt')} + drag a shape`, 'Place it freely, without snapping'],
   ['Double-click a shape', 'Edit its label (or open its table/field editor)'],
 ];
 export const RIGHT_CLICK_TIPS = [

@@ -7,9 +7,9 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.26.3';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.3';
-import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.3';
+import { cctx } from './context.js?v=1.26.4';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.4';
+import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.4';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -285,8 +285,12 @@ function linksConflict(a, b) {
   return a.runs.some((r) => b.runs.some((q) => sharesLine(r, q)));
 }
 
-/** After a batch of routes: re-route links that share a line with a different-looking link. Returns how many moved. */
-export function separateForeignRuns(gr, paper) {
+/** After a batch of routes: re-route links that share a line with a different-looking link. Returns how many moved.
+ *  `scope` (a Set of link ids, a drag frame's routed links): only pairs with a scoped link are checked, and only scoped
+ *  links move; every other link keeps its settled line as an obstacle. Without it a drag frame skipped separation, and
+ *  grabbing a card re-drew its trunk unseparated: a sibling's split point jumped 80 px onto a dashed line 8 px away, and
+ *  back on the drop (the owner's "dancing connector", 2026-10-24). */
+export function separateForeignRuns(gr, paper, scope = null) {
   if (!gr || !paper || !SHARED_BUS_TYPES.has(cctx.getDiagramType?.())) return 0;
   const links = gr.getLinks();
   // Only links sfManhattan routes take part. A link switched to another router (a data-model link set to Mapping) never
@@ -299,8 +303,10 @@ export function separateForeignRuns(gr, paper) {
   // pass follows every edit and load and edits route alike (link-runtime scheduleReroute).
   // A move can put a link onto a third link's line, so sweep again while anything moved (bounded).
   let total = 0;
-  for (let sweep = 0; sweep < SEPARATION_SWEEPS; sweep++) {
-    const moved = separationSweep(links, paper);
+  // A drag frame sweeps once: the extra sweeps settle chains of moves for the drop's full pass, and in a dense diagram a
+  // pair that cannot be cleared was retried in each (2026-10-24).
+  for (let sweep = 0; sweep < (scope ? 1 : SEPARATION_SWEEPS); sweep++) {
+    const moved = separationSweep(links, paper, scope);
     total += moved;
     if (!moved) break;
   }
@@ -309,7 +315,7 @@ export function separateForeignRuns(gr, paper) {
 
 const SEPARATION_SWEEPS = 3;
 
-function separationSweep(links, paper) {
+function separationSweep(links, paper, scope = null) {
   // Candidate pairs, bucketed by line so a big diagram is not an all-pairs scan.
   const buckets = new Map();
   links.forEach((l, i) => {
@@ -321,9 +327,15 @@ function separationSweep(links, paper) {
   });
   const pairs = new Set();
   links.forEach((l, i) => {
+    // Scoped (a drag frame): only a scoped link's runs open a pair, so the scan costs the drag's few links, not all of
+    // them - unscoped it took a frame on a 150-card grid from 1.2 to 11.8 ms (2026-10-24).
+    if (scope && !scope.has(l.id)) return;
     for (const r of _lastRuns.get(l.id)?.runs || []) {
       for (let d = -RUN_TOL; d <= RUN_TOL; d++) {
-        for (const j of buckets.get(`${r.o}:${Math.round(r.c) + d}`) || []) if (j > i) pairs.add(i * links.length + j);
+        for (const j of buckets.get(`${r.o}:${Math.round(r.c) + d}`) || []) {
+          if (j === i || (!scope && j < i)) continue;
+          pairs.add(Math.min(i, j) * links.length + Math.max(i, j));
+        }
       }
     }
   });
@@ -331,12 +343,26 @@ function separationSweep(links, paper) {
   let moved = 0;
   for (const key of [...pairs].sort((p, q) => p - q)) {
     const first = links[Math.floor(key / links.length)], second = links[key % links.length];
+    if (scope && !scope.has(first.id) && !scope.has(second.id)) continue;
     if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) continue;
     // Try moving each link of the pair and keep the move that changes its route LEAST. Moving the later link by
     // default sent two red links 144 px down to a line hugging a container's cards, where moving the green link it
     // clashed with cost 12 px.
     let best = null;
-    for (const [mover, keeper] of [[second, first], [first, second]]) {
+    const movers = [[second, first], [first, second]].filter(([m]) => !scope || scope.has(m.id));
+    if (movers.length === 1) {
+      // One candidate (a drag frame's link against a settled one): no comparison to make, so keep the move if it clears
+      // the pair, without the trial and revert re-routes - 56 strict searches a frame on a 150-card grid otherwise.
+      const [mover, keeper] = movers[0];
+      const before = _avoidRuns.get(mover.id);
+      _avoidRuns.set(mover.id, (before || []).concat(_lastRuns.get(keeper.id).runs));
+      reroute(mover);
+      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) { moved++; continue; }
+      if (before) _avoidRuns.set(mover.id, before); else _avoidRuns.delete(mover.id);
+      reroute(mover);
+      continue;
+    }
+    for (const [mover, keeper] of movers) {
       const before = _avoidRuns.get(mover.id), oldPts = _lastRuns.get(mover.id).pts;
       const trial = (before || []).concat(_lastRuns.get(keeper.id).runs);
       _avoidRuns.set(mover.id, trial);
@@ -354,6 +380,7 @@ function separationSweep(links, paper) {
     // 28 px). That link gives up its Z for the route it had before, then the other link moves as above.
     for (const [zLink, other] of [[first, second], [second, first]]) {
       if (!_lastRuns.get(zLink.id)?.z) continue;
+      if (scope && (!scope.has(zLink.id) || !scope.has(other.id))) continue;
       _noCrossedZ.add(zLink.id); reroute(zLink);
       const before = _avoidRuns.get(other.id);
       _avoidRuns.set(other.id, (before || []).concat(_lastRuns.get(zLink.id).runs)); reroute(other);
@@ -459,7 +486,7 @@ export function orthoRoute(a, b, obstacles, avoid = null, prefer = null) {
 // sets are never edited (a change builds a new array), so the array is the key.
 const _strictMemo = new WeakMap();   // avoid array -> { ax, ay, bx, by, boxes: Float64Array, mid }
 /** Strict searches actually run (memo misses), and reroute passes opened. Read by the perf guards in shared-bus.spec.js. */
-export const routeStats = { strictSearches: 0, passes: 0 };
+export const routeStats = { strictSearches: 0, passes: 0, passMs: 0 };   // passMs: time inside routePass (link-runtime.js)
 function strictSearch(a, b, obstacles, avoid) {
   const m = _strictMemo.get(avoid);
   if (m && m.ax === a.x && m.ay === a.y && m.bx === b.x && m.by === b.y && sameBoxes(m.boxes, obstacles)) return copyPts(m.mid);
@@ -882,7 +909,13 @@ export function registerSfRouter() {
     const gr = link.graph, look = linkLook(link), out = [];
     for (const def of [srcDef, tgtDef]) {
       if (!def?.id || !def.port) continue;
+      // The port's ends come in graph order. In a pass, a sibling's line counts only if drawn in this pass, which in the
+      // main loop means a sibling EARLIER in graph order. Outside a pass the same order rule applies: until 2026-10-24
+      // any sibling's last line counted there, so a link refreshed outside a pass after load merged onto a LATER
+      // sibling's line and the next full pass undid it - the first edit re-shaped a line it never touched (the owner's
+      // Arada landscape: an amber link jumped 32 px on any drop).
       for (const e of gatherPortEnds(gr, def.id, def.port)) {
+        if (!_routePass && e.link === link) break;
         if (e.link === link || linkLook(e.link) !== look) continue;
         const rec = _lastRuns.get(e.link.id);
         if (!rec || (_routePass && rec.pass !== _passNo)) continue;

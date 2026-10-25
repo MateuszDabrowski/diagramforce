@@ -12,12 +12,12 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.26.3';
-import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.3';
-import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.3';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.3';
-import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.3';
-import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.3';
+import { cctx } from './context.js?v=1.26.4';
+import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.4';
+import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.4';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.4';
+import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.4';
+import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.4';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -38,12 +38,15 @@ export function setAutoSizingEnabled(v) {
 // properties.js uses this to decide whether the converted cell can stay embedded
 // in its previous parent (e.g. converting a Node to a Container should preserve
 // embedding when the old parent is a Zone, but not another Container).
+const CONTAINER_REFUSES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.Task', 'sf.BpmnPool', 'sf.BpmnSubprocess',
+  'sf.BpmnLoop', 'sf.SequenceFragment']);
 export function canEmbed(parentType, childType) {
   if (parentType === 'sf.Container') {
-    // Team: people + most nodes, but never another grouper — and never a bare Task
-    // or Task Group (z 500 / 0 sit below the Team's 1000, so they'd hide behind it).
-    return childType !== 'sf.Container' && childType !== 'sf.Zone'
-      && childType !== 'sf.TaskGroup' && childType !== 'sf.Task';
+    // Team: people + most nodes, but never another grouper - and never a shape from a lower z tier, which would draw
+    // under the Container's body: a Task (500), a Task Group, Zone or Pool (0), a BPMN Subprocess or Loop or a Sequence
+    // Fragment (500). The Subprocess and Loop were missed until 2026-10-19 (review 2026-10-15, found in passing). A
+    // Container may still sit INSIDE a Subprocess: there the tiers run the right way.
+    return !CONTAINER_REFUSES.has(childType);
   }
   if (parentType === 'sf.Zone') {
     // Department: any node / Team / loose Task, but not another section grouper.
@@ -618,15 +621,7 @@ function fitParentToChildren(parent) {
   // A BpmnPool with a left header band reserves it; everything else hugs flush. Using a
   // wider left inset for pools means re-hugging never slides the title back over
   // the leftmost child — it grows the pool left until the header clears it.
-  // A Data Mapping zone keeps room for its join lanes (join-lanes.js; SQL Studio's lineage, 2026-10-16): the 48 px fits
-  // one lane, and each further lane on a side needs JOIN_LANE_GAP more. Hugging at 48 drew the outer lanes on or past
-  // the border, and undid the room Auto Layout and the import had made.
-  let laneL = 0, laneR = 0;
-  if (parent.get('type') === 'sf.Zone' && cctx.getDiagramType?.() === 'datamapping') {
-    const n = liveJoinLaneCounts(graph, children.map((c) => c.id));
-    laneL = JOIN_LANE_GAP * Math.max(0, n.left - 1);
-    laneR = JOIN_LANE_GAP * Math.max(0, n.right - 1);
-  }
+  const { laneL, laneR } = joinLaneRoom(parent, children.map((c) => c.id));
   const leftInset = poolLeftHeader(parent) + PARENT_FIT_PADDING + laneL;
   const newLeft = minLeft - leftInset;                 // hug left (grow AND shrink)
   const rightEdge = maxRight + PARENT_FIT_PADDING + laneR;      // hug right (grow AND shrink)
@@ -694,6 +689,16 @@ function findCaptureParent(childBBox, childType, excludeId) {
   return findHaloParent(childBBox, childType, excludeId, _dragOriginParent);
 }
 
+// A Data Mapping zone keeps room for its join lanes (join-lanes.js; SQL Studio's lineage, 2026-10-16): the 48 px fits
+// one lane, and each further lane on a side needs JOIN_LANE_GAP more. Hugging at 48 drew the outer lanes on or past
+// the border, and undid the room Auto Layout and the import had made. One function for the fit and the drop ghost, so
+// the ghost predicts the fit (until 2026-10-19 the ghost left the lanes out and drew the zone up to 16 px per lane short).
+function joinLaneRoom(parent, cardIds) {
+  if (parent.get('type') !== 'sf.Zone' || cctx.getDiagramType?.() !== 'datamapping') return { laneL: 0, laneR: 0 };
+  const n = liveJoinLaneCounts(cctx.graph, cardIds);
+  return { laneL: JOIN_LANE_GAP * Math.max(0, n.left - 1), laneR: JOIN_LANE_GAP * Math.max(0, n.right - 1) };
+}
+
 // Pure: the container's bounds after capturing childBBox — mirrors
 // tuckChildInside + fitParentToChildren (top anchored; left/right/bottom hug).
 // excludeId drops the dragged child from the existing-children scan when it's
@@ -729,8 +734,12 @@ function previewCapturedParentBounds(childBBox, parent, excludeId) {
     if (cp.x + cs.width > maxRight) maxRight = cp.x + cs.width;
     if (cp.y + cs.height > maxBottom) maxBottom = cp.y + cs.height;
   }
-  const newLeft = minLeft - leftHeader - pad;      // hug left (mirror the fit)
-  const rightEdge = maxRight + pad;   // hug right
+  // The lanes the joins among the would-be members need, the dragged card counted at its live (dragged) position.
+  const members = graph.getElements().filter((c) => c.get('parent') === parent.id).map((c) => c.id);
+  if (excludeId && !members.includes(excludeId)) members.push(excludeId);
+  const { laneL, laneR } = joinLaneRoom(parent, members);
+  const newLeft = minLeft - leftHeader - pad - laneL;      // hug left (mirror the fit)
+  const rightEdge = maxRight + pad + laneR;   // hug right
   return {
     x: newLeft,
     y: pp.y,
