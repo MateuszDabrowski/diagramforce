@@ -1,11 +1,11 @@
 // Save & Export manager (CLEANUP S4) — the Save Manager (browser saves, Drive copies, export selection). Reads tctx.modules inside function bodies. load-manager imports showSaveManagerModal (slice->slice).
-import { exportObjectSchemaCsv } from '../data-export.js?v=1.26.4';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.26.4';
-import { DRIVE_CHIP_CHECK, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.4';
-import { countDiagramShapes, escHtml, formatRelativeTime, isViewForkTab, tabInGroup } from '../util.js?v=1.26.4';
-import { tctx } from './context.js?v=1.26.4';
-import { noteError } from '../diagnostics.js?v=1.26.4';
-import { isInSlot } from '../persistence/host-env.js?v=1.26.4';
+import { exportObjectSchemaCsv } from '../data-export.js?v=1.26.5';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.5';
+import { DRIVE_CHIP_CHECK, groupSelectHtml, setTriStateCheckbox, shareChipIconHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.5';
+import { countDiagramShapes, escHtml, formatRelativeTime, isViewForkTab, tabInGroup } from '../util.js?v=1.26.5';
+import { tctx } from './context.js?v=1.26.5';
+import { noteError } from '../diagnostics.js?v=1.26.5';
+import { pickerBlockedInSlot } from '../persistence/host-env.js?v=1.26.5';
 
 export function showSaveManagerModal() {
   const p = tctx.modules.persistence;
@@ -75,7 +75,7 @@ export function showSaveManagerModal() {
   // on close, and a Drive-evicted copy is recovered by reopening it from Load & Import → Google Drive.)
   const footerHtml = `
       ${driveOn && !autoSync ? `<button class="df-modal__btn df-save-mgr__drivebtn df-drive-save__save" disabled>${saveBtnLabel}</button>` : ''}
-      ${driveOn && connected && !isInSlot() ? '<button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__shared" disabled><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>' : ''}
+      ${driveOn && connected && !pickerBlockedInSlot() ? '<button class="df-modal__btn df-modal__btn--amber-outline df-save-mgr__shared" disabled><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Add to Shared Drive</button>' : ''}
       <button class="df-modal__btn df-modal__btn--accent df-save-mgr__export-sel" style="margin-left:auto" disabled>Export Selected</button>`;
 
   // Pre-save check (NBA #3, refocused): the explicit-save hub is the ONE right place to surface loose

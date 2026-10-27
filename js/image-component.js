@@ -1,4 +1,4 @@
-import { showError, trapFocus } from './feedback.js?v=1.26.4';
+import { showError, trapFocus } from './feedback.js?v=1.26.5';
 
 // Image component — consent modal, file picker, and auto-resize for sf.Image.
 //

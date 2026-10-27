@@ -13,7 +13,8 @@
  * What the marker cannot fix: Google's Picker. It is a third-party iframe, and in an app's WKWebView that frame is
  * reported as having storage access and sent no cookies - WebKit's defect, reported to Apple 2026-09-21 - so the two
  * Picker doors (Load's whole-Drive search, Add to Shared Drive) decline in Slot with a sentence; see
- * `pickerUnavailableInSlot` in remote-store.js.
+ * `pickerUnavailableInSlot` in remote-store.js. On macOS 27.2 the frame carries the session (Slot's test,
+ * 2026-10-26), so Slot may say the Picker works with `window.slot.picker === true`; see `pickerBlockedInSlot`.
  *
  * Pure: no DOM, no timers - the tested half. remote-store.js owns the side effects.
  */
@@ -25,6 +26,19 @@ export function isInSlot(win = (typeof window !== 'undefined' ? window : undefin
     const s = win && win.slot;
     return !!s && typeof s === 'object' && typeof s.version === 'string' && s.version.length > 0;
   } catch { return false; }
+}
+
+// Localhost testing only: remote-store sets it from `"slotPicker": true` in the gitignored dev/dev-config.json, which
+// never ships, so a dev build can try the Picker inside Slot before Slot sends the flag.
+let _devPickerInSlot = false;
+export function allowPickerInSlotForDev(on) { _devPickerInSlot = on === true; }
+
+/** True when the Picker doors should decline: inside Slot, unless Slot says the Picker can sign in there with
+ *  `window.slot.picker === true` (macOS 27.2 and later; on 27.0 the Picker frame got no cookies, FB24880571). Only a
+ *  real `true` counts, as with the marker's version. A browser is never blocked. */
+export function pickerBlockedInSlot(win = (typeof window !== 'undefined' ? window : undefined)) {
+  if (!isInSlot(win) || _devPickerInSlot) return false;
+  try { return win.slot.picker !== true; } catch { return true; }
 }
 
 /** What the Picker doors say inside Slot, instead of opening Google's dead end (Slot's review, 2026-10-15). One home,

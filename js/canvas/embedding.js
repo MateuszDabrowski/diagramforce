@@ -12,12 +12,12 @@
 // canvas.js re-exports canEmbed / isAutoSizingEnabled / setAutoSizingEnabled /
 // refitAllParents for stencil.js (canEmbed) + properties.js (canEmbed) +
 // toolbar.js (the toggle + refit). Reads graph/paper via cctx; export-stable.
-import { cctx } from './context.js?v=1.26.4';
-import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.4';
-import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.4';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.4';
-import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.4';
-import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.4';
+import { cctx } from './context.js?v=1.26.5';
+import { JOIN_LANE_GAP, liveJoinLaneCounts } from './join-lanes.js?v=1.26.5';
+import { isUndoRedoActive, startBatch, endBatch, amendLast, suppressEmbedTracking } from '../history.js?v=1.26.5';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD, setDragHome } from './router.js?v=1.26.5';
+import { Z_BASE, Z_TIER_SPAN } from './z-tiers.js?v=1.26.5';
+import { poolHeaderSide } from '../persistence/diagram-schema.js?v=1.26.5';
 
 // ── Auto-sizing toggle (v1.11.6) ────────────────────────────────────
 // Controls whether fitParentToChildren may grow/shrink a parent to its embedded
@@ -854,6 +854,8 @@ export function registerEmbedding(cctx) {
     // the first pointermove, so this is the only moment it's readable. Powers the
     // capture hysteresis (sticky EXIT margin for this container while dragging).
     _dragOriginParent = cellView?.model?.get?.('parent') || null;
+    // The router reads it too: until the drop, the home frame stays pass-through for the dragged card's own links.
+    setDragHome(cellView?.model?.id, _dragOriginParent);
     // Snapshot the start position too — findEmbeddingParent gates a FREE element's capture on how far it
     // has actually moved (a click's jitter must not re-capture an overlapping node).
     _dragStartPos = cellView?.model?.position ? { ...cellView.model.position() } : null;
@@ -891,6 +893,7 @@ export function registerEmbedding(cctx) {
     }
     _dragSelectionBBox = null;   // always reset so the next (single) drag isn't sized to a stale union
     _dragOriginParent = null;    // clear the hysteresis snapshot for the next drag / stencil drop
+    setDragHome(null);
     _dragStartPos = null;        // clear the movement-gate snapshot
     const moved = _dragActive && _dragMoved;
     _dragActive = false;

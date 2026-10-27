@@ -1,13 +1,13 @@
 // Load manager (CLEANUP S4) — the Load Manager modal (Browser / Drive library / File / Paste-import panes) + its row/expiry/type helpers + the mermaid type map. Reads tctx.modules; imports showSaveManagerModal (save-manager) + renderDriveSignIn (context) - one-way slice edges.
-import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.26.4';
-import { dedupeSharedInWorkingCopies, isDeviceOnly, listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.4';
-import { SPLIT_CHEVRON_SVG, bindSplitHeads, deviceOnlyChipHtml, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.4';
-import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.26.4';
-import { btn, renderDriveSignIn, tctx } from './context.js?v=1.26.4';
-import { showSaveManagerModal } from './save-manager.js?v=1.26.4';
-import { isInSlot, SLOT_PICKER_NOTE } from '../persistence/host-env.js?v=1.26.4';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.4';
-import { noteError } from '../diagnostics.js?v=1.26.4';
+import { buildModal, confirmModal, showError, showToast } from '../feedback.js?v=1.26.5';
+import { dedupeSharedInWorkingCopies, isDeviceOnly, listedFileNotOwned } from '../persistence/drive-sync-logic.js?v=1.26.5';
+import { SPLIT_CHEVRON_SVG, bindSplitHeads, deviceOnlyChipHtml, driveChipsHtml, groupSelectHtml, refreshSplitTableCounts, setTriStateCheckbox, sharePillHtml, splitTableHeadHtml, storageRowHtml, tabRowChipsHtml } from '../storage-ui.js?v=1.26.5';
+import { countDiagramShapes, escHtml, formatBytes, formatRelativeTime, gaugeLevel, isViewForkTab, tabInGroup } from '../util.js?v=1.26.5';
+import { btn, renderDriveSignIn, tctx } from './context.js?v=1.26.5';
+import { showSaveManagerModal } from './save-manager.js?v=1.26.5';
+import { pickerBlockedInSlot, SLOT_PICKER_NOTE } from '../persistence/host-env.js?v=1.26.5';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.5';
+import { noteError } from '../diagnostics.js?v=1.26.5';
 
 function formatImportSummary({ opened = 0, imported = 0, skipped = 0, templates = 0, templatesSkipped = 0, templatesFull = 0, templatesInvalid = 0 } = {}) {
   const noun = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -303,14 +303,14 @@ function renderDriveLoadPane({ pane, footer, close }) {
   const p = tctx.modules.persistence;
   // Inside Slot the Picker cannot sign in: the door stays in place, disabled, and says why, instead of closing Load
   // for a toast that sent the user back to Load (Slot's review, 2026-10-15).
-  const inSlot = isInSlot();
-  const slotNote = inSlot ? ` <span id="df-drive-picker-slot-note">${SLOT_PICKER_NOTE} Open the file from this account's Drive tab instead: right-click it, then Open with &gt; Diagramforce.</span>` : '';
+  const pickerBlocked = pickerBlockedInSlot();   // false in a Slot that says the Picker works (window.slot.picker)
+  const slotNote = pickerBlocked ? ` <span id="df-drive-picker-slot-note">${SLOT_PICKER_NOTE} Open the file from this account's Drive tab instead: right-click it, then Open with &gt; Diagramforce.</span>` : '';
   pane.innerHTML = `
     <p class="df-drive-save-modal__hint">Your Google Drive diagrams, plus ones shared to you (marked <strong>Shared File</strong>). Open them on any device. Delete moves a diagram to Drive trash for 30 days; only the owner can remove a file shared to you.</p>
     <div class="df-drive-library__body"><p style="padding:18px;text-align:center;color:var(--text-secondary)">Loading…</p></div>
     <div class="df-drive-library__more">
       <p class="df-drive-library__more-hint">Looking for a diagram that isn't listed - one you added to Drive yourself, or that lives on a team Shared Drive?${slotNote}</p>
-      <button class="df-modal__btn df-modal__btn--accent df-drive-library__picker"${inSlot ? ' disabled aria-describedby="df-drive-picker-slot-note"' : ''}><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Search Google Drive</button>
+      <button class="df-modal__btn df-modal__btn--accent df-drive-library__picker"${pickerBlocked ? ' disabled aria-describedby="df-drive-picker-slot-note"' : ''}><svg class="df-toolbar__icon" aria-hidden="true"><use href="#icon-gdrive"></use></svg>Search Google Drive</button>
     </div>`;
   footer.innerHTML = '<button class="df-modal__btn df-modal__btn--danger-outline df-drive-library__delete" style="margin-right:auto" disabled>Delete Selected</button><button class="df-modal__btn df-modal__btn--amber-outline df-drive-library__load" disabled>Load Selected</button>';
   const deleteBtn = footer.querySelector('.df-drive-library__delete');

@@ -3,17 +3,17 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.26.4';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.4';
-import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.4';
+import { cctx } from './context.js?v=1.26.5';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.5';
+import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.5';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns, planHubLayout, DATAMODEL_COLUMN_GAP } from './layout-core.js?v=1.26.4';
-import { startBatch, endBatch } from '../history.js?v=1.26.4';
-import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.4';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns, planHubLayout, DATAMODEL_COLUMN_GAP } from './layout-core.js?v=1.26.5';
+import { startBatch, endBatch } from '../history.js?v=1.26.5';
+import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.5';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.26.4';
-import { flowConnectorType } from './link-styles.js?v=1.26.4';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.4';
+import { computeFlowLayout } from './flow-layout.js?v=1.26.5';
+import { flowConnectorType } from './link-styles.js?v=1.26.5';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.5';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────

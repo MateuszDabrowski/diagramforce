@@ -15,15 +15,15 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.4';
-import { pctx } from './context.js?v=1.26.4';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.4';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.4';
-import { isInSlot, silentRefreshDelay, shouldAutoConnect, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.4';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.4';
-import { noteError } from '../diagnostics.js?v=1.26.4';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.26.4';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.4';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.5';
+import { pctx } from './context.js?v=1.26.5';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.5';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.5';
+import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.5';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.5';
+import { noteError } from '../diagnostics.js?v=1.26.5';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.26.5';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.5';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -81,6 +81,7 @@ export async function ensureDriveConfig() {
     if (!res.ok) return;
     const c = await res.json();
     if (c && c.clientId && c.apiKey) _devConfig = { clientId: String(c.clientId), apiKey: String(c.apiKey) };
+    allowPickerInSlotForDev(c?.slotPicker === true);   // try the Picker inside Slot from a dev build (host-env.js)
   } catch { /* file absent / blocked — leave Drive gated off */ }
 }
 
@@ -2246,7 +2247,7 @@ export async function syncNow() {
 /** Pick a Diagramforce file from the user's Drive (Google Picker) and load it. */
 export async function openFromDrive({ title, sharedFirst, fileId = null } = {}) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return; }
-  if (isInSlot()) { pickerUnavailableInSlot(); return; }
+  if (pickerBlockedInSlot()) { pickerUnavailableInSlot(); return; }
   try {
     let token = tokenValid() ? _accessToken : null;   // reuse a still-valid token → no re-prompt within the hour
     if (!token) token = await getToken({ prompt: '' });
@@ -2924,7 +2925,7 @@ function clearTabDriveState(tabId) {
  *  once; skips empty tabs. Resolves with the count published (0 on cancel). */
 export function publishTabsToSharedDrive(ids) {
   if (!isDriveConfigured()) { showError('Google Drive is not configured for this origin.'); return Promise.resolve(0); }
-  if (isInSlot()) { pickerUnavailableInSlot(); return Promise.resolve(0); }
+  if (pickerBlockedInSlot()) { pickerUnavailableInSlot(); return Promise.resolve(0); }
   const list = Array.isArray(ids) ? ids : [];
   if (!list.length) return Promise.resolve(0);
   return new Promise((resolve) => {
@@ -3714,7 +3715,7 @@ async function openSharedFileAuthed(fileId) {
     // of our modals, so nothing else stops an update reload while it is up (review round 2, S1-4). Awaited, a pick of
     // this same file waited on this open (openOnce) and never opened.
     // Not in Slot: the Picker cannot sign in there, and the error above already says what happened (Slot's review).
-    if (!isInSlot()) holdUpdateReload(openFromDrive());
+    if (!pickerBlockedInSlot()) holdUpdateReload(openFromDrive());
   }
 }
 
@@ -3741,7 +3742,7 @@ function showRestrictedOpenModal(fileId) {
  *  shared it (never the owner's identity - we don't have it), and only open the Picker on the user's click. */
 function showNoDirectAccessModal(fileId = null) {
   document.querySelector('.df-drive-open-modal')?.remove();
-  if (isInSlot()) {
+  if (pickerBlockedInSlot()) {
     // The Picker cannot sign in inside Slot, so its button was a dead end (Slot's review, 2026-10-15). Drive's own
     // Open with grants the file and lands it in this tab.
     const { footer, close } = buildModal({
@@ -3778,7 +3779,7 @@ let _pickHintDismiss = null;
 function showEditViaPickerHint(fileId, name) {
   const label = String(name || 'This diagram').replace(/\.dgf$/i, '');
   _pickHintDismiss?.();
-  if (isInSlot()) {   // no Pick button: the Picker cannot sign in inside Slot (Slot's review, 2026-10-15)
+  if (pickerBlockedInSlot()) {   // no Pick button: the Picker cannot sign in inside Slot (Slot's review, 2026-10-15)
     _pickHintDismiss = showToast(`"${label}" opened as a view. If you were invited to edit it, open it once from this `
       + "account's Drive tab: Shared with me, right-click it, then Open with > Diagramforce.", 'info', { sticky: true });
     return;

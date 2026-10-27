@@ -7,9 +7,9 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.26.4';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.4';
-import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.4';
+import { cctx } from './context.js?v=1.26.5';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.5';
+import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.5';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -259,6 +259,13 @@ const _lastRuns = new Map();    // link id -> { pts, runs, look, pass } of the r
 let _passNo = 0;                // bumped per reroute pass: a sibling's line is adopted only from the SAME pass
 const _avoidRuns = new Map();   // link id -> runs it must not share a line with (set by separateForeignRuns)
 const _noCrossedZ = new Set();  // link ids that gave up their crossed-stub Z to a different-looking link (separation)
+// The element under a canvas drag and the parent it had at pointerdown (embedding.js sets it). JointJS embeddingMode
+// detaches a dragged child (parent -> null) until the drop, so the live parent made the child's home frame an obstacle to
+// the child's own links for the whole drag: grabbing the card a trunk starts from, inside a container, bent the trunk
+// 80 px onto a dashed line until the drop, even with no movement (2026-10-25). It only fills in a missing parent, so a
+// lost pointerup cannot override a real one, and the next pointerdown replaces it.
+let _dragHome = null;
+export function setDragHome(id, parentId) { _dragHome = id && parentId ? { id, parentId } : null; }
 
 const axisRun = (p, q) => {
   if (Math.abs(p.y - q.y) < 1 && Math.abs(p.x - q.x) >= 1) return { o: 'H', c: p.y, lo: Math.min(p.x, q.x), hi: Math.max(p.x, q.x) };
@@ -1223,7 +1230,7 @@ export function registerSfRouter() {
     if (!srcCell || !tgtCell) { _lastRuns.delete(link.id); return vertices; }
 
     function getParent(cell) {
-      const pid = cell?.get('parent');
+      const pid = cell?.get('parent') || (cell && cell.id === _dragHome?.id ? _dragHome.parentId : null);
       return pid ? gr.getCell(pid) : null;
     }
 
