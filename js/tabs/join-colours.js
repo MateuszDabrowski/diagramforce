@@ -4,10 +4,10 @@
 // offers a colour per join field. Accept writes the colours into the diagram as one undo step, the same edit as the
 // Color field, so exports and later edits see one kind of colour. A join the person coloured is never touched.
 
-import { tbctx } from './context.js?v=1.26.5';
-import { showToast } from '../feedback.js?v=1.26.5';
-import { planJoinColours } from '../canvas/join-lanes.js?v=1.26.5';
-import { DF_COLORS, DF_NEUTRAL_LINK } from '../persistence/diagram-palette.js?v=1.26.5';
+import { tbctx } from './context.js?v=1.26.6';
+import { showToast } from '../feedback.js?v=1.26.6';
+import { planJoinColours } from '../canvas/join-lanes.js?v=1.26.6';
+import { DF_COLORS, DF_NEUTRAL_LINK } from '../persistence/diagram-palette.js?v=1.26.6';
 
 // Amber is the mapping link colour (MAPPING_LINK_COLOR), and orange and olive sit next to it, so a join never takes them.
 export const JOIN_PALETTE = [DF_COLORS.blue, DF_COLORS.green, DF_COLORS.purple, DF_COLORS.cyan, DF_COLORS.red, DF_COLORS.indigo, DF_COLORS.teal];
@@ -77,7 +77,7 @@ export function offerJoinColours(tabId) {
  *  switched tabs since the prompt showed. Resolves to how many joins changed. The Color field's setter loads on
  *  accept: tabs.js must stay importable without JointJS (data-export.test.js imports it in Node). */
 export async function colourJoins(tabId) {
-  const { applyLinkStroke } = await import('../properties/link-props.js?v=1.26.5');
+  const { applyLinkStroke } = await import('../properties/link-props.js?v=1.26.6');
   if (tbctx.activeTabId !== tabId) tbctx.switchTab?.(tabId);
   const tab = tbctx.tabs.find((t) => t.id === tabId);
   if (!tab || tbctx.activeTabId !== tabId) return 0;

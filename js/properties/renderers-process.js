@@ -2,12 +2,12 @@
 // Subprocess/Loop/Pool/DataObjectProps) + the Flowchart renderFlowShapeProps (shared by every sf.Flow* shape).
 // Build via widgets + finishStandardProps (render-core), reading graph + the panel DOM refs via prctx; never imports
 // the facade. The showProperties() dispatch imports the eight back.
-import * as history from '../history.js?v=1.26.5';
-import { prctx } from './context.js?v=1.26.5';
-import { contrastTextColor } from '../components.js?v=1.26.5';
-import { BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from '../persistence/diagram-schema.js?v=1.26.5';
-import { finishStandardProps } from './render-core.js?v=1.26.5';
-import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.26.5';
+import * as history from '../history.js?v=1.26.6';
+import { prctx } from './context.js?v=1.26.6';
+import { contrastTextColor } from '../components.js?v=1.26.6';
+import { BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from '../persistence/diagram-schema.js?v=1.26.6';
+import { finishStandardProps } from './render-core.js?v=1.26.6';
+import { addColor, addNumber, addSelect, addText, section } from './widgets.js?v=1.26.6';
 
 export function renderBpmnEventProps(cell) {
   // Content

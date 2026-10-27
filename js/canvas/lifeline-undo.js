@@ -4,8 +4,8 @@
 // the whole snapshot. Shared by the sequence property panel (properties/renderers-sequence.js) and Sequence Auto
 // Layout (auto-layout.js), which called the raw rebuild and so lost the ports and custom spacing on undo (review
 // H2-1). Inside an open batch the command lands in that batch, so the layout stays one undo step.
-import * as history from '../history.js?v=1.26.5';
-import { cctx } from './context.js?v=1.26.5';
+import * as history from '../history.js?v=1.26.6';
+import { cctx } from './context.js?v=1.26.6';
 
 function snapLifeline(cell) {
   const ratios = cell.get('lifelinePortRatios');

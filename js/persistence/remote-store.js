@@ -15,15 +15,15 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.5';
-import { pctx } from './context.js?v=1.26.5';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.5';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.5';
-import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.5';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.5';
-import { noteError } from '../diagnostics.js?v=1.26.5';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.26.5';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.5';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.6';
+import { pctx } from './context.js?v=1.26.6';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.6';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.6';
+import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, tokenLoginHint, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.6';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.6';
+import { noteError } from '../diagnostics.js?v=1.26.6';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.26.6';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.6';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
@@ -132,9 +132,10 @@ let _tokenClient = null;
 let _accessToken = null;
 let _tokenExpiry = 0;
 // Account pre-selection for the GIS popup. A Drive "Open with" launch names the account that owns the session
-// (`state.userId` = the Google profile id, the ID-token `sub`), so passing it as GIS's `hint` PRE-SELECTS that
+// (`state.userId` = the Google profile id, the ID-token `sub`), so passing it as GIS's `login_hint` PRE-SELECTS that
 // account and skips the chooser - the per-tab sign-in becomes one frictionless click (CR). An unknown/invalid
-// hint just falls back to the normal account chooser, so this is strictly additive.
+// hint just falls back to the normal account chooser, so this is strictly additive. Inside Slot, with no Open with
+// hint, the stored account is named instead (`tokenLoginHint`, host-env.js).
 let _loginHint = null;
 export function setLoginHint(h) { _loginHint = String(h || '').trim() || null; }
 // Valid = present AND not within 30 s of its ~1 h expiry. Lets the UI show "sign in"
@@ -222,7 +223,11 @@ function requestToken({ prompt = '' } = {}) {
       scheduleCatchUpSave();
       resolve(_accessToken);
     };
-    _tokenClient.requestAccessToken({ prompt, ...(_loginHint ? { hint: _loginHint } : {}) });
+    // `login_hint` is the documented name; GIS also reads the older `hint`, which this used until 1.26.6.
+    let storedAccount = null;
+    try { storedAccount = localStorage.getItem(LS.account); } catch { /* private mode */ }
+    const loginHint = tokenLoginHint({ inSlot: isInSlot(), openWithHint: _loginHint, storedAccount });
+    _tokenClient.requestAccessToken({ prompt, ...(loginHint ? { login_hint: loginHint } : {}) });
   }));
 }
 

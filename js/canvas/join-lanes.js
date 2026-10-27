@@ -6,7 +6,7 @@
 // joins on it), and buses whose vertical spans overlap take different lanes, 16 px apart, the shortest innermost so
 // nested spans do not cross. Pure: the router draws the lanes, Auto Layout leaves room for them.
 
-import { JOIN_LANE_GAP, JOIN_COLUMN_TOL, joinPortSide, assignJoinLanes, joinLaneCounts, joinItemsByZone } from '../persistence/diagram-schema.js?v=1.26.5';
+import { JOIN_LANE_GAP, JOIN_COLUMN_TOL, joinPortSide, assignJoinLanes, joinLaneCounts, joinItemsByZone } from '../persistence/diagram-schema.js?v=1.26.6';
 
 // The lane assignment for a Data Mapping column (assignJoinLanes, joinLaneCounts, joinItemsByZone) is pure and JSON-only,
 // so it lives in diagram-schema.js, where the validator counts lanes too (2026-10-19). Re-exported for the app.

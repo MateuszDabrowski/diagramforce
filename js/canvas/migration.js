@@ -2,22 +2,22 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.26.5';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.5';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.5';
-import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.5';
-import { nodeContrastText } from '../util.js?v=1.26.5';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.5';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.5';
-import { getIconDataUri } from '../icons.js?v=1.26.5';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.5';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.5';
-import { isSharedBusDiagram } from './router.js?v=1.26.5';
-import { rerouteAllLinks } from './link-runtime.js?v=1.26.5';
+import { cctx } from './context.js?v=1.26.6';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.6';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.6';
+import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.6';
+import { nodeContrastText } from '../util.js?v=1.26.6';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.6';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.6';
+import { getIconDataUri } from '../icons.js?v=1.26.6';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.6';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.6';
+import { isSharedBusDiagram } from './router.js?v=1.26.6';
+import { rerouteAllLinks } from './link-runtime.js?v=1.26.6';
 
 // Types whose connector labels are resolved collision-only on load (see the end of migrateNodes).
 const LOAD_LABEL_TYPES = new Set(['architecture', 'process', 'org']);
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.5';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.6';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.

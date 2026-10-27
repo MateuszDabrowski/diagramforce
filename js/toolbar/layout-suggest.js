@@ -3,7 +3,7 @@
 // cards on open, as some Auto Layouts are still weaker than a hand layout, so the flag only PROPOSES it: one prompt,
 // Auto Layout or Keep as is, and Auto Layout is the type's own View menu entry, one undo step. The flag is read at
 // import and never saved, so the next open of the saved diagram does not ask again.
-import { showToast } from '../feedback.js?v=1.26.5';
+import { showToast } from '../feedback.js?v=1.26.6';
 
 /** The prompt for the tab `tabId` named `name`. `run(tabId)` lays it out (app.js: back to that tab, then the menu's
  *  Auto Layout); `onDismiss` runs once the prompt is answered by any route. Returns the toast's dismiss function. */

@@ -3,11 +3,11 @@
 // from tbctx.modules + the forward-refs (importDiagramAsTab/setTabGroup/createDiagramOfType/getGroup) at CALL
 // time; never imports the facade back.
 
-import { tbctx } from './context.js?v=1.26.5';
-import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.5';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.26.5';
-import { normalizeDiagramType } from '../persistence.js?v=1.26.5';
-import { showError, trapFocus } from '../feedback.js?v=1.26.5';
+import { tbctx } from './context.js?v=1.26.6';
+import { DIAGRAM_TYPES } from './diagram-types.js?v=1.26.6';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from '../official-templates.js?v=1.26.6';
+import { normalizeDiagramType } from '../persistence.js?v=1.26.6';
+import { showError, trapFocus } from '../feedback.js?v=1.26.6';
 
 /** Close the open New Diagram modal the way its own close does (focus trap released, focus restored). Use this, not
  *  `.remove()`: a removed overlay whose trap stayed on the stack would keep Tab wrapping into a detached dialog. */

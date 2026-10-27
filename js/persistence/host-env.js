@@ -58,6 +58,20 @@ export function silentRefreshDelay(expiryMs, nowMs = Date.now()) {
   return Math.max(5000, untilExpiry - 60000);
 }
 
+/** The account to name in Google's token request (GIS `login_hint`). A Drive "Open with" launch names its account and
+ *  wins everywhere. Inside Slot, the account this tab connected with before (`df.gdrive.account`, raw JSON): Slot's
+ *  log of 2026-10-27 showed a personal account where Google would not pick the account by itself - the boot
+ *  reconnect's `prompt: 'none'` window closed with no answer and the Drive icon got the chooser - while a Workspace
+ *  account signed straight in. A browser gets no stored-account hint, so its account choice is unchanged. */
+export function tokenLoginHint({ inSlot, openWithHint, storedAccount }) {
+  if (openWithHint) return openWithHint;
+  if (inSlot !== true) return null;
+  try {
+    const email = JSON.parse(storedAccount || 'null')?.email;
+    return typeof email === 'string' && email.includes('@') ? email.trim() : null;
+  } catch { return null; }
+}
+
 /** Whether boot should reconnect Drive without a click. All three, or nothing: inside Slot, Drive configured for
  *  this origin, and the user connected here before (the auto-sync key is SET - '1' or '0' - which an explicit
  *  Disconnect clears, so "disconnect" stays disconnected across reloads). */

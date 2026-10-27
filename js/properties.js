@@ -1,55 +1,55 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { COLOR_SCHEMA } from './properties/color-schema.js?v=1.26.5';
-import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.26.5';
+import { COLOR_SCHEMA } from './properties/color-schema.js?v=1.26.6';
+import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.26.6';
 // Property-panel widget builders (CLEANUP S2 slice 3) — form fields, action buttons, pickers.
 import {
   CLONE_ICON_SVG, addActionBtn, addAutoSizeBtn, addColorMulti, addDeleteBtn, addMarkerPicker, addNumber,
   addNumberPair, addSelect, copyCellStyle, field, getActiveCell, hasStyleClip, pasteCellStyle, rotationField,
   section, typePlural, wireMarkdownShortcuts,
-} from './properties/widgets.js?v=1.26.5';
+} from './properties/widgets.js?v=1.26.6';
 // Re-export the style-clipboard trio for app.js (selection.setStyleApi) — they live in widgets.js now.
-export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.26.5';
+export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.26.6';
 // DataObject field editor (CLEANUP S2 slice 4) — renderDataObjectProps + the dblclick handler call these back.
-import { openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.26.5';
+import { openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.26.6';
 // SF_FIELD_TYPES lives in field-editor.js now; table-view.js still imports it from properties.js (this re-export).
-export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.26.5';
+export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.26.6';
 // Link / connector panel (CLEANUP S2 slice 5) — the facade dispatch (showProperties) + the multi-select
 // Connectors section use these; setLinkEndpoints is reached via properties.setLinkEndpoints (app.js), so re-export.
 import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle,
-  applyLinkFontColor, applyLinkFontSize, setLinkFontSizeEnabled, userLinkLabelIndex, setUserLinkLabel, repaintLinkView, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.26.5';
-export { setLinkEndpoints } from './properties/link-props.js?v=1.26.5';
+  applyLinkFontColor, applyLinkFontSize, setLinkFontSizeEnabled, userLinkLabelIndex, setUserLinkLabel, repaintLinkView, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.26.6';
+export { setLinkEndpoints } from './properties/link-props.js?v=1.26.6';
 // Shape type metadata (CLEANUP S2 slice 6) — pure data maps shared by the facade + renderers + convert + autoSizeCell.
-import { TYPE_LABELS } from './properties/type-meta.js?v=1.26.5';
+import { TYPE_LABELS } from './properties/type-meta.js?v=1.26.6';
 // Shape-type conversion (CLEANUP S2 slice 6) — the renderers' Convert buttons + the right-click convert menu (via
 // buildCellActions) call these; each rewires a cell in place preserving links + embedding.
-import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.26.5';
+import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.26.6';
 // Shared render tail (CLEANUP S2 slice 7) — every render*Props ends with finishStandardProps; autoSizeCell +
 // buildCellActions are wired into selection via app.js (properties.autoSizeCell / .buildCellActions), so re-export.
-import { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.5';
-export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.5';
+import { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.6';
+export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.6';
 // Match Container Height (1.23.0) — the canvas menus reach it through the facade, same as autoSizeCell:
 // selection.setLaneMatcher(...) in app.js injects these so js/selection/ never imports js/properties/.
-export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.26.5';
+export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.26.6';
 // Per-family property renderers (CLEANUP S2 slice 8+) — the showProperties() dispatch calls these back.
-import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps, undoableLifelineOp } from './properties/renderers-sequence.js?v=1.26.5';
-import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.26.5';
-import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.26.5';
-import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.26.5';
-import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.26.5';
-import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.26.5';
-import { confirmModal, buildModal } from './feedback.js?v=1.26.5';
-import { Z_TIER_SPAN, zTierBase, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.26.5';
-import * as stencilModule from './stencil.js?v=1.26.5';
+import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps, undoableLifelineOp } from './properties/renderers-sequence.js?v=1.26.6';
+import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.26.6';
+import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.26.6';
+import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.26.6';
+import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.26.6';
+import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.26.6';
+import { confirmModal, buildModal } from './feedback.js?v=1.26.6';
+import { Z_TIER_SPAN, zTierBase, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.26.6';
+import * as stencilModule from './stencil.js?v=1.26.6';
 import {
   duplicate as clipboardDuplicate,
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.26.5';
-import * as history from './history.js?v=1.26.5';
-import { saveSelectionAsTemplate } from './templates.js?v=1.26.5';
+} from './clipboard.js?v=1.26.6';
+import * as history from './history.js?v=1.26.6';
+import { saveSelectionAsTemplate } from './templates.js?v=1.26.6';
 
 
 

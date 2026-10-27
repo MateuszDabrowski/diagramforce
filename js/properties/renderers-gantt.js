@@ -3,12 +3,12 @@
 // bar CRUD). Build via widgets + finishStandardProps (render-core) + the gantt-layout helpers, reading graph +
 // the panel DOM refs + the showProperties dispatch via prctx (add/delete/reorder re-render the panel); never
 // imports the facade. The showProperties() dispatch imports the five render*Props back.
-import * as history from '../history.js?v=1.26.5';
-import { asUndoBatch, prctx } from './context.js?v=1.26.5';
-import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTaskListWidth, ganttTimelineFor, growTimelineToFitDates, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.26.5';
-import { axisEndDate, localISODate, periodsThrough } from '../gantt-scale.js?v=1.26.5';
-import { finishStandardProps } from './render-core.js?v=1.26.5';
-import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, getActiveCell, section, toHex, typingBatch, wireColorSwatchDrag } from './widgets.js?v=1.26.5';
+import * as history from '../history.js?v=1.26.6';
+import { asUndoBatch, prctx } from './context.js?v=1.26.6';
+import { applyGanttGeometry, applyGanttGroupGeometry, ganttRowLayout, ganttTaskListWidth, ganttTimelineFor, growTimelineToFitDates, orderToY, resequenceGanttOrders, timelineBars } from '../gantt-layout.js?v=1.26.6';
+import { axisEndDate, localISODate, periodsThrough } from '../gantt-scale.js?v=1.26.6';
+import { finishStandardProps } from './render-core.js?v=1.26.6';
+import { addCloneBtn, addColor, addDate, field, addDeleteBtn, addNumber, addNumberWithSuffix, addOrderButtons, addSelect, addText, addTextarea, getActiveCell, section, toHex, typingBatch, wireColorSwatchDrag } from './widgets.js?v=1.26.6';
 
 // A Schedule date typed in the inspector: set it, then grow the timeline to cover it (past either end), as a drag past
 // the right edge does. One undo step with the date (review L5). Left growth reaches only the date typed here (a Start,
