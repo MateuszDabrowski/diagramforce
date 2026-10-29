@@ -1,12 +1,671 @@
 {
   "version": 1,
-  "appVersion": "1.19.4",
-  "timestamp": 1784134473843,
+  "appVersion": "1.26.6",
+  "timestamp": "2026-10-28T00:00:00.000Z",
   "title": "MCE Mobile Data Views",
   "diagramType": "datamodel",
   "mappingMode": false,
   "graph": {
     "cells": [
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 392,
+          "height": 602
+        },
+        "z": 0,
+        "position": {
+          "x": 4,
+          "y": 90
+        },
+        "id": "z-addr",
+        "embeds": [
+          "obj-ma"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(160,111,3,0.04)",
+            "stroke": "#A06F03"
+          },
+          "label": {
+            "fill": "#A06F03",
+            "text": "Mobile address"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 392,
+          "height": 2402
+        },
+        "z": 0,
+        "position": {
+          "x": 492,
+          "y": 90
+        },
+        "id": "z-track",
+        "embeds": [
+          "obj-msub",
+          "obj-slog",
+          "obj-ssms",
+          "obj-und",
+          "obj-smt"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(92,106,196,0.04)",
+            "stroke": "#5C6AC4"
+          },
+          "label": {
+            "fill": "#5C6AC4",
+            "text": "Subscriptions and tracking"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 392,
+          "height": 228
+        },
+        "z": 0,
+        "position": {
+          "x": 980,
+          "y": 90
+        },
+        "id": "z-subs",
+        "embeds": [
+          "obj-sub"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(29,115,201,0.04)",
+            "stroke": "#1D73C9"
+          },
+          "label": {
+            "fill": "#1D73C9",
+            "text": "Subscribers"
+          }
+        }
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 512
+        },
+        "z": 2000,
+        "objectName": "_MobileAddress",
+        "headerColor": "#A06F03",
+        "fields": [
+          {
+            "label": "_MobileID",
+            "apiName": "_MobileID",
+            "type": "Number",
+            "keyType": "pk",
+            "fid": "ma_mobileid",
+            "required": true
+          },
+          {
+            "label": "_ContactID",
+            "apiName": "_ContactID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_contactid",
+            "required": true
+          },
+          {
+            "label": "_MobileNumber",
+            "apiName": "_MobileNumber",
+            "type": "Text",
+            "keyType": "fqk",
+            "fid": "ma_mobilenumber",
+            "required": true
+          },
+          {
+            "label": "_Status",
+            "apiName": "_Status",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_status"
+          },
+          {
+            "label": "_Source",
+            "apiName": "_Source",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_source"
+          },
+          {
+            "label": "_SourceObjectId",
+            "apiName": "_SourceObjectId",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_sourceobjectid"
+          },
+          {
+            "label": "_Priority",
+            "apiName": "_Priority",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_priority"
+          },
+          {
+            "label": "_Channel",
+            "apiName": "_Channel",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_channel"
+          },
+          {
+            "label": "_CarrierID",
+            "apiName": "_CarrierID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_carrierid",
+            "required": true
+          },
+          {
+            "label": "_CountryCode",
+            "apiName": "_CountryCode",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_countrycode",
+            "required": true
+          },
+          {
+            "label": "_CreatedDate",
+            "apiName": "_CreatedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ma_createddate",
+            "required": true
+          },
+          {
+            "label": "_CreatedBy",
+            "apiName": "_CreatedBy",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_createdby",
+            "required": true
+          },
+          {
+            "label": "_ModifiedDate",
+            "apiName": "_ModifiedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ma_modifieddate",
+            "required": true
+          },
+          {
+            "label": "_ModifiedBy",
+            "apiName": "_ModifiedBy",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_modifiedby"
+          },
+          {
+            "label": "_City",
+            "apiName": "_City",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_city"
+          },
+          {
+            "label": "_State",
+            "apiName": "_State",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_state"
+          },
+          {
+            "label": "_ZipCode",
+            "apiName": "_ZipCode",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_zipcode"
+          },
+          {
+            "label": "_FirstName",
+            "apiName": "_FirstName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_firstname"
+          },
+          {
+            "label": "_LastName",
+            "apiName": "_LastName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ma_lastname"
+          },
+          {
+            "label": "_UTCOffset",
+            "apiName": "_UTCOffset",
+            "type": "Number",
+            "keyType": null,
+            "fid": "ma_utcoffset"
+          },
+          {
+            "label": "_IsHonorDST",
+            "apiName": "_IsHonorDST",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "ma_ishonordst"
+          }
+        ],
+        "position": {
+          "x": 60,
+          "y": 140
+        },
+        "id": "obj-ma",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-addr"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 336
+        },
+        "z": 2000,
+        "objectName": "_MobileSubscription",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "_SubscriptionDefinitionID",
+            "apiName": "_SubscriptionDefinitionID",
+            "type": "Text",
+            "keyType": "pk",
+            "fid": "msub_subscriptiondefinitionid",
+            "required": true
+          },
+          {
+            "label": "_MobileNumber",
+            "apiName": "_MobileNumber",
+            "type": "Text",
+            "keyType": "fqk",
+            "fid": "msub_mobilenumber",
+            "required": true
+          },
+          {
+            "label": "_OptOutStatusID",
+            "apiName": "_OptOutStatusID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_optoutstatusid"
+          },
+          {
+            "label": "_OptOutMethodID",
+            "apiName": "_OptOutMethodID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_optoutmethodid"
+          },
+          {
+            "label": "_OptOutDate",
+            "apiName": "_OptOutDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "msub_optoutdate"
+          },
+          {
+            "label": "_OptInStatusID",
+            "apiName": "_OptInStatusID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_optinstatusid",
+            "required": true
+          },
+          {
+            "label": "_OptInMethodID",
+            "apiName": "_OptInMethodID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_optinmethodid"
+          },
+          {
+            "label": "_OptInDate",
+            "apiName": "_OptInDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "msub_optindate"
+          },
+          {
+            "label": "_Source",
+            "apiName": "_Source",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_source"
+          },
+          {
+            "label": "_CreatedDate",
+            "apiName": "_CreatedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "msub_createddate",
+            "required": true
+          },
+          {
+            "label": "_CreatedBy",
+            "apiName": "_CreatedBy",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_createdby"
+          },
+          {
+            "label": "_ModifiedDate",
+            "apiName": "_ModifiedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "msub_modifieddate",
+            "required": true
+          },
+          {
+            "label": "_ModifiedBy",
+            "apiName": "_ModifiedBy",
+            "type": "Text",
+            "keyType": null,
+            "fid": "msub_modifiedby"
+          }
+        ],
+        "position": {
+          "x": 548,
+          "y": 140
+        },
+        "id": "obj-msub",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 358
+        },
+        "z": 2000,
+        "objectName": "_SMSSubscriptionLog",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "LogDate",
+            "apiName": "LogDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "slog_logdate"
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": "fqk",
+            "fid": "slog_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "MobileSubscriptionID",
+            "apiName": "MobileSubscriptionID",
+            "type": "Number",
+            "keyType": "pk",
+            "fid": "slog_mobilesubscriptionid",
+            "required": true
+          },
+          {
+            "label": "SubscriptionDefinitionID",
+            "apiName": "SubscriptionDefinitionID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "slog_subscriptiondefinitionid",
+            "required": true
+          },
+          {
+            "label": "MobileNumber",
+            "apiName": "MobileNumber",
+            "type": "Phone",
+            "keyType": "fqk",
+            "fid": "slog_mobilenumber",
+            "required": true
+          },
+          {
+            "label": "OptOutStatusID",
+            "apiName": "OptOutStatusID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "slog_optoutstatusid"
+          },
+          {
+            "label": "OptOutMethodID",
+            "apiName": "OptOutMethodID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "slog_optoutmethodid"
+          },
+          {
+            "label": "OptOutDate",
+            "apiName": "OptOutDate",
+            "type": "Date",
+            "keyType": null,
+            "fid": "slog_optoutdate"
+          },
+          {
+            "label": "OptInStatusID",
+            "apiName": "OptInStatusID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "slog_optinstatusid",
+            "required": true
+          },
+          {
+            "label": "OptInMethodID",
+            "apiName": "OptInMethodID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "slog_optinmethodid"
+          },
+          {
+            "label": "OptInDate",
+            "apiName": "OptInDate",
+            "type": "Date",
+            "keyType": null,
+            "fid": "slog_optindate"
+          },
+          {
+            "label": "Source",
+            "apiName": "Source",
+            "type": "Number",
+            "keyType": null,
+            "fid": "slog_source"
+          },
+          {
+            "label": "CreatedDate",
+            "apiName": "CreatedDate",
+            "type": "Date",
+            "keyType": null,
+            "fid": "slog_createddate",
+            "required": true
+          },
+          {
+            "label": "ModifiedDate",
+            "apiName": "ModifiedDate",
+            "type": "Date",
+            "keyType": null,
+            "fid": "slog_modifieddate",
+            "required": true
+          }
+        ],
+        "position": {
+          "x": 548,
+          "y": 524
+        },
+        "id": "obj-slog",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 270
+        },
+        "z": 2000,
+        "objectName": "_SubscriberSMS",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "ssms_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ssms_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "MobileNumber",
+            "apiName": "MobileNumber",
+            "type": "Phone",
+            "keyType": "fqk",
+            "fid": "ssms_mobilenumber",
+            "required": true
+          },
+          {
+            "label": "TransactionalOptIn",
+            "apiName": "TransactionalOptIn",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "ssms_transactionaloptin",
+            "required": true
+          },
+          {
+            "label": "TransactionalOptInDate",
+            "apiName": "TransactionalOptInDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ssms_transactionaloptindate",
+            "required": true
+          },
+          {
+            "label": "TransactionalOptOutDate",
+            "apiName": "TransactionalOptOutDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ssms_transactionaloptoutdate"
+          },
+          {
+            "label": "MarketingOptIn",
+            "apiName": "MarketingOptIn",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "ssms_marketingoptin",
+            "required": true
+          },
+          {
+            "label": "MarketingOptInDate",
+            "apiName": "MarketingOptInDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ssms_marketingoptindate",
+            "required": true
+          },
+          {
+            "label": "MarketingOptOutDate",
+            "apiName": "MarketingOptOutDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "ssms_marketingoptoutdate"
+          },
+          {
+            "label": "SMSCarrierName",
+            "apiName": "SMSCarrierName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "ssms_smscarriername"
+          }
+        ],
+        "position": {
+          "x": 548,
+          "y": 930
+        },
+        "id": "obj-ssms",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 160
+        },
+        "z": 2000,
+        "objectName": "_UndeliverableSMS",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "MobileNumber",
+            "apiName": "MobileNumber",
+            "type": "Phone",
+            "keyType": "pk",
+            "fid": "und_mobilenumber",
+            "required": true
+          },
+          {
+            "label": "Undeliverable",
+            "apiName": "Undeliverable",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "und_undeliverable",
+            "required": true
+          },
+          {
+            "label": "BounceCount",
+            "apiName": "BounceCount",
+            "type": "Number",
+            "keyType": null,
+            "fid": "und_bouncecount",
+            "required": true
+          },
+          {
+            "label": "FirstBounceDate",
+            "apiName": "FirstBounceDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "und_firstbouncedate",
+            "required": true
+          },
+          {
+            "label": "HoldDate",
+            "apiName": "HoldDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "und_holddate"
+          }
+        ],
+        "position": {
+          "x": 548,
+          "y": 1248
+        },
+        "id": "obj-und",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
+      },
       {
         "type": "sf.DataObject",
         "size": {
@@ -328,330 +987,14 @@
           }
         ],
         "position": {
-          "x": 1436,
-          "y": 788
+          "x": 548,
+          "y": 1456
         },
         "id": "obj-smt",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_SMSMessageTracking"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 270
-        },
-        "z": 2000,
-        "objectName": "_SubscriberSMS",
-        "headerColor": "#5C6AC4",
-        "fields": [
-          {
-            "label": "SubscriberID",
-            "apiName": "SubscriberID",
-            "type": "Number",
-            "keyType": "fqk",
-            "fid": "ssms_subscriberid",
-            "required": true
-          },
-          {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ssms_subscriberkey",
-            "required": true
-          },
-          {
-            "label": "MobileNumber",
-            "apiName": "MobileNumber",
-            "type": "Phone",
-            "keyType": "fqk",
-            "fid": "ssms_mobilenumber",
-            "required": true
-          },
-          {
-            "label": "TransactionalOptIn",
-            "apiName": "TransactionalOptIn",
-            "type": "Boolean",
-            "keyType": null,
-            "fid": "ssms_transactionaloptin",
-            "required": true
-          },
-          {
-            "label": "TransactionalOptInDate",
-            "apiName": "TransactionalOptInDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ssms_transactionaloptindate",
-            "required": true
-          },
-          {
-            "label": "TransactionalOptOutDate",
-            "apiName": "TransactionalOptOutDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ssms_transactionaloptoutdate"
-          },
-          {
-            "label": "MarketingOptIn",
-            "apiName": "MarketingOptIn",
-            "type": "Boolean",
-            "keyType": null,
-            "fid": "ssms_marketingoptin",
-            "required": true
-          },
-          {
-            "label": "MarketingOptInDate",
-            "apiName": "MarketingOptInDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ssms_marketingoptindate",
-            "required": true
-          },
-          {
-            "label": "MarketingOptOutDate",
-            "apiName": "MarketingOptOutDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ssms_marketingoptoutdate"
-          },
-          {
-            "label": "SMSCarrierName",
-            "apiName": "SMSCarrierName",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ssms_smscarriername"
-          }
-        ],
-        "position": {
-          "x": 1436,
-          "y": 476
-        },
-        "id": "obj-ssms",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_SubscriberSMS"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 358
-        },
-        "z": 2000,
-        "objectName": "_SMSSubscriptionLog",
-        "headerColor": "#5C6AC4",
-        "fields": [
-          {
-            "label": "LogDate",
-            "apiName": "LogDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "slog_logdate"
-          },
-          {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": "fqk",
-            "fid": "slog_subscriberkey",
-            "required": true
-          },
-          {
-            "label": "MobileSubscriptionID",
-            "apiName": "MobileSubscriptionID",
-            "type": "Number",
-            "keyType": "pk",
-            "fid": "slog_mobilesubscriptionid",
-            "required": true
-          },
-          {
-            "label": "SubscriptionDefinitionID",
-            "apiName": "SubscriptionDefinitionID",
-            "type": "Text",
-            "keyType": null,
-            "fid": "slog_subscriptiondefinitionid",
-            "required": true
-          },
-          {
-            "label": "MobileNumber",
-            "apiName": "MobileNumber",
-            "type": "Phone",
-            "keyType": "fqk",
-            "fid": "slog_mobilenumber",
-            "required": true
-          },
-          {
-            "label": "OptOutStatusID",
-            "apiName": "OptOutStatusID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "slog_optoutstatusid"
-          },
-          {
-            "label": "OptOutMethodID",
-            "apiName": "OptOutMethodID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "slog_optoutmethodid"
-          },
-          {
-            "label": "OptOutDate",
-            "apiName": "OptOutDate",
-            "type": "Date",
-            "keyType": null,
-            "fid": "slog_optoutdate"
-          },
-          {
-            "label": "OptInStatusID",
-            "apiName": "OptInStatusID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "slog_optinstatusid",
-            "required": true
-          },
-          {
-            "label": "OptInMethodID",
-            "apiName": "OptInMethodID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "slog_optinmethodid"
-          },
-          {
-            "label": "OptInDate",
-            "apiName": "OptInDate",
-            "type": "Date",
-            "keyType": null,
-            "fid": "slog_optindate"
-          },
-          {
-            "label": "Source",
-            "apiName": "Source",
-            "type": "Number",
-            "keyType": null,
-            "fid": "slog_source"
-          },
-          {
-            "label": "CreatedDate",
-            "apiName": "CreatedDate",
-            "type": "Date",
-            "keyType": null,
-            "fid": "slog_createddate",
-            "required": true
-          },
-          {
-            "label": "ModifiedDate",
-            "apiName": "ModifiedDate",
-            "type": "Date",
-            "keyType": null,
-            "fid": "slog_modifieddate",
-            "required": true
-          }
-        ],
-        "position": {
-          "x": 1436,
-          "y": 76
-        },
-        "id": "obj-slog",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_SMSSubscriptionLog"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 160
-        },
-        "z": 2000,
-        "objectName": "_UndeliverableSMS",
-        "headerColor": "#5C6AC4",
-        "fields": [
-          {
-            "label": "MobileNumber",
-            "apiName": "MobileNumber",
-            "type": "Phone",
-            "keyType": "pk",
-            "fid": "und_mobilenumber",
-            "required": true
-          },
-          {
-            "label": "Undeliverable",
-            "apiName": "Undeliverable",
-            "type": "Boolean",
-            "keyType": null,
-            "fid": "und_undeliverable",
-            "required": true
-          },
-          {
-            "label": "BounceCount",
-            "apiName": "BounceCount",
-            "type": "Number",
-            "keyType": null,
-            "fid": "und_bouncecount",
-            "required": true
-          },
-          {
-            "label": "FirstBounceDate",
-            "apiName": "FirstBounceDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "und_firstbouncedate",
-            "required": true
-          },
-          {
-            "label": "HoldDate",
-            "apiName": "HoldDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "und_holddate"
-          }
-        ],
-        "position": {
-          "x": 620,
-          "y": 614
-        },
-        "id": "obj-und",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_UndeliverableSMS"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -664,19 +1007,19 @@
         "headerColor": "#1D73C9",
         "fields": [
           {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": "fqk",
-            "fid": "sub_subscriberkey",
-            "required": true
-          },
-          {
             "label": "SubscriberID",
             "apiName": "SubscriberID",
             "type": "Number",
             "keyType": "pk",
-            "fid": "sub_subscriberid",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
             "required": true
           },
           {
@@ -684,541 +1027,39 @@
             "apiName": "EmailAddress",
             "type": "Email",
             "keyType": null,
-            "fid": "sub_emailaddress"
+            "fid": "f_emailaddress",
+            "required": true
           },
           {
             "label": "Status",
             "apiName": "Status",
             "type": "Text",
             "keyType": null,
-            "fid": "sub_status"
+            "fid": "f_status"
           }
         ],
         "position": {
-          "x": 1844,
-          "y": 408
+          "x": 1036,
+          "y": 140
         },
         "id": "obj-sub",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "headerLabel": {
-            "text": "_Subscribers"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 512
-        },
-        "z": 2000,
-        "objectName": "_MobileAddress",
-        "headerColor": "#A06F03",
-        "fields": [
-          {
-            "label": "_MobileID",
-            "apiName": "_MobileID",
-            "type": "Number",
-            "keyType": "pk",
-            "fid": "ma_mobileid",
-            "required": true
-          },
-          {
-            "label": "_ContactID",
-            "apiName": "_ContactID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_contactid",
-            "required": true
-          },
-          {
-            "label": "_MobileNumber",
-            "apiName": "_MobileNumber",
-            "type": "Text",
-            "keyType": "fqk",
-            "fid": "ma_mobilenumber",
-            "required": true
-          },
-          {
-            "label": "_Status",
-            "apiName": "_Status",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_status"
-          },
-          {
-            "label": "_Source",
-            "apiName": "_Source",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_source"
-          },
-          {
-            "label": "_SourceObjectId",
-            "apiName": "_SourceObjectId",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_sourceobjectid"
-          },
-          {
-            "label": "_Priority",
-            "apiName": "_Priority",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_priority"
-          },
-          {
-            "label": "_Channel",
-            "apiName": "_Channel",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_channel"
-          },
-          {
-            "label": "_CarrierID",
-            "apiName": "_CarrierID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_carrierid",
-            "required": true
-          },
-          {
-            "label": "_CountryCode",
-            "apiName": "_CountryCode",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_countrycode",
-            "required": true
-          },
-          {
-            "label": "_CreatedDate",
-            "apiName": "_CreatedDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ma_createddate",
-            "required": true
-          },
-          {
-            "label": "_CreatedBy",
-            "apiName": "_CreatedBy",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_createdby",
-            "required": true
-          },
-          {
-            "label": "_ModifiedDate",
-            "apiName": "_ModifiedDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "ma_modifieddate",
-            "required": true
-          },
-          {
-            "label": "_ModifiedBy",
-            "apiName": "_ModifiedBy",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_modifiedby"
-          },
-          {
-            "label": "_City",
-            "apiName": "_City",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_city"
-          },
-          {
-            "label": "_State",
-            "apiName": "_State",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_state"
-          },
-          {
-            "label": "_ZipCode",
-            "apiName": "_ZipCode",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_zipcode"
-          },
-          {
-            "label": "_FirstName",
-            "apiName": "_FirstName",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_firstname"
-          },
-          {
-            "label": "_LastName",
-            "apiName": "_LastName",
-            "type": "Text",
-            "keyType": null,
-            "fid": "ma_lastname"
-          },
-          {
-            "label": "_UTCOffset",
-            "apiName": "_UTCOffset",
-            "type": "Number",
-            "keyType": null,
-            "fid": "ma_utcoffset"
-          },
-          {
-            "label": "_IsHonorDST",
-            "apiName": "_IsHonorDST",
-            "type": "Boolean",
-            "keyType": null,
-            "fid": "ma_ishonordst"
-          }
-        ],
-        "position": {
-          "x": 1028,
-          "y": 408
-        },
-        "id": "obj-ma",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#A06F03"
-          },
-          "headerCover": {
-            "fill": "#A06F03"
-          },
-          "headerLabel": {
-            "text": "_MobileAddress"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 336
-        },
-        "z": 2000,
-        "objectName": "_MobileSubscription",
-        "headerColor": "#5C6AC4",
-        "fields": [
-          {
-            "label": "_SubscriptionDefinitionID",
-            "apiName": "_SubscriptionDefinitionID",
-            "type": "Text",
-            "keyType": "pk",
-            "fid": "msub_subscriptiondefinitionid",
-            "required": true
-          },
-          {
-            "label": "_MobileNumber",
-            "apiName": "_MobileNumber",
-            "type": "Text",
-            "keyType": "fqk",
-            "fid": "msub_mobilenumber",
-            "required": true
-          },
-          {
-            "label": "_OptOutStatusID",
-            "apiName": "_OptOutStatusID",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_optoutstatusid"
-          },
-          {
-            "label": "_OptOutMethodID",
-            "apiName": "_OptOutMethodID",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_optoutmethodid"
-          },
-          {
-            "label": "_OptOutDate",
-            "apiName": "_OptOutDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "msub_optoutdate"
-          },
-          {
-            "label": "_OptInStatusID",
-            "apiName": "_OptInStatusID",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_optinstatusid",
-            "required": true
-          },
-          {
-            "label": "_OptInMethodID",
-            "apiName": "_OptInMethodID",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_optinmethodid"
-          },
-          {
-            "label": "_OptInDate",
-            "apiName": "_OptInDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "msub_optindate"
-          },
-          {
-            "label": "_Source",
-            "apiName": "_Source",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_source"
-          },
-          {
-            "label": "_CreatedDate",
-            "apiName": "_CreatedDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "msub_createddate",
-            "required": true
-          },
-          {
-            "label": "_CreatedBy",
-            "apiName": "_CreatedBy",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_createdby"
-          },
-          {
-            "label": "_ModifiedDate",
-            "apiName": "_ModifiedDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "msub_modifieddate",
-            "required": true
-          },
-          {
-            "label": "_ModifiedBy",
-            "apiName": "_ModifiedBy",
-            "type": "Text",
-            "keyType": null,
-            "fid": "msub_modifiedby"
-          }
-        ],
-        "position": {
-          "x": 620,
-          "y": 236
-        },
-        "id": "obj-msub",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_MobileSubscription"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-subs"
       },
       {
         "type": "standard.Link",
+        "id": "rel-0",
+        "z": 3000,
         "source": {
-          "id": "obj-ma",
-          "port": "field-left-ma_mobilenumber"
-        },
-        "target": {
           "id": "obj-msub",
-          "port": "field-right-msub_mobilenumber"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-ma-obj-msub-0",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-ma",
-          "port": "field-left-ma_mobilenumber"
+          "port": "field-left-msub_mobilenumber"
         },
         "target": {
-          "id": "obj-und",
-          "port": "field-right-und_mobilenumber"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-ma-obj-und-1",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 2 0 a 5 5 0 1 1 -10 0 a 5 5 0 1 1 10 0 Z M -8 0 L -12 0 M -12 -8 L -12 8",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
           "id": "obj-ma",
           "port": "field-right-ma_mobilenumber"
         },
-        "target": {
-          "id": "obj-ssms",
-          "port": "field-left-ssms_mobilenumber"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-ma-obj-ssms-2",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -1230,19 +1071,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
+              "fill": "none",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#A06F03",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1251,130 +1092,142 @@
       },
       {
         "type": "standard.Link",
+        "id": "rel-1",
+        "z": 3000,
         "source": {
-          "id": "obj-ma",
-          "port": "field-right-ma_mobilenumber"
-        },
-        "target": {
           "id": "obj-slog",
           "port": "field-left-slog_mobilenumber"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-ma-obj-slog-3",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
+        "target": {
           "id": "obj-ma",
           "port": "field-right-ma_mobilenumber"
         },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-2",
+        "z": 3000,
+        "source": {
+          "id": "obj-ssms",
+          "port": "field-left-ssms_mobilenumber"
+        },
         "target": {
+          "id": "obj-ma",
+          "port": "field-right-ma_mobilenumber"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-3",
+        "z": 3000,
+        "source": {
+          "id": "obj-und",
+          "port": "field-left-und_mobilenumber"
+        },
+        "target": {
+          "id": "obj-ma",
+          "port": "field-right-ma_mobilenumber"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 2 0 a 5 5 0 1 1 -10 0 a 5 5 0 1 1 10 0 Z M -8 0 L -12 0 M -12 -8 L -12 8",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-4",
+        "z": 3000,
+        "source": {
           "id": "obj-smt",
           "port": "field-left-smt_mobile"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
+        "target": {
+          "id": "obj-ma",
+          "port": "field-right-ma_mobilenumber"
         },
-        "id": "rel-obj-ma-obj-smt-4",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -1386,19 +1239,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
+              "fill": "none",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#A06F03",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1407,208 +1260,16 @@
       },
       {
         "type": "standard.Link",
+        "id": "rel-5",
+        "z": 3000,
         "source": {
-          "id": "obj-sub",
-          "port": "field-left-sub_subscriberid"
-        },
-        "target": {
-          "id": "obj-ssms",
-          "port": "field-right-ssms_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-sub-obj-ssms-5",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#da4e55",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#da4e55",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#da4e55",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "port": "field-left-sub_subscriberid"
-        },
-        "target": {
-          "id": "obj-smt",
-          "port": "field-right-smt_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-obj-sub-obj-smt-6",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#DA4E55",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#DA4E55",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#DA4E55",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "port": "field-left-sub_subscriberkey"
-        },
-        "target": {
           "id": "obj-slog",
           "port": "field-right-slog_subscriberkey"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberkey"
         },
-        "id": "rel-obj-sub-obj-slog-7",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -1620,19 +1281,103 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
+            "stroke": "#B652A7",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
+              "fill": "none",
+              "stroke": "#B652A7",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#1d73c9",
+              "stroke": "#B652A7",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-6",
+        "z": 3000,
+        "source": {
+          "id": "obj-ssms",
+          "port": "field-right-ssms_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-7",
+        "z": 3000,
+        "source": {
+          "id": "obj-smt",
+          "port": "field-right-smt_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1642,10 +1387,10 @@
     ]
   },
   "viewport": {
-    "zoom": 0.8014978170394897,
+    "zoom": 0.4,
     "translate": {
-      "tx": -66.28163242340054,
-      "ty": 172.9734544754033
+      "tx": 40,
+      "ty": 40
     }
   }
 }

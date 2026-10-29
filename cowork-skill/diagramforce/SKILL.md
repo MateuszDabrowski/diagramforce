@@ -212,7 +212,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.6",
+  "appVersion": "1.26.7",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
@@ -553,9 +553,8 @@ Two things to tell the user when you hand it over:
   Data Mapping section prescribes it.
 - **Formula mappings have no source field** (153 of 153 in the org this was built against), so each source
   object that has them gets a **"&lt;name&gt; Formulas"** companion card, feeding real
-  `mappingType: "Formula"` links. That is the convention the official `data360-contact-mapping` template uses,
-  and it means the formula gets the connector's **F** badge plus the **Expression / Rule** column in the Table
-  view. A companion card is NOT an object in the org - say so when you hand the diagram over.
+  `mappingType: "Formula"` links. That gives the formula the connector's **F** badge plus the **Expression /
+  Rule** column in the Table view. A companion card is NOT an object in the org - say so when you hand the diagram over.
 - **The stream's origin is a details row ON the stream card, and only when you actually know it.** When you
   author by hand, follow the converter's fact-mode convention: the true source - object plus connector, e.g.
   "Source: Prospect (SalesforceDotCom_Home)", "Source: via &lt;connector&gt;" when only the pipe is known, or

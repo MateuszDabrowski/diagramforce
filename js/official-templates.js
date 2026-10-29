@@ -13,13 +13,13 @@
 // Offline: templates/*.json are SW-precached (sw.js), and the versioned cache name busts them on
 // every release/dev bump, so no `?v=` query is needed on the fetch.
 
-import { renderTemplateThumbnail } from './templates.js?v=1.26.6';
+import { renderTemplateThumbnail } from './templates.js?v=1.26.7';
 
 // ── Manifest (small; the cells are fetched lazily) ──────────────────────────
 const OFFICIAL_TEMPLATES = [
   {
     id: 'official-data360-contact-mapping',
-    shapes: 13,
+    shapes: 10,
     name: 'Data 360 Contact Mapping',
     description: 'Base Data 360 mapping of Contact data from Source, through DLO to DMO',
     diagramType: 'datamapping',
@@ -27,7 +27,7 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mce-email-data-views',
-    shapes: 11,
+    shapes: 14,
     name: 'MCE Email Data Views',
     description: 'Marketing Cloud Engagement data model for email channel System Data Views',
     diagramType: 'datamodel',
@@ -35,7 +35,7 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mce-mobile-data-views',
-    shapes: 7,
+    shapes: 10,
     name: 'MCE Mobile Data Views',
     description: 'Marketing Cloud Engagement data model for MobileConnect SMS channel System Data Views',
     diagramType: 'datamodel',
@@ -43,7 +43,7 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mcn-consent-data-model',
-    shapes: 25,
+    shapes: 27,
     name: 'MCN Consent Data Model',
     description: 'Marketing Cloud Next consent, subscription and engagement DMOs around the Unified Individual',
     diagramType: 'datamodel',
@@ -51,25 +51,25 @@ const OFFICIAL_TEMPLATES = [
   },
   {
     id: 'official-mcn-email-data-mapping',
-    shapes: 30,
+    shapes: 20,
     name: 'MCN Email Data Mapping',
-    description: 'Marketing Cloud Next email channel mapping from sources through Data Streams and DLOs to DMOs',
+    description: 'Marketing Cloud Next email channel mapping from sources through DLOs to DMOs',
     diagramType: 'datamapping',
     file: 'templates/mcn-email-data-mapping.json',
   },
   {
     id: 'official-mcn-push-data-mapping',
-    shapes: 31,
+    shapes: 20,
     name: 'MCN Push Data Mapping',
-    description: 'Marketing Cloud Next mobile push mapping from sources through Data Streams and DLOs to DMOs',
+    description: 'Marketing Cloud Next mobile push mapping from the Mobile SDK streams through DLOs to DMOs',
     diagramType: 'datamapping',
     file: 'templates/mcn-push-data-mapping.json',
   },
   {
     id: 'official-mcn-sms-data-mapping',
-    shapes: 26,
+    shapes: 22,
     name: 'MCN SMS Data Mapping',
-    description: 'Marketing Cloud Next SMS and WhatsApp mapping from sources through Data Streams and DLOs to DMOs',
+    description: 'Marketing Cloud Next SMS and WhatsApp mapping from sources through DLOs to DMOs',
     diagramType: 'datamapping',
     file: 'templates/mcn-sms-data-mapping.json',
   },

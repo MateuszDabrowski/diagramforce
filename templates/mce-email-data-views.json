@@ -1,123 +1,95 @@
 {
   "version": 1,
-  "appVersion": "1.19.0",
-  "timestamp": 1782808044350,
+  "appVersion": "1.26.6",
+  "timestamp": "2026-10-28T00:00:00.000Z",
   "title": "MCE Email Data Views",
   "diagramType": "datamodel",
   "mappingMode": false,
   "graph": {
     "cells": [
       {
-        "type": "sf.DataObject",
+        "type": "sf.Zone",
         "size": {
-          "width": 280,
-          "height": 314
+          "width": 392,
+          "height": 954
         },
-        "z": 2000,
-        "objectName": "_ListSubscribers",
-        "headerColor": "#1D73C9",
-        "fields": [
-          {
-            "label": "AddedBy",
-            "apiName": "AddedBy",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_addedby",
-            "required": true
-          },
-          {
-            "label": "AddMethod",
-            "apiName": "AddMethod",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_addmethod",
-            "required": true
-          },
-          {
-            "label": "CreatedDate",
-            "apiName": "CreatedDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "f_createddate"
-          },
-          {
-            "label": "DateUnsubscribed",
-            "apiName": "DateUnsubscribed",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "f_dateunsubscribed"
-          },
-          {
-            "label": "EmailAddress",
-            "apiName": "EmailAddress",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_emailaddress"
-          },
-          {
-            "label": "ListID",
-            "apiName": "ListID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_listid",
-            "required": false
-          },
-          {
-            "label": "ListName",
-            "apiName": "ListName",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_listname"
-          },
-          {
-            "label": "ListType",
-            "apiName": "ListType",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_listtype",
-            "required": true
-          },
-          {
-            "label": "Status",
-            "apiName": "Status",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_status"
-          },
-          {
-            "label": "SubscriberID",
-            "apiName": "SubscriberID",
-            "type": "Number",
-            "keyType": "fqk",
-            "fid": "f_subscriberid",
-            "required": true
-          },
-          {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_subscriberkey",
-            "required": true
-          },
-          {
-            "label": "SubscriberType",
-            "apiName": "SubscriberType",
-            "type": "Text",
-            "keyType": null,
-            "length": "",
-            "fid": "fkwwxka0"
-          }
-        ],
+        "z": 0,
         "position": {
-          "x": 1760,
-          "y": -333
+          "x": 4,
+          "y": 90
         },
-        "id": "obj-lst",
-        "keyFieldsOnly": false,
+        "id": "z-send",
+        "embeds": [
+          "obj-job"
+        ],
         "attrs": {
-          "headerLabel": {
-            "text": "_ListSubscribers"
+          "body": {
+            "fill": "rgba(160,111,3,0.04)",
+            "stroke": "#A06F03"
+          },
+          "label": {
+            "fill": "#A06F03",
+            "text": "Send"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 392,
+          "height": 2390
+        },
+        "z": 0,
+        "position": {
+          "x": 492,
+          "y": 90
+        },
+        "id": "z-track",
+        "embeds": [
+          "obj-sent",
+          "obj-open",
+          "obj-click",
+          "obj-bounce",
+          "obj-unsub",
+          "obj-compl"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(92,106,196,0.04)",
+            "stroke": "#5C6AC4"
+          },
+          "label": {
+            "fill": "#5C6AC4",
+            "text": "Tracking"
+          }
+        }
+      },
+      {
+        "type": "sf.Zone",
+        "size": {
+          "width": 832,
+          "height": 732
+        },
+        "z": 0,
+        "position": {
+          "x": 980,
+          "y": 90
+        },
+        "id": "z-subs",
+        "embeds": [
+          "obj-sub",
+          "obj-lst",
+          "obj-buu",
+          "obj-ea"
+        ],
+        "attrs": {
+          "body": {
+            "fill": "rgba(29,115,201,0.04)",
+            "stroke": "#1D73C9"
+          },
+          "label": {
+            "fill": "#1D73C9",
+            "text": "Subscribers"
           }
         }
       },
@@ -158,7 +130,6 @@
             "apiName": "AccountUserID",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "f0t4pmz6"
           },
           {
@@ -187,7 +158,6 @@
             "apiName": "PickupTime",
             "type": "DateTime",
             "keyType": null,
-            "length": "",
             "fid": "f7of2hsf"
           },
           {
@@ -202,7 +172,6 @@
             "apiName": "EventID",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fdlkyxh7"
           },
           {
@@ -232,7 +201,6 @@
             "apiName": "ModifiedBy",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "ffpx95cm"
           },
           {
@@ -240,7 +208,6 @@
             "apiName": "ModifiedDate",
             "type": "DateTime",
             "keyType": null,
-            "length": "",
             "fid": "flcs7jp5"
           },
           {
@@ -262,7 +229,6 @@
             "apiName": "IsWrapped",
             "type": "Boolean",
             "keyType": null,
-            "length": "",
             "fid": "fhit6xu8",
             "required": true
           },
@@ -271,7 +237,6 @@
             "apiName": "TestEmailAddr",
             "type": "Email",
             "keyType": null,
-            "length": "",
             "fid": "fx5bfv07"
           },
           {
@@ -287,7 +252,6 @@
             "apiName": "BccEmail",
             "type": "Email",
             "keyType": null,
-            "length": "",
             "fid": "f2rqauzr"
           },
           {
@@ -295,7 +259,6 @@
             "apiName": "OriginalSchedTime",
             "type": "DateTime",
             "keyType": null,
-            "length": "",
             "fid": "fx4rhjeg"
           },
           {
@@ -311,7 +274,6 @@
             "apiName": "CharacterSet",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fbd3s9t1"
           },
           {
@@ -319,7 +281,6 @@
             "apiName": "IPAddress",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "f7s8bq2l"
           },
           {
@@ -335,7 +296,6 @@
             "apiName": "SalesforceErrorSubscriberCount",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "fo3jzzft",
             "required": true
           },
@@ -352,7 +312,6 @@
             "apiName": "DynamicEmailSubject",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fce5oips"
           },
           {
@@ -360,7 +319,6 @@
             "apiName": "SuppressTracking",
             "type": "Boolean",
             "keyType": null,
-            "length": "",
             "fid": "fo6ikzlo",
             "required": true
           },
@@ -369,7 +327,6 @@
             "apiName": "SendClassificationType",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "f9avxs8m"
           },
           {
@@ -377,7 +334,6 @@
             "apiName": "SendClassification",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "ffc9iglq"
           },
           {
@@ -385,7 +341,6 @@
             "apiName": "ResolveLinksWithCurrentData",
             "type": "Boolean",
             "keyType": null,
-            "length": "",
             "fid": "flkuxz7o",
             "required": true
           },
@@ -394,7 +349,6 @@
             "apiName": "EmailSendDefinition",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "f64521kx"
           },
           {
@@ -402,7 +356,6 @@
             "apiName": "DeduplicateByEmail",
             "type": "Boolean",
             "keyType": null,
-            "length": "",
             "fid": "frqswthg",
             "required": true
           },
@@ -411,45 +364,34 @@
             "apiName": "TriggererSendDefinitionObjectID",
             "type": "Text",
             "keyType": null,
-            "length": "",
-            "fid": "fwb7v4vx",
-            "required": false
+            "fid": "fwb7v4vx"
           },
           {
             "label": "TriggeredSendCustomerKey",
             "apiName": "TriggeredSendCustomerKey",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "f6le7n1d"
           }
         ],
         "position": {
-          "x": 944,
-          "y": -333
+          "x": 60,
+          "y": 140
         },
         "id": "obj-job",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#A06F03"
-          },
-          "headerCover": {
-            "fill": "#A06F03"
-          },
-          "headerLabel": {
-            "text": "_Job"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-send"
       },
       {
         "type": "sf.DataObject",
         "size": {
           "width": 280,
-          "height": 534
+          "height": 292
         },
         "z": 2000,
-        "objectName": "_Bounce",
+        "objectName": "_Sent",
         "headerColor": "#5C6AC4",
         "fields": [
           {
@@ -465,8 +407,7 @@
             "apiName": "OYBAccountID",
             "type": "Number",
             "keyType": null,
-            "length": "",
-            "fid": "fgj9ii40"
+            "fid": "fnq181tu"
           },
           {
             "label": "JobID",
@@ -517,14 +458,6 @@
             "required": true
           },
           {
-            "label": "IsUnique",
-            "apiName": "IsUnique",
-            "type": "Boolean",
-            "keyType": null,
-            "fid": "f_isunique",
-            "required": true
-          },
-          {
             "label": "Domain",
             "apiName": "Domain",
             "type": "Text",
@@ -533,118 +466,29 @@
             "required": true
           },
           {
-            "label": "BounceCategoryID",
-            "apiName": "BounceCategoryID",
-            "type": "Number",
-            "keyType": null,
-            "length": "",
-            "fid": "f0gabij0",
-            "required": true
-          },
-          {
-            "label": "BounceCategory",
-            "apiName": "BounceCategory",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_bouncecategory"
-          },
-          {
-            "label": "BounceSubcategoryID",
-            "apiName": "BounceSubcategoryID",
-            "type": "Number",
-            "keyType": null,
-            "length": "",
-            "fid": "fs88m5il"
-          },
-          {
-            "label": "BounceSubcategory",
-            "apiName": "BounceSubcategory",
-            "type": "Text",
-            "keyType": null,
-            "length": "",
-            "fid": "faav55bo"
-          },
-          {
-            "label": "BounceTypeID",
-            "apiName": "BounceTypeID",
-            "type": "Number",
-            "keyType": null,
-            "length": "",
-            "fid": "fy8vvpbw",
-            "required": true
-          },
-          {
-            "label": "BounceType",
-            "apiName": "BounceType",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_bouncetype"
-          },
-          {
-            "label": "SMTPBounceReason",
-            "apiName": "SMTPBounceReason",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_smtpbouncereason"
-          },
-          {
-            "label": "SMTPMessage",
-            "apiName": "SMTPMessage",
-            "type": "Text",
-            "keyType": null,
-            "length": "",
-            "fid": "fdo0teff"
-          },
-          {
-            "label": "SMTPCode",
-            "apiName": "SMTPCode",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_smtpcode"
-          },
-          {
             "label": "TriggererSendDefinitionObjectID",
             "apiName": "TriggererSendDefinitionObjectID",
             "type": "Text",
             "keyType": null,
-            "length": "",
-            "fid": "f4od06h8"
+            "fid": "fl1lru8e"
           },
           {
             "label": "TriggeredSendCustomerKey",
             "apiName": "TriggeredSendCustomerKey",
             "type": "Text",
             "keyType": null,
-            "length": "",
-            "fid": "frtvq9uy"
-          },
-          {
-            "label": "IsFalseBounce",
-            "apiName": "IsFalseBounce",
-            "type": "Boolean",
-            "keyType": null,
-            "length": "",
-            "fid": "f6b9b12e",
-            "required": true
+            "fid": "fu6075q4"
           }
         ],
         "position": {
-          "x": 536,
-          "y": -333
+          "x": 548,
+          "y": 140
         },
-        "id": "obj-bounce",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_Bounce"
-          }
-        }
+        "id": "obj-sent",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -669,7 +513,6 @@
             "apiName": "OYBAccountID",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "fi54tr72"
           },
           {
@@ -740,7 +583,6 @@
             "apiName": "TriggererSendDefinitionObjectID",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fes9vcr3",
             "required": true
           },
@@ -749,28 +591,19 @@
             "apiName": "TriggeredSendCustomerKey",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fkx9vjf0",
             "required": true
           }
         ],
         "position": {
-          "x": 1352,
-          "y": 317
+          "x": 548,
+          "y": 480
         },
         "id": "obj-open",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_Open"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -795,7 +628,6 @@
             "apiName": "OYBAccountID",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "fz77ke0v"
           },
           {
@@ -888,7 +720,6 @@
             "apiName": "TriggererSendDefinitionObjectID",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "f1ixut7q"
           },
           {
@@ -896,27 +727,205 @@
             "apiName": "TriggeredSendCustomerKey",
             "type": "Text",
             "keyType": null,
-            "length": "",
             "fid": "fexinpq0"
           }
         ],
         "position": {
-          "x": 1352,
-          "y": 664
+          "x": 548,
+          "y": 842
         },
         "id": "obj-click",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 534
+        },
+        "z": 2000,
+        "objectName": "_Bounce",
+        "headerColor": "#5C6AC4",
+        "fields": [
+          {
+            "label": "AccountID",
+            "apiName": "AccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_accountid",
+            "required": true
           },
-          "headerCover": {
-            "fill": "#5C6AC4"
+          {
+            "label": "OYBAccountID",
+            "apiName": "OYBAccountID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "fgj9ii40"
           },
-          "headerLabel": {
-            "text": "_Click"
+          {
+            "label": "JobID",
+            "apiName": "JobID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_jobid",
+            "required": true
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid",
+            "required": true
+          },
+          {
+            "label": "BatchID",
+            "apiName": "BatchID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_batchid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "EventDate",
+            "apiName": "EventDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_eventdate",
+            "required": true
+          },
+          {
+            "label": "IsUnique",
+            "apiName": "IsUnique",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f_isunique",
+            "required": true
+          },
+          {
+            "label": "Domain",
+            "apiName": "Domain",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_domain",
+            "required": true
+          },
+          {
+            "label": "BounceCategoryID",
+            "apiName": "BounceCategoryID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f0gabij0",
+            "required": true
+          },
+          {
+            "label": "BounceCategory",
+            "apiName": "BounceCategory",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_bouncecategory"
+          },
+          {
+            "label": "BounceSubcategoryID",
+            "apiName": "BounceSubcategoryID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "fs88m5il"
+          },
+          {
+            "label": "BounceSubcategory",
+            "apiName": "BounceSubcategory",
+            "type": "Text",
+            "keyType": null,
+            "fid": "faav55bo"
+          },
+          {
+            "label": "BounceTypeID",
+            "apiName": "BounceTypeID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "fy8vvpbw",
+            "required": true
+          },
+          {
+            "label": "BounceType",
+            "apiName": "BounceType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_bouncetype"
+          },
+          {
+            "label": "SMTPBounceReason",
+            "apiName": "SMTPBounceReason",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_smtpbouncereason"
+          },
+          {
+            "label": "SMTPMessage",
+            "apiName": "SMTPMessage",
+            "type": "Text",
+            "keyType": null,
+            "fid": "fdo0teff"
+          },
+          {
+            "label": "SMTPCode",
+            "apiName": "SMTPCode",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_smtpcode"
+          },
+          {
+            "label": "TriggererSendDefinitionObjectID",
+            "apiName": "TriggererSendDefinitionObjectID",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f4od06h8"
+          },
+          {
+            "label": "TriggeredSendCustomerKey",
+            "apiName": "TriggeredSendCustomerKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "frtvq9uy"
+          },
+          {
+            "label": "IsFalseBounce",
+            "apiName": "IsFalseBounce",
+            "type": "Boolean",
+            "keyType": null,
+            "fid": "f6b9b12e",
+            "required": true
           }
-        }
+        ],
+        "position": {
+          "x": 548,
+          "y": 1270
+        },
+        "id": "obj-bounce",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -941,7 +950,6 @@
             "apiName": "OYBAccountID",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "ff9efbw3"
           },
           {
@@ -1010,22 +1018,14 @@
           }
         ],
         "position": {
-          "x": 536,
-          "y": 237
+          "x": 548,
+          "y": 1852
         },
         "id": "obj-unsub",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_Unsubscribe"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -1050,7 +1050,6 @@
             "apiName": "OYBAccountID",
             "type": "Number",
             "keyType": null,
-            "length": "",
             "fid": "fy9icbey"
           },
           {
@@ -1119,200 +1118,14 @@
           }
         ],
         "position": {
-          "x": 536,
-          "y": 543
+          "x": 548,
+          "y": 2170
         },
         "id": "obj-compl",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_Complaint"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 292
-        },
-        "z": 2000,
-        "objectName": "_Sent",
-        "headerColor": "#5C6AC4",
-        "fields": [
-          {
-            "label": "AccountID",
-            "apiName": "AccountID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_accountid",
-            "required": true
-          },
-          {
-            "label": "OYBAccountID",
-            "apiName": "OYBAccountID",
-            "type": "Number",
-            "keyType": null,
-            "length": "",
-            "fid": "fnq181tu"
-          },
-          {
-            "label": "JobID",
-            "apiName": "JobID",
-            "type": "Number",
-            "keyType": "fqk",
-            "fid": "f_jobid",
-            "required": true
-          },
-          {
-            "label": "ListID",
-            "apiName": "ListID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_listid",
-            "required": true
-          },
-          {
-            "label": "BatchID",
-            "apiName": "BatchID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_batchid",
-            "required": true
-          },
-          {
-            "label": "SubscriberID",
-            "apiName": "SubscriberID",
-            "type": "Number",
-            "keyType": "fqk",
-            "fid": "f_subscriberid",
-            "required": true
-          },
-          {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_subscriberkey",
-            "required": true
-          },
-          {
-            "label": "EventDate",
-            "apiName": "EventDate",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "f_eventdate",
-            "required": true
-          },
-          {
-            "label": "Domain",
-            "apiName": "Domain",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_domain",
-            "required": true
-          },
-          {
-            "label": "TriggererSendDefinitionObjectID",
-            "apiName": "TriggererSendDefinitionObjectID",
-            "type": "Text",
-            "keyType": null,
-            "length": "",
-            "fid": "fl1lru8e"
-          },
-          {
-            "label": "TriggeredSendCustomerKey",
-            "apiName": "TriggeredSendCustomerKey",
-            "type": "Text",
-            "keyType": null,
-            "length": "",
-            "fid": "fu6075q4"
-          }
-        ],
-        "position": {
-          "x": 1352,
-          "y": -8
-        },
-        "id": "obj-sent",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "header": {
-            "fill": "#5C6AC4"
-          },
-          "headerCover": {
-            "fill": "#5C6AC4"
-          },
-          "headerLabel": {
-            "text": "_Sent"
-          }
-        }
-      },
-      {
-        "type": "sf.DataObject",
-        "size": {
-          "width": 280,
-          "height": 160
-        },
-        "z": 2000,
-        "objectName": "_BusinessUnitUnsubscribes",
-        "headerColor": "#1D73C9",
-        "fields": [
-          {
-            "label": "BusinessUnitID",
-            "apiName": "BusinessUnitID",
-            "type": "Number",
-            "keyType": null,
-            "fid": "f_businessunitid",
-            "required": true
-          },
-          {
-            "label": "SubscriberID",
-            "apiName": "SubscriberID",
-            "type": "Number",
-            "keyType": "fqk",
-            "fid": "f_subscriberid",
-            "required": true
-          },
-          {
-            "label": "SubscriberKey",
-            "apiName": "SubscriberKey",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_subscriberkey",
-            "required": true
-          },
-          {
-            "label": "UnsubDateUTC",
-            "apiName": "UnsubDateUTC",
-            "type": "DateTime",
-            "keyType": null,
-            "fid": "f_unsubdateutc"
-          },
-          {
-            "label": "UnsubReason",
-            "apiName": "UnsubReason",
-            "type": "Text",
-            "keyType": null,
-            "fid": "f_unsubreason"
-          }
-        ],
-        "position": {
-          "x": 1760,
-          "y": 15
-        },
-        "id": "obj-buu",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "headerLabel": {
-            "text": "_BusinessUnitUnsubscribes"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-track"
       },
       {
         "type": "sf.DataObject",
@@ -1408,24 +1221,191 @@
           }
         ],
         "position": {
-          "x": 1352,
-          "y": -333
+          "x": 1036,
+          "y": 140
         },
         "id": "obj-sub",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "headerLabel": {
-            "text": "_Subscribers"
-          }
-        }
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-subs"
       },
       {
         "type": "sf.DataObject",
         "size": {
-          "width": 260,
+          "width": 280,
+          "height": 314
+        },
+        "z": 2000,
+        "objectName": "_ListSubscribers",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "AddedBy",
+            "apiName": "AddedBy",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_addedby",
+            "required": true
+          },
+          {
+            "label": "AddMethod",
+            "apiName": "AddMethod",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_addmethod",
+            "required": true
+          },
+          {
+            "label": "CreatedDate",
+            "apiName": "CreatedDate",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_createddate"
+          },
+          {
+            "label": "DateUnsubscribed",
+            "apiName": "DateUnsubscribed",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_dateunsubscribed"
+          },
+          {
+            "label": "EmailAddress",
+            "apiName": "EmailAddress",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_emailaddress"
+          },
+          {
+            "label": "ListID",
+            "apiName": "ListID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_listid"
+          },
+          {
+            "label": "ListName",
+            "apiName": "ListName",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_listname"
+          },
+          {
+            "label": "ListType",
+            "apiName": "ListType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_listtype",
+            "required": true
+          },
+          {
+            "label": "Status",
+            "apiName": "Status",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_status"
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "SubscriberType",
+            "apiName": "SubscriberType",
+            "type": "Text",
+            "keyType": null,
+            "fid": "fkwwxka0"
+          }
+        ],
+        "position": {
+          "x": 1476,
+          "y": 140
+        },
+        "id": "obj-lst",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-subs"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
+          "height": 160
+        },
+        "z": 2000,
+        "objectName": "_BusinessUnitUnsubscribes",
+        "headerColor": "#1D73C9",
+        "fields": [
+          {
+            "label": "BusinessUnitID",
+            "apiName": "BusinessUnitID",
+            "type": "Number",
+            "keyType": null,
+            "fid": "f_businessunitid",
+            "required": true
+          },
+          {
+            "label": "SubscriberID",
+            "apiName": "SubscriberID",
+            "type": "Number",
+            "keyType": "fqk",
+            "fid": "f_subscriberid",
+            "required": true
+          },
+          {
+            "label": "SubscriberKey",
+            "apiName": "SubscriberKey",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_subscriberkey",
+            "required": true
+          },
+          {
+            "label": "UnsubDateUTC",
+            "apiName": "UnsubDateUTC",
+            "type": "DateTime",
+            "keyType": null,
+            "fid": "f_unsubdateutc"
+          },
+          {
+            "label": "UnsubReason",
+            "apiName": "UnsubReason",
+            "type": "Text",
+            "keyType": null,
+            "fid": "f_unsubreason"
+          }
+        ],
+        "position": {
+          "x": 1476,
+          "y": 502
+        },
+        "id": "obj-buu",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-subs"
+      },
+      {
+        "type": "sf.DataObject",
+        "size": {
+          "width": 280,
           "height": 72
         },
-        "z": 2001,
+        "z": 2000,
         "objectName": "_EnterpriseAttribute",
         "headerColor": "#1D73C9",
         "fields": [
@@ -1434,148 +1414,32 @@
             "apiName": "_SubscriberID",
             "type": "Number",
             "keyType": "pk",
-            "fid": "fex4pev5",
+            "fid": "ea_subscriberid",
             "required": true
           }
         ],
         "position": {
-          "x": 1362,
-          "y": -460
+          "x": 1476,
+          "y": 710
         },
-        "id": "878e3cd5-471b-430b-a6e0-d600530786d3",
-        "keyFieldsOnly": false,
-        "attrs": {
-          "headerLabel": {
-            "text": "_EnterpriseAttribute"
-          }
-        }
+        "id": "obj-ea",
+        "showLabels": true,
+        "showFieldLengths": false,
+        "collapsed": false,
+        "parent": "z-subs"
       },
       {
         "type": "standard.Link",
+        "id": "rel-0",
+        "z": 3000,
         "source": {
-          "id": "obj-job",
-          "port": "field-right-f_jobid"
-        },
-        "target": {
           "id": "obj-sent",
           "port": "field-left-f_jobid"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-sent-0",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
+        "target": {
           "id": "obj-job",
           "port": "field-right-f_jobid"
         },
-        "target": {
-          "id": "obj-open",
-          "port": "field-left-f_jobid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-open-1",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -1587,19 +1451,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
+              "fill": "none",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#A06F03",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1608,364 +1472,478 @@
       },
       {
         "type": "standard.Link",
+        "id": "rel-1",
+        "z": 3000,
         "source": {
-          "id": "obj-job",
-          "port": "field-right-f_jobid"
-        },
-        "target": {
-          "id": "obj-click",
-          "port": "field-left-f_jobid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-click-2",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-job",
-          "port": "field-left-f_jobid"
-        },
-        "target": {
-          "id": "obj-bounce",
-          "port": "field-right-f_jobid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-bounce-3",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-job",
-          "port": "field-left-f_jobid"
-        },
-        "target": {
-          "id": "obj-compl",
-          "port": "field-right-f_jobid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-compl-4",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-job",
-          "port": "field-left-f_jobid"
-        },
-        "target": {
-          "id": "obj-unsub",
-          "port": "field-right-f_jobid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-job-unsub-5",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#A06F03",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#A06F03",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
+          "id": "obj-sent",
           "port": "field-right-f_subscriberid"
         },
         "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-2",
+        "z": 3000,
+        "source": {
+          "id": "obj-open",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-3",
+        "z": 3000,
+        "source": {
+          "id": "obj-open",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-4",
+        "z": 3000,
+        "source": {
+          "id": "obj-click",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-5",
+        "z": 3000,
+        "source": {
+          "id": "obj-click",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-6",
+        "z": 3000,
+        "source": {
+          "id": "obj-bounce",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-7",
+        "z": 3000,
+        "source": {
+          "id": "obj-bounce",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-8",
+        "z": 3000,
+        "source": {
+          "id": "obj-unsub",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-9",
+        "z": 3000,
+        "source": {
+          "id": "obj-unsub",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-10",
+        "z": 3000,
+        "source": {
+          "id": "obj-compl",
+          "port": "field-left-f_jobid"
+        },
+        "target": {
+          "id": "obj-job",
+          "port": "field-right-f_jobid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#1D73C9",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-11",
+        "z": 3000,
+        "source": {
+          "id": "obj-compl",
+          "port": "field-right-f_subscriberid"
+        },
+        "target": {
+          "id": "obj-sub",
+          "port": "field-left-f_subscriberid"
+        },
+        "router": {
+          "name": "sfManhattan"
+        },
+        "connector": {
+          "name": "rounded",
+          "args": {
+            "radius": 8
+          }
+        },
+        "attrs": {
+          "line": {
+            "stroke": "#008B46",
+            "sourceMarker": {
+              "type": "path",
+              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            },
+            "targetMarker": {
+              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
+              "fill": "none",
+              "stroke": "#008B46",
+              "stroke-width": 2,
+              "stroke-dasharray": "none"
+            }
+          }
+        }
+      },
+      {
+        "type": "standard.Link",
+        "id": "rel-12",
+        "z": 3000,
+        "source": {
           "id": "obj-lst",
           "port": "field-left-f_subscriberid"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
+        "target": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
         },
-        "id": "rel-sub-lst-12",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -1977,19 +1955,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
+              "fill": "none",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#1d73c9",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -1998,52 +1976,16 @@
       },
       {
         "type": "standard.Link",
+        "id": "rel-13",
+        "z": 3000,
         "source": {
-          "id": "obj-sub",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
           "id": "obj-buu",
           "port": "field-left-f_subscriberid"
         },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
+        "target": {
+          "id": "obj-sub",
+          "port": "field-right-f_subscriberid"
         },
-        "id": "rel-sub-buu-13",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -2055,19 +1997,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
+            "stroke": "#1D73C9",
+            "sourceMarker": {
+              "type": "path",
               "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
+              "fill": "none",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
+            "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#1d73c9",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -2076,133 +2018,16 @@
       },
       {
         "type": "standard.Link",
+        "id": "rel-14",
+        "z": 3000,
         "source": {
+          "id": "obj-ea",
+          "port": "field-left-ea_subscriberid"
+        },
+        "target": {
           "id": "obj-sub",
           "port": "field-right-f_subscriberid"
         },
-        "target": {
-          "id": "obj-sent",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-sent-6",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "vertices": [],
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "obj-open",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-open-7",
-        "z": 3001,
         "router": {
           "name": "sfManhattan"
         },
@@ -2214,424 +2039,19 @@
         },
         "attrs": {
           "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
+            "stroke": "#1D73C9",
             "sourceMarker": {
               "type": "path",
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "obj-click",
-          "port": "field-right-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-click-8",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "obj-compl",
-          "magnet": "rect",
-          "port": "field-left-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-compl-10",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "vertices": [
-          {
-            "x": 504,
-            "y": -352
-          }
-        ],
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "obj-unsub",
-          "magnet": "rect",
-          "port": "field-left-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-unsub-11",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "obj-bounce",
-          "magnet": "rect",
-          "port": "field-left-f_subscriberid"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "id": "rel-sub-bounce-9",
-        "z": 3001,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
-            "targetMarker": {
-              "d": "M 4 0 a 5 5 0 1 1 10 0 a 5 5 0 1 1 -10 0 Z M -12 -8 L 0 0 M 0 0 L -12 8 M 0 0 L -12 0",
-              "fill": "var(--bg-canvas, #1A1A1A)",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            }
-          }
-        }
-      },
-      {
-        "type": "standard.Link",
-        "source": {
-          "id": "obj-sub",
-          "magnet": "rect",
-          "port": "field-right-f_subscriberid"
-        },
-        "target": {
-          "id": "878e3cd5-471b-430b-a6e0-d600530786d3",
-          "magnet": "rect",
-          "port": "field-left-fex4pev5"
-        },
-        "defaultLabel": {
-          "markup": [
-            {
-              "tagName": "rect",
-              "selector": "body"
-            },
-            {
-              "tagName": "text",
-              "selector": "text"
-            }
-          ],
-          "attrs": {
-            "text": {
-              "fill": "#888888",
-              "fontSize": 13,
-              "fontWeight": 600,
-              "fontFamily": "system-ui, -apple-system, sans-serif",
-              "textAnchor": "middle",
-              "textVerticalAnchor": "middle"
-            },
-            "body": {
-              "ref": "text",
-              "refWidth": 12,
-              "refHeight": 4,
-              "refX": -6,
-              "refY": -2,
-              "fill": "var(--bg-canvas, #FFFFFF)",
-              "stroke": "none",
-              "rx": 2,
-              "ry": 2
-            }
-          },
-          "position": {
-            "distance": 0.5
-          }
-        },
-        "z": 3002,
-        "router": {
-          "name": "sfManhattan"
-        },
-        "connector": {
-          "name": "rounded",
-          "args": {
-            "radius": 8
-          }
-        },
-        "id": "6e91679f-70ff-4fba-844d-114b97f37efa",
-        "attrs": {
-          "line": {
-            "stroke": "#1d73c9",
             "targetMarker": {
               "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
               "fill": "none",
-              "stroke": "#1d73c9",
-              "stroke-width": 2,
-              "stroke-dasharray": "none"
-            },
-            "sourceMarker": {
-              "type": "path",
-              "d": "M -12 -8 L -12 8 M -12 0 L 0 0",
-              "fill": "none",
-              "stroke": "#1d73c9",
+              "stroke": "#1D73C9",
               "stroke-width": 2,
               "stroke-dasharray": "none"
             }
@@ -2641,10 +2061,10 @@
     ]
   },
   "viewport": {
-    "zoom": 0.7623575842132796,
+    "zoom": 0.4,
     "translate": {
-      "tx": -71.82164184392514,
-      "ty": 342.0210316839919
+      "tx": 40,
+      "ty": 40
     }
   }
 }

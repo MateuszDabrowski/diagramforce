@@ -1,5 +1,5 @@
 // Flow-animation overlays (CLEANUP S4) — Safari-safe marker-less link clones that animate the dash. The facade calls start/stopFlowAnimation from the Display toggle; the clone and in-place copy are line-style.js's.
-import { cloneOverlay, copyOverlayAttrs } from '../canvas/line-style.js?v=1.26.6';
+import { cloneOverlay, copyOverlayAttrs } from '../canvas/line-style.js?v=1.26.7';
 
 // ── Flow animation overlays ──────────────────────────────────────
 // Safari propagates stroke-dasharray into SVG <marker> content at

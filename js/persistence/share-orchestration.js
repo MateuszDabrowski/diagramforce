@@ -5,21 +5,21 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.26.6';
-import { diagramEmbedsImages } from '../image-component.js?v=1.26.6';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.6';
-import { escHtml, formatBytes } from '../util.js?v=1.26.6';
-import { sharePillHtml } from '../storage-ui.js?v=1.26.6';
-import { pctx } from './context.js?v=1.26.6';
-import { compactGraphForSave, loadWarning } from './json-pipeline.js?v=1.26.6';   // Copy JSON's compaction; a load's skip warning
-import { buildSingleDiagram } from './storage.js?v=1.26.6';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.26.6';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.26.6';
-import { pickerBlockedInSlot, SLOT_PICKER_NOTE } from './host-env.js?v=1.26.6';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.26.6';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.6';
-import { noteError } from '../diagnostics.js?v=1.26.6';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.6';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.26.7';
+import { diagramEmbedsImages } from '../image-component.js?v=1.26.7';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.7';
+import { escHtml, formatBytes } from '../util.js?v=1.26.7';
+import { sharePillHtml } from '../storage-ui.js?v=1.26.7';
+import { pctx } from './context.js?v=1.26.7';
+import { compactGraphForSave, loadWarning } from './json-pipeline.js?v=1.26.7';   // Copy JSON's compaction; a load's skip warning
+import { buildSingleDiagram } from './storage.js?v=1.26.7';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.26.7';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.26.7';
+import { pickerBlockedInSlot, SLOT_PICKER_NOTE } from './host-env.js?v=1.26.7';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.26.7';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.7';
+import { noteError } from '../diagnostics.js?v=1.26.7';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.7';
 
 /** Flash "✓ Copied!" on a Share pane copy button, then restore its label. The label is read once and kept, and a
  *  click inside the window restarts the flash: each click used to save the CURRENT text as the label to restore, so

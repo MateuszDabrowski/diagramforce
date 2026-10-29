@@ -3,13 +3,13 @@
 // (finishStandardProps from render-core), reading graph/paper/selection + the panel DOM refs + the showProperties
 // dispatch via prctx at CALL time; never imports the facade back. The facade's showProperties() dispatch imports
 // these four back, and its multi-select Lifeline section imports undoableLifelineOp (re-exported here).
-import { prctx } from './context.js?v=1.26.6';
+import { prctx } from './context.js?v=1.26.7';
 // Port rebuilds and the Actor lifeline toggle rewrite `ports`, which history does not record: undoableLifelineOp
 // (shared with Sequence Auto Layout) runs them as one snapshot command that also restores deleted messages.
-import { undoableLifelineOp } from '../canvas/lifeline-undo.js?v=1.26.6';
+import { undoableLifelineOp } from '../canvas/lifeline-undo.js?v=1.26.7';
 export { undoableLifelineOp };
-import { finishStandardProps } from './render-core.js?v=1.26.6';
-import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.26.6';
+import { finishStandardProps } from './render-core.js?v=1.26.7';
+import { addColor, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.26.7';
 
 export function renderSequenceParticipantProps(cell) {
   // Content

@@ -293,7 +293,9 @@ export function buildDiagram(maps, opts = {}) {
         // row per formula-populated target field, with real `mappingType: 'Formula'` links running out of it.
         // That is the sanctioned convention, so follow it rather than inventing somewhere else to put the
         // expression: it earns the 'F' badge on the canvas and lands the formula in the table's
-        // **Expression / Rule** column, which is the column that means this.
+        // **Expression / Rule** column, which is the column that means this. (The template itself, rebuilt from
+        // the SDO's REST mappings on 2026-10-28, shows no Data Stream cards by owner call; a formula map read from
+        // stream metadata still has no source field, so the converter keeps the companion card.)
         // (The template leaves `expressionRule` unset; the retrieve gives us the actual formula text, so
         // setting it is strictly better - it also drives the badge's hover tooltip.)
         // WHERE the companion lives: an ingest-side companion (source object -> DLO) goes in the DATA STREAM

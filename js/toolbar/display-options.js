@@ -1,8 +1,8 @@
 // Display-menu options (CLEANUP S4) — view mode (Diagram/Table), the per-flag toggle labels + dot indicator, and the Gantt/Sequence display settings. Reads tctx.modules + canvas/components/util inside function bodies.
-import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.26.6';
-import { btn, tctx } from './context.js?v=1.26.6';
-import { axisEndDate } from '../gantt-scale.js?v=1.26.6';
-import { growTimelineToFitDates } from '../gantt-layout.js?v=1.26.6';
+import { isAutoSizingEnabled, isConnectorGroupingEnabled, isCrossingBumpsEnabled, isFocusDimmingEnabled, isGridVisible } from '../canvas.js?v=1.26.7';
+import { btn, tctx } from './context.js?v=1.26.7';
+import { axisEndDate } from '../gantt-scale.js?v=1.26.7';
+import { growTimelineToFitDates } from '../gantt-layout.js?v=1.26.7';
 
 let _stencilWasOpenBeforeTable = false;   // restore stencil state when leaving Table mode
 

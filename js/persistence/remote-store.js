@@ -15,15 +15,15 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.6';
-import { pctx } from './context.js?v=1.26.6';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.6';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.6';
-import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, tokenLoginHint, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.6';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.6';
-import { noteError } from '../diagnostics.js?v=1.26.6';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.26.6';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.6';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.7';
+import { pctx } from './context.js?v=1.26.7';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.7';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText } from './drive-sync-logic.js?v=1.26.7';
+import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, tokenLoginHint, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.7';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.7';
+import { noteError } from '../diagnostics.js?v=1.26.7';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.26.7';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.7';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses
