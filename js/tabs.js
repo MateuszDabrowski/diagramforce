@@ -1,29 +1,29 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.7';
-import { tbctx } from './tabs/context.js?v=1.26.7';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.7';
-import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.7';
-import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.7';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.7';
+import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.9';
+import { tbctx } from './tabs/context.js?v=1.26.9';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.9';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.9';
+import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.9';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.9';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { reofferIfStranded };   // re-export: the Load Manager's Google Picker handoff re-offers New Diagram when it ends with no tab
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.7';
-import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.7';
-import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.7';
-import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.7';
-import { offerJoinColours } from './tabs/join-colours.js?v=1.26.7';
-import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.7';
-import { wireMenuDismiss } from './menu.js?v=1.26.7';
-import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.7';
-import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.7';
-import { getPalette } from './brand-palette.js?v=1.26.7';
-import { getAllIcons } from './icons.js?v=1.26.7';
-import { noteError } from './diagnostics.js?v=1.26.7';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.9';
+import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.9';
+import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.9';
+import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.9';
+import { offerJoinColours } from './tabs/join-colours.js?v=1.26.9';
+import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.9';
+import { wireMenuDismiss } from './menu.js?v=1.26.9';
+import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.9';
+import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.9';
+import { getPalette } from './brand-palette.js?v=1.26.9';
+import { getAllIcons } from './icons.js?v=1.26.9';
+import { noteError } from './diagnostics.js?v=1.26.9';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;
@@ -242,6 +242,7 @@ export function init(_graph, _paper, _canvas, _selection, _history, _persistence
     t.driveViewEdited = !!meta.driveViewEdited;   // a master-less view share the user edited (the sweep's Mode C guard)
     t.drivePendingRename = !!meta.drivePendingRename;   // renamed while signed out: the Drive file follows at the next sweep
     t.driveName = meta.driveName || null;   // the file's own name while this tab shows another ("Plan 2"): saves carry it (RA2)
+    t.driveHoldVersion = meta.driveHoldVersion || null;   // its graph lost parts of a newer release's file: no Drive writes
     scheduleSaveTabs();   // debounced: a sign-in sweep sets this for every tab in quick succession
     // Only re-render the tab bar when the share state actually flipped (a new copy shared, a source
     // gained edit rights), NOT on every routine Drive save — so the glyph appears live without flicker.
@@ -455,7 +456,9 @@ function importDiagramAsTab(name, type, graphJSON, viewport, mappingMode, { fit 
   if (importedTab) importedTab.lastModifiedAt = Date.now();
   // Item 1.3: re-link a loaded archive to its Drive master + restore the shares it fanned out to. Runs after the
   // tab exists so adopt mirrors the meta onto the new tab object (chips + session); reconcile verifies on connect.
-  if (driveMeta && (driveMeta.driveFileId || driveMeta.driveSharedSource || driveMeta.driveLocalOnly)) {
+  // A thinned newer-release file arrives with only `driveHoldVersion` (json-pipeline holdMeta): no Drive write until it is
+  // whole again (B2 follow-up). Applied here, before the next frame's open-boundary save below.
+  if (driveMeta && (driveMeta.driveFileId || driveMeta.driveSharedSource || driveMeta.driveLocalOnly || driveMeta.driveHoldVersion)) {
     persistenceModule.adoptDriveMetaIntoTab?.(id, driveMeta);
   }
   // #7: a single diagram saved/exported from a tab GROUP carries its group meta - recreate-or-REJOIN that group
@@ -730,6 +733,8 @@ function archiveTabToBrowser(id) {
       driveViewEdited: !!tab.driveViewEdited,
       drivePendingRename: !!tab.drivePendingRename,   // a rename Drive has not got yet follows the reopened archive
       driveName: tab.driveName || null,   // the file's own name, which a reopened "Plan 2" keeps saving under (RA2)
+      // A held tab's archive is the same thinned graph: reopened, it must hold its Drive saves again (B2 follow-up).
+      driveHoldVersion: tab.driveHoldVersion || null,
     };
     write = () => localStorage.setItem('sfdiag::save::' + name, JSON.stringify(data));
     write();
@@ -1500,7 +1505,9 @@ function openTabGroupMenu(anchorEl, tab) {
       saveCurrentTabState();   // flush the active tab's live graph so a clone of the ACTIVE tab is current
       const cells = (tab.id === tbctx.activeTabId ? graph.toJSON().cells : getTabGraphJSON(tab.id)?.cells) || [];
       const cloneCells = JSON.parse(JSON.stringify(cells));   // separate graph — never share cell object refs
-      importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode, { offerColours: false });
+      // A clone of a held tab is the same thinned graph: it holds its Drive saves too (B2 follow-up).
+      importDiagramAsTab(`${tab.name} (clone)`, tab.diagramType, { cells: cloneCells }, null, tab.mappingMode,
+        { offerColours: false, driveMeta: tab.driveHoldVersion ? { driveHoldVersion: tab.driveHoldVersion } : null });
       saveTabs();
     }, { iconSvg: CLONE_GLYPH }));
     // Compare — diff the ACTIVE tab against THIS (right-clicked) tab, in place: stay on the open diagram and see

@@ -442,8 +442,8 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   });
 
   // ── Relationship links ─────────────────────────────────────────────────────
-  // FIELD-to-OBJECT. The MANY end anchors on the child's actual foreign-key ROW (`field-left-<fid>` /
-  // `field-right-<fid>`); the ONE end stays on the parent's object-level `er-left` / `er-right`.
+  // FIELD-to-FIELD. The MANY end anchors on the child's actual foreign-key ROW (`field-left-<fid>` /
+  // `field-right-<fid>`); the ONE end on the parent's KEY row, the field `to` names.
   //
   // Both ends were object-level until 1.22.0, and that is why an ERD's connectors bundled: every relationship
   // between one pair of cards resolved to the SAME two anchor points, so N relationships painted as one thick
@@ -451,14 +451,19 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
   // Anchoring the child end on its own row gives each relationship its own start and answers the question the
   // reader is actually asking - WHICH lookup is this? - without a label.
   //
-  // The parent end deliberately stays object-level. It is the object's identity that is being pointed at, and
-  // 47 of those 126 relationships land on `User.Id`: moving that fan-in from the header to row 0 relocates the
-  // pile rather than removing it, and it would switch off the app's own header-port fan-out for that end.
+  // The parent end was object-level (the header's `er-*`) until 2026-10-31, on the argument that 47 of those 126
+  // relationships land on `User.Id` and a key row would only move that pile. It does not only move it: `er-*`
+  // ends are invisible to the router's distribution and all terminate on one pixel, while links that share a
+  // FIELD port are one bus that the router gives its own join lane (one vertical, 16 px apart from the next).
+  // The official templates draw every relationship this way (owner-approved 2026-10-28), and the owner asked
+  // for the generator to match them (2026-10-31), so a generated ERD and the shipped ones read alike.
   //
   // The precondition this creates: `field-*` ports only exist for fields the card is SHOWING, and the
-  // "Key Fields Only" display toggle filters to `keyType` fields. So the FROM field is FORCED to `fk` below -
-  // without it, a hand-written selection that omits keyType would have its ports filtered away and sfManhattan
-  // would fall back to a straight diagonal across the canvas.
+  // "Key Fields Only" display toggle filters to `keyType` fields. So the FROM field is FORCED to `fk` and the TO
+  // field to `pk` below - without it, a hand-written selection that omits keyType would have its ports filtered
+  // away and sfManhattan would fall back to a straight diagonal across the canvas. A TO field that is not the
+  // card's key while another field is (a lookup to an alternate key) keeps the header end instead: stamping a
+  // second `pk` would misstate the object.
   //
   // Side is picked from relative POSITION, the same rule the flow converter uses, so the two stubs face each
   // other instead of doubling back. `to` is the ONE end, `from` the MANY end - the direction a lookup reads.
@@ -499,6 +504,8 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     // selection did not. Without it that toggle deletes the port, `getPortInfo` returns null, and sfManhattan
     // degrades to a straight diagonal across the canvas.
     if (!af.keyType) af.keyType = 'fk';
+    const otherPk = [...b.fieldsByApi.values()].some((f) => f !== bf && f.keyType === 'pk');
+    if (!bf.keyType && !otherPk) bf.keyType = 'pk';
 
     // A SELF-relationship goes TOP TO TOP - out of the card's top port and straight back into it - so it draws
     // a small bracket ABOVE the card instead of anything beside it. The owner's proposal: "add option to target
@@ -530,9 +537,9 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     } else {
       const side = dx > 0 ? 'right' : 'left';
       sPort = `field-${side}-${af.fid}`;
-      tPort = dx > 0 ? 'er-left'
-        : dx < 0 ? 'er-right'
-          : 'er-left';   // same column, different cards - leave and re-enter the same side
+      // Faces the child: right to left across columns, and the same side in one column (leave and re-enter it).
+      const tSide = dx < 0 ? 'right' : 'left';
+      tPort = bf.keyType ? `field-${tSide}-${bf.fid}` : `er-${tSide}`;
     }
     // No waypoints, on any relationship. An earlier self-loop carried explicit vertices and that was the real
     // defect behind "when I clicked simplify path on them, they exploded": Simplify path clears vertices
@@ -546,10 +553,10 @@ export function buildDiagram(spec, appVersion = SPEC_VERSION) {
     const link = {
       id: `rel-${i}`, type: 'standard.Link', z: 3000,
       // Field ports render a `rect` and the ER / top groups a `circle` (js/shapes/ports.js), so naming one
-      // magnet for both ends would leave the source unresolvable. Omitting it on the field end is what every
+      // magnet for both ends would leave the field end unresolvable. Omitting it on a field end is what every
       // other field-anchored fixture in this repo does.
       source: { id: a.cell.id, port: sPort },
-      target: { id: b.cell.id, port: tPort, magnet: 'circle' },
+      target: { id: b.cell.id, port: tPort, ...(tPort.startsWith('field-') ? {} : { magnet: 'circle' }) },
       // A self-reference reads as an aside rather than as a relationship between two things on the canvas, so
       // it is DOTTED - the connector panel's own "Dotted" value, so the control shows the matching option.
       // Via the `lineStyle` prop and never `line/strokeDasharray`: the overlay manager owns the dash render,

@@ -5,21 +5,21 @@
 // the persistence runtime context, wired in persistence.init(). Legacy decode
 // uses the global `pako`.
 
-import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.26.7';
-import { diagramEmbedsImages } from '../image-component.js?v=1.26.7';
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.7';
-import { escHtml, formatBytes } from '../util.js?v=1.26.7';
-import { sharePillHtml } from '../storage-ui.js?v=1.26.7';
-import { pctx } from './context.js?v=1.26.7';
-import { compactGraphForSave, loadWarning } from './json-pipeline.js?v=1.26.7';   // Copy JSON's compaction; a load's skip warning
-import { buildSingleDiagram } from './storage.js?v=1.26.7';          // the export's envelope, for Copy JSON
-import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.26.7';
-import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.26.7';
-import { pickerBlockedInSlot, SLOT_PICKER_NOTE } from './host-env.js?v=1.26.7';
-import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.26.7';
-import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.7';
-import { noteError } from '../diagnostics.js?v=1.26.7';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.7';
+import { decodeShareV1, encodeShare, decodeShareV2, decodeShareV3, encodeGroupLink, decodeGroupLink, slimForShare, inflateCapped } from '../share-codec.js?v=1.26.9';
+import { diagramEmbedsImages } from '../image-component.js?v=1.26.9';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.9';
+import { escHtml, formatBytes } from '../util.js?v=1.26.9';
+import { sharePillHtml } from '../storage-ui.js?v=1.26.9';
+import { pctx } from './context.js?v=1.26.9';
+import { compactGraphForSave, showLoadResult, newerHoldVersion } from './json-pipeline.js?v=1.26.9';   // Copy JSON's compaction; a load's skip warning
+import { buildSingleDiagram } from './storage.js?v=1.26.9';          // the export's envelope, for Copy JSON
+import { shareGlyphKind, inviteText } from './drive-sync-logic.js?v=1.26.9';
+import { isDriveConfigured, isDriveConnected, isSignedIn, shareActiveScoped, shareActiveEditable, activeShareCopies, activeShareStatus, listActiveShareGrants, removeGrant, removeShare, resolveCopyConflict, saveTabsToDrive, publishTabsToSharedDrive, signIn, loadDriveRef, openGroupFromLink, preloadDriveAuth, setLoginHint } from './remote-store.js?v=1.26.9';
+import { pickerBlockedInSlot, SLOT_PICKER_NOTE } from './host-env.js?v=1.26.9';
+import { newDiagramTypeFromHash } from '../tabs/diagram-types.js?v=1.26.9';
+import { isPresenting, exit as exitPresent } from '../present.js?v=1.26.9';
+import { noteError } from '../diagnostics.js?v=1.26.9';
+import { holdUpdateReload } from '../update-reload.js?v=1.26.9';
 
 /** Flash "✓ Copied!" on a Share pane copy button, then restore its label. The label is read once and kept, and a
  *  click inside the window restarts the flash: each click used to save the CURRENT text as the label to restore, so
@@ -128,6 +128,7 @@ export async function shareGroupToDrive(tabIds, label, meta = {}) {
 
   const ok = results.filter((r) => r.status === 'ok' && r.shareUrl && r.fileId);
   const empty = results.filter((r) => r.status === 'empty').length;
+  const held = results.filter((r) => r.status === 'held').length;   // missing parts of a newer release's file, kept unsaved
   const failed = results.filter((r) => r.status === 'error');
   const ownerOnly = failed.filter((r) => r.ownerOnly);   // someone else's file you edit directly: theirs to share
   const otherFailed = failed.length - ownerOnly.length;
@@ -140,9 +141,10 @@ export async function shareGroupToDrive(tabIds, label, meta = {}) {
   const ownerNote = ownerOnly.length
     ? `${ownerOnly.map((r) => `"${escHtml(r.name)}"`).join(', ')} ${ownerOnly.length === 1 ? "is someone else's file, so only its owner can share it" : "are other people's files, so only their owners can share them"}.`
     : '';
-  const skipNote = (empty || failed.length)
+  const skipNote = (empty || held || failed.length)
     ? `<p class="df-group-share__skip" style="margin:6px 0 0;color:var(--text-secondary);font-size:var(--font-size-sm)">${[
       empty ? `${empty} empty diagram${empty === 1 ? '' : 's'} skipped.` : '',
+      held ? `${held} not shared: ${held === 1 ? 'it is' : 'they are'} missing parts made with a newer version of Diagramforce.` : '',
       ownerNote,
       otherFailed ? `${otherFailed} couldn't be shared (see console).` : '',
     ].filter(Boolean).join(' ')}</p>`
@@ -377,11 +379,13 @@ export async function loadFromURL() {
     // Import the diagram using the existing import handler
     if (onImportCallback) {
       const type = normalizeDiagramType(data.type);
-      onImportCallback(name, type, data.graph, data.viewport || null, data.mappingMode);
+      // A thinned link from a newer release holds the tab's Drive saves (B2 follow-up), carried in as drive meta.
+      const hold = newerHoldVersion(stats, data.type, savedVer);
+      onImportCallback(name, type, data.graph, data.viewport || null, data.mappingMode, hold ? { driveHoldVersion: hold } : null);
       // The file and paste loads' count-only warning (D9). A share link, the skill's main hand-off, dropped unknown
-      // shapes and dangling connectors with no word (review 2026-10-15, XS7-1).
-      const warning = loadWarning('Opened', name, stats, data.type);
-      if (warning) showToast(warning, 'warning', { duration: 8000 });
+      // shapes and dangling connectors with no word (review 2026-10-15, XS7-1). A link from a newer release says so
+      // and asks for a reload (B2 follow-up).
+      showLoadResult('Opened', name, stats, data.type, savedVer, null, { held: !!hold });
       return true;
     }
     return false;

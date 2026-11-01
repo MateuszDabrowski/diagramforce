@@ -7,11 +7,11 @@
 // dateSuffix, triggerDownload) all come from the persistence runtime context —
 // so it imports no other sub-module (acyclic).
 
-import { showToast, showError, buildModal } from '../feedback.js?v=1.26.7';
-import { pctx } from './context.js?v=1.26.7';
-import { compactGraphForSave } from './json-pipeline.js?v=1.26.7';
-import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.26.7';
-import { noteError } from '../diagnostics.js?v=1.26.7';
+import { showToast, showError, buildModal } from '../feedback.js?v=1.26.9';
+import { pctx } from './context.js?v=1.26.9';
+import { compactGraphForSave, newerHoldVersion } from './json-pipeline.js?v=1.26.9';
+import { countDiagramShapes, sanitizeFilenamePart } from '../util.js?v=1.26.9';
+import { noteError } from '../diagnostics.js?v=1.26.9';
 
 // localStorage key scheme + retention (formerly top-of-persistence consts).
 export const NAMED_SAVE_PREFIX = 'sfdiag::save::';
@@ -253,14 +253,22 @@ export async function loadNamedSave(key) {
     if (driveMeta && data.tabName && (data.driveFileId || data.driveSharedSource)) name = String(data.tabName);
     const ok = await checkVersionWarning(savedVer, name, data);
     if (!ok) return false;
-    if (data?.graph) sanitizeGraphJSON(data.graph);
+    // Counted: an archive written by a newer release (a rollback, or the version prompt's Don't load, which keeps
+    // unknown types) lost its unknown shapes here with no word (B2 follow-up).
+    const skipped = {};
+    if (data?.graph) sanitizeGraphJSON(data.graph, { stats: skipped });
+    // The hold this save carries (written by a held tab's close, or a thinned bundle import) or one this load adds:
+    // the tab must not write a thinned graph to Drive (B2 follow-up).
+    const hold = newerHoldVersion(skipped, data.diagramType, savedVer) || (typeof data.driveHoldVersion === 'string' ? data.driveHoldVersion : null);
+    if (driveMeta) driveMeta = { ...driveMeta, driveHoldVersion: hold };
     if (onImportCallback && data?.graph) {
       const type = normalizeDiagramType(data.diagramType);
       // Item 1.3: pass the archived Drive linkage (driveFileId + driveSharedSource + driveCopies + baseline) so
       // the loaded tab re-marks "In My Drive" and shows the shares it had, instead of becoming a browser-only tab.
       // #7: data.group recreate-or-rejoins the tab group this diagram was saved from.
-      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode, driveMeta, data.group || null);
+      onImportCallback(name, type, data.graph, data.viewport, data.mappingMode, driveMeta || (hold ? { driveHoldVersion: hold } : null), data.group || null);
       if (!driveMeta) showToast('Its Google Drive diagram is already open in a tab, so this browser copy opened as a separate diagram.', 'info', { duration: 6000 });
+      pctx.showLoadResult?.('Opened', name, skipped, data.diagramType, savedVer, null, { held: !!hold });
     } else if (data?.graph) {
       canvasModule.setLoadingJSON(true);
       try { graph.fromJSON(data.graph); } finally { canvasModule.setLoadingJSON(false); }

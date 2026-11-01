@@ -11,17 +11,17 @@
 // does NOT use the real mermaid grammar and will not handle every edge case.
 // It aims to cover the most common mermaid snippets produced by LLMs and docs.
 
-import { createElementFromComponent } from './components.js?v=1.26.7';
-import { ER_MARKER_D } from './er-markers.js?v=1.26.7';
-import { showError, showImportNotes, showToast } from './feedback.js?v=1.26.7';
-import { MAX_CELL_COUNT, SEQ_ROLE_ACCENT } from './persistence/diagram-schema.js?v=1.26.7';
+import { createElementFromComponent } from './components.js?v=1.26.9';
+import { ER_MARKER_D } from './er-markers.js?v=1.26.9';
+import { showError, showImportNotes, showToast } from './feedback.js?v=1.26.9';
+import { MAX_CELL_COUNT, SEQ_ROLE_ACCENT } from './persistence/diagram-schema.js?v=1.26.9';
 // Gantt geometry is DERIVED from dates - the importer emits data and these place every pixel, the same
 // functions the load migration uses. Nothing here computes a bar's x or width.
 import { applyGanttGeometry, applyGanttMilestoneGeometry, backfillGanttOrders, layoutTimelineTasks, orderToY }
-  from './gantt-layout.js?v=1.26.7';
-import { axisEndDate, localISODate } from './gantt-scale.js?v=1.26.7';
-import { noteError } from './diagnostics.js?v=1.26.7';
-import { portExitBlocked, obstacleBoxes } from './canvas/router.js?v=1.26.7';
+  from './gantt-layout.js?v=1.26.9';
+import { axisEndDate, localISODate } from './gantt-scale.js?v=1.26.9';
+import { noteError } from './diagnostics.js?v=1.26.9';
+import { portExitBlocked, obstacleBoxes } from './canvas/router.js?v=1.26.9';
 
 let modules = {};
 
@@ -325,9 +325,18 @@ export function pickFacingPorts(link, src, tgt, direction, boxes = null) {
     // ports on the wrong side - the hooked "auto-layout tangle". Longer-axis
     // facing fixes that while staying identical for a clean single-axis flow
     // (a vertical stack still has |dy| ≫ |dx| → top/bottom).
+    // One exit side (owner call 2026-10-31): two shapes in no frame that lie wholly apart ALONG the flow axis take
+    // the flow-axis ports, so a hub's links to the next level all leave its bottom on one bus instead of its left,
+    // bottom and right sides by geometry. Shapes inside a zone keep geometry: a card mid-stack forced to its bottom
+    // exits through the cards below it (route corpus: 27 hooks and 1,564 px over cards when the rule took them too).
     const ax = Math.abs(dx), ay = Math.abs(dy);
+    const free = !src.get('parent') && !tgt.get('parent');
+    const apartY = tb.y >= sb.y + sb.height || sb.y >= tb.y + tb.height;
+    const apartX = tb.x >= sb.x + sb.width || sb.x >= tb.x + tb.width;
     let useVertical;
-    if (ay > ax) useVertical = true;
+    if (free && direction === 'vertical' && apartY) useVertical = true;
+    else if (free && direction === 'horizontal' && apartX) useVertical = false;
+    else if (ay > ax) useVertical = true;
     else if (ax > ay) useVertical = false;
     else useVertical = direction !== 'horizontal';   // exact tie → prefer the flow axis
     if (useVertical) {

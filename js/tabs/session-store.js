@@ -4,15 +4,15 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.26.7';
-import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './new-diagram-modal.js?v=1.26.7';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getNamedSaves, getStorageFootprint, importSignature, isQuotaError, normalizeDiagramType, restoreDiagramAsSave, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.26.7';
-import { ARCHIVE_DRIVE_FIELDS, archiveDedupName, driveIdentityOf, forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.26.7';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.26.7';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.26.7';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.26.7';
-import { noteError } from '../diagnostics.js?v=1.26.7';
-import { noteDeviceOnlyEdit } from './device-only.js?v=1.26.7';
+import { tbctx } from './context.js?v=1.26.9';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './new-diagram-modal.js?v=1.26.9';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getNamedSaves, getStorageFootprint, importSignature, isQuotaError, normalizeDiagramType, restoreDiagramAsSave, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.26.9';
+import { ARCHIVE_DRIVE_FIELDS, archiveDedupName, driveIdentityOf, forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.26.9';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.26.9';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.26.9';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.26.9';
+import { noteError } from '../diagnostics.js?v=1.26.9';
+import { noteDeviceOnlyEdit } from './device-only.js?v=1.26.9';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 
@@ -323,7 +323,7 @@ function doRestoreTabData(sessionData) {
       });
       // Re-seed remote-store's runtime sync state so a synced tab keeps syncing. A shared tab may have a
       // sharedSource but no own master yet, so hydrate when EITHER is present.
-      if (t.driveFileId || t.driveSharedSource || t.driveLocalOnly) persistenceModule.hydrateTabDrive?.(t.id, serializeDriveFields(t));
+      if (t.driveFileId || t.driveSharedSource || t.driveLocalOnly || t.driveHoldVersion) persistenceModule.hydrateTabDrive?.(t.id, serializeDriveFields(t));
     }
     tbctx.activeTabId = data.activeTabId || tabs[0].id;
   } else {

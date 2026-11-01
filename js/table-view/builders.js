@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.26.7';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.26.7';
-import { durationDays } from '../gantt-scale.js?v=1.26.7';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.7';
+import { keyImpliesRequired } from '../field-model.js?v=1.26.9';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.26.9';
+import { durationDays } from '../gantt-scale.js?v=1.26.9';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.9';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -403,12 +403,64 @@ export const FLOW_ASSET_COLUMNS = Object.freeze([
   { key: 'assetId', label: 'Asset ID', sortable: true, wrap: true },
   { key: 'assetName', label: 'Asset Name', sortable: true, wrap: true },
 ]);
+// Orchestration Steps (2026-11-01): one row per stage STEP. The Stage leads (a step belongs to its stage the way
+// a write belongs to its element), then the step's identity pair. Assigned to keeps the converter's wording,
+// which already separates "nobody named" from "runs unattended". The last four columns exist only on a flow
+// converted with --expand-stages; on a default import they are blank everywhere and C2 folds them away.
+export const FLOW_STEP_COLUMNS = Object.freeze([
+  { key: 'stage', label: 'Stage', sortable: true },
+  { key: 'step', label: 'Step', sortable: true },
+  { key: 'apiName', label: 'apiName', sortable: true },
+  { key: 'stepType', label: 'Step type', sortable: true },
+  { key: 'assignedTo', label: 'Assigned to', sortable: true, wrap: true },
+  { key: 'locked', label: 'Record locked', sortable: true },
+  { key: 'entry', label: 'Entry conditions', wrap: true },
+  { key: 'exit', label: 'Exit conditions', wrap: true },
+  { key: 'outputsRead', label: 'Outputs read downstream', wrap: true },
+]);
+// Screen Components (2026-11-01): one row per component row of a Screen card, the writes grain. Shown when is
+// the column the section exists for: a component gated on a variable is branching that no connector draws.
+export const FLOW_SCREEN_COLUMNS = Object.freeze([
+  { key: 'element', label: 'Element', sortable: true },
+  { key: 'apiName', label: 'apiName', sortable: true },
+  { key: 'component', label: 'Component', sortable: true, wrap: true },
+  { key: 'componentType', label: 'Component type', sortable: true },
+  { key: 'shownWhen', label: 'Shown when', sortable: true, wrap: true },
+  { key: 'config', label: 'Configuration', wrap: true },
+]);
+// Data Reads (2026-11-01): one row per Get Records ELEMENT, not per field. Most real reads store the whole
+// record on the element and name no field, so a per-field grain would be one row each anyway, and the read
+// has no pivot to feed. Where a read does assign fields, Stored in lists them, one per line on screen and
+// '; '-joined in the flat exports (the spine's Previous / Next precedent).
+export const FLOW_READ_COLUMNS = Object.freeze([
+  { key: 'element', label: 'Element', sortable: true },
+  { key: 'apiName', label: 'apiName', sortable: true },
+  { key: 'object', label: 'Object', sortable: true },
+  { key: 'where', label: 'Where', wrap: true },
+  { key: 'returns', label: 'Returns', sortable: true },
+  { key: 'fieldsRead', label: 'Fields read', wrap: true },
+  { key: 'sortedBy', label: 'Sorted by', sortable: true },
+  { key: 'storedIn', label: 'Stored in', wrap: true, exportJoin: '; ' },
+]);
 
 const WRITE_OPS = Object.assign(Object.create(null), {
   'df.FlowCreateRecords': 'Create',
   'df.FlowUpdateRecords': 'Update',
   'df.FlowDeleteRecords': 'Delete',
+  'df.FlowCreateTask': 'Create',
+  'df.FlowCreateCampaignMember': 'Create',
 });
+// The two actions that write a record, and the object each creates. Their `details` rows are the action's
+// INPUT PARAMETERS (flow-convert.js actionParamRows), named by parameter (`campaignMemberStatus`), not by
+// field (`Status`): they list as writes, marked `_param`, and never enter the field pivot, whose key is a
+// field API name. The converter sets `object` on Create Campaign Member only; Create Task always makes a Task.
+const ACTION_WRITE_OBJECT = Object.assign(Object.create(null), {
+  'df.FlowCreateTask': 'Task',
+  'df.FlowCreateCampaignMember': 'CampaignMember',
+});
+// actionParamRows ends with where the result GOES (`name -> {!var}`, or the stored-on-the-element row).
+// Those are outputs, not values written to the record.
+const ACTION_OUTPUT_RE = /^-> \{!|^stored on the element\b/;
 // A Create carrying match criteria is an UPSERT, and flow-convert.js argues that is the single fact a
 // reader most needs ("could this create duplicates?"). This head row is the ONLY evidence: a Create
 // never gets a `filters` prop - the converter deliberately routes the criteria into `details` instead,
@@ -438,17 +490,30 @@ const displayName = el => String(el.get('name') || el.get('apiName') || '');
 // id -> the name to SHOW for that element, qualified `Name [apiName]` only when the display name is
 // ambiguous. Measured: one real decision's outcomes point at two different cells BOTH named "Create
 // Bundle WO", so a bare name there answers nothing; on a unique name the apiName is noise.
-function nameDisambiguator(graph) {
-  const counts = new Map();
+// A repeated name with NO apiName gets its position instead, `End 1`, `End 2`, numbered in execution
+// order (`order`, the spine's walk). The converter synthesises every End with name 'End' and no apiName,
+// so a flow with four exits listed four identical "End" rows, and three outcomes that "Goes to End"
+// could not be told apart. The number is the same in every section because every section reads this one
+// labelOf, and only names repeated among apiName-less cards are numbered: one End stays "End".
+function nameDisambiguator(graph, order = []) {
+  const counts = new Map(), bare = new Map();
   for (const e of graph.getElements()) {
     const n = displayName(e);
     if (n) counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  for (const e of order) {
+    const n = displayName(e);
+    if (!n || e.get('apiName')) continue;
+    if (!bare.has(n)) bare.set(n, []);
+    bare.get(n).push(e.id);
   }
   return (id) => {
     const el = id && graph.getCell(id);
     if (!el) return '';
     const n = displayName(el), api = el.get('apiName') || '';
-    return (n && api && counts.get(n) > 1) ? `${n} [${api}]` : n;
+    if (n && api && counts.get(n) > 1) return `${n} [${api}]`;
+    const peers = bare.get(n);
+    return (peers && peers.length > 1 && peers.includes(el.id)) ? `${n} ${peers.indexOf(el.id) + 1}` : n;
   };
 }
 
@@ -526,7 +591,7 @@ const spineLinkEntry = (l, otherEndId, labelOf) => {
  *  Start are APPENDED in stable cell order - their blank Previous on a non-Start row is itself a
  *  finding on a hand-drawn draft. No Start element at all falls back to cell order without crashing
  *  (the walk visits nothing and the append emits everything). */
-export function flowSpineRows(graph, labelOf) {
+export function flowExecutionOrder(graph) {
   // df.Flow* cards only: the __flowmeta/__flowresources df.Table cards and the sf.Link URL chip are
   // canvas furniture, not flow topology, and notes/labels can share the canvas too.
   const elements = graph.getElements().filter(e => String(e.get('type') || '').startsWith('df.Flow'));
@@ -550,7 +615,11 @@ export function flowSpineRows(graph, labelOf) {
     }
   }
   for (const el of elements) if (!visited.has(el.id)) order.push(el);
+  return order;
+}
 
+export function flowSpineRows(graph, labelOf, order = flowExecutionOrder(graph)) {
+  const idSet = new Set(order.map(e => e.id));
   return order.map(el => {
     const prev = [], next = [];
     for (const l of graph.getConnectedLinks(el)) {
@@ -618,10 +687,12 @@ function flowWriteRows(graph) {
   for (const el of graph.getElements()) {
     const baseOp = WRITE_OPS[el.get('type')];
     if (!baseOp) continue;
+    const actionObject = ACTION_WRITE_OBJECT[el.get('type')];
     const assignments = [], context = [], truncations = [];
     for (const d of detailsOf(el)) {
       const label = String(d?.label ?? ''), value = String(d?.value ?? '');
       if (TRUNCATION_RE.test(label)) truncations.push({ label, value });
+      else if (actionObject && ACTION_OUTPUT_RE.test(value)) continue;
       else if (FIELD_API_RE.test(label)) assignments.push({ field: label, value });
       else context.push({ label, value });
     }
@@ -635,8 +706,9 @@ function flowWriteRows(graph) {
       element: displayName(el),
       apiName: el.get('apiName') || '',
       op,
-      object: el.get('object') || '',
+      object: el.get('object') || actionObject || '',
       where,
+      ...(actionObject ? { _param: true } : {}),
     };
     // Element / apiName / Op / Object / Where repeat on EVERY row in the row model - never a rowspan,
     // never a blanked repeat: the headers are click-to-sort, and blanked repeats become lies after a sort.
@@ -654,7 +726,7 @@ function flowWriteRows(graph) {
 function flowFieldPivot(writeRows, labelOf) {
   const groups = new Map();
   for (const r of writeRows) {
-    if (r._muted || !r.field) continue;
+    if (r._muted || r._param || !r.field) continue;
     // An OBJECTLESS write can never be compared, so it is never grouped. The standard bulk-update shape
     // (`inputReference` + `inputAssignments` - "use the IDs from a record collection, and set their
     // fields individually") converts with no `object` key at all, so two such Updates on genuinely
@@ -890,20 +962,256 @@ function flowAssetRows(graph, labelOf, spineEls) {
   return rows;
 }
 
-/** The whole Flow Table view row model: five stacked sections (the Elements spine + the three typed
- *  drill-downs + Assets) + the counts the band insights report.
+// ── Orchestration Steps (2026-11-01): the approval chain ─────────────────────────────────────────
+// The converter writes an orchestration's steps in ONE of two shapes, and this section reads both:
+//
+// 1. DEFAULT (every browser import, and the CLI without --expand-stages): the df.FlowStage card holds one
+//    `details` row per step (flow-convert.js stageStepRows): label = the step label, value = the kind, the
+//    step API name when it differs from the label, and the assignees, joined with ' · '. Entry and exit
+//    conditions, record locking and the assignee type are NOT on the card in this shape.
+// 2. EXPANDED (CLI --expand-stages): every step is its own card (Action / Subflow / Screen, by kind) chained
+//    under its stage card, carrying labelled rows (flow-convert.js stepRows) that lead with 'Step type'.
+//    The stage card keeps only a 'Steps' summary and its 'Exit conditions'.
+//
+// A step card is recognised by that first row and its mechanical value ("Approval step (stepApproval)",
+// "Unknown step"), never by its id or class: an authored save keeps neither promise, and a Screen whose
+// first component happens to be LABELLED "Step type" carries a value like "DropdownBox · stepType", which
+// the value pattern rejects.
+const STEP_TYPE_RE = /^(.+?) step(?: \((.+)\))?$/;
+const isStepCard = (el) => {
+  const first = detailsOf(el)[0];
+  return !!first && String(first.label ?? '') === 'Step type' && STEP_TYPE_RE.test(String(first.value ?? ''));
+};
+// The expanded stage card's own pair (flow-convert.js stageStepSummary + stageExitText). Recognised so a stage
+// whose chain was cut by a deleted connector never parses "1 approval step, then 1 background step" as a
+// step called "Steps".
+const STAGE_SUMMARY_RE = /^\d+ \S+ steps?(?:, then \d+ \S+ steps?)*$/;
+const isExpandedStageSummary = (d) => d.length === 2 && String(d[0]?.label ?? '') === 'Steps'
+  && STAGE_SUMMARY_RE.test(String(d[0]?.value ?? '')) && String(d[1]?.label ?? '') === 'Exit conditions';
+// The converter's STEP_KIND words. A kind outside them is the raw actionType, which is a Salesforce enum
+// value (stepApproval / stepBackground / stepInteractive today), hence the step* fallback.
+const STEP_KINDS = new Set(['approval', 'background', 'interactive']);
+const isStepKind = (s) => STEP_KINDS.has(s) || /^step[A-Z]\w*$/.test(s);
+const kindLabel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+// A Flow API name: letters, digits and underscores, starting with a letter.
+const FLOW_API_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+/** One DEFAULT-shape stage row -> { stepType, apiName, assignedTo }. The value is `kind · name? · assignees?`
+ *  with the name present only when it differs from the label, so the middle segment's meaning depends on
+ *  the label:
+ *  - three parts: kind, name, assignees;
+ *  - a label that is not an API name proves the name was written, so one part after the kind is the name;
+ *  - an API-name label with one part that is not an API name: that part is the assignee, and the label IS
+ *    the name (the converter dropped it as equal);
+ *  - an API-name label with one API-name part is the case the converter's join cannot settle (label "Review"
+ *    with name "Legal_Review", or label = name "Review" with group "Legal_Review"). It is not guessed: the part
+ *    goes to Assigned to with the doubt stated, and apiName stays blank. */
+function parseStageStepValue(label, value) {
+  const segs = value ? value.split(' · ') : [];
+  const kind = segs.length && isStepKind(segs[0]) ? segs.shift() : '';
+  const out = { stepType: kindLabel(kind), apiName: '', assignedTo: '' };
+  const labelIsName = FLOW_API_NAME_RE.test(label);
+  if (segs.length >= 2) {
+    out.apiName = segs[0];
+    out.assignedTo = segs.slice(1).join(' · ');
+  } else if (segs.length === 1) {
+    if (!labelIsName) out.apiName = segs[0];
+    else if (!FLOW_API_NAME_RE.test(segs[0])) { out.apiName = label; out.assignedTo = segs[0]; }
+    else out.assignedTo = `${segs[0]} (assignee or step API name - the import does not say which)`;
+  } else if (labelIsName) {
+    out.apiName = label;
+  }
+  return out;
+}
+
+/** One row per stage step, stages in execution order, steps in stage order (the details order on a default
+ *  stage, the connector chain on an expanded one). A stage with no steps keeps one row, blank after Stage:
+ *  dropping it would hide a stage from the section that lists them (the Data Writes zero-assignment rule).
+ *  Step cards no stage chain reaches (a connector deleted by hand) follow at the end with a blank Stage. */
+function flowStepRows(graph, labelOf, spineEls) {
+  const rows = [];
+  const claimed = new Set();
+  const blank = { step: '', apiName: '', stepType: '', assignedTo: '', locked: '', entry: '', exit: '', outputsRead: '' };
+  const cardRow = (stageLabel, st) => {
+    const byLabel = new Map();
+    for (const d of detailsOf(st)) {
+      const k = String(d?.label ?? '');
+      if (!byLabel.has(k)) byLabel.set(k, String(d?.value ?? ''));
+    }
+    const m = STEP_TYPE_RE.exec(byLabel.get('Step type') || '');
+    return {
+      ...blank,
+      _elId: st.id,
+      stage: stageLabel,
+      step: labelOf(st.id),
+      apiName: st.get('apiName') || '',
+      stepType: kindLabel(m ? m[1] : ''),
+      // An approval step names its 'Approver'; every other kind says 'Assigned to' (stepRows).
+      assignedTo: byLabel.get('Approver') ?? byLabel.get('Assigned to') ?? '',
+      locked: byLabel.get('Record locked while pending') ?? '',
+      entry: byLabel.get('Entry conditions') ?? '',
+      exit: byLabel.get('Exit conditions') ?? '',
+      outputsRead: byLabel.get('Outputs read downstream') ?? '',
+    };
+  };
+  let stageCount = 0;
+  for (const stage of spineEls) {
+    if (stage.get('type') !== 'df.FlowStage') continue;
+    stageCount++;
+    const stageLabel = labelOf(stage.id);
+    // Expanded: follow outgoing connectors through step cards only. The stage's own exits leave from its
+    // LAST step (flow-convert.js expandStage), so the walk stops at the first card that is not a step.
+    const chain = [];
+    let frontier = [stage];
+    while (frontier.length) {
+      const next = [];
+      for (const c of frontier) {
+        for (const l of graph.getConnectedLinks(c)) {
+          if (l.get('source')?.id !== c.id) continue;
+          const t = graph.getCell(l.get('target')?.id);
+          if (!t || claimed.has(t.id) || !isStepCard(t)) continue;
+          claimed.add(t.id);
+          chain.push(t);
+          next.push(t);
+        }
+      }
+      frontier = next;
+    }
+    const d = detailsOf(stage);
+    if (chain.length) {
+      for (const st of chain) rows.push(cardRow(stageLabel, st));
+    } else if (isExpandedStageSummary(d)) {
+      // An expanded stage whose chain is cut: its step cards list below, unclaimed. A blank row here would
+      // claim the stage has no steps, which its own summary row contradicts.
+      continue;
+    } else if (d.length) {
+      for (const r of d) {
+        const label = String(r?.label ?? ''), value = String(r?.value ?? '');
+        if (TRUNCATION_RE.test(label)) { rows.push({ ...blank, _elId: stage.id, stage: stageLabel, step: label, _muted: true }); continue; }
+        rows.push({ ...blank, _elId: stage.id, stage: stageLabel, step: label, ...parseStageStepValue(label, value) });
+      }
+    } else {
+      rows.push({ ...blank, _elId: stage.id, stage: stageLabel });
+    }
+  }
+  for (const el of spineEls) if (!claimed.has(el.id) && isStepCard(el)) rows.push(cardRow('', el));
+  return { rows, stageCount, stepCount: rows.filter(r => !r._muted && r.step).length };
+}
+
+// ── Screen Components (2026-11-01): what each screen asks, and when each part shows ─────────────────
+// One row per Screen `details` row (flow-convert.js screenFieldRows): label = the component's human label,
+// prefixed by a user-named container ("Billing address / Street"); value = `type · name? · choices? ·
+// required? · default? · help? · validation? · shown when <condition>?`, ' · '-joined. The split below
+// takes only the two ends of that join, both fixed by the converter:
+// - "shown when" is always the LAST part, so the cut is the LAST ' · shown when ' - help text may itself
+//   say "shown when", and a first-match cut would take the help text's tail for the condition;
+// - the component type (extensionName, else fieldType) is always the FIRST part and is a single token
+//   ('InputField', 'flowruntime:lookup').
+// Everything between stays verbatim in Configuration: help text and choice lists may hold ' · ' themselves.
+// A child of a gated container that is auto-named (Section1) carries no prefix and no condition: the
+// container's own row, which comes just before its children, is the only place its condition appears.
+const SHOWN_WHEN = ' · shown when ';
+const COMPONENT_TYPE_RE = /^[A-Za-z][\w-]*(?::[\w-]+)?$/;
+function splitScreenRow(value) {
+  let rest = value, shownWhen = '';
+  const cut = rest.lastIndexOf(SHOWN_WHEN);
+  if (cut !== -1) { shownWhen = rest.slice(cut + SHOWN_WHEN.length); rest = rest.slice(0, cut); }
+  else if (rest.startsWith('shown when ')) { shownWhen = rest.slice('shown when '.length); rest = ''; }
+  const sep = rest.indexOf(' · ');
+  const head = sep === -1 ? rest : rest.slice(0, sep);
+  // 'required' is a flag part, not a type: a row whose type is missing must not promote it.
+  if (head && head !== 'required' && COMPONENT_TYPE_RE.test(head)) {
+    return { componentType: head, shownWhen, config: sep === -1 ? '' : rest.slice(sep + 3) };
+  }
+  return { componentType: '', shownWhen, config: rest };
+}
+
+/** Screens in execution order, components in details order. A screen with no component rows keeps one row
+ *  (an empty screen is still a screen the flow shows), carrying the card's `components` scalar verbatim: on
+ *  a hand-drawn card that free text is the only component list, and on a converted card it is set only when
+ *  rows are. It is not counted as components - nothing says how the author separated them. An
+ *  orchestration's interactive step is drawn as a Screen card when stages are expanded, but its rows are step
+ *  rows: it lists under Orchestration Steps. */
+function flowScreenRows(labelOf, spineEls) {
+  const rows = [];
+  let screenCount = 0, componentCount = 0, conditionalCount = 0;
+  for (const el of spineEls) {
+    if (el.get('type') !== 'df.FlowScreen' || isStepCard(el)) continue;
+    screenCount++;
+    const base = { _elId: el.id, element: labelOf(el.id), apiName: el.get('apiName') || '' };
+    const d = detailsOf(el);
+    if (!d.length) {
+      rows.push({ ...base, component: String(el.get('components') ?? '').trim(), componentType: '', shownWhen: '', config: '' });
+      continue;
+    }
+    for (const r of d) {
+      const label = String(r?.label ?? ''), value = String(r?.value ?? '');
+      if (TRUNCATION_RE.test(label)) {
+        rows.push({ ...base, component: label, componentType: '', shownWhen: '', config: value, _muted: true });
+        continue;
+      }
+      const split = splitScreenRow(value);
+      rows.push({ ...base, component: label, ...split });
+      componentCount++;
+      if (split.shownWhen) conditionalCount++;
+    }
+  }
+  return { rows, screenCount, componentCount, conditionalCount };
+}
+
+// ── Data Reads (2026-11-01): what each Get Records element queries and where the result goes ───────
+// Read from the card the converter writes (flow-convert.js recordLookups + getOutputRows): `object` and
+// `filters` scalars, then details rows 'Returns' (present only for the first-record-only case), 'Fields
+// read', 'Sorted by', and the destination - either field assignments (label = field API name, value
+// `-> {!var}`), or 'Stored in' `{!var}`, or 'Stored' "on the element (...)". A phrase label outside that
+// set is a row a later converter added: it lands in Where as "Label: value", the Data Writes rule, so it
+// stays visible and names itself instead of vanishing. `limit` and assignNullValuesIfNoRecordsFound are not
+// on the card at all (the converter does not read them), so no column claims them.
+const READ_ROW_KEY = Object.assign(Object.create(null), { 'Returns': 'returns', 'Fields read': 'fieldsRead', 'Sorted by': 'sortedBy' });
+const READ_STORE_LABELS = new Set(['Stored in', 'Stored']);
+function flowReadRows(labelOf, spineEls) {
+  const rows = [];
+  for (const el of spineEls) {
+    if (el.get('type') !== 'df.FlowGetRecords') continue;
+    const row = { _elId: el.id, element: labelOf(el.id), apiName: el.get('apiName') || '', object: el.get('object') || '',
+      where: '', returns: '', fieldsRead: '', sortedBy: '', storedIn: '' };
+    const stored = [], extra = [];
+    for (const d of detailsOf(el)) {
+      const label = String(d?.label ?? ''), value = String(d?.value ?? '');
+      if (TRUNCATION_RE.test(label)) stored.push(`${label} (see panel)`);
+      else if (READ_ROW_KEY[label]) { if (!row[READ_ROW_KEY[label]]) row[READ_ROW_KEY[label]] = value; }
+      else if (READ_STORE_LABELS.has(label)) stored.push(value);
+      else if (FIELD_API_RE.test(label)) stored.push(value.startsWith('->') ? `${label} ${value}` : `${label}: ${value}`);
+      else extra.push(`${label}: ${value}`);
+    }
+    row.where = [String(el.get('filters') || ''), ...extra].filter(Boolean).join(' · ');
+    row.storedIn = stored.join('\n');
+    rows.push(row);
+  }
+  return { rows, objectCount: new Set(rows.map(r => r.object).filter(Boolean)).size };
+}
+
+/** The whole Flow Table view row model: eight stacked sections (the Elements spine, the three shipped typed
+ *  drill-downs, Assets, then Orchestration Steps, Screen Components and Data Reads) + the counts the band
+ *  insights report.
  *  Pure - `graph` is the only input (getElements / getCell / getConnectedLinks / cell.get / cell.labels).
  *  Blank cells are ALWAYS '' - isBlankCell above treats only '' and the em-dash as blank, so a hyphen
  *  placeholder here would defeat column suppression entirely and Show All Columns would never appear. */
 export function buildFlowSections(graph) {
-  const labelOf = nameDisambiguator(graph);
-  const elementRows = flowSpineRows(graph, labelOf);
+  const order = flowExecutionOrder(graph);
+  const labelOf = nameDisambiguator(graph, order);
+  const elementRows = flowSpineRows(graph, labelOf, order);
   const writeRows = flowWriteRows(graph);
   const contestedRows = flowFieldPivot(writeRows, labelOf);
   const { rows: decisionRows, outcomeCount, decisionCount } = flowDecisionRows(graph, labelOf);
   // Assets ride the spine's execution order - the ordered elements are recovered from the spine rows
   // rather than re-walked, so the two sections can never disagree about what "execution order" means.
-  const assetRows = flowAssetRows(graph, labelOf, elementRows.map(r => graph.getCell(r._elId)));
+  const spineEls = elementRows.map(r => graph.getCell(r._elId));
+  const assetRows = flowAssetRows(graph, labelOf, spineEls);
+  // The three later sections ride the same spine order, for the same reason.
+  const steps = flowStepRows(graph, labelOf, spineEls);
+  const screens = flowScreenRows(labelOf, spineEls);
+  const reads = flowReadRows(labelOf, spineEls);
   const anyFieldWrite = writeRows.some(r => !r._muted && r.field);
   return {
     sections: [
@@ -917,11 +1225,16 @@ export function buildFlowSections(graph) {
         empty: 'No flow elements on this canvas.',
       },
       {
+        // Reads sit right before Writes (owner, 2026-11-01): what a flow reads and what it writes are read together.
+        id: 'reads', title: 'Data Reads', columns: FLOW_READ_COLUMNS, rows: reads.rows,
+        empty: 'No Get Records elements on this flow.',
+      },
+      {
         id: 'writes', title: 'Data Writes', columns: FLOW_WRITE_COLUMNS, rows: writeRows,
-        // Scoped to what this section actually SCANS (WRITE_OPS). "No record writes on this flow" was
-        // false on a real flow whose only writes are actionCalls - the converter also emits
-        // df.FlowCreateTask and df.FlowCreateCampaignMember, and both write records.
-        empty: 'No Create, Update or Delete Records elements on this flow.',
+        // Scoped to what this section actually SCANS (WRITE_OPS): the three record elements and the two
+        // record-writing actions. Any other action can write records too (Apex, a subflow), unseen here,
+        // so the copy names the scan rather than claiming the flow writes nothing.
+        empty: 'No Create, Update or Delete Records, Create Task or Create Campaign Member elements on this flow.',
       },
       {
         id: 'contested', title: 'Fields Written by More Than One Element', columns: FLOW_PIVOT_COLUMNS, rows: contestedRows,
@@ -945,6 +1258,16 @@ export function buildFlowSections(graph) {
         id: 'assets', title: 'Assets', columns: FLOW_ASSET_COLUMNS, rows: assetRows,
         empty: 'No segments, message content, subscriptions, senders or data graphs referenced by this flow.',
       },
+      // Orchestration Steps exists only on a flow with stages (owner, 2026-11-01): on any other flow it was an empty band
+      // on almost every Table view. Screen Components keeps its band, as the shipped typed sections do.
+      ...(steps.stageCount || steps.rows.length ? [{
+        id: 'steps', title: 'Orchestration Steps', columns: FLOW_STEP_COLUMNS, rows: steps.rows,
+        empty: 'No Stage elements on this flow.',
+      }] : []),
+      {
+        id: 'screens', title: 'Screen Components', columns: FLOW_SCREEN_COLUMNS, rows: screens.rows,
+        empty: 'No Screen elements on this flow.',
+      },
     ],
     elementCount: elementRows.length,
     // GRAIN: rendered write ROWS, which is what the table below shows - NOT a field-write total. A Delete
@@ -961,6 +1284,17 @@ export function buildFlowSections(graph) {
     // the rows, and a band that disagrees with its own table is the bug the old dedup count risked.
     assetRefCount: assetRows.length,
     assetElementCount: new Set(assetRows.map(r => r._elId)).size,
+    // Steps exclude the cap row and a stepless stage's blank row; stages count every Stage card.
+    stepCount: steps.stepCount,
+    stageCount: steps.stageCount,
+    // Components exclude the cap row and an empty screen's blank row; screens count every Screen card
+    // the section lists (an expanded interactive step is not one).
+    componentCount: screens.componentCount,
+    screenCount: screens.screenCount,
+    conditionalCount: screens.conditionalCount,
+    // One row per Get Records element, so the read count IS the row count.
+    readCount: reads.rows.length,
+    readObjectCount: reads.objectCount,
   };
 }
 

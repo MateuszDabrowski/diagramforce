@@ -500,7 +500,7 @@ foreignObject[data-md] del { text-decoration: line-through; }
 .df-tbl__table tbody tr:hover td { background: rgba(127, 127, 127, 0.07); }
 /* Flow Table view stacks one table per section in the shared scroller - separate them. */
 .df-tbl__table + .df-tbl__table { margin-top: 22px; }
-/* The Flow Table's five sections share one scroller and one right edge. The stack carries a measured
+/* The Flow Table's sections share one scroller and one right edge. The stack carries a measured
    min-width (alignSectionWidths in flow-table.js) so every table's width:100% resolves against the
    WIDEST section rather than the scroller's visible box - without it the overflowing section runs to
    1424px while the rest stop at the viewport, and the sections end ragged. Block-level, so a window

@@ -1,27 +1,27 @@
 // Toolbar — wires all button clicks to module actions
 // Also keeps undo/redo button states in sync
 
-import { diagramEmbedsImages } from './image-component.js?v=1.26.7';
-import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.7';
-import { resizeDataObjectToFit } from './components.js?v=1.26.7';
-import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.7';
-import { escHtml, compareSemver } from './util.js?v=1.26.7';
+import { diagramEmbedsImages } from './image-component.js?v=1.26.9';
+import { showToast, trapFocus, buildModal } from './feedback.js?v=1.26.9';
+import { resizeDataObjectToFit } from './components.js?v=1.26.9';
+import { isAutoSizingEnabled, setAutoSizingEnabled, refitAllParents, isConnectorGroupingEnabled, setConnectorGroupingEnabled, rerouteAllLinks, isCrossingBumpsEnabled, setCrossingBumpsEnabled, isFocusDimmingEnabled, setFocusDimmingEnabled, isGridVisible, DATAMODEL_COLUMN_GAP } from './canvas.js?v=1.26.9';
+import { escHtml, compareSemver } from './util.js?v=1.26.9';
 // The version, via the persistence CONTEXT leaf rather than persistence.js itself: persistence.js imports the
 // toolbar, so importing it back here would close a cycle. context.js has zero imports by design.
-import { pctx } from './persistence/context.js?v=1.26.7';
-import { showWhatsNewNow } from './whats-new.js?v=1.26.7';
-import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.7';
-import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.7';
-import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.7';
-import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.7';
-import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.7';
-import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.7';
-import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.7';
+import { pctx } from './persistence/context.js?v=1.26.9';
+import { showWhatsNewNow } from './whats-new.js?v=1.26.9';
+import { openDiagnosticsModal } from './toolbar/diagnostics-report.js?v=1.26.9';
+import { kbd, SHORTCUT_GROUPS, MOUSE_TIPS, RIGHT_CLICK_TIPS } from './keyboard.js?v=1.26.9';
+import { tctx, btn, setupDropdown } from './toolbar/context.js?v=1.26.9';
+import { setupSyncControl } from './toolbar/sync-control.js?v=1.26.9';
+import { showLoadManagerModal, showLoadModal, showDriveLibraryModal, showPasteImportModal, initWindowFileDrop } from './toolbar/load-manager.js?v=1.26.9';
+import { showSaveManagerModal } from './toolbar/save-manager.js?v=1.26.9';
+import { setShapeStateApplier, compareActiveWithTab, openReviewPicker } from './toolbar/review.js?v=1.26.9';
 // Re-export for app.js: setShapeStateApplier (app.js:144) + compareActiveWithTab (app.js:170, optional-chained - a missing re-export silently kills tab right-click Compare).
-export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.7';
-import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.7';
-import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.7';
-import { noteError } from './diagnostics.js?v=1.26.7';
+export { setShapeStateApplier, compareActiveWithTab } from './toolbar/review.js?v=1.26.9';
+import { setViewMode, updateDisplayMenuVisibility, updateDisplayToggleLabels, updateGanttToggleLabels, updateSequenceToggleLabels, refreshDisplayDotIndicator, refreshViewMenuState, isDisplayFlagOn, applyDisplayFlagToAll, dataObjectsAllCollapsed, getGanttTimelineSetting, applyToAllGanttTimelines } from './toolbar/display-options.js?v=1.26.9';
+import { startFlowAnimation, stopFlowAnimation } from './toolbar/flow-animation.js?v=1.26.9';
+import { noteError } from './diagnostics.js?v=1.26.9';
 
 let modules = {};
 // The diagram type's own Auto Layout, as the View menu offers it (set in init; null before it). The suggestion prompt
@@ -406,7 +406,7 @@ export function init(_modules) {
         // along, staying inside) AND it's the undo-tested path, so it handles flat + contained flows alike.
         placed = modules.canvas.autoLayout(direction, { align: 'barycenter' }) > 0;
         if (!placed) return;
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, modules.canvas.lastLayoutAxis?.() || direction); } catch (e) { noteError('layout:snap-ports', e); }
         // Route the final pass NOW (shared bus, separation, trunk merging) so the labels below are placed on the
         // routes that will stay - otherwise two merged "Morphes into" labels landed on the same spot. Inside the batch.
         try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }
@@ -423,15 +423,16 @@ export function init(_modules) {
         // row-1 band (object links are pinned to top/bottom ports), and sfManhattan's obstacle avoidance
         // detoured it around the 380px cards - the reported wrap-around routes. One rank per depth removes
         // the obstacle; width-aware packing and subtree ordering were both simulated and do NOT (any second
-        // sub-row still sits column-aligned under the first). M7 stays on for architecture/org, where it was
-        // measured and tuned. (b) join labels get the flow-style target-centred placement afterwards -
-        // snapLinksToPorts reseeds every label to its route midpoint, which can sit on top of a card.
+        // sub-row still sits column-aligned under the first). M7 is off for every type since 2026-10-31
+        // (auto-layout.js); this explicit 0 keeps data models off whatever that default becomes. (b) join labels
+        // get the flow-style target-centred placement afterwards - snapLinksToPorts reseeds every label to its
+        // route midpoint, which can sit on top of a card.
         // (c) `hub`: a star (one table joined to many) takes the hub layout in either direction, then every side port
         // turns to face the card at its other end (option C, 2026-10-16; auto-layout.js planHubLayout / refaceDataModelPorts).
         placed = modules.canvas.autoLayout(direction, { ...(opts || {}), maxRankExtent: 0, crossGap: DATAMODEL_COLUMN_GAP, hub: true }) > 0;
         if (!placed) return;
         try { modules.canvas.refaceDataModelPorts(); } catch (e) { noteError('layout:reface-ports', e); }
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, modules.canvas.lastLayoutAxis?.() || direction); } catch (e) { noteError('layout:snap-ports', e); }
         // Data models route on the shared bus since 1.25.8, so they need the final pass before labels too (see the
         // process branch): without it 5 of mcn-consent's 40 lines moved out from under their join labels.
         try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }
@@ -446,7 +447,7 @@ export function init(_modules) {
         // (0 label-label, 0 label-card) moving ONLY the colliding label, 8-99px to the nearest clear spot.
         placed = modules.canvas.autoLayout(direction, opts) > 0;
         if (!placed) return;
-        try { modules.mermaidImport.snapLinksToPorts(modules.graph, direction); } catch (e) { noteError('layout:snap-ports', e); }
+        try { modules.mermaidImport.snapLinksToPorts(modules.graph, modules.canvas.lastLayoutAxis?.() || direction); } catch (e) { noteError('layout:snap-ports', e); }
         try { rerouteAllLinks(); } catch (e) { noteError('layout:reroute', e); }   // final routes first: see the process branch
         try { modules.canvas.resolveConnectorLabels({ collisionOnly: true }); } catch (e) { noteError('layout:labels', e); }
       }

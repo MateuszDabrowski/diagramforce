@@ -191,7 +191,8 @@
 /* Conflict (sync paused — needs Pull/Keep/Fork): the SAME logo, amber-tinted via filter — a "needs
    attention" state distinct from the red error. grayscale→sepia→saturate→a small hue-rotate lands in
    the amber family (the brand accent), keeping the facet detail like the error tint does. */
-.df-sync__btn[data-state="conflict"] .df-sync__drive { filter: grayscale(1) brightness(0.95) sepia(1) saturate(4.5) hue-rotate(-18deg); }
+.df-sync__btn[data-state="conflict"] .df-sync__drive,
+.df-sync__btn[data-state="held"] .df-sync__drive { filter: grayscale(1) brightness(0.95) sepia(1) saturate(4.5) hue-rotate(-18deg); }
 /* Refresh-available (the original shared file gained changes — pull offered): the SAME logo, tinted BLUE
    (info, distinct from the amber conflict + red error) so it reads "there's an update to pull", not "problem". */
 .df-sync__btn[data-state="refresh"] .df-sync__drive { filter: grayscale(1) brightness(0.95) sepia(1) saturate(4) hue-rotate(165deg); }
@@ -219,9 +220,11 @@
 }
 /* Text shows in the error state (red "Sign in") + conflict (amber "Review"). */
 .df-sync__text { font-size: var(--font-size-sm); font-weight: 500; white-space: nowrap; color: var(--sync-error); }
-.df-sync__btn[data-state="conflict"] .df-sync__text { color: var(--brand-amber-text); }   /* ink in light (R7) */
+.df-sync__btn[data-state="conflict"] .df-sync__text,
+.df-sync__btn[data-state="held"] .df-sync__text { color: var(--brand-amber-text); }   /* ink in light (R7) */
 .df-sync__btn[data-state="refresh"] .df-sync__text { color: var(--color-primary); }   /* "Refresh" is an info action — blue */
-.df-sync__btn[data-state="saving"] .df-sync__text { color: var(--text-secondary); }   /* "Saving" is in-progress, not an error — neutral */
+.df-sync__btn[data-state="saving"] .df-sync__text,
+.df-sync__btn[data-state="reconnecting"] .df-sync__text { color: var(--text-secondary); }   /* in progress, not an error: neutral */
 
 /* Menu state-explainer row (first child, every state). In error it doubles as the reconnect
    button (.df-sync__status--action). */

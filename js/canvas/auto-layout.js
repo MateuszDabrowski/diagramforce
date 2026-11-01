@@ -3,17 +3,17 @@
 // (analyzeSequenceLayout / applySequenceAutoLayout). Reads the live graph,
 // paper, and fitContent through the canvas context (cctx); canvas.js is the
 // sole writer and wires cctx.fitContent in init().
-import { cctx } from './context.js?v=1.26.7';
-import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.7';
-import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.7';
+import { cctx } from './context.js?v=1.26.9';
+import { STUB as ROUTER_STUB, PAD as ROUTER_PAD } from './router.js?v=1.26.9';
+import { JOIN_LANE_GAP, assignJoinLanes, joinLaneCounts } from './join-lanes.js?v=1.26.9';
 // The layered engine, extracted pure (Stage C C2) so it can also drive scoped group interiors (C5).
-import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns, planHubLayout, DATAMODEL_COLUMN_GAP } from './layout-core.js?v=1.26.7';
-import { startBatch, endBatch } from '../history.js?v=1.26.7';
-import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.7';
+import { layoutGraphSubset, detectFlowAxis, planLaneNormalisation, planFlowZoneChains, planFlowZoneRefit, orderLayerColumns, planHubLayout, DATAMODEL_COLUMN_GAP } from './layout-core.js?v=1.26.9';
+import { startBatch, endBatch } from '../history.js?v=1.26.9';
+import { undoableLifelineOp } from './lifeline-undo.js?v=1.26.9';
 // Flow tree layout (S3) — pure, does NOT use the barycentre core (avoids the F7 join defect).
-import { computeFlowLayout } from './flow-layout.js?v=1.26.7';
-import { flowConnectorType } from './link-styles.js?v=1.26.7';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.7';
+import { computeFlowLayout } from './flow-layout.js?v=1.26.9';
+import { flowConnectorType } from './link-styles.js?v=1.26.9';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.9';
 
 
 // ── Auto Layout (improved force-directed with tight packing) ─────────
@@ -21,7 +21,11 @@ import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.7';
 // their embedded children move with them and maintain relative positions.
 // Returns the number of top-level units it placed: 0 when there was nothing to arrange (fewer than two), so the
 // caller can skip the port snap and label passes, which would otherwise rewrite connectors on a no-op (review H2-5).
+// lastLayoutAxis() then names the axis it used, which `detectAxis` may have turned from the caller's `direction`.
+let lastAxis = null;
+export const lastLayoutAxis = () => lastAxis;
 export function autoLayout(direction, opts = {}) {
+  lastAxis = null;
   const { graph, paper, fitContent } = cctx;
   // v2 "Layered" (opts.align==='barycenter'): same ranks + crossing-minimised order as the default,
   // but the final COORDINATE step pulls each node toward its neighbours' barycentre so children sit
@@ -226,10 +230,10 @@ export function autoLayout(direction, opts = {}) {
   // longest-path levels — the mixed-hub fixture collapsed to a single 12-node rank (a 3729px smear)
   // and the lane diagram's flow order inverted. Ignore back-edges when RANKING; they still render.
   //
-  // maxRankExtent / rankMedianFactor (M7): wrap a rank wider than max(1400, 2 × median rank) into
-  // sub-rows. Both numbers are MEASURED, not guessed (dev/scripts/measure-layout.mjs): on mixed-hub
-  // the cap takes aspect 2.92 → 1.38 and total connector skew 8497 → 3786, and it fires on no other
-  // fixture. The plan's original 3× factor was tried and is worse on every metric (1.67 / 5211).
+  // maxRankExtent (M7 rank wrapping) is OFF for every type (owner call 2026-10-31; datamodel since 1.22.0). A row
+  // reads as a level, so a wrapped rank showed levels that are not there: on the two real diagrams in the repo's
+  // history it fires on, it stacked source zones under each other. Its aspect and skew gains on mixed-hub could not
+  // see that. A caller may still pass it; approaches/auto-layout.md has the history.
   // gridSingletons: unlinked units pack into a grid after the connected components instead of one column (review H2-7).
   // A data model that is a star (one table joined to many on its key columns) takes the hub layout instead, in either
   // direction: field joins leave a card sideways, so the joined tables go in columns either side of the hub (owner
@@ -241,7 +245,7 @@ export function autoLayout(direction, opts = {}) {
       joinPort: (port) => typeof port === 'string' && /^field-(left|right)-/.test(port) }) : null;
   const pos = hubPlan || layoutGraphSubset(units, edges, {
     isHorizontal, align, breakCycles: true, gridSingletons: true,
-    maxRankExtent: opts.maxRankExtent ?? 1400, rankMedianFactor: opts.rankMedianFactor ?? 2,
+    maxRankExtent: opts.maxRankExtent ?? 0, rankMedianFactor: opts.rankMedianFactor ?? 2,
     // `crossGap`: the gap between neighbouring cards of one rank (columns, on a top-down layout). Data models pass
     // DATAMODEL_COLUMN_GAP; everything else keeps DEFAULT_GAPS.
     ...(opts.crossGap ? (isHorizontal ? { gapY: opts.crossGap } : { gapX: opts.crossGap }) : {}),
@@ -278,6 +282,7 @@ export function autoLayout(direction, opts = {}) {
   parkAnnotations();   // re-park unconnected Note/TextLabel/Legend/Image to the right margin (Stage A)
 
   fitAfterLayout();
+  lastAxis = isHorizontal ? 'horizontal' : 'vertical';
   return units.length;
 }
 

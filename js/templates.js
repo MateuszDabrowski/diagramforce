@@ -21,12 +21,12 @@
 // cell gets a fresh ID and all parent / embeds / source / target references
 // are rewritten to match before the cells are added to the live graph.
 
-import { showToast, promptModal, confirmModal } from './feedback.js?v=1.26.7';
-import { APP_VERSION, sanitizeGraphJSON, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.26.7';
-import { mergeTemplatesWithTombstones } from './util.js?v=1.26.7';
-import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.26.7';
-import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.26.7';
-import { noteError } from './diagnostics.js?v=1.26.7';
+import { showToast, promptModal, confirmModal } from './feedback.js?v=1.26.9';
+import { APP_VERSION, sanitizeGraphJSON, showLoadResult, triggerDownload, dateSuffix, requestPersistentStorage, contentSignature, isDriveConnected, isSignedIn, pullTemplates, pushTemplates } from './persistence.js?v=1.26.9';
+import { mergeTemplatesWithTombstones } from './util.js?v=1.26.9';
+import { newCellId, cloneCellsForInsert } from './clone-cells.js?v=1.26.9';
+import { reslotInsertedGanttBars } from './gantt-layout.js?v=1.26.9';
+import { noteError } from './diagnostics.js?v=1.26.9';
 
 const STORAGE_KEY = 'sfdiag::customTemplates';
 // Tombstones for deletes that must PROPAGATE across devices (item 17): {id, name, deletedAt}. Without these a
@@ -202,12 +202,12 @@ export function deleteTemplate(id) {
  *  so template cells run through the same `sanitizeGraphJSON` every other
  *  localStorage → graph path uses (drops type-foreign cells, strips `on*`
  *  handlers / `javascript:` URIs / proto-pollution keys). Returns [] on
- *  failure so callers degrade gracefully. */
-function safeTemplateCells(template) {
+ *  failure so callers degrade gracefully. `stats` (optional) gets sanitizeGraphJSON's counts of what it dropped. */
+function safeTemplateCells(template, stats = null) {
   if (!Array.isArray(template?.cells)) return [];
   try {
     const copy = template.cells.map(c => JSON.parse(JSON.stringify(c)));
-    const safe = sanitizeGraphJSON({ cells: copy });
+    const safe = sanitizeGraphJSON({ cells: copy }, { stats });
     return Array.isArray(safe?.cells) ? safe.cells : [];
   } catch (err) {
     console.warn('SF Diagrams: template failed sanitisation', err);
@@ -388,7 +388,11 @@ export function instantiateTemplate(templateId, dropPoint) {
  */
 export function insertTemplateCells(template, dropPoint) {
   if (!graph) return;
-  const cells = safeTemplateCells(template);
+  const skipped = {};
+  const cells = safeTemplateCells(template, skipped);
+  // A template synced from a device on a newer release keeps its raw cells here, and the drop thinned them with no
+  // word (B2 follow-up). Said once, even when nothing is left to insert.
+  showLoadResult('Inserted', String(template?.name || 'Template').slice(0, 80), skipped, null, template?.appVersion);
   if (cells.length === 0) return;
 
   // Bounding box of the positioned cells so we can centre the group on the
@@ -621,7 +625,9 @@ export function exportTemplatesJSON() {
  *  added: one bare 0 used to mean all three, and the templates-file import called the user's own re-imported export
  *  "No valid templates" (review D10). A saved shape keeps `kind: 'shape'`, or a backup turned it into a template. */
 export function importTemplatesArray(incoming, stats = null) {
-  const tally = { added: 0, duplicates: 0, full: 0, invalid: 0 };
+  // `dropped`: one entry per ADDED template that sanitising thinned (sanitizeGraphJSON's counts + the template's
+  // appVersion), which the import sums into its one warning (loadJSONText's mergeTemplates, B2 follow-up).
+  const tally = { added: 0, duplicates: 0, full: 0, invalid: 0, dropped: [] };
   const report = () => { if (stats && typeof stats === 'object') Object.assign(stats, tally); };
   if (!Array.isArray(incoming)) { report(); return 0; }
   const existing = getTemplates();
@@ -631,7 +637,8 @@ export function importTemplatesArray(incoming, stats = null) {
   const existingNames = new Set(existing.map(t => t.name));
   let added = 0;
   for (const t of incoming) {
-    const cells = safeTemplateCells(t);            // sanitise — untrusted file content
+    const dropped = {};
+    const cells = safeTemplateCells(t, dropped);   // sanitise — untrusted file content
     if (!cells.length) { tally.invalid++; continue; }   // malformed / empty → skip
     const sig = contentSignature(cells);
     if (existingSigs.has(sig)) { tally.duplicates++; continue; }   // exact duplicate → skip
@@ -651,6 +658,7 @@ export function importTemplatesArray(incoming, stats = null) {
       createdAt: Date.now(),
       cells,
     });
+    if (dropped.unknownShapes || dropped.unknownLinks || dropped.danglingLinks) tally.dropped.push({ ...dropped, appVersion: t.appVersion ?? null });
     added++;
   }
   tally.added = added;

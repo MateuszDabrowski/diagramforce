@@ -212,18 +212,24 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }
 }
 ```
 
-- Set `appVersion` to the value in the spec's **"Spec snapshot: vX"** marker.
+- Set `appVersion` to the value in the spec's **"Spec snapshot: vX"** marker, never a guessed newer one: a file
+  newer than the running app that holds a shape the app does not know pauses that tab's Google Drive saves.
 - **You place the nodes.** There is no server-side auto-layout - every element carries its own
   `position` (x/y). Lay the diagram out so it reads well: a clear direction (left-to-right or
   top-down), no overlapping shapes, and room for the connectors. A diagram that validates but is a
-  tangle of overlaps is not done.
+  tangle of overlaps is not done. Three habits keep it readable (spec Layout rules 10-11 and Port selection):
+  - **One row per level, however wide.** Never wrap a long row of siblings into a second row: it reads as another
+    level of hierarchy.
+  - **One exit side per fan.** Every link from a shape to the next level leaves the same port (`port-bottom`
+    top-down) and enters each child's facing side, so they draw one trunk and bus.
+  - **A link label sits on the part only its own link draws**, beside its own branch, never on a shared trunk.
 - Use only shapes that belong to the chosen `diagramType` (the validator flags a type-specific shape
   used in the wrong diagram).
 - Give every cell a unique `id`; a link's `source`/`target` must reference ids that exist.

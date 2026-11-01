@@ -53,12 +53,14 @@ export const pctx = {
   isDriveConfigured: null, // () => boolean
   driveSignIn: null,       // () => Promise<void>  (open the Drive sign-in flow)
   driveTabHolding: null,   // (fileId, { anyRole }) => tabId | null  (the open tab whose own Drive file this is - loadNamedSave)
+  holdTabDriveSaves: null, // (tabId, version) => void  (remote-store: a Replace with a newer release's thinned file)
 
   // Cross-cutting helpers shared with persistence.js, wired in init() so the
   // sub-modules don't import persistence.js (which would be circular).
   triggerDownload: null,      // (url, filename) => void
   dateSuffix: null,           // () => 'YYYY-MM-DD'
   sanitizeGraphJSON: null,    // (graphData) => graphData  (mutates in place)
+  showLoadResult: null,       // (verb, name, stats, rawType, savedVersion, success?) => bool  (the load's skip warning, json-pipeline)
   compactGraphForSave: null,  // (graphJSON) => graphJSON  (strip load-reconstructable data — used by every save path incl. Drive)
   normalizeDiagramType: null, // (type) => canonical type
   checkVersionWarning: null,  // async (savedVer, name, rawData) => boolean

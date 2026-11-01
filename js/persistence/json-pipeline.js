@@ -7,17 +7,17 @@
 // runtime-only and reads live state/callbacks from the persistence context (pctx);
 // version checks + dedup signatures come from the leaf versioning module.
 
-import { contentSignature, checkVersionWarning } from './versioning.js?v=1.26.7';
-import { normalizeDateSuffix } from '../util.js?v=1.26.7';
-import { escHtml } from '../util.js?v=1.26.7';
-import { showToast, showError } from '../feedback.js?v=1.26.7';
-import { pctx } from './context.js?v=1.26.7';
-import { slimForShare } from '../share-codec.js?v=1.26.7';
+import { contentSignature, checkVersionWarning } from './versioning.js?v=1.26.9';
+import { normalizeDateSuffix } from '../util.js?v=1.26.9';
+import { escHtml, compareSemver } from '../util.js?v=1.26.9';
+import { showToast, showError } from '../feedback.js?v=1.26.9';
+import { pctx } from './context.js?v=1.26.9';
+import { slimForShare } from '../share-codec.js?v=1.26.9';
 // The allowlist + cap live in a ZERO-dep leaf (diagram-schema.js) so the dev validator (dev/scripts/validate-diagram.mjs)
 // and this loader share ONE source of truth - add a new shape there and both update. (S4/v1.12.0 allowlist; drops any
 // cell whose type isn't registered, so a crafted share URL can't ship an unknown type the renderer never expected.)
-import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.26.7';
-import { widenZonesForJoinLanes } from '../canvas/join-lanes.js?v=1.26.7';
+import { ALLOWED_CELL_TYPES, MAX_CELL_COUNT } from './diagram-schema.js?v=1.26.9';
+import { widenZonesForJoinLanes } from '../canvas/join-lanes.js?v=1.26.9';
 
 /** Sanitise graph JSON from untrusted sources (share URLs, imports).
  *  Strips event-handler attributes and javascript: URIs to prevent XSS. */
@@ -362,9 +362,9 @@ function reportRejected(rejected) {
 /** Dedup + rename a bundle's diagrams against what already exists:
  *   - exact content match (same `graph.cells`) → **skipped** (no duplicate)
  *   - name match but different content → name gets **" (Restored)"**
- *  Also dedups within the file, and sanitises each kept graph. Returns the
- *  prepared `{name, diagramType, graph, viewport}` list to open or save. */
-function prepareImportedDiagrams(rawDiagrams) {
+ *  Also dedups within the file, and sanitises each kept graph, adding what it dropped to `tally` (newSkipTally).
+ *  Returns the prepared `{name, diagramType, graph, viewport}` list to open or save. */
+function prepareImportedDiagrams(rawDiagrams, tally = null, bundleAppVersion = null) {
   const { normalizeDiagramType } = pctx;
   const { sigs, names } = collectExistingDiagrams();
   const seen = new Set();
@@ -378,26 +378,30 @@ function prepareImportedDiagrams(rawDiagrams) {
     seen.add(sig);
     // A throw here (over MAX_CELL_COUNT, nested too deeply) used to escape loadJSONText and abort EVERY diagram and
     // template in the backup with no message (audit 2026-09-23). Skip that one diagram and say so.
-    try { sanitizeGraphJSON(d.graph); }
+    let dropped;
+    try { dropped = sanitizeCounting(d.graph, tally, d.appVersion || bundleAppVersion); }
     catch (err) { out.rejected.push({ name: String(d.name || 'Imported'), reason: err.message }); continue; }
     let name = String(d.name || 'Imported').slice(0, 80) || 'Imported';
     if (names.has(name)) name = `${name} (Restored)`;
     names.add(name);
-    out.push({ name, diagramType: normalizeDiagramType(d.diagramType), mappingMode: d.mappingMode || false, graph: d.graph, viewport: d.viewport || null, appVersion: d.appVersion || null, group: groupMetaOf(d.group) });
+    out.push({ name, diagramType: normalizeDiagramType(d.diagramType), mappingMode: d.mappingMode || false, graph: d.graph, viewport: d.viewport || null, appVersion: d.appVersion || null, group: groupMetaOf(d.group),
+      holdVersion: newerHoldVersion(dropped, d.diagramType, d.appVersion || bundleAppVersion) });
   }
   return out;
 }
 
 /** Dedup a bundle's diagrams, then land the new ones as browser saves. Reports skipped-as-unloadable diagrams and
  *  full storage itself. Returns `{ saved, storageFull, rejected }` (counts). */
-function saveBundleDiagrams(rawDiagrams, bundleAppVersion) {
-  const diagrams = prepareImportedDiagrams(rawDiagrams);   // dedup + rename + sanitise
+function saveBundleDiagrams(rawDiagrams, bundleAppVersion, tally = null) {
+  const diagrams = prepareImportedDiagrams(rawDiagrams, tally, bundleAppVersion);   // dedup + rename + sanitise
   if (diagrams.rejected.length) reportRejected(diagrams.rejected);
   let saved = 0;
   let storageFull = 0;
   for (const d of diagrams) {
     // Preserve each diagram's own version, else the bundle's, else current.
-    const r = restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || bundleAppVersion, d.mappingMode, d.group);
+    // A thinned diagram keeps its hold in the browser save, so the tab Load > Browser opens from it holds its Drive saves.
+    const r = restoreDiagramAsSave(d.name, d.diagramType, d.graph, d.viewport, d.appVersion || bundleAppVersion, d.mappingMode, d.group,
+      { extra: d.holdVersion ? { driveHoldVersion: d.holdVersion } : null });
     if (r === true) saved++;
     else if (r === 'quota') storageFull++;
   }
@@ -407,37 +411,110 @@ function saveBundleDiagrams(rawDiagrams, bundleAppVersion) {
 }
 
 /** Merge a file's templates into My Templates. Returns importTemplatesArray's tally `{ added, duplicates, full,
- *  invalid }`, so the summary and toasts can say why a template did not land (review D10). */
-function mergeTemplates(rawTemplates) {
+ *  invalid }`, so the summary and toasts can say why a template did not land (review D10). What sanitising the added
+ *  templates dropped goes into `tally` (newSkipTally), as a diagram's does. */
+function mergeTemplates(rawTemplates, tally = null, fileAppVersion = null) {
   const { templatesBackupApi } = pctx;
   const ts = { added: 0, duplicates: 0, full: 0, invalid: 0 };
   if (rawTemplates.length && templatesBackupApi?.importMerge) ts.added = templatesBackupApi.importMerge(rawTemplates, ts) || 0;
+  for (const d of Array.isArray(ts.dropped) ? ts.dropped : []) addSkips(tally, d, d.appVersion || fileAppVersion);
   return ts;
 }
 
 /** The import summary's template lines, from mergeTemplates' tally. */
 const templateStats = (ts) => ({ templates: ts.added, templatesSkipped: ts.duplicates, templatesFull: ts.full, templatesInvalid: ts.invalid });
 
+/** A diagramType the file names that normalizeDiagramType does not know (it falls back to Architecture). */
+function isUnknownDiagramType(rawType) {
+  const raw = rawType == null ? '' : String(rawType);
+  return raw !== '' && raw.toLowerCase() !== 'architecture' && pctx.normalizeDiagramType(raw) === 'architecture';
+}
+
+/** True when `savedVersion` (a file's appVersion) is a later release than this build. A missing or unreadable
+ *  version is not newer. */
+export function isNewerThanThisBuild(savedVersion) {
+  return savedVersion != null && savedVersion !== '' && compareSemver(savedVersion, pctx.appVersion) > 0;
+}
+
+/** The sentence a load adds when a newer release made the file and this build dropped or misread what it does not
+ *  know, or '' (B2 follow-up). The stale build is the common cause, and a reload fetches the one that knows them. */
+function newerReleaseAdvice(stats, rawType, savedVersion) {
+  const unknown = stats.unknownShapes || stats.unknownLinks || isUnknownDiagramType(rawType);
+  if (!unknown || !isNewerThanThisBuild(savedVersion)) return '';
+  return ` It was made with Diagramforce ${String(savedVersion).slice(0, 20)} and this page runs ${pctx.appVersion}.`
+    + ' Reload the page to get the update, then try again.';
+}
+
+/** The version to hold a tab's Drive saves for, or null (B2 follow-up). Set exactly when newerReleaseAdvice speaks: the
+ *  file came from a newer release and this build dropped or misread part of it, so the tab's graph is a thinned copy
+ *  that must not be written over the whole one. A load that fills a tab passes it on as `driveHoldVersion`. */
+export function newerHoldVersion(stats, rawType, savedVersion) {
+  return stats && newerReleaseAdvice(stats, rawType, savedVersion) !== '' ? String(savedVersion).slice(0, 20) : null;
+}
+/** The drive meta that carries a load's hold into the tab it opens (importDiagramAsTab -> adoptDriveMetaIntoTab). */
+function holdMeta(stats, rawType, savedVersion) {
+  const v = newerHoldVersion(stats, rawType, savedVersion);
+  return v ? { driveHoldVersion: v } : null;
+}
+
 /**
- * The warning a single-diagram load or replace shows, or null when it has nothing to warn about (review D9).
- * `stats` is sanitizeGraphJSON's; `rawType` is the diagramType the file named. A named type normalizeDiagramType does
- * not know falls back to Architecture, so the warning says so. Counts only, never cell type names: the allowlist
- * stays unprobed, and `npm run validate` names them.
+ * The warning a load shows, or null when it has nothing to warn about (review D9). `stats` is sanitizeGraphJSON's
+ * (or a multi-diagram import's sum); `rawType` is the diagramType the file named. A named type normalizeDiagramType
+ * does not know falls back to Architecture, so the warning says so. Counts only, never cell type names: the allowlist
+ * stays unprobed, and `npm run validate` names them. `savedVersion` is the file's appVersion: when it is newer than
+ * this build and something was not understood, the warning says so and asks for a reload.
  */
-export function loadWarning(verb, name, stats, rawType) {
+export function loadWarning(verb, name, stats, rawType, savedVersion = null) {
   const n = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
   const items = [];
   if (stats.unknownShapes) items.push(`${n(stats.unknownShapes, 'shape')} of an unknown type`);
   if (stats.unknownLinks) items.push(`${n(stats.unknownLinks, 'connector')} of an unknown type`);
   if (stats.danglingLinks) items.push(`${n(stats.danglingLinks, 'connector')} ${stats.unknownShapes ? 'to a missing shape' : "pointing to a shape that isn't in the file"}`);
   const list = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0];
-  const raw = rawType == null ? '' : String(rawType);
-  const unknownType = raw !== '' && raw.toLowerCase() !== 'architecture' && pctx.normalizeDiagramType(raw) === 'architecture';
-  if (unknownType) {
-    return `${verb} "${name}" as Architecture: the file's diagramType "${raw.slice(0, 40)}" is not one Diagramforce knows.`
-      + (list ? ` Skipped ${list}.` : '');
+  const newer = newerReleaseAdvice(stats, rawType, savedVersion);
+  if (isUnknownDiagramType(rawType)) {
+    return `${verb} "${name}" as Architecture: the file's diagramType "${String(rawType).slice(0, 40)}" is not one Diagramforce knows.`
+      + (list ? ` Skipped ${list}.` : '') + newer;
   }
-  return list ? `${verb} "${name}" - skipped ${list}.` : null;
+  return list ? `${verb} "${name}" - skipped ${list}.${newer}` : null;
+}
+
+/**
+ * A load's result toast: loadWarning's copy as a warning, else `success` when given. Every path that sanitises an
+ * incoming diagram ends with it, so what it dropped is said once. A warning that asks for a reload stays until it is
+ * closed: it carries an instruction. `held`: the load opened one tab whose Drive saves are now held
+ * (newerHoldVersion), so a signed-in user is told why that diagram stops syncing. Returns true when it warned.
+ */
+export function showLoadResult(verb, name, stats, rawType, savedVersion = null, success = null, { held = false } = {}) {
+  const warning = stats ? loadWarning(verb, name, stats, rawType, savedVersion) : null;
+  if (!warning) {
+    if (success) showToast(success, 'success');
+    return false;
+  }
+  const sticky = newerReleaseAdvice(stats, rawType, savedVersion) !== '';
+  const paused = held && sticky && pctx.isDriveConnected?.() ? ' Until then, Google Drive saves are paused for this diagram.' : '';
+  showToast(warning + paused, 'warning', sticky ? { sticky: true } : { duration: 8000 });
+  return true;
+}
+
+/** A multi-diagram import's skip counts: sanitizeGraphJSON's `stats` for each diagram, summed, plus the newest
+ *  appVersion among those that dropped a cell type (for loadWarning's newer-release sentence). */
+function newSkipTally() { return { unknownShapes: 0, unknownLinks: 0, danglingLinks: 0, appVersion: null }; }
+function addSkips(tally, stats, appVersion) {
+  if (!tally || !stats) return;
+  tally.unknownShapes += stats.unknownShapes || 0;
+  tally.unknownLinks += stats.unknownLinks || 0;
+  tally.danglingLinks += stats.danglingLinks || 0;
+  if ((stats.unknownShapes || stats.unknownLinks) && appVersion != null && appVersion !== ''
+      && (tally.appVersion == null || compareSemver(appVersion, tally.appVersion) > 0)) tally.appVersion = String(appVersion);
+}
+/** Sanitise one diagram of a multi-diagram file and add what it dropped to `tally`. Throws as sanitizeGraphJSON does
+ *  (nothing is added then). */
+function sanitizeCounting(graph, tally, appVersion) {
+  const stats = {};
+  sanitizeGraphJSON(graph, { stats });
+  addSkips(tally, stats, appVersion);
+  return stats;
 }
 
 /**
@@ -473,8 +550,9 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
   }
 
   // Inside a try: a throw here rejected loadJSONText, and Paste > Load's click handler does not catch it.
+  const fileLabel = String(data.title || fallbackName || 'Imported');
   let okVer;
-  try { okVer = await checkVersionWarning(data.appVersion || null, String(data.title || fallbackName || 'Imported'), data); }
+  try { okVer = await checkVersionWarning(data.appVersion || null, fileLabel, data); }
   catch (err) { showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`); return false; }
   if (!okVer) return false;
 
@@ -501,14 +579,17 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     const openSigs = backup ? collectExistingDiagrams().tabSigs : null;
     const diagrams = [];
     const rejected = [];
+    const skips = newSkipTally();   // what sanitising dropped, across every diagram and template the file adds
     let alreadyOpen = 0;
     for (const d of grouped) {
       if (!Array.isArray(d?.graph?.cells)) continue;
       if (openSigs && openSigs.has(importSignature(d.graph.cells))) { alreadyOpen++; continue; }
       // drop endpoint-less links etc. (same as every import path); one unloadable diagram is skipped, not fatal
-      try { sanitizeGraphJSON(d.graph); }
+      let dropped;
+      try { dropped = sanitizeCounting(d.graph, skips, d.appVersion || data.appVersion); }
       catch (err) { rejected.push({ name: String(d.name || 'Imported'), reason: err.message }); continue; }
       diagrams.push({
+        driveMeta: holdMeta(dropped, d.diagramType, d.appVersion || data.appVersion),   // the tab's Drive saves wait (B2)
         name: String(d.name || 'Imported').slice(0, 80) || 'Imported',
         diagramType: normalizeDiagramType(d.diagramType),
         mappingMode: d.mappingMode || false,
@@ -524,11 +605,14 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     // leaves an empty "Project X 2". An untagged (legacy) file keeps its groups: its sole group takes every diagram.
     const usedMetas = tagged ? groupMetas.filter((gm) => diagrams.some((d) => d.group === gm.name)) : groupMetas;
     if (diagrams.length) onImportGroup(usedMetas, diagrams);
-    const looseResult = loose.length ? saveBundleDiagrams(loose, data.appVersion) : { saved: 0, storageFull: 0, rejected: 0 };
+    const looseResult = loose.length ? saveBundleDiagrams(loose, data.appVersion, skips) : { saved: 0, storageFull: 0, rejected: 0 };
     // A full backup can be a kind:'group' bundle that ALSO carries templates - import them too so a restore
     // doesn't silently drop the user's template library (item 4).
-    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : []);
+    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : [], skips, data.appVersion);
     const tc = ts.added;
+    // One warning for the whole file, beside the summary below: a newer release's backup lost its unknown shapes here
+    // with no word (B2 follow-up).
+    showLoadResult('Imported', fileLabel, skips, null, skips.appVersion);
     // A backup: the Load > Browser summary says what opened, what was saved and what was already here.
     if (backup && showLoadModalCallback) {
       showLoadModalCallback({
@@ -570,16 +654,19 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
         // #7: a 1-diagram bundle's per-diagram `group` is a bare NAME tag (bundle meta lives in data.groups, handled
         // by the onImportGroup path above) - wrap it so recreate-or-rejoin works by name.
         const grp = typeof d.group === 'string' ? { name: d.group } : (d.group || null);
-        onImportCallback(nm, normalizeDiagramType(d.diagramType), d.graph, d.viewport || null, d.mappingMode || false, null, grp);
-        const warning = loadWarning('Loaded', nm, stats, d.diagramType);
-        if (warning) showToast(warning, 'warning', { duration: 8000 });
-        else showToast(`Loaded "${nm}" ✓`, 'success');
+        const av = d.appVersion || data.appVersion;
+        const hold = holdMeta(stats, d.diagramType, av);
+        onImportCallback(nm, normalizeDiagramType(d.diagramType), d.graph, d.viewport || null, d.mappingMode || false, hold, grp);
+        showLoadResult('Loaded', nm, stats, d.diagramType, av, `Loaded "${nm}" ✓`, { held: !!hold });
         return true;
       }
     }
-    const { saved, storageFull, rejected } = saveBundleDiagrams(rawDiagrams, data.appVersion);
-    const ts = mergeTemplates(rawTemplates);
+    const skips = newSkipTally();
+    const { saved, storageFull, rejected } = saveBundleDiagrams(rawDiagrams, data.appVersion, skips);
+    const ts = mergeTemplates(rawTemplates, skips, data.appVersion);
     const tc = ts.added;
+    // The diagrams land in browser saves already thinned, so the import is the only moment to say what was dropped.
+    showLoadResult('Imported', fileLabel, skips, null, skips.appVersion);
 
     // Import tally. "skipped" = file entries that did NOT become new saves
     // because an exact content-copy is already open (as a tab) or saved here.
@@ -617,7 +704,9 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
   // ── Templates-only file ──
   if (isTemplatesOnly) {
     if (!templatesBackupApi?.importMerge) { showError('Templates import is unavailable.'); return false; }
-    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : []);
+    const skips = newSkipTally();
+    const ts = mergeTemplates(Array.isArray(data.templates) ? data.templates : [], skips, data.appVersion);
+    showLoadResult('Imported', fileLabel, skips, null, skips.appVersion);
     const n = ts.added;
     const tpl = (k) => `${k} template${k === 1 ? '' : 's'}`;
     // A re-imported export is not "no valid templates" (review D10): say it is already here, or that the library is full.
@@ -655,7 +744,8 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     if (data?.graph) fitJoinLanes(data.graph, normalizeDiagramType(data.diagramType));
     if (onImportCallback && data?.graph) {
       // #7: a single-diagram file can carry its tab-group meta ({name,icon,color}) so import recreate-or-rejoins it.
-      onImportCallback(name, normalizeDiagramType(data.diagramType), data.graph, data.viewport, data.mappingMode, null, data.group || null);
+      // A thinned newer-release file holds the tab's Drive saves (B2 follow-up), carried in as drive meta.
+      onImportCallback(name, normalizeDiagramType(data.diagramType), data.graph, data.viewport, data.mappingMode, holdMeta(stats, data.diagramType, data.appVersion), data.group || null);
       // A generator that wrote rough positions asks for Auto Layout: the app proposes it, never runs it on its own.
       if (data.suggestAutoLayout === true) pctx.onSuggestAutoLayout?.(name);
     } else if (data?.graph) {
@@ -665,9 +755,8 @@ export async function loadJSONText(jsonText, fallbackName, { singleDiagramOnly =
     } else {
       throw new Error('No graph data found in JSON.');
     }
-    const warning = loadWarning('Loaded', name, stats, data.diagramType);
-    if (warning) showToast(warning, 'warning', { duration: 8000 });
-    else showToast(`Loaded "${name}" ✓`, 'success');
+    showLoadResult('Loaded', name, stats, data.diagramType, data.appVersion, `Loaded "${name}" ✓`,
+      { held: !!(onImportCallback && newerHoldVersion(stats, data.diagramType, data.appVersion)) });
     return true;
   } catch (err) {
     showError(`Failed to load ${fallbackName ? `"${fallbackName}"` : 'JSON'}: ${err.message}`);
@@ -742,12 +831,11 @@ export async function replaceActiveWithJSONText(jsonText) {
   if (!onReplaceContent) { showError('Replace is unavailable.'); return false; }
   const name = tabNameCb ? tabNameCb() : 'Diagram';
   return onReplaceContent(d.graph, () => {
-    const warning = loadWarning('Replaced', name, stats, d.diagramType);
-    if (warning) {
-      showToast(warning, 'warning', { duration: 8000 });
-    } else {
-      showToast(`Replaced "${name}" ✓ - Undo brings the old version back.`, 'success');
-    }
+    // A thinned paste holds the tab's Drive saves. A whole one never lifts a hold already there: Undo can bring the
+    // thinned graph back, and a hold the tab no longer needs costs only an explicit "Save anyway".
+    const hold = newerHoldVersion(stats, d.diagramType, d.appVersion);
+    if (hold) pctx.holdTabDriveSaves?.(pctx.activeTabIdCb?.(), hold);
+    showLoadResult('Replaced', name, stats, d.diagramType, d.appVersion, `Replaced "${name}" ✓ - Undo brings the old version back.`, { held: !!hold });
   });
 }
 

@@ -1,8 +1,8 @@
 // Cloud-sync control (CLEANUP S4) — the Drive sync icon + state-aware dropdown (sign-in status row / sync-now / history / auto-sync toggle / disconnect / about). Connecting is the status-row "Sign in" button (signIn), NOT a menu item. Reads tctx.modules; imports btn+setupDropdown (context) + showDriveHistoryModal (drive-history) - one-way slice edges. init calls setupSyncControl.
-import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.7';
-import { formatRelativeTime } from '../util.js?v=1.26.7';
-import { btn, setupDropdown, tctx } from './context.js?v=1.26.7';
-import { showDriveHistoryModal } from './drive-history.js?v=1.26.7';
+import { buildModal, confirmModal, showToast } from '../feedback.js?v=1.26.9';
+import { formatRelativeTime } from '../util.js?v=1.26.9';
+import { btn, setupDropdown, tctx } from './context.js?v=1.26.9';
+import { showDriveHistoryModal } from './drive-history.js?v=1.26.9';
 
 // One icon (left of Share Link) + a state-aware dropdown menu. The Drive icon is
 // colour + glyph coded by sync state via the SLDS sync family; the time text shows
@@ -10,10 +10,13 @@ import { showDriveHistoryModal } from './drive-history.js?v=1.26.7';
 // Short state explainer for the sync menu's first row (shown in every state). In the error
 // state the row also becomes the reconnect button (see setupSyncControl).
 function syncStatusText(st, connected = false) {
+  if (st.held) return st.heldText;   // the newer-release hold: why nothing saves, and what brings the diagram back (B2)
   if (st.lookOnly) return 'An older version, opened to look at. It is not saved to Google Drive.';
   const rel = st.lastSavedAt ? formatRelativeTime(st.lastSavedAt) : null;
   switch (st.state) {
     case 'saving':   return 'Saving to Google Drive…';
+    // Slot only: the token lapsed while the Mac slept and the silent refresh is fetching a new one (2026-11-01).
+    case 'reconnecting': return 'Reconnecting to Google Drive…';
     case 'error':    return 'Signed out of Google Drive - sign in to reconnect.';
     case 'conflict': return 'This diagram changed on Google Drive.';
     case 'refresh':  return st.refreshOwn ? 'A newer version of this diagram is on Google Drive.' : 'The original shared file has new changes.';
@@ -46,35 +49,44 @@ export function setupSyncControl() {
   // pose) at which point we re-check the live state and drop the class if saving has finished —
   // so the icon always completes its rotation and settles cleanly instead of snapping back.
   driveSvg?.addEventListener('animationiteration', () => {
-    if (p.getDriveStatus?.().state !== 'saving') driveSvg.classList.remove('df-sync__drive--spin');
+    const now = p.getDriveStatus?.().state;
+    if (now !== 'saving' && now !== 'reconnecting') driveSvg.classList.remove('df-sync__drive--spin');
   });
 
   const render = () => {
     const st = p.getDriveStatus?.() || { state: 'off', showText: false, lastSavedAt: 0 };
     btnEl.dataset.state = st.state;
-    if (st.state === 'saving') driveSvg?.classList.add('df-sync__drive--spin');   // stop is deferred to the cycle boundary above
+    // Saving and reconnecting both spin: work in progress, neither an error nor an action. Stop is deferred to the cycle
+    // boundary above.
+    const busy = st.state === 'saving' || st.state === 'reconnecting';
+    if (busy) driveSvg?.classList.add('df-sync__drive--spin');
     const isError = st.state === 'error';
     const isConflict = st.state === 'conflict';
     const isRefresh = st.state === 'refresh';   // the original shared file changed — pull available (item 6)
     const isFailed = st.state === 'failed';     // Drive did not take a save (offline, full, no answer) - auto-sync retries it
+    const isHeld = st.state === 'held';         // missing parts of a newer release's file: nothing writes it to Drive (B2)
     // ONE icon, ONE href for every state — no swapping. CSS recolours the SAME detailed Drive logo per
     // [data-state]: greyed (off) / full colour (synced) / spinning (saving) / red-tinted (error) /
     // amber-tinted (conflict). Text appears for an action (red "Sign in" / amber "Review") and as a neutral
     // "Saving" label to the left of the icon while a save is in flight (alongside the spin animation).
     if (textEl) {
-      if (isError) { textEl.textContent = 'Sign in'; textEl.style.display = ''; }
+      if (isHeld) { textEl.textContent = 'Paused'; textEl.style.display = ''; }
+      else if (isError) { textEl.textContent = 'Sign in'; textEl.style.display = ''; }
       else if (isConflict) { textEl.textContent = 'Review'; textEl.style.display = ''; }
       else if (isRefresh) { textEl.textContent = 'Refresh'; textEl.style.display = ''; }
       else if (isFailed) { textEl.textContent = 'Not synced'; textEl.style.display = ''; }
       else if (st.state === 'saving') { textEl.textContent = 'Saving'; textEl.style.display = ''; }
+      else if (st.state === 'reconnecting') { textEl.textContent = 'Reconnecting'; textEl.style.display = ''; }
       else textEl.style.display = 'none';
     }
     // Title hints the left-click (menu) + right-click (primary action) split.
-    btnEl.title = isError ? 'Google Drive sign-in needed - left-click for menu, right-click to reconnect'
+    btnEl.title = isHeld ? `Google Drive saves are paused for this diagram - left-click for why${st.stale ? ', right-click to reload' : st.refreshable ? ', right-click to refresh' : ''}`
+      : isError ? 'Google Drive sign-in needed - left-click for menu, right-click to reconnect'
       : isConflict ? 'This diagram changed on Google Drive - left-click for menu, right-click to review'
       : isRefresh ? `${st.refreshOwn ? 'A newer version is on Google Drive' : 'The original shared file has new changes'} - left-click for menu, right-click to refresh`
       : isFailed ? 'Google Drive did not take the last save - left-click for why, right-click to try again'
       : st.state === 'saving' ? 'Saving to Google Drive…'
+      : st.state === 'reconnecting' ? 'Reconnecting to Google Drive…'
       : 'Google Drive sync - left-click for menu, right-click to sync all diagrams now';
 
     // "Connected" = account-level (signed in, OR auto-sync on, OR any tab linked to a Drive file). It drives
@@ -91,12 +103,15 @@ export function setupSyncControl() {
     if (statusText) statusText.textContent = syncStatusText(st, connected);
     if (statusBtn) {
       let label = '', tone = '';
-      if (st.lookOnly && connected) { label = 'Save as new'; tone = 'sync'; }   // the explicit save (C9)
+      // Held: the reload comes first on an older page, then Refresh brings the whole diagram back. A held tab with no
+      // Drive source has no button: reopening the original is the way, and an explicit save asks before writing.
+      if (isHeld) { label = st.stale ? 'Reload' : st.refreshable ? 'Refresh' : ''; tone = 'conflict'; }
+      else if (st.lookOnly && connected) { label = 'Save as new'; tone = 'sync'; }   // the explicit save (C9)
       else if (isError || !connected) { label = 'Sign in'; tone = 'error'; }
       else if (isConflict) { label = 'Review'; tone = 'conflict'; }
       else if (isRefresh) { label = 'Refresh'; tone = 'refresh'; }
       else if (isFailed) { label = 'Try again'; tone = 'error'; }   // Sync now, which the click below runs
-      else if (st.state !== 'saving') { label = 'Sync now'; tone = 'sync'; }
+      else if (!busy) { label = 'Sync now'; tone = 'sync'; }
       statusBtn.textContent = label;
       statusBtn.dataset.tone = tone;
       statusBtn.hidden = !label;
@@ -173,7 +188,8 @@ export function setupSyncControl() {
   statusBtn?.addEventListener('click', () => {
     closeMenu();
     const st = p.getDriveStatus?.() || { state: 'off' };
-    if (st.lookOnly && p.isDriveConnected?.()) p.saveToDrive?.();   // an explicit save makes it a normal diagram (C9)
+    if (st.held) { if (st.stale) window.location.reload(); else if (st.refreshable) p.reopenLatestFromDrive?.(); }
+    else if (st.lookOnly && p.isDriveConnected?.()) p.saveToDrive?.();   // an explicit save makes it a normal diagram (C9)
     else if (st.state === 'conflict') p.resolveActiveConflict?.();
     else if (st.state === 'refresh') p.reopenLatestFromDrive?.();
     else if (st.state === 'error' || !p.isDriveConnected?.()) p.signIn?.();
@@ -189,10 +205,14 @@ export function setupSyncControl() {
     e.preventDefault();
     closeMenu();
     const state = btnEl.dataset.state;
-    if (state === 'error') p.signIn?.();
+    if (state === 'held') {
+      const st = p.getDriveStatus?.() || {};
+      if (st.stale) window.location.reload(); else if (st.refreshable) p.reopenLatestFromDrive?.();
+    }
+    else if (state === 'error') p.signIn?.();
     else if (state === 'conflict') p.resolveActiveConflict?.();
     else if (state === 'refresh') p.reopenLatestFromDrive?.();   // pull the original's latest (item 6)
-    else if (state === 'saving') { /* already saving — nothing to do */ }
+    else if (state === 'saving' || state === 'reconnecting') { /* already working — nothing to do */ }
     else p.syncNow?.();
   });
 

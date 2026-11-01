@@ -109,17 +109,71 @@ export function packLabels(items, obstacles = []) {
   return { chosen, unresolved };
 }
 
+/** A polyline's axis-aligned segments as runs: `{o: 'H'|'V', c: the constant coordinate, lo, hi, dir}`, where `dir` (+1
+ *  or -1) is the way the line travels along the run, source to target. */
+function axisRuns(pts) {
+  const out = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1];
+    if (Math.abs(a.y - b.y) < 1 && Math.abs(a.x - b.x) >= 1) out.push({ o: 'H', c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x), dir: Math.sign(b.x - a.x) });
+    else if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) >= 1) out.push({ o: 'V', c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y), dir: Math.sign(b.y - a.y) });
+  }
+  return out;
+}
+
+const onRun = (p, r, tol = 2) => (r.o === 'H' ? Math.abs(p.y - r.c) <= tol && p.x >= r.lo - tol && p.x <= r.hi + tol
+  : Math.abs(p.x - r.c) <= tol && p.y >= r.lo - tol && p.y <= r.hi + tol);
+
+/**
+ * Where a label should sit when its spot is on a stretch its link SHARES with a link labelled differently (owner,
+ * 2026-11-01: two labels on one trunk read as belonging to nobody). Pure: `pts` is the link's polyline, `shared` the
+ * runs it shares with such links, `anchor` the label's current point, `w`/`h` its pill. Returns null when the label is
+ * not on a shared run (it stays where it is: moving labels that collide with nothing was rejected, approaches/
+ * connector-labels.md). Otherwise a point on the link's OWN stretch that holds the pill (the longest, then the one
+ * nearest the anchor), at that stretch's target end: in the middle of a trunk segment only one branch uses, the label
+ * sat halfway between two forks and read as either. When no own stretch is long enough, the point of the shared run
+ * just before the fork where the link leaves it, so the label still sits next to its own branch.
+ */
+export function ownStretchPoint(pts, shared, anchor, w, h) {
+  if (!shared.length || !shared.some((r) => onRun(anchor, r))) return null;
+  const pieces = [];
+  for (const r of axisRuns(pts)) {
+    let free = [[r.lo, r.hi]];
+    for (const s of shared) {
+      if (s.o !== r.o || Math.abs(s.c - r.c) > 1) continue;
+      free = free.flatMap(([lo, hi]) => [[lo, Math.min(hi, s.lo)], [Math.max(lo, s.hi), hi]]).filter(([lo, hi]) => hi - lo >= 1);
+    }
+    for (const [lo, hi] of free) pieces.push({ o: r.o, c: r.c, lo, hi, dir: r.dir });
+  }
+  if (!pieces.length) return null;
+  const mid = (p) => (p.o === 'H' ? { x: (p.lo + p.hi) / 2, y: p.c } : { x: p.c, y: (p.lo + p.hi) / 2 });
+  const len = (p) => p.hi - p.lo;
+  const gap = (p) => Math.hypot(mid(p).x - anchor.x, mid(p).y - anchor.y);
+  const fit = pieces.filter((p) => len(p) >= (p.o === 'H' ? w : h) + 8).sort((a, b) => len(b) - len(a) || gap(a) - gap(b));
+  if (fit.length) {
+    const p = fit[0], inset = (p.o === 'H' ? w : h) / 2 + 4;
+    const t = p.dir > 0 ? p.hi - inset : p.lo + inset;   // the target end, inset by half the pill plus a gap
+    return p.o === 'H' ? { x: t, y: p.c } : { x: p.c, y: t };
+  }
+  // No own stretch holds the pill: sit on the shared run beside the fork. The fork is the end of the longest own piece
+  // that lies on a shared run; step back along that run, away from the fork, by half the pill plus a gap.
+  for (const p of [...pieces].sort((a, b) => len(b) - len(a) || gap(a) - gap(b))) {
+    for (const j of p.o === 'H' ? [{ x: p.lo, y: p.c }, { x: p.hi, y: p.c }] : [{ x: p.c, y: p.lo }, { x: p.c, y: p.hi }]) {
+      const s = shared.filter((r) => onRun(j, r, 1)).sort((a, b) => (a.o === p.o) - (b.o === p.o))[0];   // a trunk first
+      if (!s) continue;
+      const step = (s.o === 'H' ? w : h) / 2 + 4;
+      const along = s.o === 'H' ? j.x : j.y;
+      const to = Math.abs(s.lo - along) > Math.abs(s.hi - along) ? s.lo : s.hi;   // the far end of the shared run
+      const t = along + Math.sign(to - along) * Math.min(step, Math.abs(to - along));
+      return s.o === 'H' ? { x: t, y: s.c } : { x: s.c, y: t };
+    }
+  }
+  return null;
+}
+
 /** Collinear stretches two polylines share (within 1 px), as axis runs. */
 function sharedRuns(pa, pb) {
-  const runs = (pts) => {
-    const out = [];
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i], b = pts[i + 1];
-      if (Math.abs(a.y - b.y) < 1 && Math.abs(a.x - b.x) >= 1) out.push({ o: 'H', c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
-      else if (Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) >= 1) out.push({ o: 'V', c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
-    }
-    return out;
-  };
+  const runs = axisRuns;
   const out = [];
   for (const r of runs(pa)) for (const q of runs(pb)) {
     if (r.o !== q.o || Math.abs(r.c - q.c) > 1) continue;
@@ -195,6 +249,9 @@ function shareTwinLabels(items, chosen, obstacles) {
   }
 }
 
+/** Label 0's text, trimmed. */
+const labelText = (link) => String(link.labels()?.[0]?.attrs?.text?.text || link.labels()?.[0]?.attrs?.label?.text || '').trim();
+
 /** Label 0's position as `{ distance, offset? }`. JointJS also takes a bare number for the distance (Mermaid imports and
  *  1.19 saves wrote `position: 0.5`); spread into a candidate key it became `{}`, and the next getLabelCoordinates
  *  threw "invalid label position distance" mid-load. migrateLinks normalises on load; this covers a graph built live. */
@@ -252,6 +309,13 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
   // pill sat on the VP card (78px^2 of overlap) and the <2 gate skipped the fix entirely. Cards are obstacles in
   // the pack, so a lone label is a real 1-item search, not a no-op.
   if (labelled.length < (collisionOnly ? 1 : 2)) return null;
+
+  // Every link's drawn polyline and label text, for the own-stretch seed below. Only after Auto Layout on the types whose
+  // labels name the line (collisionOnly): the load pass keeps a label where it is, which may be the user's own drag.
+  const lines = collisionOnly && preferTargetCentre ? new Map(graph.getLinks().map((l) => {
+    const v = paper.requireView(l);
+    return [l.id, { id: l.id, text: labelText(l), pts: [v?.sourcePoint, ...(v?.route || []), v?.targetPoint].filter(Boolean) }];
+  })) : null;
 
   const items = [];
   for (const link of labelled) {
@@ -336,12 +400,30 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     // colliding. Reported on a freshly converted Journey: "the Spring Arrivals flow doesn't follow the rule for
     // labels over their cards".
     const isDefault = preferTargetCentre || !!seededLabels?.has(link.id);
-    const candidates = isDefault && ideal ? [ideal, here] : [here, ...(ideal ? [ideal] : [])];
+    // OWN STRETCH (owner, 2026-11-01). After Auto Layout a label starts at its path midpoint, and on a fan that point
+    // is often on the trunk or bus the link shares with its siblings: two labels on one trunk named neither branch (the
+    // process gateway fan: "Finance" and "Warehouse"). Such a label starts instead on the stretch only its link draws,
+    // or beside the fork where its link leaves the trunk (`ownStretchPoint`). A label already on its own line keeps
+    // the midpoint, so this moves no label that a reader could already attach to its line.
+    let ownD = null;
+    if (lines) {
+      const mine = lines.get(link.id), text = labelText(link);
+      const shared = mine ? [...lines.values()].filter((o) => o.id !== link.id && o.text !== text).flatMap((o) => sharedRuns(mine.pts, o.pts)) : [];
+      const anchor = view.getLabelCoordinates({ ...pos, offset: 0 });
+      const p = mine && ownStretchPoint(mine.pts, shared, anchor, w, h);
+      // Already there (within 2 px): keep the exact spot. The point is re-derived from the route, and a sub-pixel shift
+      // of the final reroute otherwise nudged a settled label on every re-run (zoned-lanes: 0.48 px, layout-labels.spec).
+      const d = p && Math.hypot(p.x - anchor.x, p.y - anchor.y) > 2 ? view.getClosestPointLength?.(p) : null;
+      if (d >= 0) ownD = d;
+    }
+    const candidates = ownD != null ? [{ key: { distance: ownD }, ...at(ownD) }]
+      : isDefault && ideal ? [ideal, here] : [here, ...(ideal ? [ideal] : [])];
 
     // Then every other point along its own path, nearest to the seed first.
     const grid = [];
+    const from = ownD ?? seedD;
     for (let d = 2; d <= len; d += DISTANCE_STEP) grid.push(d);
-    grid.sort((p, q) => Math.abs(p - seedD) - Math.abs(q - seedD) || p - q);
+    grid.sort((p, q) => Math.abs(p - from) - Math.abs(q - from) || p - q);
     for (const d of grid) candidates.push({ key: { distance: d }, ...at(d) });
 
     // Perpendicular nudges, appended LAST and tightly bounded, for a label whose own path is entirely blocked.
@@ -354,7 +436,7 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
           x: base.x, y: base.y + dy, w, h });
       }
     }
-    const text = String(link.labels()[0]?.attrs?.text?.text || link.labels()[0]?.attrs?.label?.text || '').trim();
+    const text = labelText(link);
     const look = `${String(link.attr('line/stroke') || '').toLowerCase()}|${link.get('lineStyle') || link.attr('line/strokeDasharray') || 'none'}`;
     // Twins only where a label describes the LINE (collisionOnly: architecture, org, process). A datamodel join label or a
     // flow branch label describes its TARGET, so five relationships with one join text keep five pills, one per target.

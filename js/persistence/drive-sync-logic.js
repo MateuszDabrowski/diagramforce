@@ -211,6 +211,35 @@ export function saveFailureText({ status = null, reason = null, offline = false,
   return auto ? 'Google Drive did not take the last save - it will try again.' : 'Google Drive did not take the last save - use Try again.';
 }
 
+/** A tab whose graph lost parts of a newer release's file (`holdVersion`, B2 follow-up) writes nothing to Google Drive.
+ *  The sync menu's line for it. `stale`: this page is older than `version`, so only a reload can read the parts;
+ *  `refreshable`: the tab has a Drive file or source that Refresh can bring the whole diagram back from. Pure. */
+export function heldSyncText({ version, stale = true, refreshable = false } = {}) {
+  const v = String(version || '').slice(0, 20);
+  const why = stale ? `this page could not read parts of it made with Diagramforce ${v}` : `it is missing parts made with Diagramforce ${v}`;
+  const next = stale
+    ? (refreshable ? 'Reload the page, then use Refresh.' : 'Reload the page, then open the original file or link again.')
+    : (refreshable ? 'Use Refresh to get them back from Google Drive.' : 'Open the original file or link again to get them.');
+  return `Google Drive saves are paused for this diagram: ${why}. ${next}`;
+}
+
+/** The confirmation an explicit save of such a tab asks for: the one way to write it as it is ("Save anyway").
+ *  `replaces`: the save overwrites a Drive file that holds the whole diagram (your master, or a source you write
+ *  back to), not a new file. Returns { title, message }. Pure. */
+export function heldSaveText({ name = 'This diagram', version, stale = true, refreshable = false, replaces = false } = {}) {
+  const v = String(version || '').slice(0, 20);
+  const what = replaces
+    ? 'Saving now replaces the Google Drive file with this version, and those parts stay only in its version history.'
+    : 'Saving now puts this version on Google Drive without them.';
+  const keep = stale
+    ? (refreshable ? 'To keep them, reload the page to get the update, then use Refresh.' : 'To keep them, reload the page to get the update, then open the original again.')
+    : (refreshable ? 'To keep them, use Refresh instead.' : 'To keep them, open the original file or link again.');
+  return {
+    title: 'Save without the missing parts?',
+    message: `"${String(name).slice(0, 80)}" is missing parts made with Diagramforce ${v} that this page could not read. ${what} ${keep}`,
+  };
+}
+
 export const TRANSIENT_403_REASONS = new Set([
   'rateLimitExceeded', 'userRateLimitExceeded', 'dailyLimitExceeded', 'sharingRateLimitExceeded',
   'storageQuotaExceeded', 'quotaExceeded', 'teamDriveFileLimitExceeded', 'numChildrenInNonRootLimitExceeded',
@@ -492,6 +521,9 @@ export const DRIVE_TAB_FIELDS = [
   ['driveViewEdited', false],  // 1.24.12: a master-less VIEW share the user really EDITED - only then may a sweep mint its copy
   ['drivePendingRename', false],   // 2026-10-15: renamed while signed out - the next sweep with a token renames the Drive file
   ['driveName', null],   // 2026-10-15 (RA2): the file's own name while the tab shows another ("Plan 2") - saves carry it
+  // 2026-11-01 (B2 follow-up): the newer release whose parts a load dropped from this tab's graph. While set, nothing
+  // writes the tab to Drive (doSaveInner and the direct writers); a load that brings the whole diagram back clears it.
+  ['driveHoldVersion', null],
 ];
 
 /** The Drive linkage a close-archive keeps (archiveTabToBrowser in js/tabs.js), so an archive written from a tab of
@@ -500,7 +532,7 @@ export const DRIVE_TAB_FIELDS = [
  *  build has seen its file. Every DRIVE_TAB_FIELDS entry but driveSync belongs here (drive-sync-logic.test.js). */
 export const ARCHIVE_DRIVE_FIELDS = ['driveFileId', 'driveSharedSource', 'driveSharedInEdit', 'driveCopies', 'driveHeadRevisionId',
   'driveLastHash', 'driveLastSavedAt', 'driveImported', 'driveFolderId', 'driveDriveId', 'driveOutgoingGrants', 'driveLocalOnly',
-  'driveViewEdited', 'drivePendingRename', 'driveName'];
+  'driveViewEdited', 'drivePendingRename', 'driveName', 'driveHoldVersion'];
 
 /** A plain object of `o`'s Drive linkage fields with each default applied — the `o.x || default` semantics every
  *  mirror site already uses (an empty driveCopies array is truthy, so it's preserved, matching the old inline code).

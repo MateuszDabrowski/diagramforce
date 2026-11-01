@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.26.7** — matches the app's current `appVersion`; set `"appVersion": "1.26.7"` in generated files.
+> **Spec snapshot: v1.26.9** — matches the app's current `appVersion`; set `"appVersion": "1.26.9"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped on
@@ -26,7 +26,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -49,7 +49,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.26.7"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently |
+| `appVersion` | string | Yes | Semver string, currently `"1.26.9"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently Set the exact current version, never a guessed newer one: a file newer than the running app that also holds a shape type the app does not know opens with a warning asking for a reload, and that tab's Google Drive saves pause until the whole diagram is back (1.26.8). |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
@@ -65,8 +65,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.7", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.7" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.9", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.9" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -99,10 +99,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.7", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.9", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.7" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.9" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -903,7 +903,7 @@ DataObjects below).
 
 Omit `ports`: the app builds every DataObject port on load. Reference them from link endpoints:
 
-1. **Object-level ports** — the header anchors `er-left` / `er-right` (the usual choice for an ER relationship) and
+1. **Object-level ports** — the header anchors `er-left` / `er-right` (for a relationship you know only at object grain) and
    the ring `port-top` / `port-bottom` — for "this table relates to that table" links. There is no `port-left` /
    `port-right` on a DataObject.
 2. **Field-level ports (`field-left-{fid}`, `field-right-{fid}`)** — for field→field mappings and PK→FK relationships. The view renders one for every field with a `keyType`, **every field when the diagram's mapping mode is on** (so all of `datamapping`), and any field a live link points at. `{fid}` is the field's stable `fid` (see field table), **not** its array index, so a link stays anchored to the same field across reorder, delete, and rename. *(Saves ≤ v1.14.x used the zero-based array index, `field-left-{i}`; `migrateLinks` re-keys those to `fid` form on load.)*
@@ -915,15 +915,17 @@ Apply ER markers (see Marker Types section) to represent cardinality.
 > **Which level the app reports.** The Table view's Relationships grid (1.23.2) classifies every ER link by its
 > PORT ids: **Field-level** when EITHER end names a `field-left-<fid>` / `field-right-<fid>` port, **Object-level**
 > otherwise (`er-left` / `er-right`, `port-top` / `port-bottom`). Pick the level by what you know: a relationship
-> carried by a key field (FK -> PK) is field-level - anchor the child's FK field; a relationship you only know at
-> object grain is object-level - anchor the headers. Never mix the two for the same pair.
+> carried by a key field (FK -> PK) is field-level - anchor the child's FK row and the parent's key row; a
+> relationship you only know at object grain is object-level - anchor the headers. Never mix the two for the same pair.
 >
 > **Orientation.** Cardinality is read PER END from the markers and reported `source-end:target-end` exactly as
-> drawn, beside the From/To objects - so the same fact reads `1:Many` drawn parent -> child and `Many:1` drawn
-> child -> parent, and both are correct left-to-right. Within one diagram use ONE direction: draw **from the ONE
-> (parent / PK) end to the MANY (child / FK) end** - `sourceMarker` = bar (1) or circle-bar (0..1),
-> `targetMarker` = crow's foot (Many / 0..Many / 1..Many). The bundled ERD generator draws child FK field ->
-> parent header, so its rows read `Many:1`; that is the same convention seen from the child.
+> drawn, beside the From/To objects - so the same fact reads `Many:1` drawn child -> parent and `1:Many` drawn
+> parent -> child, and both are correct left-to-right. Within one diagram use ONE direction: draw **from the MANY
+> (child / FK) end to the ONE (parent / key) end, field to field** - source = the child's FK row
+> `field-<side>-<fid>`, target = the parent's key row `field-<side>-<fid>`; `sourceMarker` = crow's foot (Many /
+> 0..Many / 1..Many), `targetMarker` = bar (1) or circle-bar (0..1). The official templates and the bundled ERD
+> generator both draw it this way, so the Table view reads their rows `Many:1`. Links that share a parent's key
+> row are one bus: the router gives the bus one lane, where header ends would all meet at one point.
 
 ### sf.OrgPerson
 
@@ -1813,7 +1815,7 @@ usual way a generated diagram looks nothing like the app's own.
 | Lane / zone width | **356** on a **556** pitch (200 px gutter) | n/a |
 | Card inset in lane | **48** left, right and bottom - the app's frame fit, so a card drag never resizes the zone | n/a |
 | First card / card gap | zone `y` + **48** / **36** | |
-| Link ports | `field-right-*` -> `field-left-*` | child FK field `field-<side>-<fid>` -> parent header `er-<side>` - **FIELD level** in the Table view (what `objects-to-diagramforce.mjs` emits); `er-right` -> `er-left` only for an object-level relationship with no key field |
+| Link ports | `field-right-*` -> `field-left-*` | child FK row `field-<side>-<fid>` -> parent key row `field-<side>-<fid>` - **FIELD level** in the Table view (what `objects-to-diagramforce.mjs` and the official templates emit); `er-right` -> `er-left` only for an object-level relationship with no key field |
 | Link router / connector | applied on load from `linkKind` | **you must author** `router:{name:"sfManhattan"}` + `connector:{name:"rounded",args:{radius:8}}` |
 
 > ⚠️ **An ERD relationship with no `router` renders as a DIAGONAL.** A `standard.Link` without one is a
@@ -1917,7 +1919,7 @@ Individual DMO has no email or phone field - contact points are their own object
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.7", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.26.9", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
     {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
@@ -1951,7 +1953,7 @@ nothing.
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.7", "title": "Customer lineage - Raw to Staging to Mart", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.26.9", "title": "Customer lineage - Raw to Staging to Mart", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-raw", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 234}, "z": 0, "embeds": ["raw-cust"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Raw", "fill": "#1D73C9"}}},
     {"id": "raw-cust", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 138}, "z": 2000, "parent": "zone-raw", "objectName": "raw.customers", "headerColor": "#1D73C9", "fields": [{"label": "customer_id", "apiName": "customer_id", "type": "int", "keyType": "pk", "fid": "r_id", "required": true}, {"label": "email", "apiName": "email", "type": "varchar(255)", "keyType": null, "fid": "r_email"}, {"label": "first_name", "apiName": "first_name", "type": "varchar(100)", "keyType": null, "fid": "r_first"}, {"label": "last_name", "apiName": "last_name", "type": "varchar(100)", "keyType": null, "fid": "r_last"}]},
@@ -2019,7 +2021,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2047,16 +2049,16 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ### Data Model (ERD)
 
 Two related Salesforce objects: 480 px cards (§3b), the header drawn from `objectName` / `headerColor`, no `ports`,
-and one FIELD-level relationship drawn from the ONE end (Account's header) to the MANY end (Contact's `AccountId`
-row), so the Table view reports it as a field-level `1:Many`.
+and one FIELD-level relationship drawn from the MANY end (Contact's `AccountId` row) to the ONE end (Account's `Id`
+row), so the Table view reports it as a field-level `Many:1`.
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.7", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "version": 1, "appVersion": "1.26.9", "title": "Account-Contact ERD", "diagramType": "datamodel",
   "graph": { "cells": [
     {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
     {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
-    {"id": "rel-account-contact", "type": "standard.Link", "source": {"id": "obj-account", "port": "er-right"}, "target": {"id": "obj-contact", "port": "field-left-c_account"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}, "labels": [{"position": 0.5, "attrs": {"text": {"text": "has"}}}]}
+    {"id": "rel-account-contact", "type": "standard.Link", "source": {"id": "obj-contact", "port": "field-left-c_account"}, "target": {"id": "obj-account", "port": "field-right-a_id"}, "router": {"name": "sfManhattan"}, "connector": {"name": "rounded", "args": {"radius": 8}}, "attrs": {"line": {"stroke": "#74797F", "strokeWidth": 2, "sourceMarker": {"type": "path", "d": "M -12 -8 L 0 0 L -12 8 M 0 0 L -12 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}, "targetMarker": {"type": "path", "d": "M -12 -8 L -12 8 M -12 0 L 0 0", "fill": "none", "stroke": "#74797F", "stroke-width": 2}}}, "labels": [{"position": 0.5, "attrs": {"text": {"text": "belongs to"}}}]}
   ] }
 }
 ```
@@ -2073,7 +2075,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2103,7 +2105,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2136,7 +2138,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2179,7 +2181,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2228,7 +2230,7 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.7",
+  "appVersion": "1.26.9",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
@@ -2273,6 +2275,10 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
   waypoint the router never re-checks, so it stays put when a card is dragged. Fix a bad route with spacing (see
   *Layout rules* below), not with vertices.
 - **Port selection:** Use `port-right`/`port-left` for horizontal flows, `port-top`/`port-bottom` for vertical flows. The router handles the rest.
+  **One exit side per fan:** every link from a shape to the next level leaves the same port (`port-bottom` top-down,
+  `port-right` left-to-right) and enters each child on the facing side, even a child far to one side. They then draw
+  one trunk and one bus. A hub whose near children take its bottom port and its far ones its side ports reads as
+  links of different kinds. The app's Auto Layout draws fans this way since 1.26.8 (shapes in no frame).
 
 ### Layout rules: what a reader notices
 
@@ -2281,7 +2287,7 @@ warns on the first seven (on rule 5, only for a link with `vertices`). Rules 1-4
 `process`, `datamodel` and `org` diagrams, rule 7 on `datamodel` only, and rule 5 on every type. A converted `flow`
 keeps Flow Builder's coordinates, `gantt` bars come from their dates and a `sequence` lays out on its lifelines; a
 `datamapping` follows the lane geometry of its own section (§3b there), which the converter and Auto Layout produce.
-The last three need you to look at a render.
+The last four need you to look at a render.
 
 1. **A gateway or event label goes on a side no link uses.** The default is below the shape
    (`y: calc(h + 10)`), so a link leaving `port-bottom` is drawn through the text. Above is
@@ -2311,9 +2317,15 @@ The last three need you to look at a render.
    column on each side and the field ports facing; Auto Layout arranges such a star that way.
 8. **Order a row of targets by where their links come from**, so links from one source do not cross each other.
 9. **Spread a lane's cards evenly across the pool width**, not packed to one side.
-10. **Put a link label on a stretch no other line runs through.** The default midpoint is often a crossing. Auto
-   Layout moves a label off cards and other labels, and a `flow` diagram gets the same on load. Nothing moves a
-   label off other lines, and other types open with labels exactly where you put them.
+10. **Put a link label on a stretch no other line runs through.** The default midpoint is often a crossing, or the
+   trunk a fan's links share, where two labels name neither branch. Put it on the part only its own link draws,
+   beside its own branch. Auto Layout moves a label off cards and other labels, and since 1.26.8 also moves one that
+   sits on a stretch shared with a differently labelled link to its own stretch. A `flow` diagram gets the collision
+   fix on load. Other types open with labels exactly where you put them.
+11. **One row per level, however wide.** Put every child of a shape in one row (one column, left-to-right). Wrapping
+   a long row into a second or third row reads as another level of hierarchy that is not there, and the links to the
+   lower rows run through the gaps of the first. A wide row is fine: the reader zooms. The app's Auto Layout stopped
+   wrapping wide ranks in 1.26.8 for the same reason.
 
 ### Capture: put cards INSIDE a frame, don't just draw one behind them
 

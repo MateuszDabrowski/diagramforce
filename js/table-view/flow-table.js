@@ -1,7 +1,8 @@
 // Flow Table view - the stacked-sections READ-ONLY render (1.22.2, extracted from table-view.js).
-// Five sibling tables inside the shared scroller: the Elements spine (every flow element in execution
-// order), Data Writes, the written-by-more-than-one-element field pivot, Decision Elements, and Assets
-// (the marketing references, element-first - one row per element+reference, in execution order). Reads
+// Eight sibling tables inside the shared scroller: the Elements spine (every flow element in execution
+// order), Data Writes, the written-by-more-than-one-element field pivot, Decision Elements, Assets
+// (the marketing references, element-first - one row per element+reference, in execution order), then
+// Orchestration Steps, Screen Components and Data Reads (2026-11-01). Reads
 // the live graph + the facade's icons via initFlowTable; never imports table-view.js back (acyclic,
 // same rule gantt-plan.js states).
 //
@@ -14,24 +15,24 @@
 // WHY N sibling tables and not one merged table with injected header rows: a single <table> computes
 // ONE column grid, so Decision Elements' 5 columns would be forced to align under Data Writes' 7 -
 // "Outcome" under "Op", same widths. That is the wrong table, not a styling nit.
-import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.26.7';
-import { getActiveTabName } from '../tabs.js?v=1.26.7';
-import { triggerDownload } from '../persistence.js?v=1.26.7';
-import { showToast, showError } from '../feedback.js?v=1.26.7';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from '../util.js?v=1.26.9';
+import { getActiveTabName } from '../tabs.js?v=1.26.9';
+import { triggerDownload } from '../persistence.js?v=1.26.9';
+import { showToast, showError } from '../feedback.js?v=1.26.9';
 import {
   buildFlowSections, sortRows, suppressColumns, exportCellText, flowFactsRows, flowResourceRows,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './builders.js?v=1.26.7';
+} from './builders.js?v=1.26.9';
 // The filter's aria-live result count rides the app's sr-only region (a11y.js imports only
 // properties.js + util.js - no cycle). Called ONLY from the debounced input handler, never from
 // renderFlowTable, so graph-change re-renders stay silent.
-import { announce } from '../a11y.js?v=1.26.7';
+import { announce } from '../a11y.js?v=1.26.9';
 // Click-to-focus (post-1.22.2): a row's nav button -> its element on the canvas. selectOnly is the same public
 // call a canvas click lands on (selection.js's own pointer handler uses it), and cctx carries
 // fitToCells, the frame-these-cells helper diagram-check.js uses. Both are acyclic from here:
 // nothing in either chain imports the table-view modules back.
-import { selectOnly } from '../selection.js?v=1.26.7';
-import { cctx } from '../canvas/context.js?v=1.26.7';
+import { selectOnly } from '../selection.js?v=1.26.9';
+import { cctx } from '../canvas/context.js?v=1.26.9';
 
 export const FLOW_TABLE_TITLE = 'Flow Details';
 
@@ -51,7 +52,7 @@ export function initFlowTable(ctx) {
 // that exists in table-view.js cannot reach flow, which never reads it.
 let _sort = new Map();          // gridId -> { key, dir }
 // Deliberately NOT the facade's _showAllCols: this module must never import table-view.js back. One
-// preference across all five sections is the correct semantic within flow.
+// preference across every section is the correct semantic within flow.
 let _showAllCols = false;
 // Per-section collapse (the stencil's category-header language, on the tier1 band). Module-scoped and
 // NEVER reset, for _sort's reason above: section ids are fixed, so the state stays correct by
@@ -61,7 +62,7 @@ let _showAllCols = false;
 // Collapse is a VIEWING aid, not a row-selection contract: the exports read _lastGrids, never the
 // DOM, so a collapsed section still exports in full - unlike the filter, whose narrowing is a stated
 // export contract. The two compose: filtered rows of a collapsed section export per the filter.
-let _collapsed = new Set();     // section ids ('elements' | 'writes' | 'contested' | 'decisions' | 'assets')
+let _collapsed = new Set();     // section ids ('elements' | 'writes' | 'contested' | 'decisions' | 'assets' | 'steps' | 'screens' | 'reads')
 let _lastGrids = [];            // the rendered { id, title, cols, rows } - feeds CSV + Markdown
 // ── Filter + Search (post-1.22.2) ── ONE query filters every section independently. Deliberately
 // NOT the facade's _filterQuery (this module never imports table-view.js back); the facade's graph
@@ -183,8 +184,8 @@ function tableHtml(g) {
         // Click-to-focus, second design (owner-directed): the affordance is an explicit icon-only
         // BUTTON in a dedicated first cell, not the whole-row handler the first design shipped - a
         // click anywhere on a row yanking the reader to the canvas was too easy to hit mid-read,
-        // with no way back. Only a row carrying a SINGLE element identity (_elId - the spine,
-        // writes, decisions and assets rows, muted rows included) gets the button; the pivot's
+        // with no way back. Only a row carrying a SINGLE element identity (_elId - every section's
+        // rows, muted rows included, except the pivot's) gets the button; the pivot's
         // rows name N elements each, so their nav cell renders EMPTY rather than not at all - the
         // section-geometry rule that killed the per-row affordance in the first design is exactly
         // what keeps this per-column one honest: the cell exists on every paint of every row. A
@@ -242,7 +243,10 @@ export function renderFlowTable({ fresh = false } = {}) {
   if (!container || !graph) return;
   const view = fresh ? null : captureTableView(container);   // a fresh show starts at the top
   const built = buildFlowSections(graph);
-  const { elementCount, writeCount, writeElementCount, contestedCount, decisionCount, outcomeCount, assetRefCount, assetElementCount } = built;
+  const {
+    elementCount, writeCount, writeElementCount, contestedCount, decisionCount, outcomeCount, assetRefCount, assetElementCount,
+    stepCount, stageCount, componentCount, screenCount, conditionalCount, readCount, readObjectCount,
+  } = built;
   // Each band carries ITS OWN insight - the counts the retired topbar note line carried, in the same
   // grain wording, now sitting on the section they describe (one fact, one home). Honest and
   // consistent even at zero, rather than blank: a collapsed zero band must still say " · 0 writes
@@ -258,6 +262,10 @@ export function renderFlowTable({ fresh = false } = {}) {
     // The writes shape, on the element-first grain: references = the section's rendered rows, so the
     // band and the row count always agree (the filter's "N of M" reads M off the same rows).
     assets: `${plural(assetRefCount, 'asset reference')} across ${plural(assetElementCount, 'element')}`,
+    steps: `${plural(stepCount, 'step')} across ${plural(stageCount, 'stage')}`,
+    // The gated count is the section's finding (in-screen branching no connector draws), so it rides the band.
+    screens: `${plural(componentCount, 'component')} across ${plural(screenCount, 'screen')}, ${conditionalCount} shown conditionally`,
+    reads: `${plural(readCount, 'read')} across ${plural(readObjectCount, 'object')}`,
   };
   const grids = built.sections.map(sec => {
     const sort = _sort.get(sec.id) || { key: null, dir: 'asc' };
@@ -354,7 +362,7 @@ export function renderFlowTable({ fresh = false } = {}) {
   restoreTableView(container, view);
 }
 
-// ── Section widths: five tables, one right edge ─────────────────────────────
+// ── Section widths: every section table, one right edge ──────────────────────
 // Each section is its own <table> (a single merged one would force Decision Elements' 5 columns to
 // align under Data Writes' 7 - the reason the sections are siblings at all), and each is width:100%.
 // The catch: percentage width resolves against the SCROLLER'S VISIBLE box, never its scrollWidth. So
@@ -480,6 +488,8 @@ function applyFlowFilter() {
 const MUTED_NOTE = Object.assign(Object.create(null), {
   writes: { key: 'field', note: '(not a field - further rows not shown, see the property panel)' },
   decisions: { key: 'outcome', note: '(from the canvas, not the imported outcome list)' },
+  steps: { key: 'step', note: '(not a step - further steps not shown, see the property panel)' },
+  screens: { key: 'component', note: '(not a component - further rows not shown, see the property panel)' },
 });
 const flatRow = (g, r, cols) => {
   const mark = r._muted ? MUTED_NOTE[g.id] : null;

@@ -4,10 +4,10 @@
 // while they work: one prompt per diagram, ten minutes after its first device-only edit, with the tab marker as the
 // backstop. Nothing here reads window.slot: a browser gets the same.
 
-import { tbctx } from './context.js?v=1.26.7';
-import { showError, showToast } from '../feedback.js?v=1.26.7';
-import { countDiagramShapes } from '../util.js?v=1.26.7';
-import { deviceOnlyStep, isDeviceOnly } from '../persistence/drive-sync-logic.js?v=1.26.7';
+import { tbctx } from './context.js?v=1.26.9';
+import { showError, showToast } from '../feedback.js?v=1.26.9';
+import { countDiagramShapes } from '../util.js?v=1.26.9';
+import { deviceOnlyStep, isDeviceOnly } from '../persistence/drive-sync-logic.js?v=1.26.9';
 
 export const DEVICE_ONLY_RISK = 'Your browser can clear it after a few weeks without a visit.';
 
@@ -47,6 +47,7 @@ async function saveToDrive(p, id, name) {
   try {
     const results = await p.saveTabsToDrive([id]);
     if ((results || []).some((r) => r.status === 'ok')) showToast(`Saved "${name}" to Google Drive`, 'success');
+    else if ((results || []).some((r) => r.status === 'held')) { /* kept paused at the Save anyway question: the user's choice */ }
     else if ((results || []).length) showError(`"${name}" could not be saved to Google Drive - see console.`);
   } catch (e) { showError('Could not save to Google Drive: ' + (e?.message || 'unknown error')); }
 }
