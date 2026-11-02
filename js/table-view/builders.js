@@ -6,10 +6,10 @@
 // The graph interface used here is narrow: getElements() / getLinks() / getCell(id) /
 // getConnectedLinks(cell), and per-cell .id / .get(prop) / .attr(path) / .prop(name) / .labels().
 // A test fake implementing just those drives every builder below.
-import { keyImpliesRequired } from '../field-model.js?v=1.26.9';
-import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.26.9';
-import { durationDays } from '../gantt-scale.js?v=1.26.9';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.9';
+import { keyImpliesRequired } from '../field-model.js?v=1.26.10';
+import { ganttRowLayout, ganttDependencies } from '../gantt-layout.js?v=1.26.10';
+import { durationDays } from '../gantt-scale.js?v=1.26.10';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.10';
 
 // ── Property evaluation helpers (graph-free — operate on a passed cell) ──────
 export const fidOfPort = port => (typeof port === 'string' && port.startsWith('field-'))
@@ -996,9 +996,14 @@ const kindLabel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 // A Flow API name: letters, digits and underscores, starting with a letter.
 const FLOW_API_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-/** One DEFAULT-shape stage row -> { stepType, apiName, assignedTo }. The value is `kind · name? · assignees?`
- *  with the name present only when it differs from the label, so the middle segment's meaning depends on
- *  the label:
+/** One DEFAULT-shape stage row -> { stepType, apiName, assignedTo, locked, entry, exit }.
+ *  Since 1.26.10 the converter writes `kind · name · approver|assigned to <who>? · record (not) locked? ·
+ *  starts when <c>|starts with the stage · exits when <c>?`, every part after the name keyed (flow-convert.js
+ *  stageStepRows). A condition can hold ' · ' itself (custom logic numbers its parts with it), so the entry runs
+ *  from "starts" to "exits when" and the exit to the end. A row with no "starts" part is the older shape below.
+ *
+ *  Up to 1.26.9 the value was `kind · name? · assignees?` with the name present only when it differed from the
+ *  label, so the middle segment's meaning depends on the label:
  *  - three parts: kind, name, assignees;
  *  - a label that is not an API name proves the name was written, so one part after the kind is the name;
  *  - an API-name label with one part that is not an API name: that part is the assignee, and the label IS
@@ -1006,10 +1011,28 @@ const FLOW_API_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
  *  - an API-name label with one API-name part is the case the converter's join cannot settle (label "Review"
  *    with name "Legal_Review", or label = name "Review" with group "Legal_Review"). It is not guessed: the part
  *    goes to Assigned to with the doubt stated, and apiName stays blank. */
+const STARTS_RE = /^starts (?:when |with the stage$)/;
+const STEP_PART_RE = /^(?:approver |assigned to |record (?:not )?locked$|exits when )/;
 function parseStageStepValue(label, value) {
   const segs = value ? value.split(' · ') : [];
   const kind = segs.length && isStepKind(segs[0]) ? segs.shift() : '';
-  const out = { stepType: kindLabel(kind), apiName: '', assignedTo: '' };
+  const out = { stepType: kindLabel(kind), apiName: '', assignedTo: '', locked: '', entry: '', exit: '' };
+  const startAt = segs.findIndex(s => STARTS_RE.test(s));
+  if (startAt >= 0) {
+    const hasName = startAt > 0 && !STEP_PART_RE.test(segs[0]);
+    if (hasName) out.apiName = segs[0];
+    for (const s of segs.slice(hasName ? 1 : 0, startAt)) {
+      if (s.startsWith('approver ')) out.assignedTo = s.slice('approver '.length);
+      else if (s.startsWith('assigned to ')) out.assignedTo = s.slice('assigned to '.length);
+      else if (s === 'record locked') out.locked = 'Yes';
+      else if (s === 'record not locked') out.locked = 'No';
+    }
+    const exitAt = segs.findIndex((s, i) => i > startAt && s.startsWith('exits when '));
+    const entry = segs.slice(startAt, exitAt > 0 ? exitAt : segs.length).join(' · ');
+    out.entry = entry === 'starts with the stage' ? 'None - starts with the stage' : entry.slice('starts when '.length);
+    if (exitAt > 0) out.exit = segs.slice(exitAt).join(' · ').slice('exits when '.length);
+    return out;
+  }
   const labelIsName = FLOW_API_NAME_RE.test(label);
   if (segs.length >= 2) {
     out.apiName = segs[0];
@@ -1165,8 +1188,8 @@ function flowScreenRows(labelOf, spineEls) {
 // read', 'Sorted by', and the destination - either field assignments (label = field API name, value
 // `-> {!var}`), or 'Stored in' `{!var}`, or 'Stored' "on the element (...)". A phrase label outside that
 // set is a row a later converter added: it lands in Where as "Label: value", the Data Writes rule, so it
-// stays visible and names itself instead of vanishing. `limit` and assignNullValuesIfNoRecordsFound are not
-// on the card at all (the converter does not read them), so no column claims them.
+// stays visible and names itself instead of vanishing. Since 1.26.10 the converter also writes 'Limit' (joins
+// Returns as "at most N") and 'If none found' (a Stored in line), each only when set.
 const READ_ROW_KEY = Object.assign(Object.create(null), { 'Returns': 'returns', 'Fields read': 'fieldsRead', 'Sorted by': 'sortedBy' });
 const READ_STORE_LABELS = new Set(['Stored in', 'Stored']);
 function flowReadRows(labelOf, spineEls) {
@@ -1176,14 +1199,18 @@ function flowReadRows(labelOf, spineEls) {
     const row = { _elId: el.id, element: labelOf(el.id), apiName: el.get('apiName') || '', object: el.get('object') || '',
       where: '', returns: '', fieldsRead: '', sortedBy: '', storedIn: '' };
     const stored = [], extra = [];
+    let limit = '';
     for (const d of detailsOf(el)) {
       const label = String(d?.label ?? ''), value = String(d?.value ?? '');
       if (TRUNCATION_RE.test(label)) stored.push(`${label} (see panel)`);
       else if (READ_ROW_KEY[label]) { if (!row[READ_ROW_KEY[label]]) row[READ_ROW_KEY[label]] = value; }
+      else if (label === 'Limit') limit = `at most ${value}`;
+      else if (label === 'If none found') stored.push(`if none found, ${value}`);
       else if (READ_STORE_LABELS.has(label)) stored.push(value);
       else if (FIELD_API_RE.test(label)) stored.push(value.startsWith('->') ? `${label} ${value}` : `${label}: ${value}`);
       else extra.push(`${label}: ${value}`);
     }
+    row.returns = [row.returns, limit].filter(Boolean).join(' · ');
     row.where = [String(el.get('filters') || ''), ...extra].filter(Boolean).join(' · ');
     row.storedIn = stored.join('\n');
     rows.push(row);

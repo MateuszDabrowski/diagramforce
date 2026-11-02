@@ -7,11 +7,12 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.26.9';
-import { prctx } from './context.js?v=1.26.9';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.26.9';
-import { ER_MARKER_D } from '../er-markers.js?v=1.26.9';
-import { addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section } from './widgets.js?v=1.26.9';
+import * as history from '../history.js?v=1.26.10';
+import { prctx } from './context.js?v=1.26.10';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.26.10';
+import { ER_MARKER_D } from '../er-markers.js?v=1.26.10';
+import { TABLE_TAB_TYPES, addActionBtn, addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section, showRowsInTable } from './widgets.js?v=1.26.10';
+import { getActiveTabType } from '../tabs.js?v=1.26.10';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors
@@ -397,6 +398,12 @@ export function renderLinkProps(cell) {
     // The Connection-type / Mapping-type / Expression chain — the SAME renderer the multi-select Mapping section
     // uses, with a single-link selection (n=1). One history step per switch; refresh() re-discloses on change.
     renderMappingControls(labelSec, [cell], { onStructureChange: prctx.refresh });
+  }
+  // The way back from the Table view: land on this link's row, a relationship (Relationships table) or a mapping (the
+  // main table on a mapping). Both ends on data objects: that is what either table lists.
+  const objEnds = [src, tgt].every((e) => prctx.graph.getCell(e?.id)?.get('type') === 'sf.DataObject');
+  if (objEnds && TABLE_TAB_TYPES.has(getActiveTabType())) {
+    addActionBtn(prctx.bodyEl, 'Show in Table view', () => showRowsInTable(`tbody tr[data-link="${CSS.escape(String(cell.id))}"]`));
   }
 
   // Gantt dependency (Phase 3): the depType (FS/SS/FF/SF) + lag (days) ARE the data the Table view and a

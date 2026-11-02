@@ -86,6 +86,10 @@ export function initMobileDragHandles() {
 
       const onMove = (e) => {
         if (e.pointerId !== pointerId) return;
+        // The release can be lost (let go outside the window, or over an OS dialog), and these listeners would then
+        // resize the sheet on hover until the next release anywhere. A mouse or pen move with no button down means
+        // the drag is over: end it where the last pressed move left it.
+        if (e.pointerType !== 'touch' && e.buttons === 0) { onEnd(e); return; }
         lastY = e.clientY;
         const delta = startY - e.clientY;
         const maxH = window.innerHeight * 0.8;

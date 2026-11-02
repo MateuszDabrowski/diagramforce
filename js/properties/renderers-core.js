@@ -5,17 +5,19 @@
 // renderFieldEditor (field-editor, the DataObject field list), startImageAddFlow (image-component), reading graph +
 // the panel DOM refs + the showProperties dispatch + the df.Table openTableEditorModal overlay via prctx; never
 // imports the facade. The showProperties() dispatch imports all 14 render*Props back.
-import * as history from '../history.js?v=1.26.9';
-import { prctx } from './context.js?v=1.26.9';
-import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.26.9';
-import { SVG as COMPONENT_SVG, contrastTextColor, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.26.9';
-import { startImageAddFlow } from '../image-component.js?v=1.26.9';
-import { recolorCellIcon } from './color-schema.js?v=1.26.9';
-import { DASH_BY_LINE_STYLE, BRACKET_PATHS, BRACKET_LABEL_X } from '../persistence/diagram-schema.js?v=1.26.9';
-import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.26.9';
-import { renderFieldEditor } from './field-editor.js?v=1.26.9';
-import { finishStandardProps } from './render-core.js?v=1.26.9';
-import { addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, wireMarkdownShortcuts } from './widgets.js?v=1.26.9';
+import * as history from '../history.js?v=1.26.10';
+import { prctx } from './context.js?v=1.26.10';
+import { updateContainerHeaderLayout, updateDataObjectHeaderLayout, updateNoteIconLayout, updateSimpleNodeLayout } from '../canvas.js?v=1.26.10';
+import { SVG as COMPONENT_SVG, contrastTextColor, getStencilSvgDataUri, resizeDataObjectToFit } from '../components.js?v=1.26.10';
+import { startImageAddFlow } from '../image-component.js?v=1.26.10';
+import { recolorCellIcon } from './color-schema.js?v=1.26.10';
+import { DASH_BY_LINE_STYLE, BRACKET_PATHS, BRACKET_LABEL_X } from '../persistence/diagram-schema.js?v=1.26.10';
+import { convertFromIcon, convertToContainer, convertToIcon, convertToNode, convertPlaceholderToNode } from './convert.js?v=1.26.10';
+import { renderFieldEditor } from './field-editor.js?v=1.26.10';
+import { finishStandardProps } from './render-core.js?v=1.26.10';
+import { TABLE_TAB_TYPES, addActionBtn, addAutoSizeBtn, addChipInput, addCloneBtn, addColor, addDeleteBtn, addIconPicker, addNumber, addNumberPair, addOrderButtons, addRaciPicker, addSegmented, addSelect, addText, addTextarea, section, showRowsInTable, wireMarkdownShortcuts } from './widgets.js?v=1.26.10';
+// Cycle-safe: tabs.js never imports the properties stack (see renderers-flow.js).
+import { getActiveTabType } from '../tabs.js?v=1.26.10';
 
 /** df.Placeholder — Label + Description, and deliberately nothing else.
  *  No icon picker and no background colour: the ? glyph and the dashed rule ARE the shape's meaning, and letting
@@ -536,6 +538,13 @@ export function renderDataObjectProps(cell) {
   const fieldsSec = section(prctx.bodyEl, 'Fields');
 
   renderFieldEditor(fieldsSec, cell);
+  // The way back from the Table view's "Show on the diagram" button: land on this object's rows (its fields; on a
+  // mapping, the rows it is the source or the target of). Gated on the TAB type, as the Flow panel's is: the Table toggle
+  // exists per tab (display-options.js), and a DataObject on another tab type must not click a hidden toggle.
+  if (TABLE_TAB_TYPES.has(getActiveTabType())) {
+    const id = CSS.escape(String(cell.id));
+    addActionBtn(prctx.bodyEl, 'Show in Table view', () => showRowsInTable(`tbody tr[data-obj="${id}"], tbody tr[data-tobj="${id}"]`, { all: true }));
+  }
 
   // Appearance — header fill is an appearance property.
   const appearance = section(prctx.bodyEl, 'Appearance');

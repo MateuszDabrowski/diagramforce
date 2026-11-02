@@ -75,10 +75,25 @@ const OPERATOR = Object.assign(Object.create(null), {
   In: 'in', NotIn: 'not in',
 });
 const readOperator = (op) => OPERATOR[op] || String(op || '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+// These operators take a true / false right value, and `false` turns them round: IsNull + false means the field
+// is NOT null. Joining the raw parts read "Email is null false". A reference stays joined as before, since
+// which way it turns is only known at run time.
+const NEGATED = Object.assign(Object.create(null), {
+  IsNull: 'is not null', IsBlank: 'is not blank', IsChanged: 'not changed',
+  WasSet: 'was not set', WasSelected: 'was not selected', WasVisited: 'was not visited',
+});
+function conditionText(left, op, value) {
+  const v = pickValue(value);
+  if (op in NEGATED && (v == null || v === 'true' || v === 'false')) return [left, v === 'false' ? NEGATED[op] : readOperator(op)].filter(Boolean).join(' ');
+  // An empty right value is a real comparison: "Email ≠ ''" means Email is filled in, and dropping it read "Email ≠".
+  // The words are assignedValue's: "(no value)" when there is none, "(value not shown)" when it could not be read.
+  const right = !op ? v : (value == null || v === '' ? '(no value)' : (v == null ? '(value not shown)' : v));
+  return [left, readOperator(op), right].filter(Boolean).join(' ');
+}
 const summarizeFilters = (filters, logic) => joinConditions((filters || [])
-  .map((f) => [f.field, readOperator(f.operator), pickValue(f.value)].filter(Boolean).join(' ')), logic);
+  .map((f) => conditionText(f.field, f.operator, f.value)), logic);
 const summarizeConditions = (conds, logic) => joinConditions((conds || [])
-  .map((c) => [c.leftValueReference, readOperator(c.operator), pickValue(c.rightValue)].filter(Boolean).join(' ')), logic);
+  .map((c) => conditionText(c.leftValueReference, c.operator, c.rightValue)), logic);
 const actionParam = (el, name) => {
   const p = (el.inputParameters || []).find((x) => x.name === name);
   return p ? pickValue(p.value) : null;
@@ -205,16 +220,23 @@ const screenFieldLabel = (f) => {
 // reproduce the mid-table "+N more" that actionParamRows was fixed for. It appends to ONE flat array which
 // screenRows caps ONCE at the end.
 const SCREEN_DEPTH_CAP = 6;   // Section > Column > field is 2 - this only guards a malformed tree
-function screenFieldRows(list, out, prefix, depth = 0, choiceIdx = null) {
+// Two gates on one row: each in brackets, so neither's own and / or logic reads across the other.
+const bothGates = (outer, own) => (outer && own ? `(${outer}) and (${own})` : outer || own || null);
+// `gate` is what an auto-named container above this level is shown when. Section1 / Column1 leave no prefix on
+// their children's rows, so without it a field inside a gated Section1 read as always shown, and only the
+// Section1 row said otherwise. A named container's children carry its name as their prefix instead, which leads
+// back to its own gated row.
+function screenFieldRows(list, out, prefix, depth = 0, choiceIdx = null, gate = null) {
   if (depth > SCREEN_DEPTH_CAP) return out;
   for (const f of asList(list)) {
     const label = screenFieldLabel(f);
     const kids = asList(f.fields);
-    const shown = summarizeConditions(f.visibilityRule?.conditions, f.visibilityRule?.conditionLogic);
+    const own = summarizeConditions(f.visibilityRule?.conditions, f.visibilityRule?.conditionLogic);
+    const shown = bothGates(gate, own);
     // A container is scaffolding, so its children REPLACE it - unless it says something they do not. A section
     // gated on a variable is real in-screen branching that never appears as a connector (the same argument that
     // put `shown when` on component rows), and a childless container is only evidenced by its own row.
-    if (label && (!kids.length || shown)) {
+    if (label && (!kids.length || own)) {
       out.push({
         label: prefix ? `${prefix} / ${label}` : label,
         // The API NAME rides along whenever it differs from the label. Labels are not unique the way names are
@@ -246,7 +268,7 @@ function screenFieldRows(list, out, prefix, depth = 0, choiceIdx = null) {
     // transparent instead of spending a line of a 42%-wide column on themselves.
     if (kids.length) {
       const named = label && label !== f.name ? label : null;
-      screenFieldRows(kids, out, [prefix, named].filter(Boolean).join(' / '), depth + 1, choiceIdx);
+      screenFieldRows(kids, out, [prefix, named].filter(Boolean).join(' / '), depth + 1, choiceIdx, named ? gate : shown);
     }
   }
   return out;
@@ -265,16 +287,30 @@ function flattenScreenFields(list, out = [], depth = 0) {
 /** Orchestrator / approval stage steps: what each step is, and who it falls to. For an approval flow this IS
  *  the content - a stage named "Legal Review" says nothing without the assignee and the step kind. */
 const STEP_KIND = Object.assign(Object.create(null), { stepApproval: 'approval', stepBackground: 'background', stepInteractive: 'interactive' });
-const stageStepRows = (el) => rows(el.stageSteps, (st) => ({
-  label: st.label || st.name,
-  value: [
-    STEP_KIND[st.actionType] || st.actionType || '',
-    (st.label || st.name) !== st.name ? st.name : null,
-    // assigneeType is User / Group; the reference is the actual user or group. Several assignees are legal.
-    asList(st.assignees).map((a) => a.assignee?.stringValue || a.assignee?.elementReference || a.assigneeType)
-      .filter(Boolean).join(', ') || null,
-  ].filter(Boolean).join(' \u00b7 '),
-}));
+// `kind · name · approver <who>? · record locked? · starts ... · exits when ...?`. The name is always written and
+// every later part names itself, so the Flow Table can split a row (builders.js parseStageStepValue). Up to
+// 1.26.9 the row dropped the name when it equalled the label and wrote assignees bare, so `kind · name ·
+// assignee` could not always be told apart, and it carried no conditions, lock or assignee type. "starts ..." is
+// always written: it is the orchestrator's rule (an ungated step starts with its stage), and it marks this shape.
+// The words follow stepRows, the expanded step card's rows.
+const stageStepRows = (el) => rows(el.stageSteps, (st) => {
+  const type = String(st.actionType || '');
+  const who = asList(st.assignees).map(assigneeText).filter(Boolean);
+  const locks = st.shouldLock === true || st.shouldLock === 'true';
+  const entry = summarizeConditions(st.entryConditions, st.entryConditionLogic);
+  const exit = summarizeConditions(st.exitConditions, st.exitConditionLogic);
+  return {
+    label: st.label || st.name,
+    value: [
+      STEP_KIND[type] || type || '',
+      st.name || null,
+      who.length ? `${type === 'stepApproval' ? 'approver' : 'assigned to'} ${who.join(', ')}` : null,
+      type === 'stepApproval' || locks ? (locks ? 'record locked' : 'record not locked') : null,
+      entry ? `starts when ${entry}` : 'starts with the stage',
+      exit ? `exits when ${exit}` : null,
+    ].filter(Boolean).join(' \u00b7 '),
+  };
+});
 
 // \u2500\u2500 Stage step EXPANSION (opts.expandStages) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // OFF BY DEFAULT, and that is a contract rather than a preference: this changes a converted orchestration's cell
@@ -477,8 +513,16 @@ const getOutputRows = (el) => {
   }
   if (el.queriedFields?.length) rows.push({ label: 'Fields read', value: asList(el.queriedFields).join(', ') });
   if (el.sortField) rows.push({ label: 'Sorted by', value: `${el.sortField}${el.sortOrder ? ` ${SORT_ORDER[el.sortOrder] || el.sortOrder}` : ''}` });
+  // A limit and the null-on-empty switch, each only when set: Flow Builder's defaults are no limit and off.
+  if (el.limit != null && String(el.limit).trim() !== '') rows.push({ label: 'Limit', value: String(el.limit) });
   const assigned = outputRows(el);
-  if (assigned.length) return rows.concat(assigned);
+  if (assigned.length) {
+    // Applies only to field assignments: with none found, the assigned variables are set to null instead of kept.
+    if (el.assignNullValuesIfNoRecordsFound === true || el.assignNullValuesIfNoRecordsFound === 'true') {
+      assigned.push({ label: 'If none found', value: 'sets the assigned variables to null' });
+    }
+    return rows.concat(assigned);
+  }
   if (el.outputReference) rows.push({ label: 'Stored in', value: `{!${el.outputReference}}` });
   else if (el.storeOutputAutomatically) rows.push({ label: 'Stored', value: `on the element (referenced as {!${el.name}.<field>})` });
   return rows;

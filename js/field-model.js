@@ -1,5 +1,5 @@
 // DataObject field model (CLEANUP V2) — the single source for the pure per-field rules that were duplicated
-// across the three field-editing surfaces (the properties-panel inline editor, the "Edit in Table" modal, and
+// across the three field-editing surfaces (the properties-panel inline editor, the "Edit Fields" modal, and
 // the Data Model table view) plus the CSV importer. Zero-dep leaf: no DOM, no graph — just the field rules, so
 // it is unit-tested directly (dev/tests/field-model.test.js).
 //

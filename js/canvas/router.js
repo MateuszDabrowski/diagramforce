@@ -7,9 +7,9 @@
 // orthoRoute) are hoisted to module level + exported so they can be
 // characterised in tests/canvas-router.test.js.
 
-import { cctx } from './context.js?v=1.26.9';
-import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.9';
-import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.9';
+import { cctx } from './context.js?v=1.26.10';
+import { right, bottom, centerX, centerY } from '../util/geometry.js?v=1.26.10';
+import { assignJoinLanes, assignSideLanes } from './join-lanes.js?v=1.26.10';
 
 // ── Routing geometry constants ──
 export const STUB = 32;  // distance from port to first turn — must exceed defaultConnectionPoint offset (16px) + arrow length (14px)
@@ -287,12 +287,33 @@ function linkLook(link) {
   return `${String(link.attr('line/stroke') || '').toLowerCase()}|${dash}`;
 }
 
-function linksConflict(a, b) {
-  if (!a || !b || a.look === b.look) return false;
+// Same-look links share a line only on one BUS: the same-look links joined through shared ports, one port or a chain
+// of them, which read as one trunk. Two same-look links on different buses are kept apart as different looks are: on
+// random-5 two blue links between four different cards ran as one line for 104 px, and nothing told the reader which
+// pair of cards a stretch belonged to (diagnosed 2026-10-19, built 2026-11-01). The buses are built once per sweep
+// (busesOf).
+function linksConflict(a, b, sameBus = true) {
+  if (!a || !b) return false;
+  if (a.look === b.look && sameBus) return false;
   return a.runs.some((r) => b.runs.some((q) => sharesLine(r, q)));
 }
+function busesOf(links) {
+  const parent = new Map(links.map((l) => [l.id, l.id]));
+  const find = (x) => { while (parent.get(x) !== x) x = parent.get(x); return x; };
+  const owner = new Map();
+  for (const l of links) {
+    const look = linkLook(l);
+    for (const end of [l.get('source'), l.get('target')]) {
+      if (!end?.id || !end.port) continue;
+      const k = `${look}|${end.id}::${end.port}`, o = owner.get(k);
+      if (o) parent.set(find(l.id), find(o)); else owner.set(k, l.id);
+    }
+  }
+  return new Map(links.map((l) => [l.id, find(l.id)]));
+}
 
-/** After a batch of routes: re-route links that share a line with a different-looking link. Returns how many moved.
+/** After a batch of routes: re-route links that share a line with a different-looking link, or with a same-looking link
+ *  on another bus (busesOf). Returns how many moved.
  *  `scope` (a Set of link ids, a drag frame's routed links): only pairs with a scoped link are checked, and only scoped
  *  links move; every other link keeps its settled line as an obstacle. Without it a drag frame skipped separation, and
  *  grabbing a card re-drew its trunk unseparated: a sibling's split point jumped 80 px onto a dashed line 8 px away, and
@@ -312,17 +333,45 @@ export function separateForeignRuns(gr, paper, scope = null) {
   let total = 0;
   // A drag frame sweeps once: the extra sweeps settle chains of moves for the drop's full pass, and in a dense diagram a
   // pair that cannot be cleared was retried in each (2026-10-24).
-  for (let sweep = 0; sweep < (scope ? 1 : SEPARATION_SWEEPS); sweep++) {
-    const moved = separationSweep(links, paper, scope);
-    total += moved;
-    if (!moved) break;
+  // Two rounds. Different-look pairs settle first, exactly as before same-look buses were kept apart. Same-look pairs go
+  // second, against those settled routes: judged mid-round, a move was measured against lines the next sweep was about
+  // to move, and passed (random-3: a dark link hopped a red arrow) (2026-11-02).
+  for (const sameLook of [false, true]) {
+    const memo = sameLook ? { failed: new Map(), moved: [] } : null;
+    for (let sweep = 0; sweep < (scope ? 1 : SEPARATION_SWEEPS); sweep++) {
+      const moved = separationSweep(links, paper, scope, sameLook, memo);
+      total += moved;
+      if (!moved) break;
+    }
   }
   return total;
 }
 
 const SEPARATION_SWEEPS = 3;
+const ARROW_ZONE = 32;            // px from a line's end: a crossing this close to a card puts a hop on the arrow
+const SAME_LOOK_CROSSINGS = 1;   // more crossings a same-look move may add
+const LANE_OFFSETS = [20, 28, 36];   // px off a keeper's line where a same-look mover may also run
+const SAME_LOOK_GAP = 16;        // px a same-look mover keeps from same-look lines of other buses (12 read as one line)
+const atRunEnd = (x, r) => Math.abs(x - r.lo) < 1 || Math.abs(x - r.hi) < 1;
+const SKIP_REACH = ARROW_ZONE + 36;   // px a move must come within to reopen a pair that failed (the bar's reach, widest lane)
+const boxesMeet = (a, b, m) => !!a && !!b && a.x0 <= b.x1 + m && b.x0 <= a.x1 + m && a.y0 <= b.y1 + m && b.y0 <= a.y1 + m;
+const sigOf = (link) => (_lastRuns.get(link.id)?.pts || []).map((p) => `${p.x},${p.y}`).join(' ');
+const boxOf = (pts) => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+  return { x0, y0, x1, y1 };
+};
+/** Where the drawn line ends: STUB - CP_PERP_OFFSET back from a stub tip toward its card. */
+function lineEndOf(p, dir) {
+  const d = STUB - CP_PERP_OFFSET;
+  return dir === 'left' ? { x: p.x + d, y: p.y } : dir === 'right' ? { x: p.x - d, y: p.y }
+    : dir === 'top' ? { x: p.x, y: p.y + d } : dir === 'bottom' ? { x: p.x, y: p.y - d } : { x: p.x, y: p.y };
+}
 
-function separationSweep(links, paper, scope = null) {
+// `memo` (the same-look round): pairs no move could part, and the boxes moves have touched since. A later sweep skips
+// such a pair unless one of its two routes changed or a move came near it: on a 300-card, 400-link diagram the round's
+// second sweep retried 344 such pairs after one move elsewhere, 270 ms for nothing.
+function separationSweep(links, paper, scope, sameLookRound, memo = null) {
   // Candidate pairs, bucketed by line so a big diagram is not an all-pairs scan.
   const buckets = new Map();
   links.forEach((l, i) => {
@@ -347,41 +396,130 @@ function separationSweep(links, paper, scope = null) {
     }
   });
   const reroute = (link) => paper.findViewByModel(link)?.update?.();
+  const bus = busesOf(links);
+  const conflict = (a, b) => linksConflict(_lastRuns.get(a.id), _lastRuns.get(b.id), bus.get(a.id) === bus.get(b.id));
+  // What a same-look move may cost the mover (routeCost): px of line shared with a different look and who with, same-look
+  // lines of other buses nearer than SAME_LOOK_GAP, crossings, and crossings on an arrow (within ARROW_ZONE of either
+  // line's end). The bar (affordable), each part from the corpus (2026-11-01/02):
+  // - different-look sharing may not grow in px (unguarded, the corpus traded 1361 px of same-look sharing for 308 px of
+  //   new different-look clash) and may not take a new partner (random-2 swapped 88 px on a red line for 52 px on a blue
+  //   one, the next sweep moved it onto a red trunk, and the diagram's clash doubled). Px alone allows the swap; partners
+  //   alone let random-4 swap a short clash with one link for a 220 px one with the same link.
+  // - no same-look line of another bus nearer than SAME_LOOK_GAP that was not already: 12 px apart, two blue lines read
+  //   as one (random-5). Never the keeper's line.
+  // - no new crossing on an arrow (a move into the lane beside a card column hopped every arrow entering it: random-5's
+  //   red link four), and at most SAME_LOOK_CROSSINGS more crossings (a move beside a shared trunk added five, random-4).
+  const routeCost = (link, pts) => {
+    const own = _lastRuns.get(link.id);
+    const look = linkLook(link), runs = runsOf(pts).concat(own?.stubs || []);
+    const ownEnds = own?.tips || [pts[0], pts[pts.length - 1]];
+    const near = (ends, x, y) => ends.some((e) => Math.abs(e.x - x) + Math.abs(e.y - y) <= ARROW_ZONE);
+    let fc = 0, all = 0, tips = 0;
+    const partners = new Set(), nearSame = new Set(), myBus = bus.get(link.id);
+    // Only links whose box comes within ARROW_ZONE of this route's can share, near, or cross it: a 400-link pass spent
+    // 7 s comparing every candidate with every link.
+    const bx = boxOf(own?.tips ? pts.concat(own.tips) : pts);
+    for (const o of links) {
+      const other = o === link ? null : _lastRuns.get(o.id);
+      if (!other) continue;
+      const ob = other.box;
+      if (ob && (ob.x0 > bx.x1 + ARROW_ZONE || ob.x1 < bx.x0 - ARROW_ZONE || ob.y0 > bx.y1 + ARROW_ZONE || ob.y1 < bx.y0 - ARROW_ZONE)) continue;
+      const theirs = other.stubs ? other.runs.concat(other.stubs) : other.runs;
+      const theirEnds = other.tips || [other.pts[0], other.pts[other.pts.length - 1]];
+      const seen = new Set();
+      for (const r of runs) for (const q of theirs) {
+        if (r.o === q.o) {
+          const ov = Math.min(r.hi, q.hi) - Math.max(r.lo, q.lo);
+          if (other.look !== look) { if (sharesLine(r, q)) { fc += ov; partners.add(o.id); } }
+          else if (bus.get(o.id) !== myBus && Math.abs(r.c - q.c) < SAME_LOOK_GAP && ov > RUN_MIN) nearSame.add(o.id);
+          continue;
+        }
+        const h = r.o === 'H' ? r : q, v = r.o === 'H' ? q : r;
+        if (v.c < h.lo - 0.5 || v.c > h.hi + 0.5 || h.c < v.lo - 0.5 || h.c > v.hi + 0.5) continue;
+        if (atRunEnd(v.c, h) && atRunEnd(h.c, v)) continue;   // two corners meeting: a junction, not a crossing
+        const k = v.c * 100003 + h.c;
+        if (seen.has(k)) continue;
+        seen.add(k); all++;
+        if (near(ownEnds, v.c, h.c) || near(theirEnds, v.c, h.c)) tips++;
+      }
+    }
+    return { fc, partners, nearSame, all, tips };
+  };
+  const costOf = (link) => { const rec = _lastRuns.get(link.id); return rec ? routeCost(link, rec.pts) : { fc: 0, partners: new Set(), nearSame: new Set(), all: 0, tips: 0 }; };
+  const affordable = (now, was, keeperId) => now.fc <= was.fc && [...now.partners].every((id) => was.partners.has(id))
+    && !now.nearSame.has(keeperId) && [...now.nearSame].every((id) => was.nearSame.has(id))
+    && now.tips <= was.tips && now.all <= was.all + SAME_LOOK_CROSSINGS;
+  // A same-look trial's avoid set carries the bar (accept), so the search passes over a candidate that misses it and takes
+  // the next one, instead of returning the first clear route (most often the lane beside the cards) for the move to be
+  // refused whole. It also offers lanes LANE_OFFSETS off the keeper's line: a gap between two card columns otherwise
+  // offers its midpoint and the lanes along the cards, and four of the corpus's seven moves took one of these.
+  const trialFor = (mover, keeper, sameLook) => {
+    const before = _avoidRuns.get(mover.id), trial = (before || []).concat(_lastRuns.get(keeper.id).runs);
+    if (sameLook) {
+      const was = costOf(mover);
+      trial.accept = (pts) => affordable(routeCost(mover, pts), was, keeper.id);
+      const lanes = (o) => _lastRuns.get(keeper.id).runs.filter((r) => r.o === o).flatMap((r) => LANE_OFFSETS.flatMap((d) => [r.c - d, r.c + d]));
+      trial.lanesX = lanes('V'); trial.lanesY = lanes('H');
+    }
+    return trial;
+  };
+  const busSize = new Map();
+  for (const b of bus.values()) busSize.set(b, (busSize.get(b) || 0) + 1);
+  const sizeOf = (l) => busSize.get(bus.get(l.id)) || 1;
   let moved = 0;
   for (const key of [...pairs].sort((p, q) => p - q)) {
     const first = links[Math.floor(key / links.length)], second = links[key % links.length];
     if (scope && !scope.has(first.id) && !scope.has(second.id)) continue;
-    if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) continue;
+    const sameLook = linkLook(first) === linkLook(second);
+    if (sameLook !== sameLookRound || !conflict(first, second)) continue;
+    const sig = memo && `${sigOf(first)}|${sigOf(second)}`;
+    if (memo) {
+      const f = memo.failed.get(key);
+      const near = (b) => [first, second].some((l) => boxesMeet(b, _lastRuns.get(l.id).box, SKIP_REACH));
+      if (f && f.sig === sig && !memo.moved.slice(f.at).some(near)) continue;
+    }
+    const fail = () => { if (memo) memo.failed.set(key, { sig, at: memo.moved.length }); };
+    const done = (mover, oldBox) => { if (memo) memo.moved.push(oldBox, _lastRuns.get(mover.id).box); moved++; };
+    // Same look: the route drawn must meet the cost bar too (the search's candidate lacks the leads and trimmed stubs).
+    const clears = (mover, was) => !conflict(first, second)
+      && (!sameLook || affordable(costOf(mover), was, (mover === first ? second : first).id));
     // Try moving each link of the pair and keep the move that changes its route LEAST. Moving the later link by
     // default sent two red links 144 px down to a line hugging a container's cards, where moving the green link it
     // clashed with cost 12 px.
     let best = null;
-    const movers = [[second, first], [first, second]].filter(([m]) => !scope || scope.has(m.id));
+    // Same look: only a link of the smaller bus moves, so a fan-out never loses a branch to a stray line
+    // (horizontal-lanes: MC Personalization's four-way bus lost its Web branch, 64 px off).
+    const movers = [[second, first], [first, second]].filter(([m, k]) => (!scope || scope.has(m.id))
+      && (!sameLook || sizeOf(m) <= sizeOf(k)));
+    if (!movers.length) continue;
     if (movers.length === 1) {
       // One candidate (a drag frame's link against a settled one): no comparison to make, so keep the move if it clears
       // the pair, without the trial and revert re-routes - 56 strict searches a frame on a 150-card grid otherwise.
       const [mover, keeper] = movers[0];
-      const before = _avoidRuns.get(mover.id);
-      _avoidRuns.set(mover.id, (before || []).concat(_lastRuns.get(keeper.id).runs));
+      const before = _avoidRuns.get(mover.id), was = sameLook ? costOf(mover) : null, oldBox = _lastRuns.get(mover.id).box;
+      _avoidRuns.set(mover.id, trialFor(mover, keeper, sameLook));
       reroute(mover);
-      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) { moved++; continue; }
+      if (clears(mover, was)) { done(mover, oldBox); continue; }
       if (before) _avoidRuns.set(mover.id, before); else _avoidRuns.delete(mover.id);
       reroute(mover);
+      fail();
       continue;
     }
     for (const [mover, keeper] of movers) {
-      const before = _avoidRuns.get(mover.id), oldPts = _lastRuns.get(mover.id).pts;
-      const trial = (before || []).concat(_lastRuns.get(keeper.id).runs);
+      const before = _avoidRuns.get(mover.id), oldPts = _lastRuns.get(mover.id).pts, was = sameLook ? costOf(mover) : null;
+      const trial = trialFor(mover, keeper, sameLook);
       _avoidRuns.set(mover.id, trial);
       reroute(mover);
-      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) {
+      if (clears(mover, was)) {
         const shift = routeShift(oldPts, _lastRuns.get(mover.id).pts);
         if (!best || shift < best.shift) best = { mover, trial, shift };
       }
       if (before) _avoidRuns.set(mover.id, before); else _avoidRuns.delete(mover.id);
       reroute(mover);
     }
-    if (best) { _avoidRuns.set(best.mover.id, best.trial); reroute(best.mover); moved++; continue; }
+    if (best) { const oldBox = _lastRuns.get(best.mover.id).box; _avoidRuns.set(best.mover.id, best.trial); reroute(best.mover); done(best.mover, oldBox); continue; }
+    // Same look: no further remedy. The Z give-up below exists for the different-looks rule.
+    if (sameLook) { fail(); continue; }
     // Neither move clears the pair, and one of them took a crossed-stub Z: two lines through one 48 px gap between
     // cards have a 16 px clear band, too narrow for either to move 10 px clear (random-1: a blue Z on a dark line for
     // 28 px). That link gives up its Z for the route it had before, then the other link moves as above.
@@ -391,7 +529,7 @@ function separationSweep(links, paper, scope = null) {
       _noCrossedZ.add(zLink.id); reroute(zLink);
       const before = _avoidRuns.get(other.id);
       _avoidRuns.set(other.id, (before || []).concat(_lastRuns.get(zLink.id).runs)); reroute(other);
-      if (!linksConflict(_lastRuns.get(first.id), _lastRuns.get(second.id))) { moved++; break; }
+      if (!conflict(first, second)) { moved++; break; }
       if (before) _avoidRuns.set(other.id, before); else _avoidRuns.delete(other.id);
       _noCrossedZ.delete(zLink.id); reroute(zLink); reroute(other);
     }
@@ -482,8 +620,9 @@ export function orthoRoute(a, b, obstacles, avoid = null, prefer = null) {
   // Leave the line only by a route about as short as the plain one. With nothing in the way, a straight link on
   // another link's line found a U-detour (40 px out and back): the awkward-angle artefact that got Stage E reverted.
   // A route that stays on course is the same length (Manhattan), so the allowance only rejects detours.
-  const strict = strictSearch(a, b, obstacles, avoid);
-  return strict && pathLength(a, strict, b) <= pathLength(a, plain, b) + DETOUR_ALLOWANCE ? strict : plain;
+  const limit = pathLength(a, plain, b) + DETOUR_ALLOWANCE;
+  const strict = strictSearch(a, b, obstacles, avoid, limit);
+  return strict && pathLength(a, strict, b) <= limit ? strict : plain;
 }
 
 // The strict search's last answer per avoid set (review P4-avoid, 2026-10-15). A link keeps its avoid set until the next
@@ -494,14 +633,15 @@ export function orthoRoute(a, b, obstacles, avoid = null, prefer = null) {
 const _strictMemo = new WeakMap();   // avoid array -> { ax, ay, bx, by, boxes: Float64Array, mid }
 /** Strict searches actually run (memo misses), and reroute passes opened. Read by the perf guards in shared-bus.spec.js. */
 export const routeStats = { strictSearches: 0, passes: 0, passMs: 0 };   // passMs: time inside routePass (link-runtime.js)
-function strictSearch(a, b, obstacles, avoid) {
+function strictSearch(a, b, obstacles, avoid, limit) {
   const m = _strictMemo.get(avoid);
-  if (m && m.ax === a.x && m.ay === a.y && m.bx === b.x && m.by === b.y && sameBoxes(m.boxes, obstacles)) return copyPts(m.mid);
+  if (m && m.ax === a.x && m.ay === a.y && m.bx === b.x && m.by === b.y && (!avoid.accept || m.limit === limit)
+    && sameBoxes(m.boxes, obstacles)) return copyPts(m.mid);
   routeStats.strictSearches++;
-  const mid = orthoSearch(a, b, obstacles, avoid, false);
+  const mid = orthoSearch(a, b, obstacles, avoid, false, limit);
   const boxes = new Float64Array(obstacles.length * 4);
   obstacles.forEach((o, i) => { boxes[i * 4] = o.x; boxes[i * 4 + 1] = o.y; boxes[i * 4 + 2] = o.width; boxes[i * 4 + 3] = o.height; });
-  _strictMemo.set(avoid, { ax: a.x, ay: a.y, bx: b.x, by: b.y, boxes, mid: copyPts(mid) });
+  _strictMemo.set(avoid, { ax: a.x, ay: a.y, bx: b.x, by: b.y, limit, boxes, mid: copyPts(mid) });
   return mid;
 }
 const copyPts = (pts) => pts && pts.map((p) => ({ x: p.x, y: p.y }));
@@ -528,6 +668,9 @@ function adoptLine(a, b, obstacles, lines) {
 }
 
 const DETOUR_ALLOWANCE = 24;   // px a route may grow to leave another link's line
+/** True when a same-look trial's bar (`avoid.accept`, separationSweep) turns a candidate down. One longer than `limit`
+ *  goes without the bar's count: orthoRoute would drop it anyway, and the count is what a dense diagram pays for. */
+const refused = (avoid, a, mid, b, limit) => !!avoid?.accept && (pathLength(a, mid, b) > limit || !avoid.accept([a, ...mid, b]));
 const pathLength = (a, mid, b) => {
   const pts = [a, ...mid, b];
   let len = 0;
@@ -535,7 +678,7 @@ const pathLength = (a, mid, b) => {
   return len;
 };
 
-function orthoSearch(a, b, obstacles, avoid, allowFallback) {
+function orthoSearch(a, b, obstacles, avoid, allowFallback, limit = Infinity) {
   const sameY = Math.abs(a.y - b.y) < 2;
   const sameX = Math.abs(a.x - b.x) < 2;
 
@@ -553,7 +696,7 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
   // below could only burn O(|y|·|x|·E) tests to reach the same fallback. Skipping them returns the identical route:
   // measured 1.3 s per link at 500 elements, on every drag frame, for one vertex 10 px off a node (audit 2026-09-23).
   const trapped = insidePadded(a, obstacles) || insidePadded(b, obstacles);
-  const clear = (mid) => { const pts = [a, ...mid, b]; return pathClear(pts, obstacles) && !(avoid && hitsRuns(pts, avoid)); };
+  const clear = (mid) => { const pts = [a, ...mid, b]; return pathClear(pts, obstacles) && !(avoid && hitsRuns(pts, avoid)) && !refused(avoid, a, mid, b, limit); };
   const consider = (mid) => { pool.push(mid); return !trapped && clear(mid) ? mid : null; };
 
   // Coincident stub tips (within 2 px on both axes): facing ports 63-65 px apart, i.e. two STUBs. Every L and Z below
@@ -600,6 +743,10 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
 
   // Sort candidates: prefer closest to midpoint
   const midY = (a.y + b.y) / 2, midX = (a.x + b.x) / 2;
+  // A same-look trial's extra lanes (separationSweep): beside the line it leaves, so a narrow gap offers more than its
+  // midpoint and the lanes along the cards.
+  for (const y of avoid?.lanesY || []) (y > midY ? yBelow : yAbove).add(y);
+  for (const x of avoid?.lanesX || []) (x > midX ? xRight : xLeft).add(x);
   const yCandidates = [...yBelow, ...yAbove].sort((p, q) => Math.abs(p - midY) - Math.abs(q - midY));
   const xCandidates = [...xRight, ...xLeft].sort((p, q) => Math.abs(p - midX) - Math.abs(q - midX));
 
@@ -617,7 +764,7 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
   }
 
   // --- 5-segment S-route fallback: combine x and y detours ---
-  const s = firstClearS(a, b, obstacles, yCandidates, xCandidates, avoid);
+  const s = firstClearS(a, b, obstacles, yCandidates, xCandidates, avoid, limit);
   if (s) return s;
   }   // !trapped
 
@@ -644,7 +791,7 @@ function orthoSearch(a, b, obstacles, avoid, allowFallback) {
  *  near side of one bound read per column (row), with the comparisons segHitsBox makes. So each column and row is
  *  measured once, on first use, and every pair after that costs O(1) - the same answer as the pairwise loop
  *  (dev/tests/canvas-router.test.js checks it against that loop). Pure; exported for tests. */
-export function firstClearS(a, b, obstacles, ys, xs, avoid = null) {
+export function firstClearS(a, b, obstacles, ys, xs, avoid = null, limit = Infinity) {
   const n = obstacles.length;
   const x1 = new Float64Array(n), y1 = new Float64Array(n), x2 = new Float64Array(n), y2 = new Float64Array(n);
   obstacles.forEach((o, i) => { x1[i] = o.x - PAD; y1[i] = o.y - PAD; x2[i] = right(o) + PAD; y2[i] = bottom(o) + PAD; });
@@ -683,6 +830,7 @@ export function firstClearS(a, b, obstacles, ys, xs, avoid = null) {
       if (dy >= a.y ? dy > down[j] : dy < up[j]) continue;
       const mid = [{ x: dx, y: a.y }, { x: dx, y: dy }, { x: b.x, y: dy }];
       if (avoid && (legHits(mid[0], mid[1]) || legHits(mid[1], mid[2]))) continue;
+      if (refused(avoid, a, mid, b, limit)) continue;
       return mid;
     }
   }
@@ -1361,7 +1509,7 @@ export function registerSfRouter() {
       if (lx != null) {
         const lane = [from, { x: lx, y: from.y }, { x: lx, y: to.y }, to]
           .filter((p, i, a) => i === 0 || p.x !== a[i - 1].x || p.y !== a[i - 1].y);
-        if (pathClear(lane, obstacles)) { remember(link, lane, false); return lane; }
+        if (pathClear(lane, obstacles)) { remember(link, lane, false, [[from, srcInfo.dir], [to, tgtInfo.dir]]); return lane; }
       }
     }
 
@@ -1503,7 +1651,7 @@ export function registerSfRouter() {
         route.push(to);
         // Remember the real vertex route. Separation cannot move this link (avoid sets do not apply here), so a clash
         // with it moves the other link, off the line that is really drawn.
-        remember(link, route, false);
+        remember(link, route, false, [[from, srcInfo.dir], [to, tgtInfo.dir]]);
         return route;
       }
 
@@ -1514,7 +1662,7 @@ export function registerSfRouter() {
       // Crossed stubs take the mid-gap Z when it is clear (see crossedStubZ); anything else goes to the search.
       const z = !srcLead && !tgtLead ? crossedStubZ(from, to, srcInfo.dir, tgtInfo.dir) : null;
       const zPts = z && [from, ...z, to];
-      const mid = z && pathClear(zPts, obstacles) && !(avoid && hitsRuns(zPts, avoid)) && !_noCrossedZ.has(link.id) ? z
+      const mid = z && pathClear(zPts, obstacles) && !(avoid && hitsRuns(zPts, avoid)) && !(avoid?.accept && !avoid.accept(zPts)) && !_noCrossedZ.has(link.id) ? z
         : orthoRoute(orthoStart, orthoEnd, obstacles, avoid, prefer);
       const route = [from];
       if (srcLead) route.push(srcLead);
@@ -1523,7 +1671,7 @@ export function registerSfRouter() {
       route.push(to);
       dropBacktrackingStub(route, tgtInfo.dir, true);
       dropBacktrackingStub(route, srcInfo.dir, false);
-      remember(link, route, mid === z);
+      remember(link, route, mid === z, [[from, srcInfo.dir], [to, tgtInfo.dir]]);
       return route;
     } catch (_) {
       // Fallback to direct vertices if routing calculation errors
@@ -1532,8 +1680,13 @@ export function registerSfRouter() {
     }
   };
 
-  function remember(link, route, z) {
-    _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0, z });
+  // `ends`: the drawn line's two ends ([stub tip, side] each), CP_PERP_OFFSET off the card where the route starts STUB
+  // off it. Separation counts crossings on that last stretch too, the arrow's (see routeCost).
+  function remember(link, route, z, ends = null) {
+    const tips = ends && ends.map(([p, dir]) => lineEndOf(p, dir));
+    const stubs = tips ? runsOf([tips[0], route[0]]).concat(runsOf([route[route.length - 1], tips[1]])) : [];
+    _lastRuns.set(link.id, { pts: route.map((p) => ({ x: p.x, y: p.y })), runs: runsOf(route), look: linkLook(link), pass: _routePass ? _passNo : 0, z, tips, stubs,
+      box: boxOf(tips ? route.concat(tips) : route) });
   }
 
   // ── Custom connection point (CR-5.1) ─────────────────────────────

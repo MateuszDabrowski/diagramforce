@@ -11,37 +11,37 @@
 // header — a blue "Data Objects" section (source columns) and an orange "Data Object
 // Relationship" section (target columns). Headers are click-to-sort; the topbar
 // carries a CSV export button and the Show/Hide-Unmapped toggle.
-import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.26.9';
-import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.26.9';
+import { csvCell, escHtml, sanitizeFilenamePart, toMarkdownTable } from './util.js?v=1.26.10';
+import { getActiveTabName, getActiveTabType } from './tabs.js?v=1.26.10';
 // The flow tab's own glyph (a zero-import leaf), wrapped below as the flow table's nav-button icon.
-import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.9';
-import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.26.9';
-import { SF_FIELD_TYPES } from './properties.js?v=1.26.9';
-import { keyImpliesRequired } from './field-model.js?v=1.26.9';
-import { buildModal, showToast, showError } from './feedback.js?v=1.26.9';
-import { buildObjectSchemaCsv } from './data-export.js?v=1.26.9';
-import { triggerDownload } from './persistence.js?v=1.26.9';
-import { ganttTimelineFor, growTimelineToFitDates, layoutTimelineTasks, resequenceGanttOrders } from './gantt-layout.js?v=1.26.9';
-import { durationDays, addDaysISO } from './gantt-scale.js?v=1.26.9';
+import { diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.10';
+import { startBatch, endBatch, setLocked, undo } from './history.js?v=1.26.10';
+import { SF_FIELD_TYPES } from './properties.js?v=1.26.10';
+import { keyImpliesRequired } from './field-model.js?v=1.26.10';
+import { buildModal, showToast, showError } from './feedback.js?v=1.26.10';
+import { buildObjectSchemaCsv } from './data-export.js?v=1.26.10';
+import { triggerDownload } from './persistence.js?v=1.26.10';
+import { ganttTimelineFor, growTimelineToFitDates, layoutTimelineTasks, resequenceGanttOrders } from './gantt-layout.js?v=1.26.10';
+import { durationDays, addDaysISO } from './gantt-scale.js?v=1.26.10';
 // Row-model builders (S9): the mapping / model / gantt projections + their ER-cardinality helpers.
 // Graph-free helpers (fieldOf/mappingTypeOf/linkLabelText) are reused by the draft-session code below.
 import {
   buildData, buildModelData, buildGanttData, sortRows, suppressColumns,
   fieldOf, mappingTypeOf, linkLabelText, MAPPING_TYPES,
   parseFilter, rowMatchesFilter, FILTER_TITLE, FILTER_TITLE_INVALID,
-} from './table-view/builders.js?v=1.26.9';
+} from './table-view/builders.js?v=1.26.10';
 // The filter's aria-live result count rides the app's existing sr-only region (a11y.js imports only
 // properties.js + util.js, so the direction stays acyclic). announce() is called ONLY from the
 // debounced input handler - never from render() - so graph-change re-renders stay silent.
-import { announce } from './a11y.js?v=1.26.9';
+import { announce } from './a11y.js?v=1.26.10';
 // S9: the Gantt project-plan table's LIVE structural ops (Add/Delete/Reorder task + the ganttDep
 // dependency editor) extracted to ./table-view/gantt-plan.js; initGanttPlan wires the live graph +
 // syncGanttDraft/render callbacks in init(). The drafted cell edits + buildGanttData stay here.
-import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.26.9';
+import { addGanttTask, deleteGanttBar, reorderGanttBar, openDepEditor, initGanttPlan } from './table-view/gantt-plan.js?v=1.26.10';
 // 1.22.2: the Flow Table view's stacked-sections render (its own sort / CSV / Markdown). Same injected-
 // context shape as gantt-plan.js - it never imports this facade back.
-import { initFlowTable, renderFlowTable, resetFlowTableFilter, exportFlowCsvFromGraph, FLOW_TABLE_TITLE, SEC_CHEVRON, captureTableView, restoreTableView } from './table-view/flow-table.js?v=1.26.9';
-import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.26.9';
+import { initFlowTable, renderFlowTable, resetFlowTableFilter, exportFlowCsvFromGraph, FLOW_TABLE_TITLE, SEC_CHEVRON, captureTableView, restoreTableView, focusOnDiagram } from './table-view/flow-table.js?v=1.26.10';
+import { buildModelRelationships, REL_COLUMNS } from './table-view/builders.js?v=1.26.10';
 
 let graph = null;
 let container = null;      // #mapping-table-view
@@ -422,6 +422,10 @@ export function render({ fresh = false } = {}) {
   const { mappingCount, objectCount, unmappedCount, fieldCount, taskCount } = built;
 
   const revHdr = _editing ? '<th rowspan="2" class="df-tbl__revcol" aria-label="Revert row"></th>' : '';
+  // Read mode, Data Model and Mapping: a leading column of icon-only "Show on the diagram" buttons, the Flow table's
+  // design (never the whole row: approaches/smaller-reverts.md). Edit mode has none, since its cells are inputs.
+  const navCol = !isGantt && !_editing;
+  const navHdr = navCol ? '<th rowspan="2" class="df-tbl__nav"></th>' : '';
   // Gantt edit mode gets a trailing per-row actions column (drag-reorder handle + delete).
   const ganttEdit = isGantt && _editing;
   const actHdr = ganttEdit ? '<th rowspan="2" class="df-tbl__actcol" aria-label="Row actions"></th>' : '';
@@ -439,8 +443,8 @@ export function render({ fresh = false } = {}) {
     return n ? `<th colspan="${n}" class="df-tbl__sec df-tbl__sec--${sec}"${foldAttrs()}>${caret()}${label}</th>` : '';
   };
   const tier1 = (isModel || isGantt)
-    ? `<tr class="df-tbl__sections">${revHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl"${foldAttrs()}>${caret()}${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
-    : `<tr class="df-tbl__sections">${revHdr}
+    ? `<tr class="df-tbl__sections">${revHdr}${navHdr}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--mdl"${foldAttrs()}>${caret()}${isGantt ? 'Project Plan' : 'Data Model'}</th>${actHdr}</tr>`
+    : `<tr class="df-tbl__sections">${revHdr}${navHdr}
         ${secTh('src', 'Data Sources')}
         ${secTh('map', 'Data Mapping')}
         ${secTh('tgt', 'Data Targets')}
@@ -595,7 +599,7 @@ export function render({ fresh = false } = {}) {
     ? `<tr class="df-tbl__addrow"><td colspan="${cols.length + 2}"><button type="button" id="tbl-add-task" class="df-tbl__add-task">${addLabel}</button></td></tr>`
     : '';
   const body = (rows.length
-    ? rows.map(r => `<tr${ganttEdit ? ` data-bar="${escHtml(String(r._barId))}"` : ''}${!isModel && !isGantt && !r._mapped ? ' class="df-tbl__row--unmapped"' : ''}>${revertCell(r)}${cols.map((c, i) => {
+    ? rows.map(r => `<tr${ganttEdit ? ` data-bar="${escHtml(String(r._barId))}"` : ''}${isGantt ? '' : rowAnchor(r)}${!isModel && !isGantt && !r._mapped ? ' class="df-tbl__row--unmapped"' : ''}>${revertCell(r)}${navCol ? `<td class="df-tbl__nav">${navBtnHtml(r._mapped ? { link: r._linkId } : { obj: r._srcObjId, fid: r._srcFid })}</td>` : ''}${cols.map((c, i) => {
         const div = starts.has(i) ? ' df-tbl__divider' : '';
         const center = c.center ? ' df-tbl__center' : '';
         const strike = isStruck(c.key, r) ? ' df-tbl__strike' : '';
@@ -613,7 +617,7 @@ export function render({ fresh = false } = {}) {
         }
         return `<td class="${(div + center + strike).trim()}">${cellHtml(c.key, r[c.key]) + warn}</td>`;
       }).join('')}${actCell(r)}</tr>`).join('')
-    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0) + (ganttEdit ? 1 : 0)}" class="df-tbl__empty">${isGantt ? (ganttEdit && ganttTimelines().length ? 'No tasks yet - use + Add task below.' : 'No tasks on this Gantt yet - add a timeline and tasks on the canvas, then return here.') : isModel ? 'No fields yet - add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet - draw field-to-field links on the canvas, then return here.'}</td></tr>`)
+    : `<tr><td colspan="${cols.length + (_editing ? 1 : 0) + (ganttEdit ? 1 : 0) + (navCol ? 1 : 0)}" class="df-tbl__empty">${isGantt ? (ganttEdit && ganttTimelines().length ? 'No tasks yet - use + Add task below.' : 'No tasks on this Gantt yet - add a timeline and tasks on the canvas, then return here.') : isModel ? 'No fields yet - add objects and fields on the canvas, then return here.' : 'No mapping connectors on this diagram yet - draw field-to-field links on the canvas, then return here.'}</td></tr>`)
     + addRowHtml;
 
   // In edit mode the note becomes a live unsaved-change tally; otherwise a mode-specific summary.
@@ -765,6 +769,9 @@ export function render({ fresh = false } = {}) {
       th.addEventListener('click', go);
       th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     });
+    container.querySelectorAll('.df-tbl__navbtn').forEach(b => {
+      b.addEventListener('click', () => focusOnDiagram(b.getAttribute('data-link') || b.getAttribute('data-obj'), b.getAttribute('data-fid')));
+    });
     container.querySelectorAll('[data-relsort]').forEach(th => {
       const key = th.getAttribute('data-relsort');
       const go = () => toggleRelSort(key);
@@ -866,7 +873,7 @@ function applyFilter() {
       tbody.appendChild(nomatch);
     }
     const td = nomatch.querySelector('td');
-    td.colSpan = cols.length || 1;
+    td.colSpan = (cols.length || 1) + 1;   // + the nav column (applyFilter runs in read mode only)
     td.textContent = `No rows match "${_filterQuery.trim()}".`;   // textContent - no HTML injection path
   } else {
     nomatch?.remove();
@@ -1413,9 +1420,27 @@ function toggleRelSection(th) {
 // The band renders on EVERY model-mode paint, rows or none, and carries its insight on the band (one fact, one
 // home - the flow rule): a collapsed zero section must still say what it holds. The insight is also stashed
 // on the seccount span so filterRelGrid can restore it in place when the query clears.
+// One "Show on the diagram" button: a link id, or an object id with the field to light. A row that names neither
+// keeps an empty cell, so the column stays aligned.
+// Row anchors for the properties panel's "Show in Table view" (showRowsInTable, properties/widgets.js): the object and field
+// a row lists and, on a mapped row, its link and the target object, so a target object finds its rows too. The
+// Relationships table's rows carry data-link already.
+function rowAnchor(r) {
+  const a = (k, v) => (v ? ` ${k}="${escHtml(String(v))}"` : '');
+  return a('data-obj', r._srcObjId) + a('data-fid', r._srcFid) + (r._mapped ? a('data-tobj', r._tgtObjId) + a('data-link', r._linkId) : '');
+}
+
+function navBtnHtml({ link, obj, fid }) {
+  const attrs = link ? `data-link="${escHtml(String(link))}"` : obj ? `data-obj="${escHtml(String(obj))}"${fid ? ` data-fid="${escHtml(String(fid))}"` : ''}` : '';
+  // The tab type's own icon: the Flow table's ICON_DIAGRAM is the flow spine, which reads oddly beside an ERD.
+  const icon = `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">${diagramTypeIconMarkup(isModelMode() ? 'datamodel' : 'datamapping')}</svg>`;
+  return attrs ? `<button type="button" class="df-tbl__navbtn" ${attrs} aria-label="Show on the diagram" title="Show on the diagram">${icon}</button>` : '';
+}
+
 function relTableHtml(rows, cols, { relationshipCount, objectLevelCount, fieldLevelCount }) {
+  const relNav = !_editing;
   const insight = `${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'} (${objectLevelCount} object-level, ${fieldLevelCount} field-level)`;
-  const tier1 = `<tr class="df-tbl__sections"><th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--rel" data-sec="relationships" role="button" tabindex="0" aria-expanded="${!_relCollapsed}" title="Collapse or expand this section">${SEC_CHEVRON}Relationships<span class="df-tbl__seccount" data-insight="${escHtml(insight)}"> · ${escHtml(insight)}</span></th></tr>`;
+  const tier1 = `<tr class="df-tbl__sections">${relNav ? '<th rowspan="2" class="df-tbl__nav"></th>' : ''}<th colspan="${cols.length}" class="df-tbl__sec df-tbl__sec--rel" data-sec="relationships" role="button" tabindex="0" aria-expanded="${!_relCollapsed}" title="Collapse or expand this section">${SEC_CHEVRON}Relationships<span class="df-tbl__seccount" data-insight="${escHtml(insight)}"> · ${escHtml(insight)}</span></th></tr>`;
   const tier2 = `<tr class="df-tbl__cols">${cols.map(c => {
     const sorted = _relSort.key === c.key;
     const cls = (((c.sortable && !_editing) ? ' df-tbl__th--sortable' : '') + (sorted ? ' df-tbl__th--sorted' : '')).trim();
@@ -1424,14 +1449,14 @@ function relTableHtml(rows, cols, { relationshipCount, objectLevelCount, fieldLe
     return `<th class="${cls}"${attr}>${escHtml(c.label)}${arrow}</th>`;
   }).join('')}</tr>`;
   const body = rows.length
-    ? rows.map(r => `<tr data-link="${escHtml(String(r._linkId))}">${cols.map(c => {
+    ? rows.map(r => `<tr data-link="${escHtml(String(r._linkId))}">${relNav ? `<td class="df-tbl__nav">${navBtnHtml({ link: r._linkId })}</td>` : ''}${cols.map(c => {
         const raw = String(r[c.key] ?? '');
         // A deprecated endpoint field strikes, as the schema grid strikes that field's own row.
         const strike = ((c.key === 'fromField' && r._fromDeprecated) || (c.key === 'toField' && r._toDeprecated)) ? ' class="df-tbl__strike"' : '';
         const val = (c.key === 'cardinality' && raw === '—') ? `<span class="df-tbl__placeholder">${escHtml(raw)}</span>` : escHtml(raw);
         return `<td${strike}>${val}</td>`;
       }).join('')}</tr>`).join('')
-    : `<tr><td colspan="${cols.length}" class="df-tbl__empty">${isMappingMode()
+    : `<tr><td colspan="${cols.length + (relNav ? 1 : 0)}" class="df-tbl__empty">${isMappingMode()
         ? 'No object relationships yet - mapping connectors are the rows above. Draw a relationship between two objects (a header-to-header connector, not a mapping) and it lists here.'
         : 'No relationships yet - draw connectors between objects, or between their fields, on the canvas, then return here.'}</td></tr>`;
   return `<table class="df-tbl__table df-tbl__table--rel${_relCollapsed ? ' df-tbl__table--collapsed' : ''}" data-grid="relationships"><thead>${tier1}${tier2}</thead><tbody>${body}</tbody></table>`;
@@ -1472,7 +1497,7 @@ function filterRelGrid(matcher) {
       tbody.appendChild(nomatch);
     }
     const td = nomatch.querySelector('td');
-    td.colSpan = cols.length || 1;
+    td.colSpan = (cols.length || 1) + 1;   // + the nav column (the filter runs in read mode only)
     td.textContent = `No relationships match "${_filterQuery.trim()}".`;
   } else {
     nomatch?.remove();

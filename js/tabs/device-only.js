@@ -4,10 +4,10 @@
 // while they work: one prompt per diagram, ten minutes after its first device-only edit, with the tab marker as the
 // backstop. Nothing here reads window.slot: a browser gets the same.
 
-import { tbctx } from './context.js?v=1.26.9';
-import { showError, showToast } from '../feedback.js?v=1.26.9';
-import { countDiagramShapes } from '../util.js?v=1.26.9';
-import { deviceOnlyStep, isDeviceOnly } from '../persistence/drive-sync-logic.js?v=1.26.9';
+import { tbctx } from './context.js?v=1.26.10';
+import { showError, showToast } from '../feedback.js?v=1.26.10';
+import { countDiagramShapes } from '../util.js?v=1.26.10';
+import { deviceOnlyStep, isDeviceOnly } from '../persistence/drive-sync-logic.js?v=1.26.10';
 
 export const DEVICE_ONLY_RISK = 'Your browser can clear it after a few weeks without a visit.';
 

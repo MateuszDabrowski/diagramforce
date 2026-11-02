@@ -1,11 +1,11 @@
 // Data Model DataObject shape + its field-row view (CLEANUP S3). registerDataObject() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { sctx } from './context.js?v=1.26.9';
-import { ensureFieldFids, fieldHasMappingLink, getVisibleDataObjectFields } from './fields.js?v=1.26.9';
-import { portGroups } from './ports.js?v=1.26.9';
-import { fieldFocus } from '../canvas/focus-state.js?v=1.26.9';
-import { textUnits, sliceUnits } from '../util.js?v=1.26.9';
+import { sctx } from './context.js?v=1.26.10';
+import { ensureFieldFids, fieldHasMappingLink, getVisibleDataObjectFields } from './fields.js?v=1.26.10';
+import { portGroups } from './ports.js?v=1.26.10';
+import { fieldFocus } from '../canvas/focus-state.js?v=1.26.10';
+import { textUnits, sliceUnits } from '../util.js?v=1.26.10';
 
 export function registerDataObject() {
   // --- DataObject ---
@@ -382,6 +382,7 @@ export function registerDataObject() {
         // Re-assert any active flow-focus dim on this field (survives re-render).
         if (field.fid && fieldFocus.dimmed?.has(`${model.id}::${field.fid}`)) rowG.classList.add('df-field-dimmed');
         const hit = document.createElementNS(ns, 'rect');
+        hit.setAttribute('class', 'do-field-hit');   // also what a Table view focus lights (css/canvas.css)
         hit.setAttribute('x', '12');
         hit.setAttribute('y', String(y));
         hit.setAttribute('width', String(Math.max(0, width - 24)));

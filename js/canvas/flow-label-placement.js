@@ -48,6 +48,16 @@ export const FALLBACK_STEP = 36;     // one pill height plus a gap
 // lay 12-97 px away. The only shared stretch of two "Deprecating" links lay 153 and 244 px away, in a crowded corner
 // at a frame border: one pill there named neither line where a reader looks, so those twins stay apart.
 export const TWIN_MAX_MOVE = 120;
+// Space between two pills when a spot allows it (2026-11-02): two pills that merely touched, a red "sync" against a blue
+// one, read as one cluster naming either line.
+export const LABEL_GAP = 4;
+// Half the width of another link's line as an obstacle, and how far into a pill a line must reach to count as hidden.
+const LINE_HALF = 2;
+const LINE_INSET = 2;
+const SOFT_MARGIN = 2;
+// How far a label may travel along its line to clear other lines and pills: uncapped, three labels went 372-418 px down
+// their lines after Auto Layout (random-1, random-2), where no reader looks for them. The twin cap, for the same reason.
+export const LINE_MOVE_MAX = TWIN_MAX_MOVE;
 
 // Frames: shapes that hold other cards (router.js and diagram-schema.js keep the same list).
 const FRAME_TYPES = new Set(['sf.Container', 'sf.Zone', 'sf.TaskGroup', 'sf.BpmnPool', 'sf.BpmnSubprocess', 'sf.BpmnLoop']);
@@ -79,11 +89,19 @@ function frameHeaders(paper, frame) {
  * lives in (see resolveFlowLabelCollisions). Items with the same `twin` key may take EXACTLY the same rect (within
  * 1 px): twin labels share one spot by design (shareTwinLabels), and a re-run must not push them apart again.
  *
- * @param {Array<{id, slack, candidates: Array<{key, x, y, w, h}>, ignore?: Set<string>, twin?: string}>} items
+ * `lines` (2026-11-02, architecture/org/process): the other links' lines, as axis runs. An item marked `clearLines`
+ * first looks, within LINE_MOVE_MAX of its `anchor` (else its first candidate), for a spot that hides no other line (the crossing of its own
+ * line with another one included) and keeps LABEL_GAP from every other pill. Both are preferences: when no candidate
+ * meets them the item packs as before (clear of cards and labels, then of labels only). Another link's run along the
+ * item's own line (a shared trunk) counts too, unless that link is the item's twin: a label there names neither line.
+ *
+ * @param {Array<{id, slack, candidates: Array<{key, x, y, w, h}>, ignore?: Set<string>, twin?: string,
+ *   clearLines?: boolean, runs?: Array<{o, c, lo, hi}>, anchor?: {x, y}}>} items
  * @param {Array<{id?, x, y, w, h}>} obstacles - cards and frames; never move, always avoided unless ignored
+ * @param {Array<{link, o: 'H'|'V', c, lo, hi}>} lines - other links' axis runs (soft obstacles, see above)
  * @returns {{ chosen: Map<string, any>, unresolved: string[] }} chosen maps id -> the winning candidate's `key`
  */
-export function packLabels(items, obstacles = []) {
+export function packLabels(items, obstacles = [], lines = []) {
   // Stable and geometry-derived, so the result cannot depend on graph insertion order - two labels at the same
   // anchor would otherwise swap between loads and the diagram would not round-trip through a save.
   const order = [...items].sort((a, b) => (a.slack ?? 0) - (b.slack ?? 0)
@@ -98,15 +116,70 @@ export function packLabels(items, obstacles = []) {
   for (const item of order) {
     const blocks = (p, c) => !(p.id != null && item.ignore?.has(p.id))
       && !(item.twin && p.twin === item.twin && Math.abs(p.x - c.x) <= 1 && Math.abs(p.y - c.y) <= 1 && Math.abs(p.w - c.w) <= 1);
-    const clears = (against) => item.candidates.find((c) => !against.some((p) => blocks(p, c) && hits(c, p)));
-    // Prefer a spot clear of everything. Failing that, clear of the other LABELS only: a pill resting on a card
-    // is still readable, whereas two pills on one spot means one of them may as well not exist.
-    const win = clears(placed) || clears(placed.filter((p) => p.isLabel)) || item.candidates[0];
-    if (!clears(placed.filter((p) => p.isLabel))) unresolved.push(item.id);
+    // On its own line only (no perpendicular nudge: one lifted "sync" 36 px off its line into empty space, random-1), and
+    // within LINE_MOVE_MAX of its `anchor`, a point the route fixes (else its first choice). Measured from where the label
+    // sits, each open could take it another LINE_MOVE_MAX along; from a fixed point a re-run finds the same spot.
+    const anchor = item.anchor || item.candidates[0];
+    const near = item.candidates.filter((c) => !c.key?.offset && Math.hypot(c.x - anchor.x, c.y - anchor.y) <= LINE_MOVE_MAX);
+    const grow = (c, m) => (m ? { x: c.x - m, y: c.y - m, w: c.w + 2 * m, h: c.h + 2 * m } : c);
+    // `gap` widens the pill against other pills, `margin` against cards and frames (the preference tiers only).
+    // Only what lies near this item's candidates can block one (a 400-label pass: 330 ms scanning every card and pill
+    // for every candidate, against 110 before the preference tiers). Exact: the box holds every candidate, grown by the
+    // widest gap a tier asks for.
+    const reach = Math.max(LABEL_GAP, SOFT_MARGIN) + 1;
+    const box = item.candidates.reduce((b, c) => ({ x0: Math.min(b.x0, c.x), y0: Math.min(b.y0, c.y), x1: Math.max(b.x1, c.x + c.w), y1: Math.max(b.y1, c.y + c.h) }),
+      { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+    const local = placed.filter((p) => p.x <= box.x1 + reach && box.x0 - reach <= p.x + p.w && p.y <= box.y1 + reach && box.y0 - reach <= p.y + p.h);
+    const clears = (against, gap = 0, avoid = null, list = item.candidates, margin = 0) => list.find((c) => {
+      if (avoid && hidesLine(c, avoid)) return false;
+      const wide = grow(c, gap), padded = grow(c, margin);
+      return !against.some((p) => blocks(p, c) && hits(p.isLabel ? wide : padded, p));
+    });
+    // The other lines near this item, as thin rects. Only for an item that asks (clearLines): a label the user dragged
+    // stays where they put it unless it lands on a card or a label.
+    const avoid = item.clearLines ? lineRects(item, lines) : null;
+    // Prefer a spot clear of everything, other lines and a gap to other pills included. Failing that, clear of lines
+    // with pills allowed to touch, then clear of cards and labels, then of the other LABELS only: a pill resting on a
+    // card is still readable, whereas two pills on one spot means one of them may as well not exist.
+    // The preference tiers take a spot only with SOFT_MARGIN to spare from cards and other pills. Inside Auto Layout a
+    // pill measures 1 px taller than it draws a moment later, so a spot that cleared a frame by under a px passed on a
+    // re-run and not the first time, and the re-run moved the label 28 px (horizontal-lanes, layout-labels.spec).
+    const labelsOnly = local.filter((p) => p.isLabel);
+    const win = (avoid && (clears(local, Math.max(LABEL_GAP, SOFT_MARGIN), avoid, near, SOFT_MARGIN)
+      || clears(local, SOFT_MARGIN, avoid, near, SOFT_MARGIN)))
+      || clears(local) || clears(labelsOnly) || item.candidates[0];
+    if (!clears(labelsOnly)) unresolved.push(item.id);
     chosen.set(item.id, win.key);
     placed.push({ x: win.x, y: win.y, w: win.w, h: win.h, isLabel: true, twin: item.twin });
   }
   return { chosen, unresolved };
+}
+
+/** True when one of the line rects reaches LINE_INSET px or more into pill `c`, whole pixels. A line grazing the pill's edge
+ *  stays visible, and the edge is where sub-pixel noise lives: the same pill measured 21.7 and 22 px tall on two runs, a
+ *  line 1 px above it counted on one and not the other, and a re-run moved the label 40 px (random-4 after Auto Layout). */
+function hidesLine(c, rects) {
+  const x = Math.round(c.x) + LINE_INSET, y = Math.round(c.y) + LINE_INSET;
+  const core = { x, y, w: Math.round(c.x + c.w) - LINE_INSET - x, h: Math.round(c.y + c.h) - LINE_INSET - y };
+  return core.w > 0 && core.h > 0 && rects.some((r) => hits(core, r));
+}
+
+/** The `lines` that could lie under one of `item`'s candidates, as thin rects: not its own link's, and not its twin's run
+ *  along its own line (twins share one pill there by design, shareTwinLabels). */
+function lineRects(item, lines) {
+  if (!lines.length || !item.candidates.length) return [];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of item.candidates) { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); }
+  const own = (r) => !!item.twin && r.twin === item.twin
+    && (item.runs || []).some((q) => q.o === r.o && Math.abs(q.c - r.c) <= LINE_HALF && q.lo < r.hi && r.lo < q.hi);
+  const out = [];
+  for (const r of lines) {
+    if (r.link === item.id || own(r)) continue;
+    const rect = r.o === 'H' ? { x: r.lo, y: r.c - LINE_HALF, w: r.hi - r.lo, h: 2 * LINE_HALF }
+      : { x: r.c - LINE_HALF, y: r.lo, w: 2 * LINE_HALF, h: r.hi - r.lo };
+    if (rect.x <= x1 && x0 <= rect.x + rect.w && rect.y <= y1 && y0 <= rect.y + rect.h) out.push(rect);
+  }
+  return out;
 }
 
 /** A polyline's axis-aligned segments as runs: `{o: 'H'|'V', c: the constant coordinate, lo, hi, dir}`, where `dir` (+1
@@ -317,6 +390,13 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     return [l.id, { id: l.id, text: labelText(l), pts: [v?.sourcePoint, ...(v?.route || []), v?.targetPoint].filter(Boolean) }];
   })) : null;
 
+  // Every link's line as axis runs, for labels that name their line (collisionOnly): a label prefers a spot that hides no
+  // other line (packLabels `lines`). After Auto Layout on random-2 a blue "sync" pill sat over the crossing of its line
+  // with a red one, and 17 of the held-out corpus's 82 labels covered another link's line.
+  const polyOf = (l) => { const v = paper.requireView(l); return [v?.sourcePoint, ...(v?.route || []), v?.targetPoint].filter(Boolean); };
+  const twinOf = (l) => { const t = labelText(l); return t ? `${t}\u0000${String(l.attr('line/stroke') || '').toLowerCase()}|${l.get('lineStyle') || l.attr('line/strokeDasharray') || 'none'}` : undefined; };
+  const lineRuns = collisionOnly ? graph.getLinks().flatMap((l) => { const twin = twinOf(l); return axisRuns(polyOf(l)).map((r) => ({ link: l.id, twin, ...r })); }) : [];
+
   const items = [];
   for (const link of labelled) {
     const pos = labelPosition(link);
@@ -441,7 +521,18 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     // Twins only where a label describes the LINE (collisionOnly: architecture, org, process). A datamodel join label or a
     // flow branch label describes its TARGET, so five relationships with one join text keep five pills, one per target.
     const twin = collisionOnly && text ? `${text}\u0000${look}` : undefined;
-    items.push({ id: link.id, slack: len - w, candidates, ignore: ownFrames(link), view, text, look, w, h, rectFor, twin });
+    // A label placed OFF its line keeps that spot unless a card or a label is in the way: a drag writes a perpendicular
+    // offset as a number (JointJS getLabelPosition), a file can author an {x, y} one (the export tests' label 240 px
+    // beside its line), and this module's last-resort nudge writes {x: 0, y: +-36}. The preference tiers only offer
+    // spots on the line, so they would pull every such label back onto it.
+    const off = pos.offset;
+    const dragged = (typeof off === 'number' && off !== 0) || (!!off && typeof off === 'object' && !!(off.x || off.y));
+    items.push({ id: link.id, slack: len - w, candidates, ignore: ownFrames(link), view, text, look, w, h, rectFor, twin,
+      clearLines: collisionOnly && !dragged, runs: collisionOnly ? axisRuns(polyOf(link)) : undefined,
+      // Where the line preference is measured from: the route midpoint, on open and after Auto Layout alike. Measured
+      // from the own-stretch point after Auto Layout and from the midpoint on open, a label moved 40 px when the laid-out
+      // diagram was opened again (random-4).
+      anchor: at(len / 2) });
   }
   // Mirrors the labelled-count gate above: collision-only mode packs a single label against the cards.
   if (items.length < (collisionOnly ? 1 : 2)) return null;
@@ -454,7 +545,7 @@ export function resolveFlowLabelCollisions(cctx, { preferTargetCentre = false, s
     if (FRAME_TYPES.has(e.get('type'))) obstacles.push(...frameHeaders(paper, e));
   }
 
-  const { chosen, unresolved } = packLabels(items, obstacles);
+  const { chosen, unresolved } = packLabels(items, obstacles, lineRuns);
   if (collisionOnly) shareTwinLabels(items, chosen, obstacles);
   let moved = 0;
   for (const [id, key] of chosen) {

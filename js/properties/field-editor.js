@@ -1,20 +1,20 @@
 // DataObject field editor (CLEANUP S2, slice 4) — the field-schema editor extracted from properties.js:
 // SF_FIELD_TYPES (the type allowlist, also imported by table-view.js via the facade re-export), the inline
-// renderFieldEditor row list, and the staged "Edit in Table" openFieldEditorModal (Save/Cancel, history-locked)
+// renderFieldEditor row list, and the staged "Edit Fields" openFieldEditorModal (Save/Cancel, history-locked)
 // plus its CSV import/export helpers. Operates on the passed cell/parent + history batching; reads the live graph
 // (prctx) only to replay the modal's undo entry by id. Never imports the facade back. The facade's renderDataObjectProps + the DataObject dblclick
 // handler import renderFieldEditor / openFieldEditorModal back; table-view.js keeps importing SF_FIELD_TYPES
 // from properties.js (facade re-export).
-import * as history from '../history.js?v=1.26.9';
-import { prctx } from './context.js?v=1.26.9';
-import { resizeDataObjectToFit } from '../components.js?v=1.26.9';
-import { buildModal, confirmModal } from '../feedback.js?v=1.26.9';
-import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.26.9';
-import { triggerDownload } from '../persistence.js?v=1.26.9';
-import { newFid } from '../shapes.js?v=1.26.9';
-import { getActiveTabName } from '../tabs.js?v=1.26.9';
-import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.26.9';
-import { typingBatch } from './widgets.js?v=1.26.9';
+import * as history from '../history.js?v=1.26.10';
+import { prctx } from './context.js?v=1.26.10';
+import { resizeDataObjectToFit } from '../components.js?v=1.26.10';
+import { buildModal, confirmModal } from '../feedback.js?v=1.26.10';
+import { applyKeyType, cycleKeyType, keyImpliesRequired, keyTypeLabel, newField } from '../field-model.js?v=1.26.10';
+import { triggerDownload } from '../persistence.js?v=1.26.10';
+import { newFid } from '../shapes.js?v=1.26.10';
+import { getActiveTabName } from '../tabs.js?v=1.26.10';
+import { sanitizeFilenamePart, csvCell as utilCsvCell, parseDelimited, sniffDelimiter, unguardCsvCell } from '../util.js?v=1.26.10';
+import { typingBatch } from './widgets.js?v=1.26.10';
 
 export const SF_FIELD_TYPES = [
   'Auto Number', 'Boolean', 'Checkbox', 'Currency', 'Date', 'DateTime', 'Email',
@@ -129,10 +129,10 @@ export function renderFieldEditor(parent, cell) {
     });
     listEl.appendChild(addBtn);
 
-    // Edit in Table button
+    // Edit Fields button (the modal; "Show in Table view" below it opens the whole-diagram Table view)
     const fullEditBtn = document.createElement('button');
     fullEditBtn.className = 'df-properties__btn df-properties__btn--full-edit';
-    fullEditBtn.textContent = '⊞ Edit in Table';
+    fullEditBtn.textContent = '⊞ Edit Fields';
     fullEditBtn.addEventListener('click', () => openFieldEditorModal(cell, rebuild));
     listEl.appendChild(fullEditBtn);
   }

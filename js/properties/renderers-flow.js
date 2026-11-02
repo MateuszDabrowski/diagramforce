@@ -4,15 +4,15 @@
 // Trigger Type / Process Type add a datalist of the most popular values as suggestions (free-text, not a picklist).
 // Edits write TOP-LEVEL model props (undoable via history CONTENT_PROPS). Reads graph + panel DOM via prctx; never
 // imports the facade. showProperties() imports it back.
-import { prctx } from './context.js?v=1.26.9';
-import { finishStandardProps } from './render-core.js?v=1.26.9';
-import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section } from './widgets.js?v=1.26.9';
-import { escHtml } from '../util.js?v=1.26.9';
-import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.9';
-import { convertFlowPlaceholderTo } from './convert.js?v=1.26.9';
+import { prctx } from './context.js?v=1.26.10';
+import { finishStandardProps } from './render-core.js?v=1.26.10';
+import { addActionBtn, addSelect, addText, addTextarea, addTextWithSuggestions, section, showRowsInTable } from './widgets.js?v=1.26.10';
+import { escHtml } from '../util.js?v=1.26.10';
+import { FLOW_ELEMENTS } from '../shapes/flow.js?v=1.26.10';
+import { convertFlowPlaceholderTo } from './convert.js?v=1.26.10';
 // Cycle-safe: tabs.js never imports the properties stack (the properties FACADE already imports
 // getActiveTabName from it), and the type gate below needs the live tab type at render time.
-import { getActiveTabType } from '../tabs.js?v=1.26.9';
+import { getActiveTabType } from '../tabs.js?v=1.26.10';
 
 // Start's Process Type / Trigger Type are FREE TEXT with a datalist of the MOST POPULAR Salesforce values as
 // suggestions (a 35-value picklist was unusable — owner feedback 2026-07-19). Type anything; the datalist just
@@ -167,30 +167,10 @@ export function renderFlowElementProps(cell) {
   // wrong projection. View, scroll and highlight are all runtime state - nothing here writes a
   // cell prop, so a save after the jump is byte-identical.
   if (getActiveTabType() === 'flow') {
-    addActionBtn(prctx.bodyEl, 'Show in Table view', () => {
-      // The same toolbar-button idiom focusFlowElement uses in the other direction (flow-table.js
-      // clicks #btn-view-diagram) - neither module may import the toolbar, and the click renders
-      // the table synchronously, so the row exists before the query below runs. tr[data-el] is the
-      // row anchor tableHtml stamps; the first match in document order is the SPINE row (the spine
-      // is section one and lists every element). A row hidden by the user's own collapse or filter
-      // is left where it is - scrollIntoView on a hidden row is a no-op, and silently rewriting
-      // that state to force a reveal would fight the user to win a scroll.
-      document.getElementById('btn-view-table')?.click();
-      const row = document.querySelector(`#mapping-table-view tbody tr[data-el="${CSS.escape(String(cell.id))}"]`);
-      if (!row) return;   // same guard class as focusFlowElement's: the element outran its render
-      // The hidden-row half of that decision, made explicit: a collapsed section's tbody is
-      // display:none, so its rows have no offsetParent - and while the scroll would no-op on its
-      // own, the flash class would NOT: parked on the hidden row, its one-shot animation fires
-      // whenever the user later expands the section, a surprise highlight disconnected from any
-      // action. Return before both; the user lands at the top with their collapse respected.
-      if (!row.offsetParent) return;
-      row.scrollIntoView({ block: 'center' });
-      // One-shot flash, restarted around a reflow so a repeat visit flashes again; the class then
-      // stays (an ended animation paints nothing), keeping the landing a stable observable fact.
-      row.classList.remove('df-tbl__row--flash');
-      void row.offsetWidth;
-      row.classList.add('df-tbl__row--flash');
-    });
+    // tr[data-el] is the row anchor tableHtml stamps; the first match in document order is the SPINE row (the spine is
+    // section one and lists every element). A row hidden by the user's own collapse or filter is left where it is
+    // (showRowsInTable): silently rewriting that state to force a reveal would fight the user to win a scroll.
+    addActionBtn(prctx.bodyEl, 'Show in Table view', () => showRowsInTable(`tbody tr[data-el="${CSS.escape(String(cell.id))}"]`));
   }
 
   finishStandardProps(cell, { sizeMode: 'pair', autoSize: true, applySize: true });

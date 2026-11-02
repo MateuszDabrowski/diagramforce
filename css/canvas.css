@@ -558,6 +558,13 @@ foreignObject[data-md] del { text-decoration: line-through; }
 }
 .df-tbl__navbtn:hover { color: var(--color-primary); }
 .df-tbl__navbtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+/* A Data Model or Mapping row's button lands on the field's object and lights the field's row once
+   (table-view/flow-table.js focusOnDiagram). The hit rect is transparent, so the fill is the only paint. */
+.do-field-row.df-field-flash > .do-field-hit { animation: df-field-flash 1.6s ease-out; }
+@keyframes df-field-flash {
+  0%, 30% { fill: color-mix(in srgb, var(--color-primary) 32%, transparent); }
+  100% { fill: transparent; }
+}
 /* The way back (properties panel -> Table view): the returned-to row flashes once so the user lands
    where they left. One-shot by design; renderers-flow.js restarts it on a repeat visit by re-adding
    the class around a reflow, and the class then STAYS (an ended animation paints nothing) so the

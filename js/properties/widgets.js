@@ -2,19 +2,19 @@
 // extracted from properties.js. They read the live graph/paper/selection via prctx (context.js) at CALL time,
 // take their target `parent` element as an argument, and never import the facade back. The renderers +
 // finishStandardProps + buildCellActions (still in the facade) import these.
-import { prctx, asUndoBatch } from './context.js?v=1.26.9';
-import * as history from '../history.js?v=1.26.9';
-import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.26.9';
-import { wrapSelectionWithMarker } from '../markdown.js?v=1.26.9';
-import { COLOR_SCHEMA } from './color-schema.js?v=1.26.9';
-import { confirmModal, showToast } from '../feedback.js?v=1.26.9';
-import { getAllIcons, getIconDataUri } from '../icons.js?v=1.26.9';
-import { Z_TIER_SPAN, tierNameForType, zTierBase } from '../canvas.js?v=1.26.9';
-import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.26.9';
-import { escHtml } from '../util.js?v=1.26.9';
-import { saveCellAsShape } from '../templates.js?v=1.26.9';
-import { TYPE_LABELS } from './type-meta.js?v=1.26.9';
-import { RACI_ROLES } from '../shapes/raci.js?v=1.26.9';
+import { prctx, asUndoBatch } from './context.js?v=1.26.10';
+import * as history from '../history.js?v=1.26.10';
+import { copy as clipboardCopy, cloneElementWithConnectors, countConnectedConnectors, countConnectors } from '../clipboard.js?v=1.26.10';
+import { wrapSelectionWithMarker } from '../markdown.js?v=1.26.10';
+import { COLOR_SCHEMA } from './color-schema.js?v=1.26.10';
+import { confirmModal, showToast } from '../feedback.js?v=1.26.10';
+import { getAllIcons, getIconDataUri } from '../icons.js?v=1.26.10';
+import { Z_TIER_SPAN, tierNameForType, zTierBase } from '../canvas.js?v=1.26.10';
+import { getPalette, addToPalette, removeFromPalette, onPaletteChange, PALETTE_MAX_SLOTS } from '../brand-palette.js?v=1.26.10';
+import { escHtml } from '../util.js?v=1.26.10';
+import { saveCellAsShape } from '../templates.js?v=1.26.10';
+import { TYPE_LABELS } from './type-meta.js?v=1.26.10';
+import { RACI_ROLES } from '../shapes/raci.js?v=1.26.10';
 
 /** One undo batch per TYPING RUN: opened by the first keystroke, closed on blur or after a pause. It used to open on
  *  FOCUS and close only on blur - but clicking a shape does not blur the panel input (JointJS prevents the default on
@@ -238,6 +238,29 @@ export function addActionBtn(parent, label, onClick, iconSvg = '') {
   btn.addEventListener('click', onClick);
   wrap.appendChild(btn);
   parent.appendChild(wrap);
+}
+
+// The tab types whose Table view lists data objects and their links (display-options.js `isDataObjectType`).
+export const TABLE_TAB_TYPES = new Set(['datamodel', 'datamapping']);
+
+/**
+ * The way BACK from the Table view's click-to-focus: open the Table view and land on the rows matching `selector`
+ * (under `#mapping-table-view`). Clicks #btn-view-table, the toolbar idiom the table uses in the other direction
+ * (neither side may import the toolbar); the click renders the table synchronously, so the rows exist before the query.
+ * `all: false` (Flow) takes the FIRST match only, the spine row, and stops there when the user's collapse or filter hides
+ * it: scrollIntoView on a hidden row is a no-op, and the one-shot flash parked on it would fire whenever the section
+ * is later expanded. `all: true` (a data object's field rows) scrolls to the first visible match and flashes every
+ * visible one. View, scroll and highlight are runtime state: a save after the jump is byte-identical.
+ */
+export function showRowsInTable(selector, { all = false } = {}) {
+  document.getElementById('btn-view-table')?.click();
+  const scope = `#mapping-table-view ${selector}`;
+  const rows = all ? [...document.querySelectorAll(scope)].filter((r) => r.offsetParent)
+    : [document.querySelector(scope)].filter((r) => r?.offsetParent);
+  if (!rows.length) return;
+  rows[0].scrollIntoView({ block: 'center' });
+  // Restarted around a reflow so a repeat visit flashes again; the class then stays (an ended animation paints nothing).
+  for (const row of rows) { row.classList.remove('df-tbl__row--flash'); void row.offsetWidth; row.classList.add('df-tbl__row--flash'); }
 }
 
 export function addConvertBtn(parent, label, onClick) {
