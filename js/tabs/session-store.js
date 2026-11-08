@@ -4,15 +4,15 @@
 // notifyChange/renameTab/render/reorderTabsByGroup) via tbctx forward-refs at CALL time; imports the
 // showNewDiagramModal slice directly (acyclic). Owns STORAGE_KEY + the _sessionUpdate flag.
 
-import { tbctx } from './context.js?v=1.26.10';
-import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './new-diagram-modal.js?v=1.26.10';
-import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getNamedSaves, getStorageFootprint, importSignature, isQuotaError, normalizeDiagramType, restoreDiagramAsSave, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.26.10';
-import { ARCHIVE_DRIVE_FIELDS, archiveDedupName, driveIdentityOf, forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.26.10';
-import { buildModal, showError, showToast } from '../feedback.js?v=1.26.10';
-import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.26.10';
-import { canWriteSession, setBeforeYield } from './single-window.js?v=1.26.10';
-import { noteError } from '../diagnostics.js?v=1.26.10';
-import { noteDeviceOnlyEdit } from './device-only.js?v=1.26.10';
+import { tbctx } from './context.js?v=1.27.0';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './new-diagram-modal.js?v=1.27.0';
+import { APP_VERSION, STORAGE_WARNING_BYTES, classifyVersionDiff, compactGraphForSave, dateSuffix, evictRedundantArchives, getNamedSaves, getStorageFootprint, importSignature, isQuotaError, normalizeDiagramType, restoreDiagramAsSave, sanitizeGraphJSON, triggerDownload } from '../persistence.js?v=1.27.0';
+import { ARCHIVE_DRIVE_FIELDS, archiveDedupName, driveIdentityOf, forkName, serializeDriveFields } from '../persistence/drive-sync-logic.js?v=1.27.0';
+import { buildModal, showError, showToast } from '../feedback.js?v=1.27.0';
+import { escHtml, sanitizeFilenamePart } from '../util.js?v=1.27.0';
+import { canWriteSession, setBeforeYield } from './single-window.js?v=1.27.0';
+import { noteError } from '../diagnostics.js?v=1.27.0';
+import { noteDeviceOnlyEdit } from './device-only.js?v=1.27.0';
 
 const STORAGE_KEY = 'sf-diagrams-tabs';
 

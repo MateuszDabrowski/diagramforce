@@ -8,9 +8,9 @@
 // them onto cctx in init(), then calls registerViewportControls(cctx) to attach
 // the listeners and expose `getZoom` + `fitContent` back onto cctx for the
 // sub-modules that need them (e.g. auto-layout.js calls cctx.fitContent()).
-import { cctx } from './context.js?v=1.26.10';
-import { centerX, centerY, clamp } from '../util/geometry.js?v=1.26.10';
-import { isTouchEvent } from '../util.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
+import { centerX, centerY, clamp } from '../util/geometry.js?v=1.27.0';
+import { isTouchEvent } from '../util.js?v=1.27.0';
 
 // ── Zoom + grid state ───────────────────────────────────────────────
 let currentZoom = 1;

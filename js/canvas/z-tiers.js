@@ -3,15 +3,15 @@
 // listener assigns a fresh cell the next free z in its tier, and the 'change:z' listener
 // snaps a cell back into its tier after JointJS's drag-time toFront() (embeddingMode) so
 // dragging never silently reorders layers. Links live in their own tier (3000+), except
-// Gantt dependency links which tuck under the bars (Z_GANTT_DEP).
+// Gantt dependency links which tuck under the bars (Z_GANTT_DEP). Pills sit above every link (Z_PILL).
 //
 // registerZTiers(cctx) MUST run BEFORE the first cell is added (so cctx.graph is assigned
 // right after graph creation in canvas.init(), then this is called immediately). The
 // _isLoadingJSON guard (via cctx.isLoadingJSON) keeps graph.fromJSON() from clobbering
 // saved z values on reload. Reads the live graph via cctx; the constants + tierNameForType
 // are re-exported by canvas.js for properties.js / properties/widgets.js (reorder controls).
-import { cctx } from './context.js?v=1.26.10';
-import { isUndoRedoActive } from '../history.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
+import { isUndoRedoActive } from '../history.js?v=1.27.0';
 
 export const Z_BASE = Object.assign(Object.create(null), {
   'sf.Zone':           0,
@@ -52,12 +52,18 @@ export const Z_BASE = Object.assign(Object.create(null), {
 });
 export const Z_TIER_SPAN = 499;   // 500 slots per tier (0–499 relative to base)
 const Z_LINK_BASE  = 3000;
+// A Pill is a label - a Flow outcome, a step number - and it usually sits ON a connector, so it draws above every
+// link. Under them (its 2400 default before 1.27.0) the line ran through the text, and neither Bring to Front nor a
+// drag could lift it: both keep a cell in its tier. The tier sits far above the link tier, which has no ceiling (each
+// new link takes the top z + 1). Older saves are lifted on load (migration.js liftPills).
+export const Z_PILL = 9000;
+Z_BASE['df.Pill'] = Z_PILL;
 // Gantt dependency links render BELOW the task bars (2000 tier) but above the timeline grid (1000), so a connector
 // crossing a row tucks BEHIND the bars instead of overlaying them. Exempt from the normal link tier (3000+).
 export const Z_GANTT_DEP  = 1900;
 
 /** The z band a type lives in: the one Bring to Front / Send to Back reorder it within, and the one the add and
- *  change:z listeners below keep it in. A type with no Z_BASE entry (df.Pill, df.Legend, df.Table, df.Placeholder, the
+ *  change:z listeners below keep it in. A type with no Z_BASE entry (df.Legend, df.Table, df.Placeholder, the
  *  df.Flow* cards, sf.Image, sf.Link) takes the 500-wide band its own default z sits in: sf.Image 1500, the rest 2000.
  *  The order buttons fell back to 20000, which put the shape above every connector, and a flat 2000 would lift an
  *  Image off its 1500 default (review S4-1). The listeners skipped these types until port 132d1fde7, so a drag's

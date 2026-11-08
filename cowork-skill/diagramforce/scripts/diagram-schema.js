@@ -155,7 +155,7 @@ export const ALLOWED_CELL_TYPES = new Set([
   'df.FlowStage',
   'df.FlowPlaceholder',
   // Generic (df.* net-new shapes; sf.* legacy kept for save back-compat)
-  'df.Pill', 'df.Legend', 'df.Table', 'df.Placeholder',
+  'df.Pill', 'df.Legend', 'df.Table', 'df.Placeholder', 'df.Venn',
   // JointJS link
   'standard.Link',
 ]);
@@ -184,6 +184,46 @@ const isLink = (c) => c && typeof c === 'object' && c.source != null && c.target
  * `diagram.cells` (bare graph). Returns { errors, warnings } as arrays of plain strings. ERRORS are things the loader
  * drops/throws on (the diagram won't import as authored); WARNINGS are best-practice / silent-degrade issues.
  */
+// df.Venn (1.27.0). The join names mirror js/venn-model.js JOINS: this leaf imports nothing, so
+// dev/tests/venn-model.test.js holds the two lists equal. A wrong value draws (the view falls back), so these warn.
+export const VENN_JOIN_TYPES = ['inner', 'left', 'right', 'full', 'leftExcluding', 'rightExcluding', 'fullExcluding'];
+const VENN_REGION_KEYS = Object.assign(Object.create(null), { 2: ['A', 'B', 'AB'], 3: ['A', 'B', 'C', 'AB', 'AC', 'BC', 'ABC'] });
+function vennWarnings(c) {
+  const out = [];
+  const at = `df.Venn "${c.id ?? '?'}"`;
+  const sets = Array.isArray(c.sets) ? c.sets : null;
+  if (!sets || sets.length < 2 || sets.length > 3) out.push(`${at} needs \`sets\` with 2 or 3 entries ({label, color}) - it draws 2 default sets.`);
+  const n = sets && sets.length >= 3 ? 3 : 2;
+  if (c.vennMode != null && c.vennMode !== 'join' && c.vennMode !== 'overlaps') out.push(`${at}: \`vennMode\` is "join" or "overlaps" (or omit it: joins imply "join") - it falls back to that rule.`);
+  const joins = c.joins == null ? [] : c.joins;
+  const mode = c.vennMode === 'join' || c.vennMode === 'overlaps' ? c.vennMode : (Array.isArray(joins) && joins.some(Boolean) ? 'join' : 'overlaps');
+  if (!Array.isArray(joins)) out.push(`${at}: \`joins\` must be an array of join types, one per pair of tables.`);
+  else if (joins.length) {
+    const bad = joins.filter((j) => j && !VENN_JOIN_TYPES.includes(j));
+    if (bad.length) out.push(`${at}: unknown join ${bad.map((j) => JSON.stringify(j)).join(', ')} - use ${VENN_JOIN_TYPES.join(', ')}.`);
+    if (joins.length > n - 1) out.push(`${at}: ${n} sets take ${n - 1} join(s), one per pair read left to right; the extra ${joins.length - (n - 1)} is ignored.`);
+  }
+  if (mode === 'join' && !(Array.isArray(joins) && joins[0])) out.push(`${at}: \`vennMode: "join"\` with no first join fills nothing - set \`joins\`, e.g. ["left"].`);
+  if (c.sharedCentre === false && !(n === 3 && mode === 'overlaps')) out.push(`${at}: \`sharedCentre: false\` applies to three sets showing overlaps (a join draws circles, which always share a centre) - ignored.`);
+  const openCentre = c.sharedCentre === false && n === 3 && mode === 'overlaps';
+  if (c.regions != null && (typeof c.regions !== 'object' || Array.isArray(c.regions))) {
+    out.push(`${at}: \`regions\` must be an object keyed by region (${VENN_REGION_KEYS[n].join(', ')}).`);
+    return out;
+  }
+  const entries = Object.entries(c.regions || {});
+  if (mode === 'join' && entries.length) out.push(`${at}: a join fills every region itself, so \`regions\` is not drawn; use \`vennMode: "overlaps"\` to label or highlight areas.`);
+  for (const [key, r] of entries) {
+    if (!VENN_REGION_KEYS[n].includes(key)) { out.push(`${at}: region "${key}" does not exist with ${n} sets (use ${VENN_REGION_KEYS[n].join(', ')}) - ignored.`); continue; }
+    if (key.length === 1 && r && r.label) out.push(`${at}: region "${key}" is one set's own area, which shows that set's name - put its words in that set's \`label\`.`);
+    if (openCentre && key === 'ABC') out.push(`${at}: region "ABC" is not drawn with \`sharedCentre: false\` (no area lies in all three sets).`);
+    const fill = r && r.fill;
+    if (fill != null && fill !== 'on' && !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(fill))) {
+      out.push(`${at}: region "${key}" fill ${JSON.stringify(fill)} is not "on" (the highlight colour) or a hex colour.`);
+    }
+  }
+  return out;
+}
+
 export function validateDiagram(diagram) {
   const errors = [];
   const warnings = [];
@@ -225,6 +265,7 @@ export function validateDiagram(diagram) {
     if (home && type && VALID_DIAGRAM_TYPES.has(type) && !home.includes(type)) {
       warnings.push(`Cell "${id}" is a ${ct} (a ${home.join('/')} shape) but diagramType is "${type}".`);
     }
+    if (ct === 'df.Venn') warnings.push(...vennWarnings(c));
   }
 
   // Second pass: dangling links (the loader drops a link whose source/target id isn't present).

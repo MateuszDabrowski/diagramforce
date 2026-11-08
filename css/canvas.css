@@ -365,6 +365,11 @@ foreignObject[data-md] del { text-decoration: line-through; }
   pointer-events: none;
   fill: none;
 }
+/* Over a Flow connector's Highlight State band the gaps erase to the band as it shows over the canvas, not to the
+   bare canvas (line-style.js markBand). A browser without color-mix drops this rule and keeps the one above. */
+.df-line-style-overlay[data-band] {
+  stroke: color-mix(in srgb, var(--df-band) var(--df-band-mix), var(--bg-canvas)) !important;
+}
 
 /* ── Data Mapping table view — read-only Excel/CSV-contract projection ──────── */
 .df-table-view {

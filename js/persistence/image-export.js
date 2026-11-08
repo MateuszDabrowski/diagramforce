@@ -5,10 +5,10 @@
 // download/date helpers come from the persistence runtime context, wired in
 // persistence.init().
 
-import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.26.10';
-import { showToast, showError } from '../feedback.js?v=1.26.10';
-import { sanitizeFilenamePart } from '../util.js?v=1.26.10';
-import { pctx } from './context.js?v=1.26.10';
+import { GIFEncoder, quantize, applyPalette } from '../../assets/vendor/gifenc.esm.js?v=1.27.0';
+import { showToast, showError } from '../feedback.js?v=1.27.0';
+import { sanitizeFilenamePart } from '../util.js?v=1.27.0';
+import { pctx } from './context.js?v=1.27.0';
 
 // Raster exports draw the diagram onto a <canvas> at a DESIRED 2x (retina) scale. But browsers silently cap
 // canvas dimensions: WebKit/Safari rasterizes blank or clipped past ~8192 px/side or its total-area ceiling,
@@ -990,8 +990,25 @@ function applyLineStyleInline(svgRoot, transparent) {
   const cs = getComputedStyle(root);
   const bgCanvas = cs.getPropertyValue('--bg-canvas').trim() || (theme === 'dark' ? '#1A1A1A' : '#FAFAFA');
   svgRoot.querySelectorAll('.df-line-style-overlay').forEach(overlay => {
-    overlay.setAttribute('stroke', bgCanvas);
+    // Over a Flow connector's Highlight State band the gaps erase to the band as it shows over the canvas (the
+    // canvas does it with color-mix, css/canvas.css), so the band has no dark stripe in the export either.
+    const [band, mix] = (overlay.getAttribute('data-band') || '').split(' ');
+    overlay.setAttribute('stroke', (band && mixHex(band, bgCanvas, parseFloat(mix) / 100)) || bgCanvas);
+    overlay.removeAttribute('style');
   });
+}
+
+/** `a` laid over `b` at opacity `t`, for two hex colours (#rgb or #rrggbb); null when either is not a hex. */
+function mixHex(a, b, t) {
+  const rgb = (h) => {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(h).trim());
+    if (!m) return null;
+    const x = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+    return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16));
+  };
+  const [p, q] = [rgb(a), rgb(b)];
+  if (!p || !q || !Number.isFinite(t)) return null;
+  return '#' + p.map((v, i) => Math.round(v * t + q[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
 }
 
 // ── URL Sharing ─────────────────────────────────────────────────────

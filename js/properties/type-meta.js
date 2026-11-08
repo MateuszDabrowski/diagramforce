@@ -91,6 +91,7 @@ export const TYPE_LABELS = Object.assign(Object.create(null), {
   'df.Placeholder':              'Placeholder',
   'df.Legend':              'Legend',
   'df.Table':               'Table',
+  'df.Venn':                'Venn',
 });
 
 // Default sizes used by "Auto Size"
@@ -125,6 +126,7 @@ export const DEFAULT_SIZES = Object.assign(Object.create(null), {
   'df.Placeholder':              { width: 180, height: 64 },
   'df.Legend':         { width: 120, height: 28 },
   'df.Table':          { width: 330, height: 90 },
+  'df.Venn':           { width: 360, height: 260 },
   'sf.Link':           { width: 220, height: 44 },
   'sf.DataObject':     { width: 260, height: 80 },
   'sf.GanttTask':      { width: 240, height: 32 },

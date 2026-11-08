@@ -1,55 +1,56 @@
 // Properties panel — left sidebar element inspector
 // Properties are grouped into collapsible accordion sections
 
-import { COLOR_SCHEMA } from './properties/color-schema.js?v=1.26.10';
-import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.26.10';
+import { COLOR_SCHEMA } from './properties/color-schema.js?v=1.27.0';
+import { wirePrctx, asUndoBatch } from './properties/context.js?v=1.27.0';
 // Property-panel widget builders (CLEANUP S2 slice 3) — form fields, action buttons, pickers.
 import {
   CLONE_ICON_SVG, addActionBtn, addAutoSizeBtn, addColorMulti, addDeleteBtn, addMarkerPicker, addNumber,
   addNumberPair, addSelect, copyCellStyle, field, getActiveCell, hasStyleClip, pasteCellStyle, rotationField,
   section, typePlural, wireMarkdownShortcuts,
-} from './properties/widgets.js?v=1.26.10';
+} from './properties/widgets.js?v=1.27.0';
 // Re-export the style-clipboard trio for app.js (selection.setStyleApi) — they live in widgets.js now.
-export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.26.10';
+export { copyCellStyle, hasStyleClip, pasteCellStyle } from './properties/widgets.js?v=1.27.0';
 // DataObject field editor (CLEANUP S2 slice 4) — renderDataObjectProps + the dblclick handler call these back.
-import { openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.26.10';
+import { openFieldEditorModal, makeFieldCheckToggle } from './properties/field-editor.js?v=1.27.0';
 // SF_FIELD_TYPES lives in field-editor.js now; table-view.js still imports it from properties.js (this re-export).
-export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.26.10';
+export { SF_FIELD_TYPES } from './properties/field-editor.js?v=1.27.0';
 // Link / connector panel (CLEANUP S2 slice 5) — the facade dispatch (showProperties) + the multi-select
 // Connectors section use these; setLinkEndpoints is reached via properties.setLinkEndpoints (app.js), so re-export.
 import { renderLinkProps, renderMappingControls, LINK_LINE_STYLE_OPTS, applyLinkStroke, applyLinkStrokeWidth, applyLinkLineStyle,
-  applyLinkFontColor, applyLinkFontSize, setLinkFontSizeEnabled, userLinkLabelIndex, setUserLinkLabel, repaintLinkView, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.26.10';
-export { setLinkEndpoints } from './properties/link-props.js?v=1.26.10';
+  applyLinkFontColor, applyLinkFontSize, setLinkFontSizeEnabled, userLinkLabelIndex, setUserLinkLabel, repaintLinkView, LINK_MARKER_OPTS, LINK_MARKER_SVGS, buildLinkMarkerDefs, detectLinkMarker, applyLinkMarker } from './properties/link-props.js?v=1.27.0';
+export { setLinkEndpoints } from './properties/link-props.js?v=1.27.0';
 // Shape type metadata (CLEANUP S2 slice 6) — pure data maps shared by the facade + renderers + convert + autoSizeCell.
-import { TYPE_LABELS } from './properties/type-meta.js?v=1.26.10';
+import { TYPE_LABELS } from './properties/type-meta.js?v=1.27.0';
 // Shape-type conversion (CLEANUP S2 slice 6) — the renderers' Convert buttons + the right-click convert menu (via
 // buildCellActions) call these; each rewires a cell in place preserving links + embedding.
-import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.26.10';
+import { convertToContainer, convertToNode, convertToIcon, convertContainerToIcon, convertFromIcon } from './properties/convert.js?v=1.27.0';
 // Shared render tail (CLEANUP S2 slice 7) — every render*Props ends with finishStandardProps; autoSizeCell +
 // buildCellActions are wired into selection via app.js (properties.autoSizeCell / .buildCellActions), so re-export.
-import { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.10';
-export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.26.10';
+import { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.27.0';
+export { autoSizeCell, buildCellActions } from './properties/render-core.js?v=1.27.0';
 // Match Container Height (1.23.0) — the canvas menus reach it through the facade, same as autoSizeCell:
 // selection.setLaneMatcher(...) in app.js injects these so js/selection/ never imports js/properties/.
-export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.26.10';
+export { MATCH_HEIGHT_LABEL, isProcessDiagram, runMatchContainerHeights } from './properties/render-core.js?v=1.27.0';
 // Per-family property renderers (CLEANUP S2 slice 8+) — the showProperties() dispatch calls these back.
-import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps, undoableLifelineOp } from './properties/renderers-sequence.js?v=1.26.10';
-import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.26.10';
-import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.26.10';
-import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.26.10';
-import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.26.10';
-import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.26.10';
-import { confirmModal, buildModal } from './feedback.js?v=1.26.10';
-import { Z_TIER_SPAN, zTierBase, updateSimpleNodeLayout, syncMobilePanelHeight } from './canvas.js?v=1.26.10';
-import * as stencilModule from './stencil.js?v=1.26.10';
+import { renderSequenceParticipantProps, renderSequenceActorProps, renderSequenceActivationProps, renderSequenceFragmentProps, undoableLifelineOp } from './properties/renderers-sequence.js?v=1.27.0';
+import { renderOrgPersonProps, renderTaskProps } from './properties/renderers-org.js?v=1.27.0';
+import { renderGanttTaskProps, renderGanttMilestoneProps, renderGanttMarkerProps, renderGanttTimelineProps, renderGanttGroupProps } from './properties/renderers-gantt.js?v=1.27.0';
+import { renderBpmnEventProps, renderBpmnTaskProps, renderBpmnGatewayProps, renderBpmnSubprocessProps, renderBpmnLoopProps, renderBpmnPoolProps, renderBpmnDataObjectProps, renderFlowShapeProps } from './properties/renderers-process.js?v=1.27.0';
+import { renderFlowElementProps } from './properties/renderers-flow.js?v=1.27.0';
+import { renderVennProps, requestRegionFocus, vennRegionAt, toggleVennHighlight } from './properties/renderers-venn.js?v=1.27.0';
+import { renderPlaceholderProps, renderSimpleNodeProps, renderContainerProps, renderTextLabelProps, renderPillProps, renderLegendProps, renderTableProps, renderLineProps, renderLinkElementProps, renderNoteProps, renderImageProps, renderZoneProps, renderTaskGroupProps, renderDataObjectProps, renderAnnotationProps } from './properties/renderers-core.js?v=1.27.0';
+import { confirmModal, buildModal } from './feedback.js?v=1.27.0';
+import { Z_TIER_SPAN, zTierBase, updateSimpleNodeLayout, syncMobilePanelHeight, drawsStateAsBand, applyStateBand } from './canvas.js?v=1.27.0';
+import * as stencilModule from './stencil.js?v=1.27.0';
 import {
   duplicate as clipboardDuplicate,
   cloneSelectionWithMode,
   countExternalConnectors,
   countExternalConnectedConnectors,
-} from './clipboard.js?v=1.26.10';
-import * as history from './history.js?v=1.26.10';
-import { saveSelectionAsTemplate } from './templates.js?v=1.26.10';
+} from './clipboard.js?v=1.27.0';
+import * as history from './history.js?v=1.27.0';
+import { saveSelectionAsTemplate } from './templates.js?v=1.27.0';
 
 
 
@@ -169,6 +170,7 @@ export function init(_graph, _paper, _selection) {
   // Double-click on element opens inline text editor on canvas.
   // Links are handled separately (below) so that dblclick on empty link
   // segments keeps JointJS's vertex-add behaviour.
+  const VENN_DBLCLICK_MS = 280;   // a Venn click waits this long for a second click before it toggles a highlight
   paper.on('cell:pointerdblclick', (cellView, evt) => {
     if (cellView.model.isLink()) return;
     // df.Table cells are MARKDOWN, multi-line content (not a single label), so a double-click opens the staged
@@ -178,8 +180,40 @@ export function init(_graph, _paper, _selection) {
     // per-object "Edit Fields" field editor (openFieldEditorModal) instead of an inline header rename — exactly
     // like df.Table above, NOT the whole-diagram Table view. `refresh` re-renders the inspector after it closes.
     if (cellView.model.get('type') === 'sf.DataObject') { openFieldEditorModal(cellView.model, refresh); return; }
+    // df.Venn: a region's text lives in the panel's Regions section, so a double-click on a region opens it there
+    // with that region's text focused (owner, 2026-11-08: the region text went unfound in a collapsed section).
+    if (cellView.model.get('type') === 'df.Venn') {
+      clearTimeout(vennClick.timer);   // the two clicks of this double-click toggle nothing
+      vennClick.timer = 0;
+      const p = paper.clientToLocalPoint({ x: evt.clientX, y: evt.clientY });
+      const at = cellView.model.position();
+      const key = vennRegionAt(cellView.model, p.x - at.x, p.y - at.y);
+      if (key) { requestRegionFocus(key); showProperties(cellView.model); }
+      return;
+    }
     startInlineEdit(cellView, evt);
   });
+
+  // df.Venn showing overlaps: a click on an area of a Venn that was ALREADY selected toggles that area's highlight, as
+  // its box in the panel does (owner, 2026-11-08). The first click on an unselected Venn only selects it. The toggle
+  // waits out the double-click window and a double-click cancels it, so editing an area's words never flips its
+  // highlight. JointJS selects on mousedown; the capture-phase pointerdown snapshot runs before it.
+  const vennClick = { timer: 0, selectedBefore: [] };
+  paper.el.addEventListener('pointerdown', () => { vennClick.selectedBefore = selection.getSelectedIds(); }, true);
+  paper.on('element:pointerclick', (cellView, evt, x, y) => {
+    const cell = cellView.model;
+    if (cell.get('type') !== 'df.Venn') return;
+    if (vennClick.timer) { clearTimeout(vennClick.timer); vennClick.timer = 0; return; }   // a double-click's second click
+    const sb = vennClick.selectedBefore;
+    if (sb.length !== 1 || sb[0] !== cell.id) return;
+    const key = vennRegionAt(cell, x - cell.position().x, y - cell.position().y);
+    if (!key) return;
+    vennClick.timer = setTimeout(() => {
+      vennClick.timer = 0;
+      if (toggleVennHighlight(cell, key)) showProperties(cell);
+    }, VENN_DBLCLICK_MS);
+  });
+
 
   // For links: only dblclick on the existing label enters inline edit.
   // When a link is selected, JointJS overlays a vertex tool on top of the link
@@ -581,9 +615,17 @@ function applyShapeStateInner(cell, style) {
 // StrokeWidth/LineStyle) so it cooperates with the lineStyle overlay + Safari <marker> re-insert instead of being
 // wiped by them. Reuses the SAME `borderStyle` + `_origBorder` props (save/share/undo unchanged); on a link,
 // `_origBorder` carries {stroke, strokeWidth, lineStyle}, restored losslessly on None.
+// The exceptions are the connectors whose line style means something - a Flow connector, a Gantt dependency, a
+// sequence message: the state is a band under the line (link-styles.js drawsStateAsBand / applyStateBand) and the
+// line, its width and its dash are never touched.
 function applyLinkState(cell, style) {
   const prev = cell.get('borderStyle') || 'standard';
   if (style === prev) return;
+  if (drawsStateAsBand(cell)) {
+    cell.set('borderStyle', style === 'standard' ? null : style);
+    applyStateBand(cell);
+    return;
+  }
   if (style === 'standard') {
     const orig = cell.get('_origBorder');
     if (orig) {
@@ -779,6 +821,7 @@ function showProperties(cell) {
   else if (type === 'df.Pill')     renderPillProps(cell);
   else if (type === 'df.Legend')   renderLegendProps(cell);
   else if (type === 'df.Table')    renderTableProps(cell);
+  else if (type === 'df.Venn')     renderVennProps(cell);
   else if (type === 'sf.Link')     renderLinkElementProps(cell);
   else if (type === 'sf.Image')    renderImageProps(cell);
   else if (cell.isLink())            renderLinkProps(cell);

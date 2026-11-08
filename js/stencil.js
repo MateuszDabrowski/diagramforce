@@ -1,19 +1,19 @@
 // Stencil panel — draggable component library
 // Organizes built-in components + saved templates by category, search, drag-to-canvas
 
-import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.26.10';
-import { deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks, clampGanttDateToAxis, clampGanttSpanToAxis, growTimelineToFitDates } from './gantt-layout.js?v=1.26.10';
-import { getAllIcons, getCategories } from './icons.js?v=1.26.10';
-import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, HALO_PARENT_TYPES, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.26.10';
-import { startImageAddFlow } from './image-component.js?v=1.26.10';
-import * as history from './history.js?v=1.26.10';
-import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.26.10';
-import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.26.10';
-import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.26.10';
-import { SVG } from './components/stencil-kit.js?v=1.26.10';
-import { confirmModal, showToast } from './feedback.js?v=1.26.10';
-import { escHtml } from './util.js?v=1.26.10';
-import { DIAGRAM_TYPES } from './tabs.js?v=1.26.10'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
+import { COMPONENT_CATEGORIES, BPMN_CATEGORIES, DATAMODEL_CATEGORIES, DATAMAPPING_CATEGORIES, GANTT_CATEGORIES, ORG_CATEGORIES, SEQUENCE_CATEGORIES, FLOW_CATEGORIES, createElementFromComponent, createGanttBarsFor } from './components.js?v=1.27.0';
+import { deriveGanttMilestoneDate, deriveGanttMarkerDate, ganttTimelineFor, deriveGanttDates, backfillGanttOrders, layoutTimelineTasks, ganttDropTarget, ganttGroupInsertOrder, ganttGroupInsertSlotY, snapGanttRowCentreY, recolorGroupTasks, clampGanttDateToAxis, clampGanttSpanToAxis, growTimelineToFitDates } from './gantt-layout.js?v=1.27.0';
+import { getAllIcons, getCategories } from './icons.js?v=1.27.0';
+import { updateSimpleNodeLayout, updateContainerHeaderLayout, snapActivationToLifeline, canEmbed, HALO_PARENT_TYPES, findHaloParent, tuckChildInside, showDropGhost, hideDropGhost, clearGanttDateChip, showGanttGroupInsertBar } from './canvas.js?v=1.27.0';
+import { startImageAddFlow } from './image-component.js?v=1.27.0';
+import * as history from './history.js?v=1.27.0';
+import { getTemplates, deleteTemplate, renderTemplateThumbnail, instantiateTemplate, insertTemplateCells, onTemplatesChange } from './templates.js?v=1.27.0';
+import { getOfficialTemplates, loadOfficialTemplate, renderOfficialThumbnail } from './official-templates.js?v=1.27.0';
+import { getOfficialShapePacks, loadOfficialShapePack } from './official-shapes.js?v=1.27.0';
+import { SVG } from './components/stencil-kit.js?v=1.27.0';
+import { confirmModal, showToast } from './feedback.js?v=1.27.0';
+import { escHtml } from './util.js?v=1.27.0';
+import { DIAGRAM_TYPES } from './tabs.js?v=1.27.0'; // reader-friendly workspace labels (no cycle: tabs ⊄ stencil)
 
 let graph, paper;
 let panelEl, searchEl, bodyEl, clearBtn;

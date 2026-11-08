@@ -17,7 +17,7 @@
 // Reads the live graph/paper via the canvas context (cctx); the observer +
 // sync-id are private module state (nothing else reads them). canvas.js calls
 // startLineStyleOverlays() once in init() AFTER cctx.graph/paper are wired.
-import { cctx } from './context.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
 
 let _lineStyleObserver = null;
 let _lineStyleSyncId = 0;
@@ -80,6 +80,24 @@ export function copyOverlayAttrs(line, overlay, own = []) {
   for (const { name } of [...overlay.attributes]) if (!skip(name) && !line.hasAttribute(name)) overlay.removeAttribute(name);
 }
 
+// A Highlight State band sits under its line (link-styles.js applyStateBand), so a gap erased in
+// the canvas colour cut a dark stripe through the band on every dashed Fault, dotted Go To and dashed reply. A banded overlay
+// carries the band's colour and opacity (`data-band`, `--df-band`, `--df-band-mix`) and erases in the band as it shows
+// over the canvas (css/canvas.css; image-export.js bakes the same mix). Attributes the overlay sets itself:
+const OVERLAY_OWN = ['stroke-dasharray', 'style', 'data-band'];
+function markBand(link, overlay) {
+  const band = link.attr('wrapper/stroke');
+  if (!band) {
+    if (overlay.hasAttribute('data-band')) { overlay.removeAttribute('data-band'); overlay.removeAttribute('style'); }
+    return;
+  }
+  const mix = `${Math.round((link.attr('wrapper/strokeOpacity') ?? 1) * 100)}%`;
+  if (overlay.getAttribute('data-band') === `${band} ${mix}`) return;
+  overlay.setAttribute('data-band', `${band} ${mix}`);
+  overlay.style.setProperty('--df-band', band);
+  overlay.style.setProperty('--df-band-mix', mix);
+}
+
 function syncLineStyleOverlays() {
   const { graph, paper } = cctx;
   if (!paper || !graph) return;
@@ -101,8 +119,9 @@ function syncLineStyleOverlays() {
       if (!lineEl) continue;
 
       let overlay = lineEl.parentNode.querySelector(':scope > .df-line-style-overlay');
-      if (overlay) copyOverlayAttrs(lineEl, overlay, ['stroke-dasharray']);
+      if (overlay) copyOverlayAttrs(lineEl, overlay, OVERLAY_OWN);
       else overlay = cloneOverlay(lineEl, 'df-line-style-overlay');
+      markBand(link, overlay);
 
       // Invert the user's dasharray so the overlay erases the right stripes.
       const parts = String(style).trim().split(/\s+/);

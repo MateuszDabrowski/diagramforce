@@ -7,12 +7,12 @@
 // the live graph/paper/selection + refresh via prctx at CALL time; never imports the facade back. The facade
 // re-imports renderLinkProps + renderMappingControls + the 4 line-style setters (multi-select + dispatch) and
 // re-exports setLinkEndpoints for app.js.
-import * as history from '../history.js?v=1.26.10';
-import { prctx } from './context.js?v=1.26.10';
-import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.26.10';
-import { ER_MARKER_D } from '../er-markers.js?v=1.26.10';
-import { TABLE_TAB_TYPES, addActionBtn, addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section, showRowsInTable } from './widgets.js?v=1.26.10';
-import { getActiveTabType } from '../tabs.js?v=1.26.10';
+import * as history from '../history.js?v=1.27.0';
+import { prctx } from './context.js?v=1.27.0';
+import { applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType, flowGoToDestName, flowLabelAttrs, flowGoToLabelAttrs, syncFrequencyLabel, syncMappingTypeBadge } from '../canvas.js?v=1.27.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.27.0';
+import { TABLE_TAB_TYPES, addActionBtn, addCloneBtn, addColor, addDeleteBtn, addMarkerPicker, addNumber, addSegmented, addSelect, addText, section, showRowsInTable } from './widgets.js?v=1.27.0';
+import { getActiveTabType } from '../tabs.js?v=1.27.0';
 
 // ── Shared connector-appearance setters ───────────────────────────────────────
 // Used by BOTH the single-link panel (renderLinkProps) and the multi-select Connectors

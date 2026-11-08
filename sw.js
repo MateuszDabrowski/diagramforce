@@ -12,7 +12,7 @@
  * keep CACHE_VERSION in lockstep with every `?v=`; version-consistency.test.js enforces it.
  */
 
-const CACHE_VERSION = '1.26.10';
+const CACHE_VERSION = '1.27.0';
 const CACHE_NAME = `diagramforce-v${CACHE_VERSION}`;
 
 // Same-origin assets to pre-cache on install. Anything not listed here is
@@ -85,6 +85,7 @@ const PRECACHE_URLS = [
   `./js/er-markers.js?v=${CACHE_VERSION}`,
   `./js/feedback.js?v=${CACHE_VERSION}`,
   `./js/field-model.js?v=${CACHE_VERSION}`,
+  `./js/venn-model.js?v=${CACHE_VERSION}`,
   `./js/history.js?v=${CACHE_VERSION}`,
   `./js/icons.js?v=${CACHE_VERSION}`,
   `./js/image-component.js?v=${CACHE_VERSION}`,
@@ -124,6 +125,7 @@ const PRECACHE_URLS = [
   `./js/properties/render-core.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-core.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-flow.js?v=${CACHE_VERSION}`,
+  `./js/properties/renderers-venn.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-gantt.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-org.js?v=${CACHE_VERSION}`,
   `./js/properties/renderers-process.js?v=${CACHE_VERSION}`,
@@ -144,6 +146,7 @@ const PRECACHE_URLS = [
   `./js/shapes/gantt.js?v=${CACHE_VERSION}`,
   `./js/shapes/data-object.js?v=${CACHE_VERSION}`,
   `./js/shapes/flow.js?v=${CACHE_VERSION}`,
+  `./js/shapes/venn.js?v=${CACHE_VERSION}`,
   `./js/shapes/bpmn-flow.js?v=${CACHE_VERSION}`,
   `./js/shapes/core.js?v=${CACHE_VERSION}`,
   `./js/share-codec.js?v=${CACHE_VERSION}`,

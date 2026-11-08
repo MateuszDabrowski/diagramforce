@@ -1,16 +1,16 @@
 // Pre-built Salesforce architecture components
 // Each component is a config object describing a diagram element
 
-import { getIconDataUri } from './icons.js?v=1.26.10';
-import { getVisibleDataObjectFields } from './shapes.js?v=1.26.10';
-import { orderToY } from './gantt-layout.js?v=1.26.10';
-import { axisEndDate, periodDate, addDaysISO, localISODate } from './gantt-scale.js?v=1.26.10';
-import { sanitizeCssColor } from './util.js?v=1.26.10';
-import { SEQ_ROLE_ACCENT, BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from './persistence/diagram-schema.js?v=1.26.10';
+import { getIconDataUri } from './icons.js?v=1.27.0';
+import { getVisibleDataObjectFields } from './shapes.js?v=1.27.0';
+import { orderToY } from './gantt-layout.js?v=1.27.0';
+import { axisEndDate, periodDate, addDaysISO, localISODate } from './gantt-scale.js?v=1.27.0';
+import { sanitizeCssColor } from './util.js?v=1.27.0';
+import { SEQ_ROLE_ACCENT, BPMN_EVENT_STYLE, BPMN_GATEWAY_GLYPH } from './persistence/diagram-schema.js?v=1.27.0';
 // S9: the shared stencil kit (SVG glyph map + node/container builders + GENERIC_SHAPES) that every
 // *_CATEGORIES array below is built from, extracted to ./components/stencil-kit.js.
-import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.26.10';
-import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.26.10';
+import { node, SVG, GENERIC_SHAPES } from './components/stencil-kit.js?v=1.27.0';
+import { FLOW_ELEMENTS } from './shapes/flow.js?v=1.27.0';
 export { SVG };   // re-export for properties.js / tabs.js / properties/renderers-core.js
 
 /** Convert inline stencilSvg markup to a data URI for use as a canvas icon.
@@ -824,6 +824,9 @@ export function createElementFromComponent(component, position = { x: 100, y: 10
 
     case 'df.Table':
       return new joint.shapes.df.Table({ position });
+
+    case 'df.Venn':
+      return new joint.shapes.df.Venn({ position });
 
     case 'sf.Link': {
       const color = '#1D73C9';

@@ -30,6 +30,7 @@ export const SVG = {
   legend:     '<rect x="3" y="6.5" width="7" height="7" rx="2" fill="currentColor" stroke="none"/><rect x="12" y="8" width="6" height="2" rx="1" fill="currentColor" stroke="none"/><rect x="12" y="12" width="4" height="1.6" rx="0.8" fill="currentColor" stroke="none"/>',
   // table — a 3×3 grid outline (header row implied by the heavier top band)
   table:      '<rect x="2.5" y="3.5" width="15" height="13" rx="1.5"/><line x1="2.5" y1="7.5" x2="17.5" y2="7.5"/><line x1="2.5" y1="12" x2="17.5" y2="12"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5"/><line x1="12.5" y1="3.5" x2="12.5" y2="16.5"/>',
+  venn:       '<circle cx="7.5" cy="10" r="5.5"/><circle cx="12.5" cy="10" r="5.5"/>',
   // linkIcon — external-link glyph (SVG Repo "External_Link"), translated to crop
   // the 24×24 source into the 20×20 viewBox and with the arrow head pulled one
   // unit toward the shape centre (M19 5 instead of M20 4).
@@ -98,4 +99,5 @@ export const GENERIC_SHAPES = [
   { type: 'df.Pill',        label: 'Pill',       stencilSvg: SVG.pill  },
   { type: 'df.Legend',      label: 'Legend',     stencilSvg: SVG.legend },
   { type: 'df.Table',       label: 'Table',      stencilSvg: SVG.table  },
+  { type: 'df.Venn',        label: 'Venn',       stencilSvg: SVG.venn   },
 ];

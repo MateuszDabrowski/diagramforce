@@ -328,6 +328,49 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
+/* df.Venn panel rows (renderers-venn.js): a colour dot then a name, a query line, an overlap with its text and box. */
+.df-venn-hint { margin: 0 0 10px; }
+.df-venn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.df-venn-row > .df-prop-field { flex: 1; min-width: 0; }
+.df-venn-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.df-venn-dot::-webkit-color-swatch-wrapper { padding: 0; }
+.df-venn-dot::-webkit-color-swatch { border: none; border-radius: 50%; }
+.df-venn-dot::-moz-color-swatch { border: none; border-radius: 50%; }
+.df-venn-dot--static { display: inline-block; width: 12px; height: 12px; cursor: default; }
+.df-venn-dots { display: inline-flex; flex: none; }
+.df-venn-dots > .df-venn-dot + .df-venn-dot { margin-left: -4px; }
+.df-venn-query {
+  display: grid;
+  /* The picker column fits the longest join name, down to a floor on a narrow panel; the names take the rest. */
+  grid-template-columns: minmax(7.5em, max-content) minmax(3em, 1fr);
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+}
+.df-venn-query__kw,
+.df-venn-query__table {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.df-venn-query__kw { color: var(--text-muted); }
+.df-venn-query__name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.df-venn-query__table { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Two classes: .df-properties__select (later in this file) sets its own width. */
+.df-venn-query > .df-venn-query__join { width: 100%; min-width: 0; }
 .df-properties__hint code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10.5px;

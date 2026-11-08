@@ -3,9 +3,9 @@ name: diagramforce
 description: >-
   Author an importable Diagramforce diagram - from a description, from an existing diagram (a
   screenshot, draw.io, or Mermaid), or from real Salesforce metadata (Flows, objects, Data Cloud
-  mappings, data graphs) - then hand the user a file to open in Diagramforce. Diagramforce is a
-  no-backend browser editor for Salesforce/CRM architecture, data models (ERD), field mapping and
-  lineage, process flows, Salesforce Flows, org charts, Gantt timelines, and UML sequence diagrams.
+  mappings, data graphs) - then hand the user a file to open. Diagramforce is a
+  browser editor for Salesforce/CRM architecture, data models (ERD), field mapping and
+  lineage, process flows, Salesforce Flows, org charts, Gantt timelines, UML sequence diagrams and SQL-join Venns.
   Use it whenever the user wants to visualize, diagram, map, model, draw, or recreate any of those as
   an editable diagram - especially in a Salesforce, Marketing Cloud, or Data Cloud context, even when
   they don't name Diagramforce (e.g. 'turn this into an ERD', 'map these fields into the Individual
@@ -188,6 +188,11 @@ architecture tab with the type-specific tools gated off.
 For the genuinely tricky calls (e.g. process vs flow, datamodel vs datamapping), read the
 **"Choosing the right diagram type"** section of the spec before committing.
 
+**A SQL join or overlapping sets** ("explain this LEFT JOIN", a join cheat sheet, "what is powerful AND free")
+is a `df.Venn` shape, not a diagram type: it works on any type, so put it on the `datamodel` or `datamapping`
+the query reads, or on an `architecture` tab on its own. Set `joins` and the app fills the regions; see `df.Venn`
+in the spec.
+
 ### 2. Read the spec section for that type - do not guess shape names
 
 The full contract is [`references/DIAGRAM_JSON_SPEC.md`](references/DIAGRAM_JSON_SPEC.md).
@@ -212,7 +217,7 @@ Envelope:
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Human-readable diagram name",
   "diagramType": "architecture",
   "graph": { "cells": [ /* elements first, then links */ ] }

@@ -15,16 +15,16 @@
 // key is referrer-locked to Drive+Picker, so a copy buys at most quota — never
 // data). They are resolved per-origin below.
 
-import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.26.10';
-import { pctx } from './context.js?v=1.26.10';
-import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.26.10';
-import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText, heldSyncText, heldSaveText } from './drive-sync-logic.js?v=1.26.10';
-import { newerHoldVersion } from './json-pipeline.js?v=1.26.10';   // when a load's dropped parts hold a tab's Drive saves
-import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, tokenLoginHint, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.26.10';
-import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.26.10';
-import { noteError } from '../diagnostics.js?v=1.26.10';
-import { isSessionHalted } from '../tabs/single-window.js?v=1.26.10';
-import { holdUpdateReload } from '../update-reload.js?v=1.26.10';
+import { showToast, showError, buildModal, confirmModal } from '../feedback.js?v=1.27.0';
+import { pctx } from './context.js?v=1.27.0';
+import { driveFileName, driveBackupFileName, isBackupPrefixed, BACKUP_PREFIX, TEMPLATES_DRIVE_NAME, DGF_MIME, PICKER_MIMES, myDiagramsQuery } from './df-format.js?v=1.27.0';
+import { listedFileNotOwned, sourceAccessLost, revisionMoved, upsertCopy, removeCopy, conflictActions, shouldFanOut, sortRevisions, revisionSizeLabel, healDecision, importsToUnflag, sharedSourcePushDecision, importedFileRole, isRecognizedDgfMaster, reconcileTabFileLinks, tabShareRole, sharedMasterDeleteDecision, revisionAuthorLabel, upstreamNoticeDecision, deadCopyDecision, reservedDriveFileIds, saveFailureText, heldSyncText, heldSaveText } from './drive-sync-logic.js?v=1.27.0';
+import { newerHoldVersion } from './json-pipeline.js?v=1.27.0';   // when a load's dropped parts hold a tab's Drive saves
+import { isInSlot, pickerBlockedInSlot, allowPickerInSlotForDev, silentRefreshDelay, shouldAutoConnect, tokenLoginHint, SLOT_PICKER_NOTE, SLOT_OPEN_IN_BROWSER, SLOT_OPEN_WITH_ROUTE } from './host-env.js?v=1.27.0';
+import { countDiagramShapes, compareSemver, escHtml, formatRelativeTime, diffGraphs } from '../util.js?v=1.27.0';
+import { noteError } from '../diagnostics.js?v=1.27.0';
+import { isSessionHalted } from '../tabs/single-window.js?v=1.27.0';
+import { holdUpdateReload } from '../update-reload.js?v=1.27.0';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // `email` is requested SEPARATELY + lazily (incremental auth) — ONLY the first time someone uses

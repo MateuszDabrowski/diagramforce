@@ -2,22 +2,23 @@
 // from canvas.js (Phase 4, Slice 4). migrateLinks/migrateNodes normalise legacy
 // marker + shape formats; updateSimpleNodeLayout re-centres SimpleNode content.
 // Reads the live graph/paper + refreshAllIconHrefs via the canvas context (cctx).
-import { cctx } from './context.js?v=1.26.10';
-import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.26.10';
-import { getVisibleDataObjectFields } from '../shapes.js?v=1.26.10';
-import { applyMappingLinkStyle, GANTT_DEP_STROKE } from './link-styles.js?v=1.26.10';
-import { nodeContrastText } from '../util.js?v=1.26.10';
-import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.26.10';
-import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.26.10';
-import { getIconDataUri } from '../icons.js?v=1.26.10';
-import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.26.10';
-import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.26.10';
-import { isSharedBusDiagram } from './router.js?v=1.26.10';
-import { rerouteAllLinks } from './link-runtime.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
+import { flowLinkPorts } from '../persistence/flow-convert.js?v=1.27.0';
+import { getVisibleDataObjectFields } from '../shapes.js?v=1.27.0';
+import { applyMappingLinkStyle, drawsStateAsBand, applyStateBand, GANTT_DEP_STROKE } from './link-styles.js?v=1.27.0';
+import { nodeContrastText } from '../util.js?v=1.27.0';
+import { propAttrPlan } from '../persistence/diagram-schema.js?v=1.27.0';
+import { buildSeqActivationPorts } from '../shapes/ports.js?v=1.27.0';
+import { getIconDataUri } from '../icons.js?v=1.27.0';
+import { SVG as COMPONENT_SVG, getStencilSvgDataUri } from '../components.js?v=1.27.0';
+import { resolveFlowLabelCollisions } from './flow-label-placement.js?v=1.27.0';
+import { isSharedBusDiagram } from './router.js?v=1.27.0';
+import { rerouteAllLinks } from './link-runtime.js?v=1.27.0';
+import { Z_PILL, Z_TIER_SPAN } from './z-tiers.js?v=1.27.0';
 
 // Types whose connector labels are resolved collision-only on load (see the end of migrateNodes).
 const LOAD_LABEL_TYPES = new Set(['architecture', 'process', 'org']);
-import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.26.10';
+import { ganttTimelineFor, applyGanttGeometry, applyGanttMilestoneGeometry, deriveGanttMilestoneDate, applyGanttMarkerGeometry, deriveGanttMarkerDate, applyGanttGroupGeometry, backfillGanttDates, backfillGanttOrders, layoutTimelineTasks, migrateGanttTimeline, healTimelineEndDate } from '../gantt-layout.js?v=1.27.0';
 
 // sf.Note default icon. A Note always shows a light-bulb UNLESS the user explicitly removed it (the persisted
 // `iconCleared` flag). #5D4037 is the note text colour.
@@ -81,6 +82,18 @@ export function migrateLinks() {
     }
   }
   for (const link of graph.getLinks()) {
+    // ── A Highlight State saved before 1.27.0 on a connector whose style means something ──
+    // It recoloured the line like any other connector's, so a Flow Fault read as a Standard, a Gantt dependency lost
+    // its state to the amber heal below, and a reply message lost its dash. The connector's own style survives in the
+    // state's `_origBorder` stash: put it back before the Flow type is read from the stroke and before the Gantt heal.
+    // The state itself stays and is painted as a band after this loop (link-styles.js applyStateBand).
+    const orig = drawsStateAsBand(link) ? link.get('_origBorder') : null;
+    if (orig) {
+      if (orig.stroke) link.attr('line/stroke', orig.stroke);
+      if (orig.strokeWidth != null) link.attr('line/strokeWidth', orig.strokeWidth);
+      link.prop('lineStyle', orig.lineStyle && orig.lineStyle !== 'none' ? orig.lineStyle : null);
+      link.unset('_origBorder');
+    }
     // ── A label position written as a bare number → { distance } ──
     // JointJS reads `position: 0.5` as `{ distance: 0.5 }`, and saves from 1.19 (and every Mermaid import until
     // 2026-10-16) carry it. The label passes read `position.distance`: the collision pass that runs on open since
@@ -364,6 +377,8 @@ export function migrateLinks() {
     });
     link.labels(newLabels);
   }
+  // A Highlight State band, re-derived from `borderStyle` after every heal above has settled the line and its ends.
+  for (const link of graph.getLinks()) if (drawsStateAsBand(link)) applyStateBand(link);
 
   // Force all link views to re-render (clears stale routing/connection-point caches)
   paper.updateViews();
@@ -606,8 +621,22 @@ export function alignFlowAnnotationColumn() {
   setTimeout(() => meta.off('change:size', seat), 1000);
 }
 
+/** Put every Pill in its tier above the connectors (Z_PILL). A save before 1.27.0 holds 2400, and an authored file
+ *  can hold anything - the reported one gave a Flow outcome pill its card's 2001, so its own connector ran through
+ *  the text. The load guard keeps the z-tier listeners out, so this pass is the only way in. Re-ranks all pills when
+ *  any is out of the tier, keeping their order among themselves. Idempotent. */
+function liftPills(graph) {
+  const inTier = (z) => z >= Z_PILL && z < Z_PILL + Z_TIER_SPAN;
+  const pills = graph.getElements().filter((el) => el.get('type') === 'df.Pill');
+  if (pills.every((p) => inTier(p.get('z')))) return;
+  pills.map((p, i) => ({ p, i, z: p.get('z') ?? 0 }))
+    .sort((a, b) => a.z - b.z || a.i - b.i)
+    .forEach(({ p }, rank) => p.set('z', Z_PILL + Math.min(rank, Z_TIER_SPAN - 1)));
+}
+
 export function migrateNodes() {
   const { graph, refreshAllIconHrefs } = cctx;
+  liftPills(graph);
   // Phase 4.5: convert legacy tasks[]-only Gantt timelines into real bars BEFORE the per-element pass. The new
   // dated bars appear in the snapshot below and re-run applyGanttGeometry idempotently (no move). No-op for a
   // timeline that already has bars (idempotent) or is group-bearing (kept on the legacy path).

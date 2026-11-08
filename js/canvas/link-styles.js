@@ -8,9 +8,9 @@
 // Uses the `joint` GLOBAL (JointJS is a global script, never an import). rerouteAllLinks + the
 // paper defaultLink factory + the reroute cascade stay in canvas.js (S7 slice 3b).
 
-import { cctx } from './context.js?v=1.26.10';
-import { Z_GANTT_DEP } from './z-tiers.js?v=1.26.10';
-import { ER_MARKER_D } from '../er-markers.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
+import { Z_GANTT_DEP } from './z-tiers.js?v=1.27.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.27.0';
 
 // ── Data Cloud mapping links ─────────────────────────────────────────
 // A field→field link drawn while mapping mode is on is a source→DMO mapping
@@ -381,6 +381,54 @@ export function flowConnectorType(link) {
 }
 /** Back-compat shim (migration + older callers): true iff the connector is a Fault. */
 export function isFlowFaultLink(link) { return flowConnectorType(link) === 'fault'; }
+
+// Highlight State as a band. Most connectors show their state by recolouring the line, as a shape recolours its
+// border (properties.js applyLinkState). Three kinds cannot, because their line's style means something:
+// - a Flow connector's colour IS its type, so Added turned a Fault into a Standard at once, and the loader repainted
+//   it grey on the next open with the state still set and nothing showing it;
+// - a Gantt dependency's amber is not editable, and the loader repaints it on every open: same lost state;
+// - a sequence message's dash marks a reply (UML), so Added drew a reply solid, as a call.
+// Measured across all eight types on 2026-11-08; the others keep the recolour. These paint the link's `wrapper`
+// instead - JointJS's hit-area path, already drawn under the line and on the same route - as a translucent band in
+// the state's colour (same colours as SHAPE_STATE_STYLES, properties.js). Re-derived from `borderStyle` on every load.
+const SEQ_TYPES = new Set(['sf.SequenceParticipant', 'sf.SequenceActor', 'sf.SequenceActivation']);
+export function drawsStateAsBand(link) {
+  if (link.prop('linkKind') === 'ganttDep') return true;
+  const ends = [link.get('source')?.id, link.get('target')?.id].map((id) => (id ? cctx.graph?.getCell(id) : null));
+  if (ends.some((c) => String(c?.get('type') || '').startsWith('df.Flow'))) return true;
+  return ends.every((c) => SEQ_TYPES.has(c?.get('type')));
+}
+const STATE_BAND = Object.assign(Object.create(null), {
+  bold: '#2E9E5B', dotted: '#E8881A', dashed: '#DA4E55', deferred: '#1D73C9',
+});
+// The routed path stops short of each shape by its connection point's offset - 16 px by default (sfConnectionPoint,
+// canvas.js), none for a Gantt dependency, which attaches at the bar's edge - and the line's end stubs bridge that
+// gap. So the band gets band-coloured stubs of the same length: without them it stopped short of both cards (owner,
+// on the first render). Butt caps on the path and the stubs, so where they meet the alpha does not double. A marker's
+// content does not inherit the path's opacity, hence the stub's own `stroke-opacity`. The band keeps the wrapper's
+// own 10 px width (the standard.Link default): that width is the connector's click target, so clearing the band
+// removes only the paint and the stubs.
+const BAND_OPACITY = 0.4;
+const DEFAULT_CP_OFFSET = 16;
+const BAND_ATTRS = ['stroke', 'strokeOpacity', 'strokeLinecap', 'sourceMarker', 'targetMarker'];
+export function applyStateBand(link) {
+  const color = STATE_BAND[link.get('borderStyle')];
+  if (!color) {
+    if (link.attr('wrapper/stroke') != null) BAND_ATTRS.forEach((a) => link.removeAttr(`wrapper/${a}`));
+    return;
+  }
+  link.attr('wrapper', { stroke: color, strokeOpacity: BAND_OPACITY, strokeLinecap: 'butt' });
+  for (const end of ['source', 'target']) {
+    const cp = link.prop(`${end}/connectionPoint`);
+    const gap = cp ? (cp.args?.offset ?? 0) : DEFAULT_CP_OFFSET;
+    if (gap > 0) {
+      link.attr(`wrapper/${end}Marker`, { type: 'path', d: `M 0 0 L -${gap} 0`, fill: 'none', stroke: color, 'stroke-width': 10,
+        'stroke-opacity': BAND_OPACITY, 'stroke-linecap': 'butt' });
+    } else if (link.attr(`wrapper/${end}Marker`) != null) {
+      link.removeAttr(`wrapper/${end}Marker`);
+    }
+  }
+}
 
 /** The destination element's name, for seeding a Go To connector's label (Salesforce labels an Outgoing Go To with
  *  the target element's name). Empty when the target has no name or isn't resolvable yet. */

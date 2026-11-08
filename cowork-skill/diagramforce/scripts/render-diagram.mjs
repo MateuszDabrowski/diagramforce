@@ -136,6 +136,10 @@ export function findBrowser(explicit) {
 export function launchArgs(profile, { noSandbox = false } = {}) {
   const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
     '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars',
+    // A full build otherwise asks the macOS Keychain for its Safe Storage key, and a build the Keychain has not seen
+    // raises a password prompt that hangs the render. This profile is temporary and holds no secrets. Playwright passes
+    // the same flag to every Chromium it launches.
+    '--use-mock-keychain',
     // Full Chrome blocks a window.open without a user gesture (the headless shell does not); the opener needs it.
     '--disable-popup-blocking', 'about:blank'];
   return noSandbox ? ['--no-sandbox', ...args] : args;

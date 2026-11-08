@@ -12,9 +12,9 @@
 //
 // Reads cctx.graph/paper + cctx.getMappingMode; imports the apply* stylers from link-styles.js.
 
-import { cctx } from './context.js?v=1.26.10';
-import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType } from './link-styles.js?v=1.26.10';
-import { ER_MARKER_D } from '../er-markers.js?v=1.26.10';
+import { cctx } from './context.js?v=1.27.0';
+import { applyGanttDepLinkStyle, applyMappingLinkStyle, applyRelationshipLinkStyle, applyFlowLinkStyle, flowConnectorType } from './link-styles.js?v=1.27.0';
+import { ER_MARKER_D } from '../er-markers.js?v=1.27.0';
 
 export function registerLinkClassifier(cctx) {
   const { graph, paper } = cctx;

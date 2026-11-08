@@ -139,8 +139,9 @@ const pill = (id, x, y, text, fill) => ({
   id, type: 'df.Pill',
   position: { x, y },
   size: { width: pillWidth(text), height: PILL_H },
-  // ABOVE the z 3000 relationships, deliberately: a badge a connector can be drawn through is not a badge.
-  z: 3500,
+  // The app's Pill tier, above every connector (DIAGRAM_JSON_SPEC.md Z-Order): a badge a connector can be drawn
+  // through is not a badge. The loader lifts any Pill below it, so this only saves that step.
+  z: 9000,
   pillText: text,
   attrs: {
     body: { fill, stroke: 'none' },

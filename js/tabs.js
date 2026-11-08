@@ -1,29 +1,29 @@
 // Tabs — multi-diagram tab management
 // Each tab holds its own graph JSON, viewport, and undo/redo history.
 
-import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.26.10';
-import { tbctx } from './tabs/context.js?v=1.26.10';
-import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.26.10';
-import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.26.10';
-import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.26.10';
-import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.26.10';
+import { APP_VERSION, normalizeDiagramType, compactGraphForSave, dateSuffix } from './persistence.js?v=1.27.0';
+import { tbctx } from './tabs/context.js?v=1.27.0';
+import { DIAGRAM_TYPES, diagramTypeIconMarkup } from './tabs/diagram-types.js?v=1.27.0';
+import { showNewDiagramModal, dismissNewDiagramModal, reofferIfStranded } from './tabs/new-diagram-modal.js?v=1.27.0';
+import { showCloseConfirmModal, showCloseTabsModal, closeNeedsPrompt } from './tabs/close-manager.js?v=1.27.0';
+import { saveCurrentTabState, commitActiveTab, activateTab, saveTabs, scheduleSaveTabs, checkStoragePressure, restoreTabs, getSessionUpdate, setupAutoSave, setupSessionFlush, isSessionBackupHealthy, getReplaceTarget, replaceActiveContent, isHoldingForVersionPrompt } from './tabs/session-store.js?v=1.27.0';
 export { setupSessionFlush, isSessionBackupHealthy };
 export { commitActiveTab, getSessionUpdate, setupAutoSave };  // re-export: app.js/save-manager reach these via tctx.modules.tabs
 export { showCloseTabsModal };  // re-export: toolbar/load-manager reaches it via tctx.modules.tabs
 export { reofferIfStranded };   // re-export: the Load Manager's Google Picker handoff re-offers New Diagram when it ends with no tab
 export { getReplaceTarget };    // re-export: the Paste pane's Replace button gates on it (tctx.modules.tabs)
-export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.26.10';
-import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.26.10';
-import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.26.10';
-import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.26.10';
-import { offerJoinColours } from './tabs/join-colours.js?v=1.26.10';
-import { showToast, buildModal, confirmModal } from './feedback.js?v=1.26.10';
-import { wireMenuDismiss } from './menu.js?v=1.26.10';
-import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.26.10';
-import { layoutTimelineTasks } from './gantt-layout.js?v=1.26.10';
-import { getPalette } from './brand-palette.js?v=1.26.10';
-import { getAllIcons } from './icons.js?v=1.26.10';
-import { noteError } from './diagnostics.js?v=1.26.10';
+export { DIAGRAM_TYPES } from './tabs/diagram-types.js?v=1.27.0';
+import { escHtml, countDiagramShapes, sanitizeCssColor, contrastInk } from './util.js?v=1.27.0';
+import { tabShareRole, shareGlyphKind, archiveDedupName, driveIdentityOf, ARCHIVE_DRIVE_FIELDS, hasVerifiedMyDriveBackup } from './persistence/drive-sync-logic.js?v=1.27.0';
+import { DEVICE_ONLY_RISK, tabIsDeviceOnly } from './tabs/device-only.js?v=1.27.0';
+import { offerJoinColours } from './tabs/join-colours.js?v=1.27.0';
+import { showToast, buildModal, confirmModal } from './feedback.js?v=1.27.0';
+import { wireMenuDismiss } from './menu.js?v=1.27.0';
+import { createElementFromComponent, createGanttTimelineSeed } from './components.js?v=1.27.0';
+import { layoutTimelineTasks } from './gantt-layout.js?v=1.27.0';
+import { getPalette } from './brand-palette.js?v=1.27.0';
+import { getAllIcons } from './icons.js?v=1.27.0';
+import { noteError } from './diagnostics.js?v=1.27.0';
 
 let graph, paper, canvasModule, selectionModule, historyModule, persistenceModule, stencilModule;
 let tabListEl;

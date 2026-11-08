@@ -107,6 +107,8 @@ const CONTENT_PROPS = [
   // df.Pill: its text (the shape re-fits its width from it). Missing, so a Pill text edit was not undoable, and
   // undoing the width alone left "Phase 1" inside a 32px circle (audit 2026-09-23).
   'pillText',
+  // df.Venn (1.27.0): what it shows, its sets, the open centre, SQL joins, region fills + overlap text, highlight colour.
+  'vennMode', 'sets', 'sharedCentre', 'joins', 'regions', 'highlightColor',
   // Container/Zone/BPMN grouper: a user-pinned SIZE — set by a resize-handle drag, cleared by Auto size.
   // Opts the frame out of the embedding content-hug so a deliberately tall lane survives a child drag.
   'manualSize',

@@ -1,11 +1,11 @@
 // Core / architecture shapes (SimpleNode/Container/TextLabel/Pill/Legend/Table/Line/Image/Link/Note) + Zone (CLEANUP S3). registerCore() is called by shapes.js register(); it defines the block's
 // JointJS shapes/views. Reads the shared leaves (ports/markdown-fo/fields/context) + app modules; never the facade.
 
-import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.26.10';
-import { portGroups, portItems } from './ports.js?v=1.26.10';
-import { sanitizeCssColor, textUnits } from '../util.js?v=1.26.10';
-import { getIconDataUri } from '../icons.js?v=1.26.10';
-import { raciPillsWidth, renderRaciPills } from './raci.js?v=1.26.10';
+import { SVG_NS_SHAPES, ensureMarkdownFO } from './markdown-fo.js?v=1.27.0';
+import { portGroups, portItems } from './ports.js?v=1.27.0';
+import { sanitizeCssColor, textUnits } from '../util.js?v=1.27.0';
+import { getIconDataUri } from '../icons.js?v=1.27.0';
+import { raciPillsWidth, renderRaciPills } from './raci.js?v=1.27.0';
 
 // The Placeholder's ? glyph and its dashed rule read as "undecided", so the ink is a deliberate mid-grey rather
 // than the theme's node-text: it must stay legible on BOTH the light and dark card without ever looking like a
@@ -453,7 +453,7 @@ export function registerCore() {
     'df.Pill',
     {
       size: { width: 32, height: 32 },
-      z: 2400,
+      z: 9000,   // Z_PILL (canvas/z-tiers.js): above every connector
       pillText: '1',
       attrs: {
         body: {

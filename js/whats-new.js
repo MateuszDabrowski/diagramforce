@@ -8,8 +8,8 @@
 // and shown nothing — first-run onboarding is the walkthrough's job, not this.
 // Patch + dev-build bumps never trigger it (only major.minor is compared).
 
-import { compareSemver } from './util.js?v=1.26.10';
-import { buildModal } from './feedback.js?v=1.26.10';
+import { compareSemver } from './util.js?v=1.27.0';
+import { buildModal } from './feedback.js?v=1.27.0';
 
 const SEEN_KEY = 'df_whats_new_seen';
 
@@ -19,6 +19,26 @@ const SEEN_KEY = 'df_whats_new_seen';
 // brush …) are SLDS icons registered by icons.js. `text` is trusted inline HTML
 // (authored, not user input), so keep it to <strong>.
 export const WHATS_NEW = [
+  // 1.27.0 - covers EVERYTHING since the 1.26.0 entry: the 1.26.2-1.26.10 patches (never announced - the overlay
+  // fires on major/minor only) and 1.27.0: the Venn shape, connector Highlight State as a band, Pills above
+  // connectors. Owner calls (2026-11-08): ship as a minor so the patches can be announced, with df.Venn in it so the
+  // release has something truly new, and lead with it; then the Claude skill and spec, whose gains since 1.26.0 the
+  // owner rates the biggest in day-to-day use; the display and Auto Layout gains (labels, routing, data model join
+  // lanes) as ONE point, snapping kept apart as an editing change; every highlight in plain words. Left out: fixes, the Slot changes (the 1.26.0 rule), the
+  // newer-release load hold, the SQL Studio Auto Layout offer, the rebuilt templates and the Edit Fields rename.
+  {
+    version: '1.27.0',
+    title: "What's new in Diagramforce",
+    intro: 'A Venn shape that draws SQL joins, a much better Claude skill, change marks that never hide what a connector means, quick trips between a diagram and its Table view, and clearer layouts.',
+    highlights: [
+      { icon: 'join', text: '<strong>Venn diagrams for SQL joins and overlapping sets.</strong> Add a Venn from Generic Shapes and choose what it shows. Join result: name two or three tables, pick a join such as LEFT JOIN, and the rows the join returns light up. Overlaps: name the things you compare, label what they have in common, and click any area to highlight it. Labels shrink to fit, and a double-click on any part of the Venn edits its words.' },
+      { icon: 'icon-claude', text: '<strong>A much better Claude skill - update yours.</strong> The Claude skill and the spec it writes from had their biggest round of work yet. Diagrams Claude draws come out tidier: fan-outs leave from one side, labels stay off other lines, and each level sits on one row. Salesforce Flows convert with fewer gaps, data models link each foreign key to the right row, and Claude can now draw Venns and mark what changed on a Flow. Replace the skill in your Claude account with the latest one to get all of it. <a href="https://github.com/MateuszDabrowski/diagramforce/tree/main/cowork-skill/diagramforce" target="_blank" rel="noopener">Get the skill</a>.' },
+      { icon: 'change_request', text: '<strong>Mark changes on any connector.</strong> Highlight State (Added, Changed, Removed, Deferred) now shows on Flow connectors, Gantt dependencies and sequence messages as a coloured band behind the line. The line keeps its own colour and style, so a Fault still looks like a Fault and a reply still looks like a reply. Pills now always sit on top of connectors, so a label on a line is never crossed out by it.' },
+      { icon: 'table', text: '<strong>Move between the diagram and the Table view.</strong> In the Table view of a data model or data mapping, each row has a button that takes you to that object or connector on the canvas. On the canvas, Show in Table view on an object or connector takes you back to its rows. A Flow\'s Table view now also lists the records it reads, its screen components and its orchestration steps.' },
+      { icon: 'layout', text: '<strong>Clearer diagrams and smarter Auto Layout.</strong> On architecture, process and org diagrams, connector labels slide along their own line to a clear spot instead of covering another line or label, and a label you moved stays where you put it. Connectors of the same colour from different shapes no longer run on top of each other. On data models, each join field gets its own lane, Auto Layout puts the most connected object in the middle, and Diagramforce offers once to give each join field its own colour.' },
+      { icon: 'merge', text: '<strong>Snap to even spacing.</strong> While you drag a shape, it snaps into place when the gaps to its neighbours are equal, not only when their edges line up. Hold Option (Alt) to place it freely.' },
+    ],
+  },
   // 1.26.0 - covers EVERYTHING since 1.25.0: the 1.25.1-1.25.9 patches (never announced - the overlay fires on
   // major/minor only) and the 2026-10-15 full review. Owner calls at the cut (2026-10-15): connectors, Auto Layout,
   // Data Mapping for any pipeline, the skill's layout checks and the inclusive Gantt End Date. Left out: the

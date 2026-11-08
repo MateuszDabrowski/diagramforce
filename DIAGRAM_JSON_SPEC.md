@@ -4,7 +4,7 @@
 >
 > The app lives at **[diagramforce.com](https://diagramforce.com/)** — this is the only canonical URL. When you point a user to the app (e.g. "paste this JSON via Load ▸ Paste"), always use that address. The former host `diagramforce.mateuszdabrowski.pl` still 301-redirects here, so old links keep working, but never hand it to a user as the address. There is **no** `diagramforce.app`.
 >
-> **Spec snapshot: v1.26.10** — matches the app's current `appVersion`; set `"appVersion": "1.26.10"` in generated files.
+> **Spec snapshot: v1.27.0** — matches the app's current `appVersion`; set `"appVersion": "1.27.0"` in generated files.
 >
 > **Validate before importing.** Run the bundled `validate-diagram.mjs` (a zero-dependency CLI - `node scripts/validate-diagram.mjs your-diagram.json` in the Cowork skill, `npm run validate -- your-diagram.json` in the repo) to catch the
 > issues the loader heals or **drops** rather than erroring on: a cell whose `type` isn't a real shape (dropped on
@@ -26,7 +26,7 @@
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "timestamp": 1712700000000,
   "title": "My Diagram",
   "diagramType": "architecture",
@@ -49,7 +49,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | number | Yes | Always `1` |
-| `appVersion` | string | Yes | Semver string, currently `"1.26.10"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently Set the exact current version, never a guessed newer one: a file newer than the running app that also holds a shape type the app does not know opens with a warning asking for a reload, and that tab's Google Drive saves pause until the whole diagram is back (1.26.8). |
+| `appVersion` | string | Yes | Semver string, currently `"1.27.0"`. A file with NO `appVersion` opens behind a compatibility warning (it counts as a major-version gap); an older 1.x version loads silently Set the exact current version, never a guessed newer one: a file newer than the running app that also holds a shape type the app does not know opens with a warning asking for a reload, and that tab's Google Drive saves pause until the whole diagram is back (1.26.8). |
 | `timestamp` | number | No | Unix timestamp in milliseconds |
 | `title` | string | Yes | Diagram name (shown as tab title) |
 | `diagramType` | string | Yes | One of: `"architecture"`, `"process"`, `"flow"`, `"datamodel"`, `"datamapping"`, `"org"`, `"gantt"`, `"sequence"`. **Must match the shapes you use** (see [Diagram Types](#diagram-types)). Aliases (case-insensitive) are accepted - `"data"`, `"mapping"`, `"organisation"`/`"organization"`, `"salesforceflow"`/`"flowbuilder"`/`"sfflow"` - but write the canonical forms |
@@ -65,8 +65,8 @@
 > (produced by the app's Export Manager), but you normally won't generate them:
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.10", "exportedAt": 1712700000000,
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.10" } ],
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.27.0", "exportedAt": 1712700000000,
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.27.0" } ],
 >   "templates": [ { "name": "...", "diagramType": "architecture", "cells": [] } ] }
 > ```
 >
@@ -99,10 +99,10 @@
 > or `null`.
 >
 > ```json
-> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.26.10", "exportedAt": 1712700000000,
+> { "schema": "diagramforce-export", "version": 1, "appVersion": "1.27.0", "exportedAt": 1712700000000,
 >   "kind": "group",
 >   "groups": [ { "name": "Project A", "icon": null, "color": "#27ae60" } ],
->   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.26.10" } ] }
+>   "diagrams": [ { "name": "...", "diagramType": "architecture", "group": "Project A", "graph": { "cells": [] }, "viewport": null, "appVersion": "1.27.0" } ] }
 > ```
 >
 > A `kind:"group"` bundle imports **differently** from a generic one: it
@@ -155,7 +155,15 @@
 
 > **`df.Table`** (since v1.17.3) — a grid of **markdown, multi-line** cells. Top-level props: `rows` (an array of row arrays of cell strings, e.g. `[["**Layer**","What"],["Data 360","Unifies\nidentity"]]` — each cell supports the same markdown subset as a description: `**bold**` / `*italic*` / `~~strike~~` / `` `code` `` + `\n` line breaks); optional `tableLabel` (a caption rendered above the grid, left-aligned); `highlightFirstRow` (bool, default `true`) + `highlightFirstCol` (bool, default `false`) tint + bold the leading row / column; `plainCells` (bool, default `false`) renders cells LITERALLY instead of as inline markdown - turn it on when the cells hold **code**, because a Salesforce formula's `*` operators are markdown italic markers and `{!a} * {!b} * 2` otherwise renders as `{!a} <em> {!b} </em> 2` with the operators silently deleted (v1.22.0); `fontSize` (default `13`); `tableFill`; `tableBorder` (tints BOTH the outer border AND the inner grid lines — the "Grid & Border" control); and `tableTextColor` (cell text + the label; `''` → `var(--text-primary)`). The label renders one notch larger than the cells (`fontSize + 2`). The number of columns is the widest row's length; ragged input is padded to a rectangle on load, and a manual resize re-applies a per-column minimum width. The view MEASURES each cell's wrapped markdown to give rows **variable height** (so a multi-line cell grows its row), and resizes the model. The outer `body` rect is a transparent selection + Shape-state frame (the visible table is view-drawn from `tableFill`/`tableBorder`). Cells are edited in the "Edit in Table" overlay (Save / Cancel, +Row / +Column strips, row-× / column-×). *(Replaces the pre-v1.17.3 `headerRow` boolean — old tables migrate it to `highlightFirstRow` on load.)*
 
-> **Highlight State (review / diff overlay, since v1.17.2; UI label "Highlight" → "Shape State" → "Highlight State" across v1.17.x — internals/prop unchanged):** any element with a `body` outline gets a `None / Added / Changed / Removed / Deferred` control — its own COLLAPSIBLE section (collapsed by default, between Content and Appearance), the states stacked as styled checkbox rows (the selected row carries the dash effect) — that paints the body stroke green (added) / orange dotted (changed) / red dashed (removed) / violet dash-dot (deferred). It persists as a top-level `borderStyle` prop (`"bold"` / `"dotted"` / `"dashed"` / `"deferred"`; the prop name predates the UI rename and is kept stable for back-compat). A companion `_origBorder` prop (`{stroke, strokeWidth, strokeDasharray}`) stashes the pre-override stroke so reverting to **None** restores the shape's own border losslessly. Both absent on a None / un-highlighted element.
+> **`df.Venn`** (v1.27.0) - a Venn diagram of **2 or 3 sets** that shows ONE of two things, set by `vennMode`: **`"join"`** draws the rows a SQL join returns, as circles, and **`"overlaps"`** draws what the sets have in common, as ellipses (with three sets, the petal layout: three long ellipses along the sides of a triangle). Omit `vennMode` and a Venn with `joins` shows the join, any other the overlaps. A generic shape: use it on any diagram type, typically beside the data model or mapping a query reads. Shared props: `sets` (2 or 3 `{label, color}` entries in order - sets A, B and C, or the tables of a join; `color` is a hex from the palette, the set's outline is drawn in it and its area tinted with it; a set's own area always shows its `label`, which can hold `\n` line breaks and `**bold**` lines); `highlightColor` (default `#DA4E55`: the join's result, or a highlighted area); `fontSize` (default `14`). **Join** (`vennMode: "join"`): `joins` holds SQL join types, ONE PER PAIR read left to right (`inner`, `left`, `right`, `full`, `leftExcluding`, `rightExcluding`, `fullExcluding`), so 1 for two tables and 2 for three: `(A join1 B) join2 C`. Every region the join returns is drawn in the highlight colour and nothing else is marked: the overlap an EXCLUDING join drops stays plain. With three tables, only the first join shows that join's result whatever the third table holds (step 1 of a three-table explanation). `regions` is not drawn in a join. **Overlaps** (`vennMode: "overlaps"`): `regions` is keyed by the letters of the sets an area lies in - `A`, `B`, `C` for a set's own area, `AB`, `AC`, `BC`, `ABC` for the overlaps. Any area takes `fill`: `"on"` to highlight it in the highlight colour, or a hex. An overlap also takes `label`, its text (`\n` and `**bold**` as above); a set's own area is labelled by the set's name instead. `sharedCentre` (three sets, default `true`) set to `false` leaves no area in all three sets while each pair still overlaps. Default size `360 x 260`; the sets fit the box and keep their shape. **For a join cheat sheet**, name the tables with their aliases and pair each Venn with a `df.Table` (`plainCells: true`) or `sf.TextLabel` holding the SQL:
+> ```json
+> { "id": "join-left-excl", "type": "df.Venn", "position": { "x": 40, "y": 40 }, "size": { "width": 320, "height": 220 },
+>   "vennMode": "join", "sets": [{ "label": "sub", "color": "#1D73C9" }, { "label": "de", "color": "#BE5C2A" }],
+>   "joins": ["leftExcluding"] }
+> ```
+> **For what things have in common**, name the sets after the things compared and label the overlaps with what they share: `"vennMode": "overlaps", "sets": [{ "label": "SQL Query\nActivity", "color": "#DA4E55" }, { "label": "DESelect\nSegment", "color": "#BE5C2A" }, ...], "regions": { "AB": { "label": "**POWERFUL**" } }`.
+
+> **Highlight State (review / diff overlay, since v1.17.2; UI label "Highlight" → "Shape State" → "Highlight State" across v1.17.x — internals/prop unchanged):** any element with a `body` outline gets a `None / Added / Changed / Removed / Deferred` control — its own COLLAPSIBLE section (collapsed by default, between Content and Appearance), the states stacked as styled checkbox rows (the selected row carries the dash effect) — that paints the body stroke green (added) / orange dotted (changed) / red dashed (removed) / violet dash-dot (deferred). It persists as a top-level `borderStyle` prop (`"bold"` / `"dotted"` / `"dashed"` / `"deferred"`; the prop name predates the UI rename and is kept stable for back-compat). A companion `_origBorder` prop (`{stroke, strokeWidth, strokeDasharray}`) stashes the pre-override stroke so reverting to **None** restores the shape's own border losslessly. Both absent on a None / un-highlighted element. **Connectors** take the same top-level `borderStyle`. On most diagrams the state recolours the line, so author it as for a shape: the state's stroke on `attrs.line.stroke` plus `_origBorder`. Three kinds are different, because their line style means something: a **Flow connector** (its colour IS its type - the protocol tokens in [Colours & dark mode](#colours--dark-mode)), a **Gantt dependency** (its amber is fixed) and a **sequence message** (a dashed one is a reply). On these the state draws as a translucent band in the state's colour under an untouched line, and the loader paints that band from `borderStyle` alone (v1.27.0). To mark an added or removed Flow path, set only `borderStyle` on its connectors and keep the type's stroke; the loader repaints any other stroke to its type's colour.
 
 ## Choosing the right diagram type
 
@@ -304,13 +312,16 @@ Assign these `z` values to keep layers rendering correctly:
 | BpmnSubprocess, BpmnLoop, SequenceFragment, Task | `500` | Sub-containers |
 | Container, GanttTimeline, GanttGroup | `1000` | Containers |
 | Image | `1500` | Pictures behind the cards |
-| SimpleNode, Note, TextLabel, Line, Link, DataObject, OrgPerson, all Bpmn/Flow shapes, GanttTask, GanttMilestone, GanttMarker, SequenceParticipant, SequenceActor | `2000` | Elements |
+| SimpleNode, Note, TextLabel, Line, Link, DataObject, OrgPerson, all Bpmn/Flow shapes, GanttTask, GanttMilestone, GanttMarker, SequenceParticipant, SequenceActor, `df.Venn` | `2000` | Elements |
 | SequenceActivation | `2200` | Overlays on top of elements |
 | `df.Table` | `2300` | Tables |
-| `df.Pill`, `df.Legend` | `2400` | Badges and keys |
+| `df.Legend` | `2400` | Keys |
 | Links | `3000` or higher | Connections |
+| `df.Pill` | `9000` | Labels and badges, above every connector (v1.27.0) |
 
 An authored `z` survives load, so a frame given an element's `2000` covers its own children - use the tier above.
+A `df.Pill` is the exception: the loader puts every Pill above the connectors, keeping their order among themselves,
+because a Pill usually sits ON a line (a Flow outcome, a step number) and a line drawn through it hides the text.
 
 ### Port Definitions
 
@@ -322,7 +333,7 @@ new connections after generation.
 
 Shapes with NO ports (a link cannot attach to them): `sf.TextLabel`, `sf.Note`, `sf.Line`, `sf.Link`, `sf.Image`,
 `sf.Zone`, `sf.TaskGroup`, `sf.BpmnPool`, `sf.SequenceFragment`, `sf.GanttTimeline`, `df.Pill`, `df.Legend`,
-`df.Table`.
+`df.Table`, `df.Venn`.
 
 ## Link Structure
 
@@ -478,7 +489,7 @@ Colours that are **not** on the canvas (modal chrome, export-only text fills) ar
 
 ## Shape Reference
 
-The generic net-new shapes `df.Placeholder`, `df.Pill`, `df.Legend` and `df.Table` are described under
+The generic net-new shapes `df.Placeholder`, `df.Pill`, `df.Legend`, `df.Table` and `df.Venn` are described under
 [Diagram Types](#diagram-types).
 
 ### sf.SimpleNode
@@ -1919,7 +1930,7 @@ Individual DMO has no email or phone field - contact points are their own object
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.10", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.27.0", "title": "Contact to Individual and Contact Point Email", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-src", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 212}, "z": 0, "layerStage": "source", "embeds": ["obj-src"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Source", "fill": "#1D73C9"}}},
     {"id": "obj-src", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 116}, "z": 2000, "parent": "zone-src", "objectName": "Salesforce Contact", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "s_id", "required": true}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "s_email"}, {"label": "First Name", "apiName": "FirstName", "type": "Text", "keyType": null, "fid": "s_fname"}]},
@@ -1953,7 +1964,7 @@ nothing.
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.10", "title": "Customer lineage - Raw to Staging to Mart", "diagramType": "datamapping",
+  "version": 1, "appVersion": "1.27.0", "title": "Customer lineage - Raw to Staging to Mart", "diagramType": "datamapping",
   "graph": { "cells": [
     {"id": "zone-raw", "type": "sf.Zone", "position": {"x": 40, "y": 40}, "size": {"width": 356, "height": 234}, "z": 0, "embeds": ["raw-cust"], "attrs": {"body": {"fill": "rgba(29,115,201,0.05)", "stroke": "#1D73C9"}, "label": {"text": "Raw", "fill": "#1D73C9"}}},
     {"id": "raw-cust", "type": "sf.DataObject", "position": {"x": 88, "y": 88}, "size": {"width": 260, "height": 138}, "z": 2000, "parent": "zone-raw", "objectName": "raw.customers", "headerColor": "#1D73C9", "fields": [{"label": "customer_id", "apiName": "customer_id", "type": "int", "keyType": "pk", "fid": "r_id", "required": true}, {"label": "email", "apiName": "email", "type": "varchar(255)", "keyType": null, "fid": "r_email"}, {"label": "first_name", "apiName": "first_name", "type": "varchar(100)", "keyType": null, "fid": "r_first"}, {"label": "last_name", "apiName": "last_name", "type": "varchar(100)", "keyType": null, "fid": "r_last"}]},
@@ -2021,7 +2032,7 @@ their cadence on the line. *(Validated with `validate-diagram.mjs`; rendered in-
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Order-to-Cash System Landscape",
   "diagramType": "architecture",
   "graph": {
@@ -2054,7 +2065,7 @@ row), so the Table view reports it as a field-level `Many:1`.
 
 ```json
 {
-  "version": 1, "appVersion": "1.26.10", "title": "Account-Contact ERD", "diagramType": "datamodel",
+  "version": 1, "appVersion": "1.27.0", "title": "Account-Contact ERD", "diagramType": "datamodel",
   "graph": { "cells": [
     {"id": "obj-account", "type": "sf.DataObject", "position": {"x": 100, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Account", "headerColor": "#1D73C9", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "a_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "a_name", "required": true, "length": 255}, {"label": "Industry", "apiName": "Industry", "type": "Picklist", "keyType": null, "fid": "a_industry", "required": false, "sampleValues": "Technology, Manufacturing"}, {"label": "Annual Revenue", "apiName": "AnnualRevenue", "type": "Currency", "keyType": null, "fid": "a_revenue", "required": false}, {"label": "Owner", "apiName": "OwnerId", "type": "Lookup", "keyType": "fk", "fid": "a_owner", "required": true}]},
     {"id": "obj-contact", "type": "sf.DataObject", "position": {"x": 720, "y": 100}, "size": {"width": 480, "height": 160}, "z": 2000, "objectName": "Contact", "headerColor": "#B652A7", "fields": [{"label": "Id", "apiName": "Id", "type": "ID", "keyType": "pk", "fid": "c_id", "required": true}, {"label": "Name", "apiName": "Name", "type": "Text", "keyType": null, "fid": "c_name", "required": true, "length": 255}, {"label": "Email", "apiName": "Email", "type": "Email", "keyType": null, "fid": "c_email", "required": false, "sampleValues": "jane@acme.com, sam@globalmedia.com"}, {"label": "Account", "apiName": "AccountId", "type": "Lookup", "keyType": "fk", "fid": "c_account", "required": false}, {"label": "Title", "apiName": "Title", "type": "Text", "keyType": null, "fid": "c_title", "required": false, "length": 128}]},
@@ -2075,7 +2086,7 @@ swaps port direction. *(Validated with `validate-diagram.mjs`; rendered in-app.)
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Account Lookup",
   "diagramType": "sequence",
   "graph": {
@@ -2105,7 +2116,7 @@ full-height today line; a `sf.GanttMarker` (`markerDate`) is a separate dated ma
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Implementation Plan",
   "diagramType": "gantt",
   "graph": {
@@ -2138,7 +2149,7 @@ fill/stroke; flows OMIT `targetMarker` (the loader adds the arrow). *(Validated 
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Access Request Process",
   "diagramType": "process",
   "graph": {
@@ -2181,7 +2192,7 @@ A **segment-triggered marketing flow**: a Data Cloud segment membership starts i
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Welcome Campaign (segment-triggered)",
   "diagramType": "flow",
   "graph": {
@@ -2230,7 +2241,7 @@ on **Load → Paste**. *(Validated with `validate-diagram.mjs`; rendered in-app.
 ```json
 {
   "version": 1,
-  "appVersion": "1.26.10",
+  "appVersion": "1.27.0",
   "title": "Project Phoenix - Delivery Teams",
   "diagramType": "org",
   "graph": {
